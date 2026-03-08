@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AppProvider } from "../lib/store";
 import Navbar from "@/components/Navbar";
+import { Analytics } from "@vercel/analytics/react";
 
 export const metadata: Metadata = {
   title: "普惠托育智慧管理平台",
@@ -16,12 +17,15 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className="antialiased">
+        {children}
+  <Analytics />
         <AppProvider>
           <Navbar />
           <main className="min-h-[calc(100vh-64px)] bg-[var(--background)]">
             {children}
           </main>
         </AppProvider>
+        
       </body>
     </html>
   );
