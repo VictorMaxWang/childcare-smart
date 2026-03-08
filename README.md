@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SmartChildcare 智慧托育管理平台
 
-## Getting Started
+一个面向托育机构的数字化业务闭环平台。
 
-First, run the development server:
+## 核心功能
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- 数据总览看板
+- 幼儿档案管理
+- 晨检健康管理
+- 饮食记录系统
+- 成长观察记录
+- 家园共育反馈
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 技术栈
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Next.js 16  
+React 19  
+TypeScript  
+TailwindCSS  
+Radix UI  
+Vercel Deploy  
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 在线访问
 
-## Learn More
+https://smartchildcare.cn
 
-To learn more about Next.js, take a look at the following resources:
+## 项目结构
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+app/page.tsx            数据看板  
+app/children/page.tsx   幼儿管理  
+app/health/page.tsx     晨检管理  
+app/diet/page.tsx       饮食记录  
+app/growth/page.tsx     成长记录  
+app/parent/page.tsx     家长端  
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 系统架构
 
-## Deploy on Vercel
+统一状态管理：
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+lib/store.tsx
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+核心 Hook：
+
+useApp()
