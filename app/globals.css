@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --font-geist-sans: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", Arial, Helvetica, sans-serif;
+  --font-geist-mono: "Cascadia Code", "Consolas", "Courier New", monospace;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #334155;
+  --muted: #f8fafc;
+  --muted-foreground: #64748b;
+  --accent: #f0f9ff;
+  --accent-foreground: #0c4a6e;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #6366f1;
+  --radius: 0.5rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--background);
+  background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--foreground);
+  font-family: var(--font-geist-sans);
+  min-height: 100vh;
+}
