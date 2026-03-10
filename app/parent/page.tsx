@@ -166,7 +166,7 @@ export default function ParentPage() {
   }, [aiSnapshot, aiRefreshNonce]);
 
   useEffect(() => {
-    if (!aiSnapshotKey) {
+    if (!aiSnapshotKey || !aiSnapshot) {
       setAiSuggestion(null);
       setAiLoading(false);
       return;
@@ -179,9 +179,7 @@ export default function ParentPage() {
       return;
     }
 
-    const snapshot = JSON.parse(aiSnapshotKey) as ChildSuggestionSnapshot;
-
-    const fallback = buildFallbackSuggestion(snapshot.ruleFallback);
+    const fallback = buildFallbackSuggestion(aiSnapshot.ruleFallback);
     const controller = new AbortController();
     let cancelled = false;
 
@@ -191,7 +189,7 @@ export default function ParentPage() {
         const response = await fetch("/api/ai/suggestions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot }),
+          body: JSON.stringify({ snapshot: aiSnapshot }),
           signal: controller.signal,
         });
 
@@ -223,7 +221,7 @@ export default function ParentPage() {
       cancelled = true;
       controller.abort();
     };
-  }, [aiSnapshotKey]);
+  }, [aiSnapshotKey, aiSnapshot]);
 
   function refreshAiSuggestion() {
     if (!aiSnapshot) return;
