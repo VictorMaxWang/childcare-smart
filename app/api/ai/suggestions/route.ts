@@ -1,0 +1,48 @@
+import { NextResponse } from "next/server";
+import { buildFallbackSuggestion } from "@/lib/ai/fallback";
+import { requestDashscopeSuggestion } from "@/lib/ai/dashscope";
+import type {
+  AiSuggestionPayload,
+  AiSuggestionResponse,
+  ChildSuggestionSnapshot,
+  RuleFallbackItem,
+} from "@/lib/ai/types";
+
+function isValidSnapshot(snapshot: unknown): snapshot is ChildSuggestionSnapshot {
+  if (!snapshot || typeof snapshot !== "object") return false;
+  const obj = snapshot as Record<string, unknown>;
+  if (!obj.child || typeof obj.child !== "object") return false;
+  if (!obj.summary || typeof obj.summary !== "object") return false;
+  if (!Array.isArray(obj.ruleFallback)) return false;
+  return true;
+}
+
+export async function POST(request: Request) {
+  let payload: AiSuggestionPayload | null = null;
+
+  try {
+    payload = (await request.json()) as AiSuggestionPayload;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  if (!payload || !isValidSnapshot(payload.snapshot)) {
+    return NextResponse.json({ error: "Invalid snapshot payload" }, { status: 400 });
+  }
+
+  const fallbackItems = payload.snapshot.ruleFallback as RuleFallbackItem[];
+  const fallback = buildFallbackSuggestion(fallbackItems);
+
+  const aiResult = await requestDashscopeSuggestion(payload.snapshot);
+  if (!aiResult) {
+    return NextResponse.json(fallback, { status: 200 });
+  }
+
+  return NextResponse.json(
+    {
+      ...aiResult,
+      source: "ai",
+    } satisfies AiSuggestionResponse,
+    { status: 200 }
+  );
+}

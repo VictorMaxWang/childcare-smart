@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
 
 export type Role = "家长" | "教师" | "机构管理员";
 export type Gender = "男" | "女";
@@ -240,6 +241,10 @@ export interface AddGrowthRecordInput {
 interface AppContextType {
   users: User[];
   currentUser: User;
+  isAuthenticated: boolean;
+  authLoading: boolean;
+  login: (userId: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  logout: () => Promise<void>;
   switchUser: (userId: string) => void;
 
   children: Child[];
@@ -283,6 +288,32 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | null>(null);
+
+const STORAGE_KEYS = {
+  children: "childcare.children.v1",
+  attendance: "childcare.attendance.v1",
+  meals: "childcare.meals.v1",
+  growth: "childcare.growth.v1",
+  feedback: "childcare.feedback.v1",
+  health: "childcare.health.v1",
+  taskCheckIns: "childcare.taskcheckins.v1",
+} as const;
+
+function readStorage<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStorage<T>(key: string, value: T) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
 
 const GIRL_AVATARS = ["👧", "🧒", "👶"];
 const BOY_AVATARS = ["👦", "🧒", "👶"];
@@ -655,7 +686,10 @@ export function calcNutritionScore(
 
 export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const [users] = useState<User[]>(INITIAL_USERS);
-  const [currentUserId, setCurrentUserId] = useState(INITIAL_USERS[1].id);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [storageReady, setStorageReady] = useState(false);
+  const [remoteReady, setRemoteReady] = useState(false);
   const [childrenList, setChildrenList] = useState<Child[]>(INITIAL_CHILDREN);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(INITIAL_ATTENDANCE);
   const [mealRecords, setMealRecords] = useState<MealRecord[]>(normalizeRecords(INITIAL_MEALS));
@@ -663,8 +697,157 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const [guardianFeedbacks, setGuardianFeedbacks] = useState<GuardianFeedback[]>(INITIAL_FEEDBACKS);
   const [healthCheckRecords, setHealthCheckRecords] = useState<HealthCheckRecord[]>(INITIAL_HEALTH_CHECKS);
   const [taskCheckInRecords, setTaskCheckInRecords] = useState<TaskCheckInRecord[]>(INITIAL_TASK_CHECKINS);
+  const isAuthenticated = Boolean(currentUserId);
 
-  const currentUser = users.find((user) => user.id === currentUserId) ?? users[0];
+  useEffect(() => {
+    const storedChildren = readStorage<Child[]>(STORAGE_KEYS.children, INITIAL_CHILDREN);
+    const storedAttendance = readStorage<AttendanceRecord[]>(STORAGE_KEYS.attendance, INITIAL_ATTENDANCE);
+    const storedMeals = normalizeRecords(readStorage<MealRecord[]>(STORAGE_KEYS.meals, INITIAL_MEALS));
+    const storedGrowth = readStorage<GrowthRecord[]>(STORAGE_KEYS.growth, INITIAL_GROWTH);
+    const storedFeedback = readStorage<GuardianFeedback[]>(STORAGE_KEYS.feedback, INITIAL_FEEDBACKS);
+    const storedHealth = readStorage<HealthCheckRecord[]>(STORAGE_KEYS.health, INITIAL_HEALTH_CHECKS);
+    const storedTaskCheckIns = readStorage<TaskCheckInRecord[]>(STORAGE_KEYS.taskCheckIns, INITIAL_TASK_CHECKINS);
+
+    setChildrenList(storedChildren);
+    setAttendanceRecords(storedAttendance);
+    setMealRecords(storedMeals);
+    setGrowthRecords(storedGrowth);
+    setGuardianFeedbacks(storedFeedback);
+    setHealthCheckRecords(storedHealth);
+    setTaskCheckInRecords(storedTaskCheckIns);
+    setStorageReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      setRemoteReady(true);
+      return;
+    }
+    setRemoteReady(false);
+
+    let active = true;
+    const loadRemoteSnapshot = async () => {
+      try {
+        const response = await fetch("/api/state", { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+        const data = (await response.json()) as { ok: boolean; snapshot: AppStateSnapshot | null };
+        if (!data.ok || !data.snapshot || !active) {
+          return;
+        }
+
+        setChildrenList(data.snapshot.children);
+        setAttendanceRecords(data.snapshot.attendance);
+        setMealRecords(normalizeRecords(data.snapshot.meals));
+        setGrowthRecords(data.snapshot.growth);
+        setGuardianFeedbacks(data.snapshot.feedback);
+        setHealthCheckRecords(data.snapshot.health);
+        setTaskCheckInRecords(data.snapshot.taskCheckIns);
+      } catch {
+        // Remote sync is optional for local development fallback.
+      } finally {
+        if (active) setRemoteReady(true);
+      }
+    };
+
+    void loadRemoteSnapshot();
+
+    return () => {
+      active = false;
+    };
+  }, [authLoading, isAuthenticated]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    writeStorage(STORAGE_KEYS.children, childrenList);
+    writeStorage(STORAGE_KEYS.attendance, attendanceRecords);
+    writeStorage(STORAGE_KEYS.meals, mealRecords);
+    writeStorage(STORAGE_KEYS.growth, growthRecords);
+    writeStorage(STORAGE_KEYS.feedback, guardianFeedbacks);
+    writeStorage(STORAGE_KEYS.health, healthCheckRecords);
+    writeStorage(STORAGE_KEYS.taskCheckIns, taskCheckInRecords);
+  }, [
+    storageReady,
+    childrenList,
+    attendanceRecords,
+    mealRecords,
+    growthRecords,
+    guardianFeedbacks,
+    healthCheckRecords,
+    taskCheckInRecords,
+  ]);
+
+  useEffect(() => {
+    if (!storageReady || !remoteReady || !isAuthenticated) return;
+
+    const timer = window.setTimeout(async () => {
+      const snapshot: AppStateSnapshot = {
+        children: childrenList,
+        attendance: attendanceRecords,
+        meals: mealRecords,
+        growth: growthRecords,
+        feedback: guardianFeedbacks,
+        health: healthCheckRecords,
+        taskCheckIns: taskCheckInRecords,
+        updatedAt: new Date().toISOString(),
+      };
+
+      try {
+        await fetch("/api/state", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ snapshot }),
+        });
+      } catch {
+        // Keep local persistence available if remote sync fails.
+      }
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    storageReady,
+    remoteReady,
+    isAuthenticated,
+    childrenList,
+    attendanceRecords,
+    mealRecords,
+    growthRecords,
+    guardianFeedbacks,
+    healthCheckRecords,
+    taskCheckInRecords,
+  ]);
+
+  useEffect(() => {
+    let active = true;
+    const loadSession = async () => {
+      try {
+        const response = await fetch("/api/auth/session", { cache: "no-store" });
+        if (!response.ok) {
+          if (active) setCurrentUserId(null);
+          return;
+        }
+        const data = (await response.json()) as { userId?: string | null };
+        const userExists = users.some((user) => user.id === data.userId);
+        if (active) {
+          setCurrentUserId(userExists ? (data.userId ?? null) : null);
+        }
+      } catch {
+        if (active) setCurrentUserId(null);
+      } finally {
+        if (active) setAuthLoading(false);
+      }
+    };
+    void loadSession();
+    return () => {
+      active = false;
+    };
+  }, [users]);
+
+  const currentUser = users.find((user) => user.id === currentUserId) ?? users[1] ?? users[0];
   const visibleChildren = useMemo(() => filterChildrenByUser(childrenList, currentUser), [childrenList, currentUser]);
 
   const getAttendanceByDate = (date: string, childId?: string) => {
@@ -681,7 +864,36 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     return todayAttendance?.isPresent;
   });
 
-  const switchUser = (userId: string) => setCurrentUserId(userId);
+  const switchUser = (userId: string) => {
+    const canSwitch = users.some((user) => user.id === userId);
+    if (canSwitch) setCurrentUserId(userId);
+  };
+
+  const login = async (userId: string, password: string) => {
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, password }),
+      });
+      const result = (await response.json()) as { ok: boolean; error?: string; userId?: string };
+      if (!response.ok || !result.ok || !result.userId) {
+        return { ok: false, error: result.error ?? "登录失败，请检查账号和密码。" };
+      }
+      setCurrentUserId(result.userId);
+      return { ok: true };
+    } catch {
+      return { ok: false, error: "网络异常，请稍后重试。" };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      setCurrentUserId(null);
+    }
+  };
 
   const addChild = (child: NewChildInput) => {
     const avatars = child.gender === "女" ? GIRL_AVATARS : BOY_AVATARS;
@@ -1068,6 +1280,10 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       value={{
         users,
         currentUser,
+        isAuthenticated,
+        authLoading,
+        login,
+        logout,
         switchUser,
         children: childrenList,
         visibleChildren,

@@ -74,7 +74,6 @@ export default function DashboardPage() {
     (record) => record.date === todayDate && record.isAbnormal && visibleIds.has(record.childId)
   );
   
-  const presentChildIds = new Set(presentChildren.map(c => c.id));
   const missingHealthChecks = presentChildren.filter(
     (child) => !healthCheckRecords.some(r => r.childId === child.id && r.date === todayDate)
   );
