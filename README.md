@@ -166,4 +166,83 @@ AI 输出采用 **结构化 JSON 建议格式**，确保系统稳定性与可解
 
 ---
 
-# 系统架构
+
+## 系统架构图
+
+```mermaid
+graph TD
+    A[机构记录] --> B[数据结构化存储]
+    B --> C[规则分析 + AI分析]
+    C --> D[系统建议]
+    D --> E[家长反馈]
+    E --> F[托育行动闭环]
+
+```
+
+## 项目结构
+
+```text
+childcare-smart
+│
+├─ app
+│  ├─ api
+│  ├─ children
+│  ├─ diet
+│  ├─ growth
+│  ├─ health
+│  ├─ parent
+│
+├─ components
+│
+├─ lib
+│  ├─ ai
+│  ├─ store
+│
+├─ scripts
+│
+├─ supabase
+│
+└─ public
+
+```
+
+## 在线演示
+
+* **演示地址**：[https://smartchildcare.cn](https://smartchildcare.cn)
+* **GitHub 仓库**：[https://github.com/VictorMaxWang/childcare-smart](https://github.com/VictorMaxWang/childcare-smart)
+
+## 快速运行
+
+```bash
+git clone [https://github.com/VictorMaxWang/childcare-smart](https://github.com/VictorMaxWang/childcare-smart)
+cd childcare-smart
+npm install
+npm run dev
+
+```
+
+## 项目规划
+
+**未来版本计划：**
+
+### SmartChildcare v2.1
+
+* AI 托育建议优化
+* 数据可视化增强
+* 家长小程序接口
+* 多机构支持
+
+### SmartChildcare v3.0
+
+* 个性化托育分析
+* 长期成长数据分析
+* 托育风险预测
+
+## License
+
+MIT License
+
+## ⭐ Star History
+
+如果这个项目对你有帮助，请给一个 Star ⭐
+
