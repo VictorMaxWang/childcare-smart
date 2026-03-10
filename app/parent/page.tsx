@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { BellRing, HeartHandshake, LineChart, MessageCircleHeart, CheckCircle, Goal, Award } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { BellRing, HeartHandshake, LineChart, MessageCircleHeart, CheckCircle, Goal } from "lucide-react";
 import { formatDisplayDate, getAgeText, getAgeBandFromBirthDate, type CollaborationStatus, useApp } from "@/lib/store";
+import type { AiSuggestionResponse, ChildSuggestionSnapshot, RuleFallbackItem } from "@/lib/ai/types";
+import { buildFallbackSuggestion } from "@/lib/ai/fallback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,13 +15,25 @@ import { getWeeklyTaskForChild } from "@/lib/mock/coparenting";
 const FEEDBACK_STATUSES: CollaborationStatus[] = ["已知晓", "在家已配合", "今晚反馈"];
 
 export default function ParentPage() {
-  const { currentUser, getParentFeed, addGuardianFeedback, checkInTask, getTaskCheckIns } = useApp();
+  const {
+    currentUser,
+    getParentFeed,
+    addGuardianFeedback,
+    checkInTask,
+    getTaskCheckIns,
+    healthCheckRecords,
+    mealRecords,
+    growthRecords,
+    guardianFeedbacks,
+  } = useApp();
   const parentFeed = getParentFeed();
 
   const [selectedChildId, setSelectedChildId] = useState(parentFeed[0]?.child.id ?? "");
   const [feedbackStatus, setFeedbackStatus] = useState<CollaborationStatus>("已知晓");
   const [feedbackContent, setFeedbackContent] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [aiSuggestion, setAiSuggestion] = useState<AiSuggestionResponse | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   const selectedFeed = useMemo(
     () => parentFeed.find((item) => item.child.id === selectedChildId) ?? parentFeed[0],
@@ -37,6 +51,161 @@ export default function ParentPage() {
   const taskCheckIns = getTaskCheckIns(selectedFeed?.child.id ?? "");
   const isTaskCheckedInToday = Boolean(currentTask && taskCheckIns.some(t => t.taskId === currentTask.id && t.date === todayStr));
   const weeklyCheckInCount = taskCheckIns.filter(t => t.taskId === currentTask?.id).length;
+
+  const aiSnapshot = useMemo(() => {
+    if (!selectedFeed) return null;
+
+    const now = new Date();
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+
+    const inLastSevenDays = (dateText?: string) => {
+      if (!dateText) return false;
+      const ts = Date.parse(dateText.split(" ")[0]);
+      return !Number.isNaN(ts) && ts >= sevenDaysAgo.getTime() && ts <= now.getTime();
+    };
+
+    const childHealth = healthCheckRecords.filter((record) => {
+      if (record.childId !== selectedFeed.child.id) return false;
+      return inLastSevenDays(record.date);
+    });
+
+    const childMeals = mealRecords.filter((record) => {
+      if (record.childId !== selectedFeed.child.id) return false;
+      return inLastSevenDays(record.date);
+    });
+
+    const childGrowth = growthRecords.filter((record) => {
+      if (record.childId !== selectedFeed.child.id) return false;
+      return inLastSevenDays(record.createdAt);
+    });
+
+    const childFeedbacks = guardianFeedbacks.filter((record) => {
+      if (record.childId !== selectedFeed.child.id) return false;
+      return inLastSevenDays(record.date);
+    });
+
+    const avgTemp =
+      childHealth.length > 0
+        ? Math.round((childHealth.reduce((sum, item) => sum + item.temperature, 0) / childHealth.length) * 10) / 10
+        : undefined;
+
+    const categoryCounter = new Map<string, number>();
+    childGrowth.forEach((record) => {
+      categoryCounter.set(record.category, (categoryCounter.get(record.category) ?? 0) + 1);
+    });
+
+    const topCategories = Array.from(categoryCounter.entries())
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+
+    const statusCounts = childFeedbacks.reduce<Record<string, number>>((acc, item) => {
+      acc[item.status] = (acc[item.status] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    const ruleFallback: RuleFallbackItem[] = selectedFeed.suggestions.map((item) => ({
+      title: item.title,
+      description: item.description,
+      level: item.level,
+      tags: item.tags,
+    }));
+
+    return {
+      child: {
+        id: selectedFeed.child.id,
+        name: selectedFeed.child.name,
+        ageBand: getAgeBandFromBirthDate(selectedFeed.child.birthDate),
+        className: selectedFeed.child.className,
+        allergies: selectedFeed.child.allergies,
+        specialNotes: selectedFeed.child.specialNotes,
+      },
+      summary: {
+        health: {
+          abnormalCount: childHealth.filter((item) => item.isAbnormal).length,
+          handMouthEyeAbnormalCount: childHealth.filter((item) => item.handMouthEye === "异常").length,
+          avgTemperature: avgTemp,
+          moodKeywords: Array.from(new Set(childHealth.map((item) => item.mood))).slice(0, 5),
+        },
+        meals: {
+          recordCount: childMeals.length,
+          hydrationAvg:
+            childMeals.length > 0
+              ? Math.round(childMeals.reduce((sum, item) => sum + (item.waterMl || 0), 0) / childMeals.length)
+              : 0,
+          balancedRate:
+            childMeals.length > 0
+              ? Math.round(
+                  (childMeals.filter((item) => item.nutritionScore >= 75).length / childMeals.length) * 100
+                )
+              : 0,
+          monotonyDays: Math.max(0, 7 - new Set(childMeals.map((item) => item.date)).size),
+          allergyRiskCount: childMeals.filter((record) => Boolean(record.allergyReaction)).length,
+        },
+        growth: {
+          recordCount: childGrowth.length,
+          attentionCount: childGrowth.filter((record) => record.needsAttention).length,
+          pendingReviewCount: childGrowth.filter((record) => record.reviewStatus === "待复查").length,
+          topCategories,
+        },
+        feedback: {
+          count: childFeedbacks.length,
+          statusCounts,
+          keywords: childFeedbacks.map((item) => item.content).filter(Boolean).slice(0, 5),
+        },
+      },
+      ruleFallback,
+    } satisfies ChildSuggestionSnapshot;
+  }, [selectedFeed, healthCheckRecords, mealRecords, growthRecords, guardianFeedbacks]);
+
+  useEffect(() => {
+    if (!aiSnapshot) {
+      setAiSuggestion(null);
+      return;
+    }
+
+    const fallback = buildFallbackSuggestion(aiSnapshot.ruleFallback);
+    const controller = new AbortController();
+    let cancelled = false;
+
+    async function fetchAiSuggestion() {
+      setAiLoading(true);
+      try {
+        const response = await fetch("/api/ai/suggestions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ snapshot: aiSnapshot }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          setAiSuggestion(fallback);
+          return;
+        }
+
+        const data = (await response.json()) as AiSuggestionResponse;
+        if (!cancelled) {
+          setAiSuggestion(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setAiSuggestion(fallback);
+        }
+      } finally {
+        if (!cancelled) {
+          setAiLoading(false);
+        }
+      }
+    }
+
+    fetchAiSuggestion();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [aiSnapshot]);
 
   function submitFeedback() {
     if (!selectedFeed || !feedbackContent.trim()) return;
@@ -278,15 +447,20 @@ export default function ParentPage() {
           <Card>
             <CardHeader>
               <CardTitle>系统建议</CardTitle>
-              <CardDescription>规则引擎先判定，再用模板化文案表达，确保可解释与可追踪。</CardDescription>
+              <CardDescription>
+                AI 建议骨架版输出结构化建议，若 AI 不可用将自动回退到规则建议。
+              </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {selectedFeed.suggestions.map((insight) => (
+              {buildSuggestionCards(aiSuggestion, selectedFeed.suggestions).map((insight) => (
                 <div key={insight.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                   <div className="mb-2 flex items-center gap-2">
                     <Badge variant={insight.level === "warning" ? "warning" : insight.level === "success" ? "success" : "info"}>
                       {insight.level === "warning" ? "需关注" : insight.level === "success" ? "已准备好" : "建议"}
                     </Badge>
+                    {aiLoading ? <Badge variant="secondary">生成中</Badge> : null}
+                    {aiSuggestion?.source === "fallback" ? <Badge variant="info">规则兜底</Badge> : null}
+                    {aiSuggestion?.source === "ai" ? <Badge variant="success">AI 建议</Badge> : null}
                   </div>
                   <p className="text-sm font-semibold text-slate-700">{insight.title}</p>
                   <p className="mt-2 text-xs leading-5 text-slate-500">{insight.description}</p>
@@ -329,4 +503,46 @@ function TrendItem({ label, value }: { label: string; value: string }) {
       <p className="mt-2 text-base font-semibold text-slate-700">{value}</p>
     </div>
   );
+}
+
+function buildSuggestionCards(
+  aiSuggestion: AiSuggestionResponse | null,
+  fallbackInsights: Array<{ id: string; title: string; description: string; level: "success" | "warning" | "info" }>
+) {
+  if (!aiSuggestion) {
+    return fallbackInsights;
+  }
+
+  const cards: Array<{ id: string; title: string; description: string; level: "success" | "warning" | "info" }> = [];
+
+  for (const item of aiSuggestion.concerns) {
+    cards.push({
+      id: `ai-concern-${item}`,
+      title: item,
+      description: aiSuggestion.actions[0] || aiSuggestion.disclaimer,
+      level: "warning",
+    });
+  }
+
+  for (const item of aiSuggestion.highlights) {
+    cards.push({
+      id: `ai-highlight-${item}`,
+      title: item,
+      description: aiSuggestion.actions[1] || aiSuggestion.disclaimer,
+      level: "info",
+    });
+  }
+
+  if (cards.length === 0) {
+    return fallbackInsights;
+  }
+
+  cards.push({
+    id: "ai-disclaimer",
+    title: `风险等级：${aiSuggestion.riskLevel}`,
+    description: aiSuggestion.disclaimer,
+    level: "success",
+  });
+
+  return cards.slice(0, 6);
 }

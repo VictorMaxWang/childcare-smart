@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
 import { Baby, BookHeart, LayoutDashboard, Salad, ShieldCheck, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/store";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { href: "/", label: "数据概览", icon: LayoutDashboard },
@@ -17,8 +18,19 @@ const navItems = [
 ];
 
 export default function Navbar() {
+  const router = useRouter();
   const pathname = usePathname();
-  const { currentUser, users, switchUser } = useApp();
+  const { currentUser, logout } = useApp();
+
+  if (pathname === "/login") {
+    return null;
+  }
+
+  async function handleLogout() {
+    await logout();
+    router.replace("/login");
+    router.refresh();
+  }
 
   return (
     <nav className="sticky top-0 z-40 border-b border-[var(--border)] bg-white/80 backdrop-blur-md shadow-sm">
@@ -60,18 +72,7 @@ export default function Navbar() {
               {currentUser.avatar} {currentUser.name} · {currentUser.role}
             </p>
           </div>
-          <Select value={currentUser.id} onValueChange={switchUser}>
-            <SelectTrigger className="w-[170px] bg-white">
-              <SelectValue placeholder="切换角色" />
-            </SelectTrigger>
-            <SelectContent>
-              {users.map((user) => (
-                <SelectItem key={user.id} value={user.id}>
-                  {user.avatar} {user.name}（{user.role}）
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Button variant="outline" onClick={handleLogout}>退出登录</Button>
         </div>
       </div>
     </nav>

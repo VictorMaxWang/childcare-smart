@@ -17,15 +17,13 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className="antialiased">
-        {children}
-  <Analytics />
         <AppProvider>
           <Navbar />
           <main className="min-h-[calc(100vh-64px)] bg-[var(--background)]">
             {children}
           </main>
         </AppProvider>
-        
+        <Analytics />
       </body>
     </html>
   );
