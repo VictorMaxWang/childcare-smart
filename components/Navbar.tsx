@@ -7,6 +7,7 @@ import { Baby, BookHeart, LayoutDashboard, Salad, ShieldCheck, Users } from "luc
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
+import MobileNav from "@/components/MobileNav";
 
 const navItems = [
   { href: "/", label: "数据概览", icon: LayoutDashboard },
@@ -43,8 +44,8 @@ export default function Navbar() {
           <span className="text-base">普惠托育智慧平台</span>
         </Link>
 
-        {/* Nav Links */}
-        <div className="flex flex-1 items-center justify-center gap-1 overflow-x-auto">
+        {/* Nav Links — desktop only */}
+        <div className="hidden flex-1 items-center justify-center gap-1 overflow-x-auto md:flex">
           {navItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
@@ -65,8 +66,8 @@ export default function Navbar() {
           })}
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="hidden text-right md:block">
+        <div className="hidden items-center gap-3 md:flex">
+          <div className="text-right">
             <p className="text-xs text-slate-400">当前身份</p>
             <p className="text-sm font-semibold text-slate-700">
               {currentUser.avatar} {currentUser.name} · {currentUser.role}
@@ -74,6 +75,9 @@ export default function Navbar() {
           </div>
           <Button variant="outline" onClick={handleLogout}>退出登录</Button>
         </div>
+
+        {/* Mobile hamburger */}
+        <MobileNav onLogout={handleLogout} />
       </div>
     </nav>
   );

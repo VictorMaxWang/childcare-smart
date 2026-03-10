@@ -33,6 +33,11 @@ export async function POST(request: Request) {
   const fallbackItems = payload.snapshot.ruleFallback as RuleFallbackItem[];
   const fallback = buildFallbackSuggestion(fallbackItems);
 
+  // Test-only switch for smoke checks without affecting normal UI flow.
+  if (request.headers.get("x-ai-force-fallback") === "1") {
+    return NextResponse.json(fallback, { status: 200 });
+  }
+
   const aiResult = await requestDashscopeSuggestion(payload.snapshot);
   if (!aiResult) {
     return NextResponse.json(fallback, { status: 200 });

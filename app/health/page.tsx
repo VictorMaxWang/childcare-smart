@@ -117,10 +117,13 @@ export default function HealthPage() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-primary">晨检与健康 🌡️</h1>
+          <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
+            <Thermometer className="h-8 w-8 text-sky-500" />
+            晨检与健康
+          </h1>
           <p className="text-muted-foreground mt-1">记录并追踪班级幼儿每日健康体征，及时预警异常情况。</p>
         </div>
       </div>

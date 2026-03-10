@@ -223,7 +223,7 @@ export default function ParentPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
+    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
       <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
@@ -452,20 +452,32 @@ export default function ParentPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {buildSuggestionCards(aiSuggestion, selectedFeed.suggestions).map((insight) => (
-                <div key={insight.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              {aiLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={`skeleton-${i}`} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm skeleton-pulse">
+                    <div className="mb-3 h-5 w-20 rounded-full bg-slate-100" />
+                    <div className="h-4 w-3/4 rounded bg-slate-100" />
+                    <div className="mt-3 space-y-2">
+                      <div className="h-3 w-full rounded bg-slate-50" />
+                      <div className="h-3 w-5/6 rounded bg-slate-50" />
+                    </div>
+                  </div>
+                ))
+              ) : (
+              buildSuggestionCards(aiSuggestion, selectedFeed.suggestions).map((insight) => (
+                <div key={insight.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
                   <div className="mb-2 flex items-center gap-2">
                     <Badge variant={insight.level === "warning" ? "warning" : insight.level === "success" ? "success" : "info"}>
                       {insight.level === "warning" ? "需关注" : insight.level === "success" ? "已准备好" : "建议"}
                     </Badge>
-                    {aiLoading ? <Badge variant="secondary">生成中</Badge> : null}
                     {aiSuggestion?.source === "fallback" ? <Badge variant="info">规则兜底</Badge> : null}
                     {aiSuggestion?.source === "ai" ? <Badge variant="success">AI 建议</Badge> : null}
                   </div>
                   <p className="text-sm font-semibold text-slate-700">{insight.title}</p>
                   <p className="mt-2 text-xs leading-5 text-slate-500">{insight.description}</p>
                 </div>
-              ))}
+              ))
+              )}
             </CardContent>
           </Card>
 
@@ -477,7 +489,7 @@ export default function ParentPage() {
             <CardContent className="space-y-3">
               {selectedFeed.feedbacks.length > 0 ? (
                 selectedFeed.feedbacks.map((feedback) => (
-                  <div key={feedback.id} className="rounded-2xl border border-slate-100 bg-white p-4">
+                  <div key={feedback.id} className="rounded-2xl border border-slate-100 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-md">
                     <div className="flex items-center justify-between">
                       <Badge variant={feedback.status === "今晚反馈" ? "warning" : "info"}>{feedback.status}</Badge>
                       <span className="text-xs text-slate-400">{feedback.createdByRole} · {feedback.createdBy}</span>

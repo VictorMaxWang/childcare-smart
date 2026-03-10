@@ -107,7 +107,7 @@ export default function GrowthPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
+    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
       <div className="mb-8">
         <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
           <BookHeart className="h-8 w-8 text-rose-500" />
@@ -264,7 +264,7 @@ export default function GrowthPage() {
                 const child = visibleChildren.find((item) => item.id === record.childId);
                 if (!child) return null;
                 return (
-                  <div key={record.id} className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+                  <div key={record.id} className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">

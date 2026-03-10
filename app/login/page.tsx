@@ -43,7 +43,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-gradient-to-b from-sky-50 to-white px-6 py-10">
+    <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-gradient-to-b from-sky-50 to-white px-6 py-10 page-enter">
       <Card className="w-full max-w-md border-sky-100 shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-2xl text-slate-800">

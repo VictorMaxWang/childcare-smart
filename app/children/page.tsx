@@ -141,7 +141,7 @@ export default function ChildrenPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
+    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
@@ -375,7 +375,7 @@ function ChildArchiveCard({
   const isPresent = attendance?.isPresent ?? false;
 
   return (
-    <Card className="overflow-hidden border-slate-100 shadow-sm">
+    <Card className="overflow-hidden border-slate-100 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white pb-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">

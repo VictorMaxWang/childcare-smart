@@ -1316,7 +1316,16 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         getAdminBoardData,
       }}
     >
-      {childNodes}
+      {authLoading ? (
+        <div className="flex min-h-[calc(100vh-64px)] items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
+            <p className="text-sm text-slate-400">加载中…</p>
+          </div>
+        </div>
+      ) : (
+        childNodes
+      )}
     </AppContext.Provider>
   );
 }

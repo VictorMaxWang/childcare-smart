@@ -35,3 +35,29 @@ body {
   font-family: var(--font-geist-sans);
   min-height: 100vh;
 }
+
+/* ── Page enter animation ── */
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: page-fade-in 0.45s ease-out both;
+}
+
+/* ── Skeleton pulse for loading states ── */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.skeleton-pulse {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}

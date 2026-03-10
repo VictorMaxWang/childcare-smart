@@ -177,7 +177,7 @@ export default function DietPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
+    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
       <div className="mb-8">
         <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
           <Salad className="h-8 w-8 text-emerald-500" />
