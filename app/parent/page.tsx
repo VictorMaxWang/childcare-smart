@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BellRing, HeartHandshake, LineChart, MessageCircleHeart, CheckCircle, Goal, Award } from "lucide-react";
+import { BellRing, HeartHandshake, LineChart, MessageCircleHeart, CheckCircle, Goal } from "lucide-react";
 import { formatDisplayDate, getAgeText, getAgeBandFromBirthDate, type CollaborationStatus, useApp } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

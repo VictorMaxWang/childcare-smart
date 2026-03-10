@@ -1,6 +1,9 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isRole } from "@/lib/auth/roles";
+import { isSupabaseRuntimeEnabled } from "@/lib/runtime/mode";
 
 export type Role = "家长" | "教师" | "机构管理员";
 export type Gender = "男" | "女";
@@ -612,6 +615,143 @@ function normalizeRecords(records: MealRecord[]) {
   }));
 }
 
+function mapProfileToUser(profile: Record<string, unknown>, fallbackId: string, fallbackName: string): User {
+  const roleRaw = String(profile.role ?? "");
+  const role: Role = isRole(roleRaw) ? roleRaw : "教师";
+  return {
+    id: String(profile.id ?? fallbackId),
+    name: String(profile.name ?? fallbackName),
+    role,
+    avatar: String(profile.avatar ?? "👤"),
+    institutionId: String(profile.institution_id ?? "inst-1"),
+    className: profile.class_name ? String(profile.class_name) : undefined,
+  };
+}
+
+function mapDbChildToChild(row: Record<string, unknown>): Child {
+  return {
+    id: String(row.id),
+    name: String(row.name ?? ""),
+    nickname: row.nickname ? String(row.nickname) : undefined,
+    birthDate: String(row.birth_date ?? TODAY),
+    gender: String(row.gender) === "女" ? "女" : "男",
+    allergies: Array.isArray(row.allergies) ? row.allergies.map((a) => String(a)) : [],
+    heightCm: Number(row.height_cm ?? 0),
+    weightKg: Number(row.weight_kg ?? 0),
+    guardians: Array.isArray(row.guardians)
+      ? row.guardians.map((g) => ({
+          name: String((g as Record<string, unknown>).name ?? ""),
+          relation: String((g as Record<string, unknown>).relation ?? ""),
+          phone: String((g as Record<string, unknown>).phone ?? ""),
+        }))
+      : [],
+    institutionId: String(row.institution_id ?? "inst-1"),
+    className: String(row.class_name ?? ""),
+    specialNotes: String(row.special_notes ?? ""),
+    avatar: String(row.avatar ?? "🧒"),
+    parentUserId: row.parent_user_id ? String(row.parent_user_id) : undefined,
+  };
+}
+
+function mapDbAttendanceRecord(row: Record<string, unknown>): AttendanceRecord {
+  return {
+    id: String(row.id ?? `a-${Date.now()}`),
+    childId: String(row.child_id ?? ""),
+    date: String(row.date ?? TODAY),
+    isPresent: Boolean(row.is_present),
+    checkInAt: row.check_in_at ? String(row.check_in_at) : undefined,
+    checkOutAt: row.check_out_at ? String(row.check_out_at) : undefined,
+    absenceReason: row.absence_reason ? String(row.absence_reason) : undefined,
+  };
+}
+
+function mapDbHealthCheckRecord(row: Record<string, unknown>): HealthCheckRecord {
+  const checkedByRoleRaw = String(row.checked_by_role ?? "教师");
+  return {
+    id: String(row.id ?? `hc-${Date.now()}`),
+    childId: String(row.child_id ?? ""),
+    date: String(row.date ?? TODAY),
+    temperature: Number(row.temperature ?? 36.5),
+    mood: String(row.mood ?? ""),
+    handMouthEye: String(row.hand_mouth_eye) === "异常" ? "异常" : "正常",
+    isAbnormal: Boolean(row.is_abnormal),
+    remark: row.remark ? String(row.remark) : undefined,
+    checkedBy: row.checked_by ? String(row.checked_by) : "",
+    checkedByRole: isRole(checkedByRoleRaw) ? checkedByRoleRaw : "教师",
+  };
+}
+
+function mapDbMealRecord(row: Record<string, unknown>): MealRecord {
+  const foods = Array.isArray(row.foods)
+    ? row.foods.map((food) => ({
+        id: String((food as Record<string, unknown>).id ?? `f-${Date.now()}`),
+        name: String((food as Record<string, unknown>).name ?? ""),
+        category: String((food as Record<string, unknown>).category ?? "其他") as FoodCategory,
+        amount: String((food as Record<string, unknown>).amount ?? ""),
+      }))
+    : [];
+  const recordedByRoleRaw = String(row.recorded_by_role ?? "教师");
+  const preference = String(row.preference ?? "正常") as PreferenceStatus;
+  const waterMl = Number(row.water_ml ?? 0);
+  return {
+    id: String(row.id ?? `m-${Date.now()}`),
+    childId: String(row.child_id ?? ""),
+    date: String(row.date ?? TODAY),
+    meal: String(row.meal ?? "早餐") as MealType,
+    foods,
+    intakeLevel: String(row.intake_level ?? "适中") as IntakeLevel,
+    preference,
+    allergyReaction: row.allergy_reaction ? String(row.allergy_reaction) : undefined,
+    waterMl,
+    nutritionScore: Number(row.nutrition_score ?? calcNutritionScore(foods, waterMl, preference)),
+    recordedBy: row.recorded_by ? String(row.recorded_by) : "",
+    recordedByRole: isRole(recordedByRoleRaw) ? recordedByRoleRaw : "教师",
+  };
+}
+
+function mapDbGrowthRecord(row: Record<string, unknown>): GrowthRecord {
+  const recorderRoleRaw = String(row.recorder_role ?? "教师");
+  return {
+    id: String(row.id ?? `g-${Date.now()}`),
+    childId: String(row.child_id ?? ""),
+    createdAt: String(row.created_at_text ?? TODAY),
+    recorder: String(row.recorder ?? ""),
+    recorderRole: isRole(recorderRoleRaw) ? recorderRoleRaw : "教师",
+    category: String(row.category ?? "情绪表现") as BehaviorCategory,
+    tags: Array.isArray(row.tags) ? row.tags.map((tag) => String(tag)) : [],
+    selectedIndicators: Array.isArray(row.selected_indicators)
+      ? row.selected_indicators.map((item) => String(item))
+      : undefined,
+    description: String(row.description ?? ""),
+    needsAttention: Boolean(row.needs_attention),
+    followUpAction: row.follow_up_action ? String(row.follow_up_action) : undefined,
+    reviewDate: row.review_date ? String(row.review_date) : undefined,
+    reviewStatus: String(row.review_status ?? "") === "待复查" ? "待复查" : "已完成",
+  };
+}
+
+function mapDbGuardianFeedback(row: Record<string, unknown>): GuardianFeedback {
+  const createdByRoleRaw = String(row.created_by_role ?? "家长");
+  return {
+    id: String(row.id ?? `fb-${Date.now()}`),
+    childId: String(row.child_id ?? ""),
+    date: String(row.date ?? TODAY),
+    status: String(row.status ?? "已知晓") as CollaborationStatus,
+    content: String(row.content ?? ""),
+    createdBy: row.created_by ? String(row.created_by) : "",
+    createdByRole: isRole(createdByRoleRaw) ? createdByRoleRaw : "家长",
+  };
+}
+
+function mapDbTaskCheckInRecord(row: Record<string, unknown>): TaskCheckInRecord {
+  return {
+    id: String(row.id ?? `tc-${Date.now()}`),
+    childId: String(row.child_id ?? ""),
+    taskId: String(row.task_id ?? ""),
+    date: String(row.date ?? TODAY),
+  };
+}
+
 function filterChildrenByUser(children: Child[], user: User) {
   if (user.role === "机构管理员") {
     return children.filter((child) => child.institutionId === user.institutionId);
@@ -654,7 +794,7 @@ export function calcNutritionScore(
 }
 
 export function AppProvider({ children: childNodes }: { children: ReactNode }) {
-  const [users] = useState<User[]>(INITIAL_USERS);
+  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [currentUserId, setCurrentUserId] = useState(INITIAL_USERS[1].id);
   const [childrenList, setChildrenList] = useState<Child[]>(INITIAL_CHILDREN);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(INITIAL_ATTENDANCE);
@@ -663,6 +803,124 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const [guardianFeedbacks, setGuardianFeedbacks] = useState<GuardianFeedback[]>(INITIAL_FEEDBACKS);
   const [healthCheckRecords, setHealthCheckRecords] = useState<HealthCheckRecord[]>(INITIAL_HEALTH_CHECKS);
   const [taskCheckInRecords, setTaskCheckInRecords] = useState<TaskCheckInRecord[]>(INITIAL_TASK_CHECKINS);
+  const hasSupabaseEnv = isSupabaseRuntimeEnabled();
+
+  useEffect(() => {
+    if (!hasSupabaseEnv) return;
+
+    let active = true;
+
+    async function hydrateFromSupabase() {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const {
+          data: { user: authUser },
+        } = await supabase.auth.getUser();
+
+        if (!authUser || !active) return;
+
+        const { data: profile } = await supabase
+          .from("user_profiles")
+          .select("id,name,role,avatar,institution_id,class_name")
+          .eq("id", authUser.id)
+          .single();
+
+        const mappedUser = mapProfileToUser(
+          (profile as Record<string, unknown>) ?? {},
+          authUser.id,
+          authUser.email ?? "未命名用户"
+        );
+
+        if (!active) return;
+
+        setUsers([mappedUser]);
+        setCurrentUserId(mappedUser.id);
+
+        let childrenQuery = supabase.from("children").select("*");
+        if (mappedUser.role === "家长") {
+          childrenQuery = childrenQuery.eq("parent_user_id", mappedUser.id);
+        } else if (mappedUser.role === "教师") {
+          childrenQuery = childrenQuery
+            .eq("institution_id", mappedUser.institutionId)
+            .eq("class_name", mappedUser.className ?? "");
+        } else {
+          childrenQuery = childrenQuery.eq("institution_id", mappedUser.institutionId);
+        }
+
+        const { data: dbChildren } = await childrenQuery;
+        if (!active || !dbChildren) return;
+
+        const mappedChildren = dbChildren.map((row) => mapDbChildToChild(row as Record<string, unknown>));
+        const childIds = mappedChildren.map((child) => child.id);
+
+        if (mappedUser.role === "家长") {
+          setUsers([{ ...mappedUser, childIds }]);
+        }
+
+        setChildrenList(mappedChildren);
+
+        if (childIds.length === 0) {
+          setAttendanceRecords([]);
+          setHealthCheckRecords([]);
+          setMealRecords([]);
+          setGrowthRecords([]);
+          setGuardianFeedbacks([]);
+          setTaskCheckInRecords([]);
+          return;
+        }
+
+        const [attendanceRes, healthRes, mealRes, growthRes, feedbackRes, taskRes] = await Promise.all([
+          supabase.from("attendance_records").select("*").in("child_id", childIds),
+          supabase.from("health_checks").select("*").in("child_id", childIds),
+          supabase.from("meal_records").select("*").in("child_id", childIds),
+          supabase.from("growth_records").select("*").in("child_id", childIds),
+          supabase.from("guardian_feedbacks").select("*").in("child_id", childIds),
+          supabase.from("task_checkins").select("*").in("child_id", childIds),
+        ]);
+
+        if (!active) return;
+
+        setAttendanceRecords(
+          Array.isArray(attendanceRes.data)
+            ? attendanceRes.data.map((row) => mapDbAttendanceRecord(row as Record<string, unknown>))
+            : []
+        );
+        setHealthCheckRecords(
+          Array.isArray(healthRes.data)
+            ? healthRes.data.map((row) => mapDbHealthCheckRecord(row as Record<string, unknown>))
+            : []
+        );
+        setMealRecords(
+          Array.isArray(mealRes.data)
+            ? mealRes.data.map((row) => mapDbMealRecord(row as Record<string, unknown>))
+            : []
+        );
+        setGrowthRecords(
+          Array.isArray(growthRes.data)
+            ? growthRes.data.map((row) => mapDbGrowthRecord(row as Record<string, unknown>))
+            : []
+        );
+        setGuardianFeedbacks(
+          Array.isArray(feedbackRes.data)
+            ? feedbackRes.data.map((row) => mapDbGuardianFeedback(row as Record<string, unknown>))
+            : []
+        );
+        setTaskCheckInRecords(
+          Array.isArray(taskRes.data)
+            ? taskRes.data.map((row) => mapDbTaskCheckInRecord(row as Record<string, unknown>))
+            : []
+        );
+      } catch {
+        // Keep mock data fallback when Supabase is not configured or unavailable.
+      }
+    }
+
+    hydrateFromSupabase();
+
+    return () => {
+      active = false;
+    };
+  }, [hasSupabaseEnv]);
 
   const currentUser = users.find((user) => user.id === currentUserId) ?? users[0];
   const visibleChildren = useMemo(() => filterChildrenByUser(childrenList, currentUser), [childrenList, currentUser]);
@@ -681,18 +939,51 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     return todayAttendance?.isPresent;
   });
 
-  const switchUser = (userId: string) => setCurrentUserId(userId);
+  const switchUser = (userId: string) => {
+    // In Supabase auth mode, current identity should come from session/profile instead of demo switching.
+    if (hasSupabaseEnv) return;
+    setCurrentUserId(userId);
+  };
 
   const addChild = (child: NewChildInput) => {
     const avatars = child.gender === "女" ? GIRL_AVATARS : BOY_AVATARS;
+    const childId = `c-${Date.now()}`;
+    const avatar = avatars[Math.floor(Math.random() * avatars.length)];
+
     setChildrenList((prev) => [
       ...prev,
       {
         ...child,
-        id: `c-${Date.now()}`,
-        avatar: avatars[Math.floor(Math.random() * avatars.length)],
+        id: childId,
+        avatar,
       },
     ]);
+
+    if (!hasSupabaseEnv) return;
+
+    void (async () => {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        await supabase.from("children").insert({
+          id: childId,
+          name: child.name,
+          nickname: child.nickname ?? null,
+          birth_date: child.birthDate,
+          gender: child.gender,
+          allergies: child.allergies,
+          height_cm: child.heightCm,
+          weight_kg: child.weightKg,
+          guardians: child.guardians,
+          institution_id: child.institutionId,
+          class_name: child.className,
+          special_notes: child.specialNotes,
+          avatar,
+          parent_user_id: child.parentUserId ?? null,
+        });
+      } catch {
+        // Keep optimistic local state even if remote sync fails.
+      }
+    })();
   };
 
   const removeChild = (id: string) => {
@@ -701,16 +992,53 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     setMealRecords((prev) => prev.filter((record) => record.childId !== id));
     setGrowthRecords((prev) => prev.filter((record) => record.childId !== id));
     setGuardianFeedbacks((prev) => prev.filter((record) => record.childId !== id));
+
+    if (!hasSupabaseEnv) return;
+
+    void (async () => {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        await supabase.from("children").delete().eq("id", id);
+      } catch {
+        // Keep optimistic local state even if remote sync fails.
+      }
+    })();
   };
 
   const markAttendance = (input: Omit<AttendanceRecord, "id">) => {
+    const recordId = `a-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+    const existing = attendanceRecords.find((record) => record.childId === input.childId && record.date === input.date);
+    const syncId = existing?.id ?? recordId;
+
     setAttendanceRecords((prev) => {
-      const existing = prev.find((record) => record.childId === input.childId && record.date === input.date);
-      if (!existing) {
-        return [...prev, { ...input, id: `a-${Date.now()}` }];
+      const existingInPrev = prev.find((record) => record.childId === input.childId && record.date === input.date);
+      if (!existingInPrev) {
+        return [...prev, { ...input, id: recordId }];
       }
-      return prev.map((record) => (record.id === existing.id ? { ...existing, ...input } : record));
+      return prev.map((record) => (record.id === existingInPrev.id ? { ...existingInPrev, ...input } : record));
     });
+
+    if (!hasSupabaseEnv) return;
+
+    void (async () => {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        await supabase.from("attendance_records").upsert(
+          {
+            id: syncId,
+            child_id: input.childId,
+            date: input.date,
+            is_present: input.isPresent,
+            check_in_at: input.checkInAt ?? null,
+            check_out_at: input.checkOutAt ?? null,
+            absence_reason: input.absenceReason ?? null,
+          },
+          { onConflict: "child_id,date" }
+        );
+      } catch {
+        // Keep optimistic local state even if remote sync fails.
+      }
+    })();
   };
 
   const toggleTodayAttendance = (childId: string) => {
@@ -729,19 +1057,53 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   };
 
   const upsertMealRecord = (input: UpsertMealRecordInput) => {
+    const recordId = `m-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+    const existing = mealRecords.find(
+      (record) =>
+        record.childId === input.childId && record.date === input.date && record.meal === input.meal
+    );
+    const syncId = existing?.id ?? recordId;
+
     setMealRecords((prev) => {
-      const existing = prev.find(
+      const existingInPrev = prev.find(
         (record) =>
           record.childId === input.childId && record.date === input.date && record.meal === input.meal
       );
       const next: MealRecord = {
-        ...(existing ?? { id: `m-${Date.now()}-${Math.random().toString(16).slice(2, 6)}` }),
+        ...(existingInPrev ?? { id: recordId }),
         ...input,
         nutritionScore: calcNutritionScore(input.foods, input.waterMl, input.preference),
       };
-      if (!existing) return [...prev, next];
-      return prev.map((record) => (record.id === existing.id ? next : record));
+      if (!existingInPrev) return [...prev, next];
+      return prev.map((record) => (record.id === existingInPrev.id ? next : record));
     });
+
+    if (!hasSupabaseEnv) return;
+
+    void (async () => {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        await supabase.from("meal_records").upsert(
+          {
+            id: syncId,
+            child_id: input.childId,
+            date: input.date,
+            meal: input.meal,
+            foods: input.foods,
+            intake_level: input.intakeLevel,
+            preference: input.preference,
+            allergy_reaction: input.allergyReaction ?? null,
+            water_ml: input.waterMl,
+            nutrition_score: calcNutritionScore(input.foods, input.waterMl, input.preference),
+            recorded_by: currentUser.id,
+            recorded_by_role: currentUser.role,
+          },
+          { onConflict: "child_id,date,meal" }
+        );
+      } catch {
+        // Keep optimistic local state even if remote sync fails.
+      }
+    })();
   };
 
   const previewBulkMealTemplate = (
@@ -784,11 +1146,15 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   };
 
   const addGrowthRecord = (input: AddGrowthRecordInput) => {
+    const recordId = `g-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+    const createdAt = new Date().toLocaleString("zh-CN", { hour12: false });
+    const reviewStatus = input.reviewStatus ?? (input.needsAttention ? "待复查" : "已完成");
+
     setGrowthRecords((prev) => [
       {
-        id: `g-${Date.now()}`,
+        id: recordId,
         childId: input.childId,
-        createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+        createdAt,
         recorder: currentUser.name,
         recorderRole: currentUser.role,
         category: input.category,
@@ -797,22 +1163,68 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         needsAttention: input.needsAttention,
         followUpAction: input.followUpAction,
         reviewDate: input.reviewDate,
-        reviewStatus: input.reviewStatus ?? (input.needsAttention ? "待复查" : "已完成"),
+        reviewStatus,
+        selectedIndicators: input.selectedIndicators,
       },
       ...prev,
     ]);
+
+    if (!hasSupabaseEnv) return;
+
+    void (async () => {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        await supabase.from("growth_records").insert({
+          id: recordId,
+          child_id: input.childId,
+          created_at_text: createdAt,
+          recorder: currentUser.name,
+          recorder_role: currentUser.role,
+          category: input.category,
+          tags: input.tags,
+          selected_indicators: input.selectedIndicators ?? [],
+          description: input.description,
+          needs_attention: input.needsAttention,
+          follow_up_action: input.followUpAction ?? null,
+          review_date: input.reviewDate ?? null,
+          review_status: reviewStatus,
+        });
+      } catch {
+        // Keep optimistic local state even if remote sync fails.
+      }
+    })();
   };
 
   const addGuardianFeedback = (input: Omit<GuardianFeedback, "id" | "createdBy" | "createdByRole">) => {
+    const feedbackId = `fb-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
     setGuardianFeedbacks((prev) => [
       {
         ...input,
-        id: `fb-${Date.now()}`,
+        id: feedbackId,
         createdBy: currentUser.name,
         createdByRole: currentUser.role,
       },
       ...prev,
     ]);
+
+    if (!hasSupabaseEnv) return;
+
+    void (async () => {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        await supabase.from("guardian_feedbacks").insert({
+          id: feedbackId,
+          child_id: input.childId,
+          date: input.date,
+          status: input.status,
+          content: input.content,
+          created_by: currentUser.id,
+          created_by_role: currentUser.role,
+        });
+      } catch {
+        // Keep optimistic local state even if remote sync fails.
+      }
+    })();
   };
 
   const getTodayHealthCheck = (childId: string) => {
@@ -820,8 +1232,13 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   };
 
   const upsertHealthCheck = (input: Omit<HealthCheckRecord, "id" | "date" | "checkedBy" | "checkedByRole"> & { date?: string }) => {
+    const date = input.date || TODAY;
+    const healthCheckId = `hc-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+    const existing = healthCheckRecords.find((record) => record.childId === input.childId && record.date === date);
+    const syncId = existing?.id ?? healthCheckId;
+
     setHealthCheckRecords((prev) => {
-      const existingIndex = prev.findIndex((record) => record.childId === input.childId && record.date === (input.date || TODAY));
+      const existingIndex = prev.findIndex((record) => record.childId === input.childId && record.date === date);
       if (existingIndex > -1) {
         const next = [...prev];
         next[existingIndex] = { ...next[existingIndex], ...input };
@@ -830,14 +1247,39 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       return [
         {
           ...input,
-          id: `hc-${Date.now()}`,
-          date: input.date || TODAY,
+          id: healthCheckId,
+          date,
           checkedBy: currentUser.name,
           checkedByRole: currentUser.role,
         },
         ...prev,
       ];
     });
+
+    if (!hasSupabaseEnv) return;
+
+    void (async () => {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        await supabase.from("health_checks").upsert(
+          {
+            id: syncId,
+            child_id: input.childId,
+            date,
+            temperature: input.temperature,
+            mood: input.mood,
+            hand_mouth_eye: input.handMouthEye,
+            is_abnormal: input.isAbnormal,
+            remark: input.remark ?? null,
+            checked_by: currentUser.id,
+            checked_by_role: currentUser.role,
+          },
+          { onConflict: "child_id,date" }
+        );
+      } catch {
+        // Keep optimistic local state even if remote sync fails.
+      }
+    })();
   };
 
   const getTaskCheckIns = (childId: string, date?: string) => {
@@ -845,11 +1287,34 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   };
 
   const checkInTask = (childId: string, taskId: string, date: string) => {
+    const checkInId = `tc-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+    const alreadyExists = taskCheckInRecords.some((r) => r.childId === childId && r.taskId === taskId && r.date === date);
     setTaskCheckInRecords((prev) => {
       const exists = prev.some((r) => r.childId === childId && r.taskId === taskId && r.date === date);
       if (exists) return prev;
-      return [...prev, { id: `tc-${Date.now()}`, childId, taskId, date }];
+      return [...prev, { id: checkInId, childId, taskId, date }];
     });
+
+    if (alreadyExists) return;
+
+    if (!hasSupabaseEnv) return;
+
+    void (async () => {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        await supabase.from("task_checkins").upsert(
+          {
+            id: checkInId,
+            child_id: childId,
+            task_id: taskId,
+            date,
+          },
+          { onConflict: "child_id,task_id,date" }
+        );
+      } catch {
+        // Keep optimistic local state even if remote sync fails.
+      }
+    })();
   };
 
   const getTodayMealRecords = (childIds?: string[]) => {

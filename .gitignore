@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# release automation artifacts
+release-report.json
+artifacts/
+
+# release gate secrets
+.env.release

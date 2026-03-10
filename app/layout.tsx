@@ -14,19 +14,17 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <html lang="zh-CN">
-      <body className="antialiased">
-        {children}
-  <Analytics />
-        <AppProvider>
-          <Navbar />
-          <main className="min-h-[calc(100vh-64px)] bg-[var(--background)]">
-            {children}
-          </main>
-        </AppProvider>
-        
-      </body>
-    </html>
-  );
+ return (
+  <html lang="zh-CN">
+    <body className="antialiased">
+      <AppProvider>
+        <Navbar />
+        <main className="min-h-[calc(100vh-64px)] bg-[var(--background)]">
+          {children}
+        </main>
+      </AppProvider>
+      <Analytics />
+    </body>
+  </html>
+);
 }

@@ -19,6 +19,7 @@ import { useApp } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { WeeklyTrendChart } from "@/components/charts/WeeklyTrendChart";
 
 const TODAY_TEXT = new Date().toLocaleDateString("zh-CN", {
   year: "numeric",
@@ -74,7 +75,6 @@ export default function DashboardPage() {
     (record) => record.date === todayDate && record.isAbnormal && visibleIds.has(record.childId)
   );
   
-  const presentChildIds = new Set(presentChildren.map(c => c.id));
   const missingHealthChecks = presentChildren.filter(
     (child) => !healthCheckRecords.some(r => r.childId === child.id && r.date === todayDate)
   );
@@ -145,6 +145,15 @@ export default function DashboardPage() {
       desc: "家长打卡并提交已知晓/配合/今晚反馈",
       href: "/parent",
       icon: "5",
+    },
+  ];
+
+  const weeklyTrendChartData = [
+    { name: "本周", balancedRate: weeklyTrend.balancedRate, hydrationAvg: weeklyTrend.hydrationAvg },
+    {
+      name: "目标",
+      balancedRate: 85,
+      hydrationAvg: 180,
     },
   ];
 
@@ -249,6 +258,7 @@ export default function DashboardPage() {
             <CardDescription>规则引擎用于识别膳食均衡、蔬果不足、单一摄入和低饮水风险。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
+            <WeeklyTrendChart data={weeklyTrendChartData} />
             {[
               { label: "膳食均衡占比", value: weeklyTrend.balancedRate, suffix: "%", color: "bg-indigo-400" },
               { label: "含蔬果天数", value: weeklyTrend.vegetableDays, suffix: "天", color: "bg-emerald-400" },

@@ -6,7 +6,24 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "release:check": "node ./scripts/release-check.mjs",
+    "release:report": "node ./scripts/release-check.mjs",
+    "release:report:local": "node ./scripts/release-check.mjs --report-path=./artifacts/release-report.local.json",
+    "release:check:remote": "node ./scripts/release-check.mjs --require-remote",
+    "release:report:remote": "node ./scripts/release-check.mjs --require-remote --report-path=./artifacts/release-report.remote.json",
+    "release:gate:local": "npm run lint && npm run build && npm run release:check",
+    "release:gate:remote": "npm run release:check:remote",
+    "release:gate:remote:env": "node ./scripts/release-check.mjs --require-remote --release-env-file=.env.release --report-path=./artifacts/release-report.remote.json",
+    "release:env:init": "node ./scripts/release-env-init.mjs",
+    "release:env:check": "node ./scripts/release-env-check.mjs",
+    "release:go:remote": "npm run release:remote:reset && npm run release:env:init && npm run release:env:check && npm run release:gate:remote:env",
+    "release:go:all": "npm run release:gate:local && npm run release:go:remote",
+    "release:sql:pass": "node ./scripts/release-sql-check-set.mjs --overall-passed=true",
+    "release:sql:fail": "node ./scripts/release-sql-check-set.mjs --overall-passed=false",
+    "release:ready": "node ./scripts/release-ready.mjs",
+    "release:status": "node ./scripts/release-status.mjs",
+    "release:remote:reset": "node ./scripts/release-remote-reset.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -14,6 +31,8 @@
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
+    "@supabase/ssr": "^0.9.0",
+    "@supabase/supabase-js": "^2.99.0",
     "@vercel/analytics": "^1.6.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -21,6 +40,7 @@
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "recharts": "^3.8.0",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {

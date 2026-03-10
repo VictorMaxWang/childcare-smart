@@ -5,10 +5,10 @@ import { Activity, AlertTriangle, CheckCircle2, Search, Thermometer, Users } fro
 import { useApp } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -289,7 +289,7 @@ export default function HealthPage() {
               <Label htmlFor="handMouthEye" className="text-right">
                 手口眼
               </Label>
-              <Select value={handMouthEye} onValueChange={(val: any) => setHandMouthEye(val)}>
+              <Select value={handMouthEye} onValueChange={(val: "正常" | "异常") => setHandMouthEye(val)}>
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="选择状态" />
                 </SelectTrigger>

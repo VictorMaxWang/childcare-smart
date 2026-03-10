@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, ChefHat, Plus, Salad, ShieldAlert, X } from "lucide-react";
 import {
   calcNutritionScore,
@@ -81,13 +81,11 @@ export default function DietPage() {
   const [bulkExcludedChildIds, setBulkExcludedChildIds] = useState<string[]>([]);
   const [bulkMessage, setBulkMessage] = useState("");
 
-  useEffect(() => {
-    if (!visibleChildren.some((child) => child.id === selectedChildId)) {
-      setSelectedChildId(visibleChildren[0]?.id ?? "");
-    }
-  }, [selectedChildId, visibleChildren]);
+  const effectiveSelectedChildId = visibleChildren.some((child) => child.id === selectedChildId)
+    ? selectedChildId
+    : (visibleChildren[0]?.id ?? "");
 
-  const selectedChild = visibleChildren.find((child) => child.id === selectedChildId) ?? null;
+  const selectedChild = visibleChildren.find((child) => child.id === effectiveSelectedChildId) ?? null;
   const todayAttendance = getTodayAttendance();
   const attendanceMap = new Map(todayAttendance.map((item) => [item.childId, item]));
 
@@ -357,7 +355,7 @@ export default function DietPage() {
             <CardContent className="space-y-3">
               {visibleChildren.map((child) => {
                 const attendance = attendanceMap.get(child.id);
-                const isSelected = child.id === selectedChildId;
+                const isSelected = child.id === effectiveSelectedChildId;
                 const score = mealRecords
                   .filter((record) => record.childId === child.id && record.date === TODAY)
                   .map((record) => record.nutritionScore);
@@ -492,13 +490,6 @@ function MealEditorCard({ meal, record, onSave }: { meal: MealType; record?: Mea
   const [preference, setPreference] = useState<PreferenceStatus>(record?.preference ?? "正常");
   const [waterMl, setWaterMl] = useState(String(record?.waterMl ?? 120));
   const [allergyReaction, setAllergyReaction] = useState(record?.allergyReaction ?? "");
-
-  useEffect(() => {
-    setIntakeLevel(record?.intakeLevel ?? "适中");
-    setPreference(record?.preference ?? "正常");
-    setWaterMl(String(record?.waterMl ?? 120));
-    setAllergyReaction(record?.allergyReaction ?? "");
-  }, [record]);
 
   const foods = record?.foods ?? [];
   const mealScore = calcNutritionScore(foods, Number(waterMl) || 0, preference);

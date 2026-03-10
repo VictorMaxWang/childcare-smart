@@ -1,0 +1,69 @@
+name: release-gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_REPORT_PATH: artifacts/release-report.local.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Local Release Gate (lint + build + release-check)
+        run: npm run release:gate:local
+
+      - name: Upload Local Release Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-report-local
+          path: artifacts/release-report.local.json
+          if-no-files-found: ignore
+
+  gate-remote:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.RELEASE_BASE_URL != '' && secrets.RELEASE_ADMIN_COOKIE != '' && secrets.CRON_SECRET != '' }}
+    runs-on: ubuntu-latest
+    needs: gate
+    env:
+      RELEASE_BASE_URL: ${{ secrets.RELEASE_BASE_URL }}
+      RELEASE_ADMIN_COOKIE: ${{ secrets.RELEASE_ADMIN_COOKIE }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      RELEASE_REPORT_PATH: artifacts/release-report.remote.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Release Remote Check
+        run: npm run release:gate:remote
+
+      - name: Upload Remote Release Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-report-remote
+          path: artifacts/release-report.remote.json
+          if-no-files-found: ignore
