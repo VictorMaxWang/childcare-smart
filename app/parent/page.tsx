@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { BellRing, HeartHandshake, LineChart, MessageCircleHeart, CheckCircle, Goal } from "lucide-react";
 import { formatDisplayDate, getAgeText, getAgeBandFromBirthDate, type CollaborationStatus, useApp } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +52,12 @@ export default function ParentPage() {
     setFeedbackContent("");
     setFeedbackStatus("已知晓");
   }
+
+  useEffect(() => {
+    if (!feedbackMessage) return;
+    const timer = setTimeout(() => setFeedbackMessage(""), 3000);
+    return () => clearTimeout(timer);
+  }, [feedbackMessage]);
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">

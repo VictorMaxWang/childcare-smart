@@ -43,6 +43,10 @@ export const INSTITUTION_NAME = "春芽普惠托育中心";
 
 const TODAY = new Date().toISOString().split("T")[0];
 
+function getToday() {
+  return new Date().toISOString().split("T")[0];
+}
+
 export interface User {
   id: string;
   name: string;
@@ -252,7 +256,7 @@ interface AppContextType {
   getAttendanceByDate: (date: string, childId?: string) => AttendanceRecord[];
   getTodayAttendance: () => AttendanceRecord[];
   markAttendance: (input: Omit<AttendanceRecord, "id">) => void;
-  toggleTodayAttendance: (childId: string) => void;
+  toggleTodayAttendance: (childId: string, absenceReason?: string) => void;
 
   healthCheckRecords: HealthCheckRecord[];
   upsertHealthCheck: (input: Omit<HealthCheckRecord, "id" | "date" | "checkedBy" | "checkedByRole"> & { date?: string }) => void;
@@ -770,7 +774,7 @@ function startOfDay(dateString: string) {
 
 function isInLastDays(dateString: string, days: number) {
   const pureDate = dateString.split(" ")[0];
-  const diff = startOfDay(TODAY) - startOfDay(pureDate);
+  const diff = startOfDay(getToday()) - startOfDay(pureDate);
   return diff >= 0 && diff <= (days - 1) * 24 * 60 * 60 * 1000;
 }
 
@@ -930,11 +934,11 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     return attendanceRecords.filter((record) => record.date === date && ids.includes(record.childId));
   };
 
-  const getTodayAttendance = () => getAttendanceByDate(TODAY);
+  const getTodayAttendance = () => getAttendanceByDate(getToday());
 
   const presentChildren = visibleChildren.filter((child) => {
     const todayAttendance = attendanceRecords.find(
-      (record) => record.childId === child.id && record.date === TODAY
+      (record) => record.childId === child.id && record.date === getToday()
     );
     return todayAttendance?.isPresent;
   });
@@ -1041,16 +1045,17 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     })();
   };
 
-  const toggleTodayAttendance = (childId: string) => {
-    const existing = attendanceRecords.find((record) => record.childId === childId && record.date === TODAY);
+  const toggleTodayAttendance = (childId: string, absenceReason?: string) => {
+    const today = getToday();
+    const existing = attendanceRecords.find((record) => record.childId === childId && record.date === today);
     if (!existing) {
-      markAttendance({ childId, date: TODAY, isPresent: true, checkInAt: "08:30", checkOutAt: "17:10" });
+      markAttendance({ childId, date: today, isPresent: true, checkInAt: "08:30", checkOutAt: "17:10" });
       return;
     }
     markAttendance({
       ...existing,
       isPresent: !existing.isPresent,
-      absenceReason: existing.isPresent ? "临时请假" : undefined,
+      absenceReason: existing.isPresent ? (absenceReason ?? "临时请假") : undefined,
       checkInAt: existing.isPresent ? undefined : "08:35",
       checkOutAt: existing.isPresent ? undefined : "17:15",
     });
@@ -1228,11 +1233,11 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   };
 
   const getTodayHealthCheck = (childId: string) => {
-    return healthCheckRecords.find((record) => record.childId === childId && record.date === TODAY);
+    return healthCheckRecords.find((record) => record.childId === childId && record.date === getToday());
   };
 
   const upsertHealthCheck = (input: Omit<HealthCheckRecord, "id" | "date" | "checkedBy" | "checkedByRole"> & { date?: string }) => {
-    const date = input.date || TODAY;
+    const date = input.date || getToday();
     const healthCheckId = `hc-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
     const existing = healthCheckRecords.find((record) => record.childId === input.childId && record.date === date);
     const syncId = existing?.id ?? healthCheckId;
@@ -1319,7 +1324,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
   const getTodayMealRecords = (childIds?: string[]) => {
     const ids = childIds ?? visibleChildren.map((child) => child.id);
-    return mealRecords.filter((record) => record.date === TODAY && ids.includes(record.childId));
+    return mealRecords.filter((record) => record.date === getToday() && ids.includes(record.childId));
   };
 
   const getWeeklyDietTrend = (childId?: string): WeeklyDietTrend => {
@@ -1474,13 +1479,14 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       ? visibleChildren
       : visibleChildren.filter((child) => Boolean(child.parentUserId));
 
+    const today = getToday();
     return parentChildren.map((child) => {
-      const todayMeals = mealRecords.filter((record) => record.childId === child.id && record.date === TODAY);
+      const todayMeals = mealRecords.filter((record) => record.childId === child.id && record.date === today);
       const todayGrowth = growthRecords.filter(
-        (record) => record.childId === child.id && record.createdAt.startsWith(TODAY)
+        (record) => record.childId === child.id && record.createdAt.startsWith(today)
       );
       const suggestions = getSmartInsights().filter((insight) => !insight.childId || insight.childId === child.id);
-      const feedbacks = guardianFeedbacks.filter((feedback) => feedback.childId === child.id && feedback.date === TODAY);
+      const feedbacks = guardianFeedbacks.filter((feedback) => feedback.childId === child.id && feedback.date === today);
 
       return {
         child,

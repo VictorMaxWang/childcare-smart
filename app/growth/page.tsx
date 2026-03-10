@@ -119,7 +119,14 @@ export default function GrowthPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_1fr]">
+      {visibleChildren.length === 0 ? (
+        <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 py-20 text-center text-slate-500">
+          <BookHeart className="mx-auto mb-4 h-12 w-12 text-slate-300" />
+          <p className="text-base font-medium">当前视角下暂无可见幼儿</p>
+          <p className="mt-1 text-sm">请联系机构管理员确认班级分配或幼儿数据。</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_1fr]">
         <Card className="h-fit">
           <CardHeader>
             <CardTitle className="text-lg">新增观察记录</CardTitle>
@@ -356,7 +363,8 @@ export default function GrowthPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

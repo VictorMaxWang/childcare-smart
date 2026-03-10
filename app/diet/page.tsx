@@ -201,7 +201,7 @@ export default function DietPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 lg:grid-cols-6">
-            <Select value={bulkMeal} onValueChange={(value) => setBulkMeal(value as MealType)}>
+            <Select value={bulkMeal} onValueChange={(value) => { setBulkMeal(value as MealType); setBulkExcludedChildIds([]); setBulkFoods([]); setBulkMessage(""); }}>
               <SelectTrigger>
                 <SelectValue placeholder="选择餐次" />
               </SelectTrigger>

@@ -40,6 +40,8 @@ export default function ChildrenPage() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [absenceDialogChildId, setAbsenceDialogChildId] = useState<string | null>(null);
+  const [absenceReason, setAbsenceReason] = useState("");
   const [form, setForm] = useState({
     name: "",
     nickname: "",
@@ -109,6 +111,12 @@ export default function ChildrenPage() {
   function handleSubmit() {
     if (!form.name.trim() || !form.birthDate || !form.guardianName.trim()) {
       setError("请至少填写姓名、出生日期和一位监护人信息。");
+      return;
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    if (form.birthDate > today) {
+      setError("出生日期不能是未来日期。");
       return;
     }
 
@@ -208,7 +216,15 @@ export default function ChildrenPage() {
                 canManage={canManage}
                 attendance={attendance}
                 onDelete={() => setDeleteId(child.id)}
-                onToggleAttendance={() => toggleTodayAttendance(child.id)}
+                onToggleAttendance={() => {
+                  // If currently present → will become absent: ask for reason
+                  if (attendance?.isPresent) {
+                    setAbsenceReason("");
+                    setAbsenceDialogChildId(child.id);
+                  } else {
+                    toggleTodayAttendance(child.id);
+                  }
+                }}
               />
             );
           })}
@@ -333,6 +349,38 @@ export default function ChildrenPage() {
               }}
             >
               确认删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(absenceDialogChildId)} onOpenChange={(value) => !value && setAbsenceDialogChildId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>记录缺勤原因</DialogTitle>
+            <DialogDescription>请填写缺勤原因（可留空，默认为"临时请假"）。</DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Input
+              value={absenceReason}
+              onChange={(e) => setAbsenceReason(e.target.value)}
+              placeholder="如：发热请假、家庭事务等"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAbsenceDialogChildId(null)}>
+              取消
+            </Button>
+            <Button
+              onClick={() => {
+                if (absenceDialogChildId) {
+                  toggleTodayAttendance(absenceDialogChildId, absenceReason.trim() || "临时请假");
+                }
+                setAbsenceDialogChildId(null);
+                setAbsenceReason("");
+              }}
+            >
+              确认缺勤
             </Button>
           </DialogFooter>
         </DialogContent>

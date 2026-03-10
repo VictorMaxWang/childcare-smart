@@ -33,6 +33,7 @@ export default function HealthPage() {
   const [handMouthEye, setHandMouthEye] = useState<"正常" | "异常">("正常");
   const [remark, setRemark] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [tempError, setTempError] = useState("");
 
   // Computed data
   const childData = useMemo(() => {
@@ -83,12 +84,19 @@ export default function HealthPage() {
     
     setSelectedChildId(childId);
     setIsDialogOpen(true);
+    setTempError("");
   };
 
   const handleSaveHealthCheck = () => {
     if (!selectedChildId) return;
     
     const tempNum = parseFloat(temperature);
+    if (isNaN(tempNum) || tempNum < 30 || tempNum > 45) {
+      setTempError("请输入有效体温（30–45°C）");
+      return;
+    }
+    setTempError("");
+
     const isTempAbnormal = tempNum >= TEMPERATURE_THRESHOLD;
     const isAbnormal = isTempAbnormal || handMouthEye === "异常" || mood.includes("哭闹");
 
@@ -276,10 +284,12 @@ export default function HealthPage() {
                   type="number"
                   step="0.1"
                   value={temperature}
-                  onChange={(e) => setTemperature(e.target.value)}
+                  onChange={(e) => { setTemperature(e.target.value); setTempError(""); }}
                   className={parseFloat(temperature) >= TEMPERATURE_THRESHOLD ? "border-red-500 text-red-600" : ""}
                 />
-                {parseFloat(temperature) >= TEMPERATURE_THRESHOLD && (
+                {tempError ? (
+                  <p className="text-xs text-red-500 mt-1">{tempError}</p>
+                ) : parseFloat(temperature) >= TEMPERATURE_THRESHOLD && (
                   <p className="text-xs text-red-500 mt-1">发热预警 (≥{TEMPERATURE_THRESHOLD}°C)</p>
                 )}
               </div>

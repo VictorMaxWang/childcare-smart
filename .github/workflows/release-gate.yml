@@ -6,9 +6,14 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   gate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       RELEASE_REPORT_PATH: artifacts/release-report.local.json
     steps:
@@ -38,6 +43,8 @@ jobs:
   gate-remote:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.RELEASE_BASE_URL != '' && secrets.RELEASE_ADMIN_COOKIE != '' && secrets.CRON_SECRET != '' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: gate
     env:
       RELEASE_BASE_URL: ${{ secrets.RELEASE_BASE_URL }}
