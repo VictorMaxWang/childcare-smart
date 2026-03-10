@@ -90,6 +90,7 @@ export async function requestDashscopeSuggestion(
   const model = process.env.AI_MODEL || "qwen-turbo";
 
   if (!apiKey) {
+    console.warn("[AI] DASHSCOPE_API_KEY is missing, falling back to rules.");
     return null;
   }
 
@@ -123,6 +124,8 @@ export async function requestDashscopeSuggestion(
     });
 
     if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.error(`[AI] DashScope request failed: ${response.status} ${response.statusText}`, errorText.slice(0, 300));
       return null;
     }
 
@@ -135,8 +138,13 @@ export async function requestDashscopeSuggestion(
     );
 
     const parsed = safeJsonParse(content);
-    return normalizeAiOutput(parsed);
-  } catch {
+    const normalized = normalizeAiOutput(parsed);
+    if (!normalized) {
+      console.error("[AI] DashScope returned content that could not be normalized:", content.slice(0, 300));
+    }
+    return normalized;
+  } catch (error) {
+    console.error("[AI] DashScope request threw an exception:", error);
     return null;
   } finally {
     clearTimeout(timeout);

@@ -18,6 +18,7 @@ function isValidSnapshot(snapshot: unknown): snapshot is ChildSuggestionSnapshot
 }
 
 export async function POST(request: Request) {
+  const configuredModel = process.env.AI_MODEL || "qwen-turbo";
   let payload: AiSuggestionPayload | null = null;
 
   try {
@@ -31,7 +32,10 @@ export async function POST(request: Request) {
   }
 
   const fallbackItems = payload.snapshot.ruleFallback as RuleFallbackItem[];
-  const fallback = buildFallbackSuggestion(fallbackItems);
+  const fallback = {
+    ...buildFallbackSuggestion(fallbackItems),
+    model: "rule-fallback",
+  } satisfies AiSuggestionResponse;
 
   // Test-only switch for smoke checks without affecting normal UI flow.
   if (request.headers.get("x-ai-force-fallback") === "1") {
@@ -40,6 +44,7 @@ export async function POST(request: Request) {
 
   const aiResult = await requestDashscopeSuggestion(payload.snapshot);
   if (!aiResult) {
+    console.warn(`[AI] Falling back to rules for child ${payload.snapshot.child.id} using model ${configuredModel}.`);
     return NextResponse.json(fallback, { status: 200 });
   }
 
@@ -47,6 +52,7 @@ export async function POST(request: Request) {
     {
       ...aiResult,
       source: "ai",
+      model: configuredModel,
     } satisfies AiSuggestionResponse,
     { status: 200 }
   );

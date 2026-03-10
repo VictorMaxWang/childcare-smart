@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BellRing, HeartHandshake, LineChart, MessageCircleHeart, CheckCircle, Goal } from "lucide-react";
 import { formatDisplayDate, getAgeText, getAgeBandFromBirthDate, type CollaborationStatus, useApp } from "@/lib/store";
 import type { AiSuggestionResponse, ChildSuggestionSnapshot, RuleFallbackItem } from "@/lib/ai/types";
@@ -34,6 +34,8 @@ export default function ParentPage() {
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestionResponse | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiRefreshNonce, setAiRefreshNonce] = useState(0);
+  const aiSuggestionCacheRef = useRef<Map<string, AiSuggestionResponse>>(new Map());
 
   const selectedFeed = useMemo(
     () => parentFeed.find((item) => item.child.id === selectedChildId) ?? parentFeed[0],
@@ -159,13 +161,27 @@ export default function ParentPage() {
     } satisfies ChildSuggestionSnapshot;
   }, [selectedFeed, healthCheckRecords, mealRecords, growthRecords, guardianFeedbacks]);
 
+  const aiSnapshotKey = useMemo(() => {
+    return aiSnapshot ? `${JSON.stringify(aiSnapshot)}::${aiRefreshNonce}` : "";
+  }, [aiSnapshot, aiRefreshNonce]);
+
   useEffect(() => {
-    if (!aiSnapshot) {
+    if (!aiSnapshotKey) {
       setAiSuggestion(null);
+      setAiLoading(false);
       return;
     }
 
-    const fallback = buildFallbackSuggestion(aiSnapshot.ruleFallback);
+    const cached = aiSuggestionCacheRef.current.get(aiSnapshotKey);
+    if (cached) {
+      setAiSuggestion(cached);
+      setAiLoading(false);
+      return;
+    }
+
+    const snapshot = JSON.parse(aiSnapshotKey) as ChildSuggestionSnapshot;
+
+    const fallback = buildFallbackSuggestion(snapshot.ruleFallback);
     const controller = new AbortController();
     let cancelled = false;
 
@@ -175,7 +191,7 @@ export default function ParentPage() {
         const response = await fetch("/api/ai/suggestions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot: aiSnapshot }),
+          body: JSON.stringify({ snapshot }),
           signal: controller.signal,
         });
 
@@ -186,10 +202,12 @@ export default function ParentPage() {
 
         const data = (await response.json()) as AiSuggestionResponse;
         if (!cancelled) {
+          aiSuggestionCacheRef.current.set(aiSnapshotKey, data);
           setAiSuggestion(data);
         }
       } catch {
         if (!cancelled) {
+          aiSuggestionCacheRef.current.set(aiSnapshotKey, fallback);
           setAiSuggestion(fallback);
         }
       } finally {
@@ -205,7 +223,14 @@ export default function ParentPage() {
       cancelled = true;
       controller.abort();
     };
-  }, [aiSnapshot]);
+  }, [aiSnapshotKey]);
+
+  function refreshAiSuggestion() {
+    if (!aiSnapshot) return;
+    aiSuggestionCacheRef.current.delete(aiSnapshotKey);
+    setAiSuggestion(null);
+    setAiRefreshNonce((prev) => prev + 1);
+  }
 
   function submitFeedback() {
     if (!selectedFeed || !feedbackContent.trim()) return;
@@ -446,11 +471,23 @@ export default function ParentPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>系统建议</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                系统建议
+                {aiSuggestion?.source === "ai" ? <Badge variant="success">AI 建议</Badge> : null}
+                {aiSuggestion?.source === "fallback" ? <Badge variant="info">规则兜底</Badge> : null}
+                {aiSuggestion?.model ? <Badge variant="secondary">模型：{aiSuggestion.model}</Badge> : null}
+              </CardTitle>
               <CardDescription>
-                AI 建议骨架版输出结构化建议，若 AI 不可用将自动回退到规则建议。
+                AI 建议输出结构化建议；若 AI 不可用将自动回退到规则建议。当前会缓存同一份结果，避免重复请求。
               </CardDescription>
             </CardHeader>
+            <CardContent className="pt-0">
+              <div className="mb-4 flex items-center justify-end">
+                <Button variant="outline" size="sm" onClick={refreshAiSuggestion} disabled={aiLoading || !aiSnapshot}>
+                  {aiLoading ? "刷新中..." : "刷新 AI 建议"}
+                </Button>
+              </div>
+            </CardContent>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {aiLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
@@ -470,8 +507,6 @@ export default function ParentPage() {
                     <Badge variant={insight.level === "warning" ? "warning" : insight.level === "success" ? "success" : "info"}>
                       {insight.level === "warning" ? "需关注" : insight.level === "success" ? "已准备好" : "建议"}
                     </Badge>
-                    {aiSuggestion?.source === "fallback" ? <Badge variant="info">规则兜底</Badge> : null}
-                    {aiSuggestion?.source === "ai" ? <Badge variant="success">AI 建议</Badge> : null}
                   </div>
                   <p className="text-sm font-semibold text-slate-700">{insight.title}</p>
                   <p className="mt-2 text-xs leading-5 text-slate-500">{insight.description}</p>

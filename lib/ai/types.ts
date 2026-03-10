@@ -56,4 +56,5 @@ export interface AiSuggestionResponse {
   actions: string[];
   disclaimer: string;
   source: "ai" | "fallback";
+  model?: string;
 }
