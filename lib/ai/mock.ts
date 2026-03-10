@@ -19,6 +19,11 @@ function riskFromSnapshot(snapshot: ChildSuggestionSnapshot): "low" | "medium" |
 export function buildMockAiSuggestion(snapshot: ChildSuggestionSnapshot): AiSuggestionResponse {
   const riskLevel = riskFromSnapshot(snapshot);
   const { child, summary } = snapshot;
+  const summaryText =
+    `${child.name}近7天在饮食、成长和家园反馈上已形成连续记录，` +
+    `${summary.meals.hydrationAvg < 120 ? "当前饮水偏低需要重点提醒，" : "饮水整体较稳定，"}` +
+    `${summary.growth.attentionCount > 0 ? "且存在需持续跟进的成长观察项，" : "成长记录整体平稳，"}` +
+    "建议围绕作息、饮水和家园协同继续做更细化的个性化跟进。";
 
   const highlights = [
     `${child.name}近7天共完成${summary.meals.recordCount}条膳食记录，数据连续性良好。`,
@@ -46,9 +51,23 @@ export function buildMockAiSuggestion(snapshot: ChildSuggestionSnapshot): AiSugg
 
   return {
     riskLevel,
+    summary: summaryText,
     highlights,
     concerns,
     actions,
+    actionPlan: {
+      schoolActions: [
+        "今天园内在晨检和午睡前后继续记录情绪、饮水和进食情况，避免遗漏关键时段。",
+        "今天离园前由教师补齐需关注记录，并标注是否已有改善。",
+      ],
+      familyActions: [
+        "今晚家庭同步反馈入睡时间、饮水和情绪状态，帮助判断园内建议是否有效。",
+        "今晚若孩子对某类食物明显抗拒，可记录替代食材接受情况后再反馈。",
+      ],
+      reviewActions: [
+        "48小时后结合新记录复盘一次，如关注项连续增加则升级为重点跟踪。",
+      ],
+    },
     disclaimer: "本建议由本地规则生成，仅用于托育观察与家园沟通参考，不构成医疗诊断。",
     source: "ai",
   };

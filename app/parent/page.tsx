@@ -114,6 +114,55 @@ export default function ParentPage() {
       tags: item.tags,
     }));
 
+    const recentHealth = childHealth
+      .slice()
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 4)
+      .map((record) => ({
+        date: record.date,
+        temperature: record.temperature,
+        mood: record.mood,
+        handMouthEye: record.handMouthEye,
+        isAbnormal: record.isAbnormal,
+        remark: record.remark,
+      }));
+
+    const recentMeals = childMeals
+      .slice()
+      .sort((a, b) => `${b.date}-${b.meal}`.localeCompare(`${a.date}-${a.meal}`))
+      .slice(0, 5)
+      .map((record) => ({
+        date: record.date,
+        meal: record.meal,
+        foods: record.foods.map((food) => `${food.name}(${food.amount})`),
+        waterMl: record.waterMl,
+        preference: record.preference,
+        allergyReaction: record.allergyReaction,
+      }));
+
+    const recentGrowth = childGrowth
+      .slice()
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 5)
+      .map((record) => ({
+        createdAt: record.createdAt,
+        category: record.category,
+        description: record.description,
+        needsAttention: record.needsAttention,
+        followUpAction: record.followUpAction,
+        reviewStatus: record.reviewStatus,
+      }));
+
+    const recentFeedback = childFeedbacks
+      .slice()
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 4)
+      .map((record) => ({
+        date: record.date,
+        status: record.status,
+        content: record.content,
+      }));
+
     return {
       child: {
         id: selectedFeed.child.id,
@@ -156,6 +205,12 @@ export default function ParentPage() {
           statusCounts,
           keywords: childFeedbacks.map((item) => item.content).filter(Boolean).slice(0, 5),
         },
+      },
+      recentDetails: {
+        health: recentHealth,
+        meals: recentMeals,
+        growth: recentGrowth,
+        feedback: recentFeedback,
       },
       ruleFallback,
     } satisfies ChildSuggestionSnapshot;
@@ -485,6 +540,46 @@ export default function ParentPage() {
                   {aiLoading ? "刷新中..." : "刷新 AI 建议"}
                 </Button>
               </div>
+              {!aiLoading && aiSuggestion?.summary ? (
+                <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 text-sm leading-7 text-slate-700">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-indigo-500">AI 总结</p>
+                  <p>{aiSuggestion.summary}</p>
+                </div>
+              ) : null}
+              {!aiLoading && (aiSuggestion?.actionPlan || aiSuggestion?.actions?.length) ? (
+                <div className="mb-6 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <p className="mb-3 text-sm font-semibold text-slate-800">详细个性化方案</p>
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    <PlanSection
+                      title="今天园内"
+                      accentClassName="bg-emerald-100 text-emerald-700"
+                      items={
+                        aiSuggestion.actionPlan?.schoolActions?.length
+                          ? aiSuggestion.actionPlan.schoolActions
+                          : aiSuggestion.actions.slice(0, 2)
+                      }
+                    />
+                    <PlanSection
+                      title="今晚家庭"
+                      accentClassName="bg-amber-100 text-amber-700"
+                      items={
+                        aiSuggestion.actionPlan?.familyActions?.length
+                          ? aiSuggestion.actionPlan.familyActions
+                          : aiSuggestion.actions.slice(2, 4)
+                      }
+                    />
+                    <PlanSection
+                      title="48小时内复查"
+                      accentClassName="bg-indigo-100 text-indigo-700"
+                      items={
+                        aiSuggestion.actionPlan?.reviewActions?.length
+                          ? aiSuggestion.actionPlan.reviewActions
+                          : aiSuggestion.actions.slice(4, 5)
+                      }
+                    />
+                  </div>
+                </div>
+              ) : null}
             </CardContent>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {aiLoading ? (
@@ -550,6 +645,36 @@ function TrendItem({ label, value }: { label: string; value: string }) {
   );
 }
 
+function PlanSection({
+  title,
+  items,
+  accentClassName,
+}: {
+  title: string;
+  items: string[];
+  accentClassName: string;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl bg-white p-4 shadow-sm">
+      <div className={`mb-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${accentClassName}`}>
+        {title}
+      </div>
+      <div className="space-y-3">
+        {items.map((item, index) => (
+          <div key={`${title}-${item}-${index}`} className="flex items-start gap-3">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+              {index + 1}
+            </div>
+            <p className="text-sm leading-6 text-slate-600">{item}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function buildSuggestionCards(
   aiSuggestion: AiSuggestionResponse | null,
   fallbackInsights: Array<{ id: string; title: string; description: string; level: "success" | "warning" | "info" }>
@@ -560,20 +685,20 @@ function buildSuggestionCards(
 
   const cards: Array<{ id: string; title: string; description: string; level: "success" | "warning" | "info" }> = [];
 
-  for (const item of aiSuggestion.concerns) {
+  for (const [index, item] of aiSuggestion.concerns.entries()) {
     cards.push({
       id: `ai-concern-${item}`,
       title: item,
-      description: aiSuggestion.actions[0] || aiSuggestion.disclaimer,
+      description: aiSuggestion.actions[index] || aiSuggestion.disclaimer,
       level: "warning",
     });
   }
 
-  for (const item of aiSuggestion.highlights) {
+  for (const [index, item] of aiSuggestion.highlights.entries()) {
     cards.push({
       id: `ai-highlight-${item}`,
       title: item,
-      description: aiSuggestion.actions[1] || aiSuggestion.disclaimer,
+      description: aiSuggestion.actions[aiSuggestion.concerns.length + index] || aiSuggestion.disclaimer,
       level: "info",
     });
   }

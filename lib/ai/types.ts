@@ -42,6 +42,37 @@ export interface ChildSuggestionSnapshot {
       keywords: string[];
     };
   };
+  recentDetails?: {
+    health: Array<{
+      date: string;
+      temperature: number;
+      mood: string;
+      handMouthEye: "正常" | "异常";
+      isAbnormal: boolean;
+      remark?: string;
+    }>;
+    meals: Array<{
+      date: string;
+      meal: string;
+      foods: string[];
+      waterMl: number;
+      preference: string;
+      allergyReaction?: string;
+    }>;
+    growth: Array<{
+      createdAt: string;
+      category: string;
+      description: string;
+      needsAttention: boolean;
+      followUpAction?: string;
+      reviewStatus?: string;
+    }>;
+    feedback: Array<{
+      date: string;
+      status: string;
+      content: string;
+    }>;
+  };
   ruleFallback: RuleFallbackItem[];
 }
 
@@ -49,11 +80,19 @@ export interface AiSuggestionPayload {
   snapshot: ChildSuggestionSnapshot;
 }
 
+export interface AiActionPlan {
+  schoolActions: string[];
+  familyActions: string[];
+  reviewActions: string[];
+}
+
 export interface AiSuggestionResponse {
   riskLevel: AiRiskLevel;
+  summary: string;
   highlights: string[];
   concerns: string[];
   actions: string[];
+  actionPlan?: AiActionPlan;
   disclaimer: string;
   source: "ai" | "fallback";
   model?: string;
