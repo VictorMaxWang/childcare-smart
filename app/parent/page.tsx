@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BellRing, HeartHandshake, LineChart, MessageCircleHeart, CheckCircle, Goal } from "lucide-react";
+import { BellRing, HeartHandshake, LineChart as LineChartIcon, MessageCircleHeart, CheckCircle, Goal } from "lucide-react";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { formatDisplayDate, getAgeText, getAgeBandFromBirthDate, type CollaborationStatus, useApp } from "@/lib/store";
 import type { AiSuggestionResponse, ChildSuggestionSnapshot, RuleFallbackItem } from "@/lib/ai/types";
 import { buildFallbackSuggestion } from "@/lib/ai/fallback";
@@ -219,6 +229,43 @@ export default function ParentPage() {
   const aiSnapshotKey = useMemo(() => {
     return aiSnapshot ? `${JSON.stringify(aiSnapshot)}::${aiRefreshNonce}` : "";
   }, [aiSnapshot, aiRefreshNonce]);
+
+  const weeklyChartData = useMemo(() => {
+    if (!selectedFeed) return [];
+
+    const endDate = new Date();
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(endDate);
+      date.setDate(endDate.getDate() - (6 - index));
+      const key = date.toISOString().split("T")[0];
+      return {
+        key,
+        label: `${date.getMonth() + 1}/${date.getDate()}`,
+        nutritionScore: 0,
+        waterMl: 0,
+      };
+    });
+
+    const recordMap = new Map<string, { nutritionTotal: number; nutritionCount: number; waterMl: number }>();
+    mealRecords
+      .filter((record) => record.childId === selectedFeed.child.id)
+      .forEach((record) => {
+        const current = recordMap.get(record.date) ?? { nutritionTotal: 0, nutritionCount: 0, waterMl: 0 };
+        current.nutritionTotal += record.nutritionScore;
+        current.nutritionCount += 1;
+        current.waterMl += record.waterMl;
+        recordMap.set(record.date, current);
+      });
+
+    return days.map((day) => {
+      const matched = recordMap.get(day.key);
+      return {
+        label: day.label,
+        nutritionScore: matched ? Math.round(matched.nutritionTotal / matched.nutritionCount) : 0,
+        waterMl: matched?.waterMl ?? 0,
+      };
+    });
+  }, [mealRecords, selectedFeed]);
 
   useEffect(() => {
     if (!aiSnapshotKey || !aiSnapshot) {
@@ -507,16 +554,32 @@ export default function ParentPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <LineChart className="h-5 w-5 text-amber-500" />
+                  <LineChartIcon className="h-5 w-5 text-amber-500" />
                   本周变化趋势
                 </CardTitle>
                 <CardDescription>帮助家长快速理解是否存在饮食单一或饮水偏低问题。</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 text-sm text-slate-600">
-                <TrendItem label="均衡天数占比" value={`${selectedFeed.weeklyTrend.balancedRate}%`} />
-                <TrendItem label="含蔬果天数" value={`${selectedFeed.weeklyTrend.vegetableDays}天`} />
-                <TrendItem label="含蛋白天数" value={`${selectedFeed.weeklyTrend.proteinDays}天`} />
-                <TrendItem label="平均饮水量" value={`${selectedFeed.weeklyTrend.hydrationAvg}ml`} />
+                <div className="h-64 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={weeklyChartData} margin={{ top: 12, right: 4, left: -12, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+                      <YAxis yAxisId="score" domain={[0, 100]} tickLine={false} axisLine={false} fontSize={12} />
+                      <YAxis yAxisId="water" orientation="right" tickLine={false} axisLine={false} fontSize={12} />
+                      <Tooltip content={<ParentChartTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Line yAxisId="score" type="monotone" dataKey="nutritionScore" stroke="var(--primary)" strokeWidth={3} dot={{ r: 3 }} name="营养评分" />
+                      <Line yAxisId="water" type="monotone" dataKey="waterMl" stroke="#0ea5e9" strokeWidth={2} dot={{ r: 2 }} name="饮水量(ml)" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <TrendItem label="均衡天数占比" value={`${selectedFeed.weeklyTrend.balancedRate}%`} />
+                  <TrendItem label="含蔬果天数" value={`${selectedFeed.weeklyTrend.vegetableDays}天`} />
+                  <TrendItem label="含蛋白天数" value={`${selectedFeed.weeklyTrend.proteinDays}天`} />
+                  <TrendItem label="平均饮水量" value={`${selectedFeed.weeklyTrend.hydrationAvg}ml`} />
+                </div>
                 <TrendItem label="饮食单一天数" value={`${selectedFeed.weeklyTrend.monotonyDays}天`} />
               </CardContent>
             </Card>
@@ -715,4 +778,21 @@ function buildSuggestionCards(
   });
 
   return cards.slice(0, 6);
+}
+
+function ParentChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number | string }>; label?: string }) {
+  if (!active || !payload || payload.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-lg">
+      {label ? <p className="mb-1 font-semibold text-slate-700">{label}</p> : null}
+      <div className="space-y-1">
+        {payload.map((entry, index) => (
+          <p key={`${entry.name}-${index}`}>
+            {entry.name}: {entry.value}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
 }

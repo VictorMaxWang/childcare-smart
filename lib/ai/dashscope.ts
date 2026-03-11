@@ -1,4 +1,10 @@
-import type { AiActionPlan, AiSuggestionResponse, ChildSuggestionSnapshot } from "@/lib/ai/types";
+import type {
+  AiActionPlan,
+  AiSuggestionResponse,
+  ChildSuggestionSnapshot,
+  WeeklyReportResponse,
+  WeeklyReportSnapshot,
+} from "@/lib/ai/types";
 
 const DASHSCOPE_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = 12000;
@@ -81,6 +87,34 @@ function normalizeAiOutput(raw: unknown): Omit<AiSuggestionResponse, "source"> |
   };
 }
 
+function normalizeWeeklyReportOutput(raw: unknown): Omit<WeeklyReportResponse, "source"> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+
+  const overview = String(obj.overview ?? "").trim();
+  const highlights = normalizeArray(obj.highlights).slice(0, 4);
+  const risks = normalizeArray(obj.risks).slice(0, 4);
+  const nextWeekFocus = normalizeArray(obj.nextWeekFocus).slice(0, 4);
+  const managementTip = String(obj.managementTip ?? "").trim();
+
+  if (!overview && highlights.length === 0 && risks.length === 0 && nextWeekFocus.length === 0) {
+    return null;
+  }
+
+  return {
+    overview:
+      overview ||
+      "本周园所整体运行较稳定，出勤、饮食和成长记录已形成连续数据，建议下周继续围绕重点关注儿童做精细化追踪。",
+    highlights: highlights.length > 0 ? highlights : ["本周基础数据采集较完整。"],
+    risks: risks.length > 0 ? risks : ["暂未识别到明显的全局高风险信号。"],
+    nextWeekFocus:
+      nextWeekFocus.length > 0
+        ? nextWeekFocus
+        : ["继续保持晨检、饮食和成长观察的连续记录。"],
+    managementTip: managementTip || "建议将高频关注儿童纳入下周重点复盘名单。",
+  };
+}
+
 function buildPrompt(snapshot: ChildSuggestionSnapshot): string {
   const modelInput = {
     child: {
@@ -112,6 +146,21 @@ function buildPrompt(snapshot: ChildSuggestionSnapshot): string {
     "disclaimer必须强调非医疗诊断。",
     "输入: ",
     JSON.stringify(modelInput),
+  ].join("\n");
+}
+
+function buildWeeklyReportPrompt(snapshot: WeeklyReportSnapshot): string {
+  return [
+    "你是托育机构周报分析助手。",
+    "你只能做托育运营分析和家园协同建议，不做医疗诊断。",
+    "请根据输入的周度结构化数据输出严格JSON，不要输出任何额外文本。",
+    "JSON字段必须为: overview, highlights, risks, nextWeekFocus, managementTip。",
+    "overview必须是100到140字之间的中文总结，适合比赛演示时直接朗读。",
+    "highlights、risks、nextWeekFocus必须是字符串数组，每个数组3到4条，语言具体、可执行。",
+    "managementTip是一句给园长或教师团队的管理建议。",
+    "优先结合出勤率、饮水、饮食单一、需关注观察、待复查、家长反馈闭环情况。",
+    "输入:",
+    JSON.stringify(snapshot),
   ].join("\n");
 }
 
@@ -177,6 +226,73 @@ export async function requestDashscopeSuggestion(
     return normalized;
   } catch (error) {
     console.error("[AI] DashScope request threw an exception:", error);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function requestDashscopeWeeklyReport(
+  snapshot: WeeklyReportSnapshot
+): Promise<Omit<WeeklyReportResponse, "source"> | null> {
+  const apiKey = process.env.DASHSCOPE_API_KEY || "";
+  const model = process.env.AI_MODEL || "qwen-turbo";
+
+  if (!apiKey) {
+    console.warn("[AI] DASHSCOPE_API_KEY is missing, falling back to weekly report rules.");
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(DASHSCOPE_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+        messages: [
+          {
+            role: "system",
+            content: "你是托育周报分析助手。输出固定JSON，不输出额外文本，不给医疗诊断。",
+          },
+          {
+            role: "user",
+            content: buildWeeklyReportPrompt(snapshot),
+          },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.error(`[AI] DashScope weekly report failed: ${response.status} ${response.statusText}`, errorText.slice(0, 300));
+      return null;
+    }
+
+    const raw = (await response.json()) as Record<string, unknown>;
+    const content = String(
+      (raw.choices as Array<Record<string, unknown>> | undefined)?.[0]?.message &&
+        typeof (raw.choices as Array<Record<string, unknown>>)[0].message === "object"
+        ? ((raw.choices as Array<Record<string, unknown>>)[0].message as Record<string, unknown>).content
+        : ""
+    );
+
+    const parsed = safeJsonParse(content);
+    const normalized = normalizeWeeklyReportOutput(parsed);
+    if (!normalized) {
+      console.error("[AI] DashScope weekly report content could not be normalized:", content.slice(0, 300));
+    }
+    return normalized;
+  } catch (error) {
+    console.error("[AI] DashScope weekly report threw an exception:", error);
     return null;
   } finally {
     clearTimeout(timeout);

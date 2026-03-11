@@ -86,6 +86,53 @@ export interface AiActionPlan {
   reviewActions: string[];
 }
 
+export interface WeeklyReportSnapshot {
+  institutionName?: string;
+  reportDate: string;
+  childrenCount: number;
+  attendance: {
+    presentCount: number;
+    absentCount: number;
+    attendanceRate: number;
+  };
+  health: {
+    abnormalCount: number;
+    missingCount: number;
+    topSignals: string[];
+  };
+  meals: {
+    balancedRate: number;
+    hydrationAvg: number;
+    monotonyRiskCount: number;
+    lowHydrationChildren: string[];
+    lowVegChildren: string[];
+  };
+  growth: {
+    attentionCount: number;
+    pendingReviewCount: number;
+    topCategories: Array<{ category: string; count: number }>;
+  };
+  feedback: {
+    count: number;
+    pendingTonightCount: number;
+  };
+  highlights: string[];
+}
+
+export interface WeeklyReportPayload {
+  snapshot: WeeklyReportSnapshot;
+}
+
+export interface WeeklyReportResponse {
+  overview: string;
+  highlights: string[];
+  risks: string[];
+  nextWeekFocus: string[];
+  managementTip: string;
+  source: "ai" | "fallback";
+  model?: string;
+}
+
 export interface AiSuggestionResponse {
   riskLevel: AiRiskLevel;
   summary: string;

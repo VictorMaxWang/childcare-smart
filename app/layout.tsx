@@ -3,6 +3,7 @@ import "./globals.css";
 import { AppProvider } from "../lib/store";
 import Navbar from "@/components/Navbar";
 import { Analytics } from "@vercel/analytics/react";
+import { ThemeProvider } from "@/lib/theme";
 
 export const metadata: Metadata = {
   title: "普惠托育智慧管理平台",
@@ -17,12 +18,14 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className="antialiased">
-        <AppProvider>
-          <Navbar />
-          <main className="min-h-[calc(100vh-64px)] bg-[var(--background)]">
-            {children}
-          </main>
-        </AppProvider>
+        <ThemeProvider>
+          <AppProvider>
+            <Navbar />
+            <main className="min-h-[calc(100vh-64px)] bg-[var(--background)] transition-colors duration-200">
+              {children}
+            </main>
+          </AppProvider>
+        </ThemeProvider>
         <Analytics />
       </body>
     </html>

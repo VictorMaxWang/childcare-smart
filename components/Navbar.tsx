@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import MobileNav from "@/components/MobileNav";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const navItems = [
   { href: "/", label: "数据概览", icon: LayoutDashboard },
@@ -34,7 +35,7 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="sticky top-0 z-40 border-b border-[var(--border)] bg-white/80 backdrop-blur-md shadow-sm">
+    <nav className="sticky top-0 z-40 border-b border-[var(--border)] bg-[color:color-mix(in_srgb,var(--card)_88%,transparent)] backdrop-blur-md shadow-sm transition-colors duration-200">
       <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-6 py-3">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 font-bold text-[var(--primary)]">
@@ -67,6 +68,7 @@ export default function Navbar() {
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
+          <ThemeToggle />
           <div className="text-right">
             <p className="text-xs text-slate-400">当前身份</p>
             <p className="text-sm font-semibold text-slate-700">

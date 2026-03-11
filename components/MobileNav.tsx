@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X, Baby, BookHeart, LayoutDashboard, Salad, ShieldCheck, Users, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/store";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const navItems = [
   { href: "/", label: "数据概览", icon: LayoutDashboard },
@@ -110,6 +111,10 @@ export default function MobileNav({ onLogout }: { onLogout: () => void }) {
             <p className="font-semibold text-slate-700">
               {currentUser.avatar} {currentUser.name} · {currentUser.role}
             </p>
+          </div>
+          <div className="mb-3 flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
+            <span className="text-sm font-medium text-slate-600">界面主题</span>
+            <ThemeToggle />
           </div>
           <button
             onClick={() => {

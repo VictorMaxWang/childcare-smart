@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -15,10 +16,28 @@ import {
   TriangleAlert,
   Users,
 } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
+  Radar,
+  RadarChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { useApp } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import type { WeeklyReportResponse, WeeklyReportSnapshot } from "@/lib/ai/types";
 
 const TODAY_TEXT = new Date().toLocaleDateString("zh-CN", {
   year: "numeric",
@@ -66,7 +85,11 @@ export default function DashboardPage() {
   const weeklyTrend = getWeeklyDietTrend();
   const insights = getSmartInsights();
   const adminBoard = getAdminBoardData();
-  const visibleIds = new Set(visibleChildren.map((child) => child.id));
+  const visibleIds = useMemo(() => new Set(visibleChildren.map((child) => child.id)), [visibleChildren]);
+  const [weeklyReport, setWeeklyReport] = useState<WeeklyReportResponse | null>(null);
+  const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
+  const [weeklyReportNonce, setWeeklyReportNonce] = useState(0);
+  const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
 
   // Health Calculation
   const todayDate = new Date().toISOString().split("T")[0];
@@ -81,6 +104,165 @@ export default function DashboardPage() {
   const pendingReviews = growthRecords
     .filter((record) => visibleIds.has(record.childId) && record.reviewStatus === "待复查")
     .sort((a, b) => (a.reviewDate ?? "9999-12-31").localeCompare(b.reviewDate ?? "9999-12-31"));
+
+  const attendanceChartData = [
+    { name: "出勤", value: presentCount, fill: "var(--primary)" },
+    { name: "缺勤", value: Math.max(visibleChildren.length - presentCount, 0), fill: "#f59e0b" },
+  ];
+
+  const attentionChartData = adminBoard.highAttentionChildren.map((item) => ({
+    name: item.childName,
+    count: item.count,
+  }));
+
+  const radarChartData = [
+    { subject: "均衡", value: weeklyTrend.balancedRate },
+    { subject: "蔬果", value: Math.round((weeklyTrend.vegetableDays / 7) * 100) },
+    { subject: "蛋白", value: Math.round((weeklyTrend.proteinDays / 7) * 100) },
+    { subject: "主食", value: Math.round((weeklyTrend.stapleDays / 7) * 100) },
+    { subject: "饮水", value: Math.min(Math.round((weeklyTrend.hydrationAvg / 600) * 100), 100) },
+  ];
+
+  const weeklyReportSnapshot = useMemo(() => {
+    const reportDate = new Date().toISOString().split("T")[0];
+    const abnormalCount = healthCheckRecords.filter((record) => record.isAbnormal && visibleIds.has(record.childId)).length;
+    const signalCounter = new Map<string, number>();
+
+    healthCheckRecords
+      .filter((record) => visibleIds.has(record.childId) && record.isAbnormal)
+      .forEach((record) => {
+        signalCounter.set(record.mood, (signalCounter.get(record.mood) ?? 0) + 1);
+        if (record.handMouthEye === "异常") {
+          signalCounter.set("手口眼异常", (signalCounter.get("手口眼异常") ?? 0) + 1);
+        }
+      });
+
+    const topCategories = Array.from(
+      growthRecords
+        .filter((record) => visibleIds.has(record.childId))
+        .reduce<Map<string, number>>((acc, record) => {
+          acc.set(record.category, (acc.get(record.category) ?? 0) + 1);
+          return acc;
+        }, new Map())
+    )
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4);
+
+    const monotonyRiskCount = visibleChildren.filter((child) => getWeeklyDietTrend(child.id).monotonyDays >= 3).length;
+
+    return {
+      institutionName: "春芽普惠托育中心",
+      reportDate,
+      childrenCount: visibleChildren.length,
+      attendance: {
+        presentCount,
+        absentCount: Math.max(visibleChildren.length - presentCount, 0),
+        attendanceRate: visibleChildren.length ? Math.round((presentCount / visibleChildren.length) * 100) : 0,
+      },
+      health: {
+        abnormalCount,
+        missingCount: missingHealthChecks.length,
+        topSignals: Array.from(signalCounter.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 4)
+          .map(([signal]) => signal),
+      },
+      meals: {
+        balancedRate: weeklyTrend.balancedRate,
+        hydrationAvg: weeklyTrend.hydrationAvg,
+        monotonyRiskCount,
+        lowHydrationChildren: adminBoard.lowHydrationChildren.slice(0, 3).map((item) => item.childName),
+        lowVegChildren: adminBoard.lowVegTrendChildren.slice(0, 3).map((item) => item.childName),
+      },
+      growth: {
+        attentionCount: growthRecords.filter((record) => visibleIds.has(record.childId) && record.needsAttention).length,
+        pendingReviewCount: pendingReviews.length,
+        topCategories,
+      },
+      feedback: {
+        count: guardianFeedbacks.filter((item) => visibleIds.has(item.childId)).length,
+        pendingTonightCount: guardianFeedbacks.filter(
+          (item) => visibleIds.has(item.childId) && item.status === "今晚反馈"
+        ).length,
+      },
+      highlights: insights.slice(0, 4).map((item) => item.title),
+    } satisfies WeeklyReportSnapshot;
+  }, [
+    adminBoard.lowHydrationChildren,
+    adminBoard.lowVegTrendChildren,
+    getWeeklyDietTrend,
+    growthRecords,
+    guardianFeedbacks,
+    healthCheckRecords,
+    insights,
+    missingHealthChecks.length,
+    pendingReviews.length,
+    presentCount,
+    visibleChildren,
+    visibleIds,
+    weeklyTrend.balancedRate,
+    weeklyTrend.hydrationAvg,
+  ]);
+
+  const weeklyReportKey = useMemo(
+    () => `${JSON.stringify(weeklyReportSnapshot)}::${weeklyReportNonce}`,
+    [weeklyReportNonce, weeklyReportSnapshot]
+  );
+
+  useEffect(() => {
+    const cached = weeklyReportCacheRef.current.get(weeklyReportKey);
+    if (cached) {
+      setWeeklyReport(cached);
+      return;
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    async function fetchWeeklyReport() {
+      setWeeklyReportLoading(true);
+      try {
+        const response = await fetch("/api/ai/weekly-report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ snapshot: weeklyReportSnapshot }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error("Weekly report request failed");
+        }
+
+        const data = (await response.json()) as WeeklyReportResponse;
+        if (!cancelled) {
+          weeklyReportCacheRef.current.set(weeklyReportKey, data);
+          setWeeklyReport(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setWeeklyReport(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setWeeklyReportLoading(false);
+        }
+      }
+    }
+
+    fetchWeeklyReport();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [weeklyReportKey, weeklyReportSnapshot]);
+
+  function refreshWeeklyReport() {
+    weeklyReportCacheRef.current.delete(weeklyReportKey);
+    setWeeklyReport(null);
+    setWeeklyReportNonce((prev) => prev + 1);
+  }
 
   const recentTimeline = [
     ...todayAttendance.map((item) => ({
@@ -245,31 +427,64 @@ export default function DashboardPage() {
         <Card className="xl:col-span-2">
           <CardHeader>
             <CardTitle>最近一周趋势</CardTitle>
-            <CardDescription>规则引擎用于识别膳食均衡、蔬果不足、单一摄入和低饮水风险。</CardDescription>
+            <CardDescription>用图表直观看到出勤结构、重点关注儿童和整体营养结构。</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
-            {[
-              { label: "膳食均衡占比", value: weeklyTrend.balancedRate, suffix: "%", color: "bg-indigo-400" },
-              { label: "含蔬果天数", value: weeklyTrend.vegetableDays, suffix: "天", color: "bg-emerald-400" },
-              { label: "平均饮水量", value: weeklyTrend.hydrationAvg, suffix: "ml", color: "bg-sky-400" },
-              { label: "饮食单一天数", value: weeklyTrend.monotonyDays, suffix: "天", color: "bg-rose-400" },
-            ].map((item) => {
-              const percent = item.suffix === "%" ? item.value : Math.min(item.value * 14, 100);
-              return (
-                <div key={item.label}>
-                  <div className="mb-2 flex items-center justify-between text-sm">
-                    <span className="font-medium text-slate-600">{item.label}</span>
-                    <span className="font-semibold text-slate-800">
-                      {item.value}
-                      {item.suffix}
-                    </span>
-                  </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-                    <div className={`h-full rounded-full ${item.color}`} style={{ width: `${percent}%` }} />
-                  </div>
+          <CardContent className="grid gap-5 lg:grid-cols-2">
+            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <p className="mb-3 text-sm font-semibold text-slate-700">出勤结构</p>
+              <div className="h-60">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={attendanceChartData} dataKey="value" nameKey="name" innerRadius={56} outerRadius={82} paddingAngle={4}>
+                      {attendanceChartData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<ChartTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <p className="mb-3 text-sm font-semibold text-slate-700">高频关注儿童</p>
+              <div className="h-60">
+                {attentionChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={attentionChartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={12} />
+                      <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={12} />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Bar dataKey="count" fill="var(--primary)" radius={[10, 10, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <EmptyChart text="当前暂无高频关注儿童。" />
+                )}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm lg:col-span-2">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-700">膳食结构雷达</p>
+                <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                  <span>均衡 {weeklyTrend.balancedRate}%</span>
+                  <span>蔬果 {weeklyTrend.vegetableDays}天</span>
+                  <span>饮水 {weeklyTrend.hydrationAvg}ml</span>
+                  <span>单一 {weeklyTrend.monotonyDays}天</span>
                 </div>
-              );
-            })}
+              </div>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={radarChartData} outerRadius="72%">
+                    <PolarGrid />
+                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12 }} />
+                    <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+                    <Radar dataKey="value" stroke="var(--primary)" fill="var(--primary)" fillOpacity={0.35} />
+                    <Tooltip content={<ChartTooltip />} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -290,6 +505,54 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle>AI 周报</CardTitle>
+                <CardDescription>把本周全量结构化数据压缩成一段可答辩、可汇报、可执行的总结。</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                {weeklyReport?.source === "ai" ? <Badge variant="success">AI 生成</Badge> : null}
+                {weeklyReport?.source === "fallback" ? <Badge variant="info">规则兜底</Badge> : null}
+                <Button variant="outline" size="sm" onClick={refreshWeeklyReport} disabled={weeklyReportLoading}>
+                  {weeklyReportLoading ? "生成中..." : "刷新周报"}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {weeklyReportLoading ? (
+              <div className="space-y-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm skeleton-pulse">
+                <div className="h-4 w-28 rounded bg-slate-100" />
+                <div className="h-3 w-full rounded bg-slate-50" />
+                <div className="h-3 w-5/6 rounded bg-slate-50" />
+                <div className="h-3 w-4/5 rounded bg-slate-50" />
+              </div>
+            ) : weeklyReport ? (
+              <>
+                <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 text-sm leading-7 text-slate-700">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-indigo-500">本周总评</p>
+                  <p>{weeklyReport.overview}</p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <WeeklyReportList title="本周亮点" items={weeklyReport.highlights} accentClassName="bg-emerald-100 text-emerald-700" />
+                  <WeeklyReportList title="主要风险" items={weeklyReport.risks} accentClassName="bg-amber-100 text-amber-700" />
+                  <WeeklyReportList title="下周重点" items={weeklyReport.nextWeekFocus} accentClassName="bg-sky-100 text-sky-700" />
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 text-sm text-slate-600 shadow-sm">
+                  <span className="font-semibold text-slate-700">管理建议：</span>
+                  {weeklyReport.managementTip}
+                </div>
+              </>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+                当前未生成周报，可点击“刷新周报”重试。
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -490,4 +753,51 @@ function BoardList({ title, items, emptyText, icon }: { title: string; items: st
 
 function AlertIcon() {
   return <Sparkles className="h-4 w-4 text-rose-400" />;
+}
+
+function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number | string }>; label?: string }) {
+  if (!active || !payload || payload.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-lg">
+      {label ? <p className="mb-1 font-semibold text-slate-700">{label}</p> : null}
+      <div className="space-y-1">
+        {payload.map((entry, index) => (
+          <p key={`${entry.name}-${index}`}>
+            {entry.name}: {entry.value}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmptyChart({ text }: { text: string }) {
+  return <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-400">{text}</div>;
+}
+
+function WeeklyReportList({
+  title,
+  items,
+  accentClassName,
+}: {
+  title: string;
+  items: string[];
+  accentClassName: string;
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-4 shadow-sm">
+      <div className={`mb-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${accentClassName}`}>{title}</div>
+      <div className="space-y-3">
+        {items.map((item, index) => (
+          <div key={`${title}-${index}`} className="flex items-start gap-3 text-sm leading-6 text-slate-600">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+              {index + 1}
+            </div>
+            <p>{item}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
