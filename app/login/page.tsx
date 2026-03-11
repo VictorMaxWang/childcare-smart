@@ -51,8 +51,8 @@ export default function LoginPage() {
         <div className="float-soft absolute bottom-[8%] left-[35%] h-28 w-28 rounded-full bg-violet-300/20 blur-2xl" style={{ animationDelay: "2s" }} />
       </div>
 
-      <div className="relative mx-auto grid min-h-[calc(100vh-144px)] max-w-7xl overflow-hidden rounded-[32px] border border-white/60 bg-white/40 shadow-[0_24px_80px_rgba(15,23,42,0.16)] backdrop-blur-sm lg:grid-cols-[1.08fr_0.92fr]">
-        <section className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-sky-600 px-8 py-10 text-white sm:px-10 lg:px-12 lg:py-12">
+      <div className="relative mx-auto grid min-h-[calc(100vh-144px)] max-w-7xl overflow-hidden rounded-4xl border border-white/60 bg-white/40 shadow-[0_24px_80px_rgba(15,23,42,0.16)] backdrop-blur-sm lg:grid-cols-[1.08fr_0.92fr]">
+        <section className="relative overflow-hidden bg-linear-to-br from-indigo-600 via-violet-600 to-sky-600 px-8 py-10 text-white sm:px-10 lg:px-12 lg:py-12">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(125,211,252,0.22),transparent_32%)]" />
           <div className="relative z-10 flex h-full flex-col justify-between gap-10">
             <div>
@@ -80,7 +80,7 @@ export default function LoginPage() {
           <Card className="glass w-full max-w-xl rounded-[28px] border-white/60 bg-white/75 shadow-[0_18px_60px_rgba(15,23,42,0.14)]">
             <CardHeader className="space-y-4 pb-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-sky-100 shadow-sm">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-100 to-sky-100 shadow-sm">
                   <Baby className="h-6 w-6 text-indigo-600" />
                 </div>
                 <div>

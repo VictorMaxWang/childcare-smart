@@ -219,34 +219,39 @@ export default function GrowthPage() {
             </div>
             
             {availableIndicators.length > 0 && (
-              <div className="space-y-2 rounded-xl bg-slate-50 p-3 border border-slate-100">
-                <Label className="text-indigo-700">结构化观察指标</Label>
-                <div className="grid grid-cols-1 gap-2 mt-2">
+              <fieldset className="space-y-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <legend className="text-sm font-medium text-indigo-700">结构化观察指标</legend>
+                <div className="mt-2 grid grid-cols-1 gap-2">
                   {availableIndicators.map((indicator) => {
                     const isSelected = selectedIndicators.includes(indicator.id);
                     return (
-                      <div 
+                      <label
                         key={indicator.id} 
-                        className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer transition-colors border ${isSelected ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:border-indigo-100'}`}
-                        onClick={() => {
-                          setSelectedIndicators(prev => 
-                            isSelected 
-                              ? prev.filter(id => id !== indicator.id) 
-                              : [...prev, indicator.id]
-                          );
-                        }}
+                        htmlFor={`indicator-${indicator.id}`}
+                        className={`flex items-start gap-2 rounded-lg border p-2 transition-colors ${isSelected ? 'border-indigo-200 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-100'}`}
                       >
-                        <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-slate-300'}`}>
-                          {isSelected && <CheckCircle2 className="w-3 h-3" />}
+                        <input
+                          id={`indicator-${indicator.id}`}
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            setSelectedIndicators((prev) =>
+                              isSelected ? prev.filter((id) => id !== indicator.id) : [...prev, indicator.id]
+                            );
+                          }}
+                          className="sr-only"
+                        />
+                        <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${isSelected ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-300'}`} aria-hidden="true">
+                          {isSelected ? <CheckCircle2 className="h-3 w-3" /> : null}
                         </div>
                         <span className={`text-sm ${isSelected ? 'text-indigo-900 font-medium' : 'text-slate-600'}`}>
                           {indicator.label}
                         </span>
-                      </div>
+                      </label>
                     );
                   })}
                 </div>
-              </div>
+              </fieldset>
             )}
 
             <div className="space-y-2">
@@ -270,7 +275,7 @@ export default function GrowthPage() {
                 <p className="text-sm font-medium text-slate-700">是否需要关注</p>
                 <p className="text-xs text-slate-400">用于触发后续提醒和家园协同任务。</p>
               </div>
-              <Button variant={needsAttention ? "destructive" : "outline"} onClick={() => setNeedsAttention((prev) => !prev)}>
+              <Button variant={needsAttention ? "destructive" : "outline"} aria-pressed={needsAttention} onClick={() => setNeedsAttention((prev) => !prev)}>
                 {needsAttention ? "需要关注" : "正常观察"}
               </Button>
             </div>
@@ -296,7 +301,7 @@ export default function GrowthPage() {
                 <CardDescription>把近期观察重点直接转成图表，更容易讲清楚班级关注面。</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-[260px] w-full">
+                <div className="h-65 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={categoryChartData} dataKey="value" nameKey="name" outerRadius={90} innerRadius={42}>
@@ -308,7 +313,7 @@ export default function GrowthPage() {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="-mt-[150px] flex justify-center pointer-events-none">
+                <div className="-mt-37.5 flex justify-center pointer-events-none">
                   <div className="rounded-full bg-white/90 px-5 py-3 text-center shadow-sm ring-1 ring-slate-100">
                     <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">总记录</p>
                     <p className="mt-1 text-2xl font-black text-slate-800">{filteredRecords.length}</p>
@@ -334,7 +339,7 @@ export default function GrowthPage() {
                 <CardDescription>用柱状图快速说明当前待追踪工作量和已闭环完成度。</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-[260px] w-full">
+                <div className="h-65 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={reviewChartData} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
                       <defs>
@@ -407,9 +412,9 @@ export default function GrowthPage() {
                 const child = visibleChildren.find((item) => item.id === record.childId);
                 if (!child) return null;
                 return (
-                  <div key={record.id} className="group/card relative rounded-3xl border border-slate-100 bg-white p-5 pl-7 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-lg hover:border-indigo-100">
+                  <article key={record.id} className="group/card relative rounded-3xl border border-slate-100 bg-white p-5 pl-7 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-lg hover:border-indigo-100">
                     <span className="absolute bottom-5 left-5 top-5 border-l-2 border-dashed border-slate-200" />
-                    <span className="absolute left-[13px] top-8 h-4 w-4 rounded-full bg-indigo-500 ring-4 ring-indigo-100" />
+                    <span className="absolute left-3.25 top-8 h-4 w-4 rounded-full bg-indigo-500 ring-4 ring-indigo-100" />
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -451,10 +456,10 @@ export default function GrowthPage() {
                           ))}
                         </div>
                       </div>
-                      <div className="min-w-[180px] rounded-2xl bg-slate-50 p-3 text-xs text-slate-500">
+                      <div className="min-w-45 rounded-2xl bg-slate-50 p-3 text-xs text-slate-500">
                         <div className="flex items-center gap-2">
                           <Clock3 className="h-3.5 w-3.5" />
-                          {record.createdAt}
+                          <time dateTime={record.createdAt}>{record.createdAt}</time>
                         </div>
                         <p className="mt-2">记录人：{record.recorder}</p>
                         <p className="mt-1">角色：{record.recorderRole}</p>
@@ -463,7 +468,7 @@ export default function GrowthPage() {
                         <p className="mt-1">年龄：{getAgeText(child.birthDate)}</p>
                       </div>
                     </div>
-                  </div>
+                  </article>
                 );
               })}
             </CardContent>
@@ -482,20 +487,20 @@ export default function GrowthPage() {
                 const child = visibleChildren.find((item) => item.id === record.childId);
                 if (!child) return null;
                 return (
-                  <div key={`timeline-${record.id}`} className="relative rounded-2xl border border-slate-100 bg-white p-4 pl-8 shadow-sm">
+                  <article key={`timeline-${record.id}`} className="relative rounded-2xl border border-slate-100 bg-white p-4 pl-8 shadow-sm">
                     <span className="absolute bottom-3 left-4 top-3 border-l-2 border-dashed border-slate-200" />
-                    <span className="absolute left-[9px] top-6 h-3.5 w-3.5 rounded-full bg-indigo-400 ring-4 ring-indigo-100" />
+                    <span className="absolute left-2.25 top-6 h-3.5 w-3.5 rounded-full bg-indigo-400 ring-4 ring-indigo-100" />
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                       <div>
                         <p className="text-sm font-semibold text-slate-700">{child.name} · {record.category}</p>
                         <p className="mt-1 text-xs leading-5 text-slate-500">{record.description}</p>
                       </div>
                       <div className="text-xs text-slate-400">
-                        <p>{record.createdAt}</p>
+                        <p><time dateTime={record.createdAt}>{record.createdAt}</time></p>
                         <p className="mt-1">{record.recorderRole} · {record.recorder}</p>
                       </div>
                     </div>
-                  </div>
+                  </article>
                 );
               })}
             </CardContent>

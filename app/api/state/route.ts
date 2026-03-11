@@ -6,6 +6,7 @@ import { isAppStateSnapshot, type AppStateSnapshot } from "@/lib/persistence/sna
 const USER_INSTITUTION_MAP: Record<string, string> = {
   "u-admin": "inst-1",
   "u-teacher": "inst-1",
+  "u-teacher2": "inst-1",
   "u-parent": "inst-1",
 };
 
@@ -36,7 +37,8 @@ export async function GET() {
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    console.error("[STATE] Failed to load snapshot", error);
+    return NextResponse.json({ ok: false, error: "远端状态读取失败" }, { status: 500 });
   }
 
   const snapshot = data?.snapshot;
@@ -84,7 +86,8 @@ export async function PUT(request: Request) {
   });
 
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    console.error("[STATE] Failed to save snapshot", error);
+    return NextResponse.json({ ok: false, error: "远端状态保存失败" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

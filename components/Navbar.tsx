@@ -35,11 +35,11 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="sticky top-0 z-40 border-b border-white/60 bg-white/75 shadow-sm backdrop-blur-xl after:absolute after:bottom-0 after:left-0 after:h-px after:w-full after:bg-gradient-to-r after:from-indigo-500/20 after:via-violet-500/20 after:to-transparent after:content-['']">
+    <nav className="sticky top-0 z-40 border-b border-white/60 bg-white/75 shadow-sm backdrop-blur-xl after:absolute after:bottom-0 after:left-0 after:h-px after:w-full after:bg-linear-to-r after:from-indigo-500/20 after:via-violet-500/20 after:to-transparent after:content-['']">
       <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-6 py-3">
         {/* Logo */}
-        <Link href="/" className="group flex items-center gap-3 font-bold text-[var(--primary)]">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-100 to-sky-100 shadow-sm transition-transform duration-300 group-hover:-translate-y-0.5">
+        <Link href="/" className="group flex items-center gap-3 font-bold text-(--primary)">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-linear-to-br from-indigo-100 to-sky-100 shadow-sm transition-transform duration-300 group-hover:-translate-y-0.5">
             <Baby className="h-5 w-5 text-indigo-600" />
           </div>
           <div>

@@ -21,8 +21,11 @@ const ADMIN_USER_IDS = new Set(["u-admin"]);
 const USER_INSTITUTION_MAP: Record<string, string> = {
   "u-admin": "inst-1",
   "u-teacher": "inst-1",
+  "u-teacher2": "inst-1",
   "u-parent": "inst-1",
 };
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 async function getAdminProfile() {
   const userId = await getSessionUserId();
@@ -70,13 +73,15 @@ export async function GET(request: Request) {
       .limit(limit);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("[NOTIFICATION_EVENTS] Failed to fetch events", error);
+      return NextResponse.json({ error: "获取通知事件失败" }, { status: 500 });
     }
 
     return NextResponse.json({ events: data ?? [] });
   } catch (error) {
+    console.error("[NOTIFICATION_EVENTS] Unexpected GET error", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "fetch notification events failed" },
+      { error: "获取通知事件失败" },
       { status: 500 }
     );
   }
@@ -95,6 +100,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "date is required, format: YYYY-MM-DD" }, { status: 400 });
     }
 
+    if (!DATE_PATTERN.test(targetDate)) {
+      return NextResponse.json({ error: "date format is invalid, expected YYYY-MM-DD" }, { status: 400 });
+    }
+
     let childrenQuery = context.supabase
       .from("children")
       .select("id,institution_id,class_name")
@@ -106,7 +115,8 @@ export async function POST(request: Request) {
 
     const { data: children, error: childrenError } = await childrenQuery;
     if (childrenError) {
-      return NextResponse.json({ error: childrenError.message }, { status: 500 });
+      console.error("[NOTIFICATION_EVENTS] Failed to load children", childrenError);
+      return NextResponse.json({ error: "查询幼儿列表失败" }, { status: 500 });
     }
 
     if (!children || children.length === 0) {
@@ -123,7 +133,8 @@ export async function POST(request: Request) {
       .eq("date", targetDate);
 
     if (checkinError) {
-      return NextResponse.json({ error: checkinError.message }, { status: 500 });
+      console.error("[NOTIFICATION_EVENTS] Failed to load checkins", checkinError);
+      return NextResponse.json({ error: "查询任务签到失败" }, { status: 500 });
     }
 
     const checkedChildIdSet = new Set(
@@ -150,13 +161,15 @@ export async function POST(request: Request) {
       .select("id,institution_id,child_id,event_type,source,created_by,payload,status,processed_at,created_at");
 
     if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
+      console.error("[NOTIFICATION_EVENTS] Failed to insert events", insertError);
+      return NextResponse.json({ error: "创建通知事件失败" }, { status: 500 });
     }
 
     return NextResponse.json({ inserted: inserted?.length ?? 0, events: inserted ?? [] }, { status: 201 });
   } catch (error) {
+    console.error("[NOTIFICATION_EVENTS] Unexpected POST error", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "enqueue notification events failed" },
+      { error: "创建通知事件失败" },
       { status: 500 }
     );
   }
@@ -180,7 +193,8 @@ export async function PATCH(request: Request) {
       .limit(limit);
 
     if (fetchError) {
-      return NextResponse.json({ error: fetchError.message }, { status: 500 });
+      console.error("[NOTIFICATION_EVENTS] Failed to fetch pending events", fetchError);
+      return NextResponse.json({ error: "拉取待处理事件失败" }, { status: 500 });
     }
 
     const eventRows = (pendingEvents ?? []) as NotificationEventRow[];
@@ -215,8 +229,9 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ summary });
   } catch (error) {
+    console.error("[NOTIFICATION_EVENTS] Unexpected PATCH error", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "dispatch notification events failed" },
+      { error: "处理通知事件失败" },
       { status: 500 }
     );
   }

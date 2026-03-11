@@ -406,10 +406,10 @@ function ChildArchiveCard({
 
   return (
     <Card className="overflow-hidden border-slate-100 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white pb-4">
+      <CardHeader className="border-b border-slate-100 bg-linear-to-r from-slate-50 to-white pb-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-3xl">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-3xl" role="img" aria-label={`${child.name} 的头像`}>
               {child.avatar}
             </div>
             <div>
@@ -423,8 +423,8 @@ function ChildArchiveCard({
           <div className="flex flex-col items-end gap-2">
             <Badge variant={isPresent ? "success" : "secondary"}>{isPresent ? "今日出勤" : "今日缺勤"}</Badge>
             {canManage ? (
-              <button onClick={onDelete} className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-500">
-                <Trash2 className="h-4 w-4" />
+              <button aria-label={`删除 ${child.name} 的档案`} onClick={onDelete} className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-500">
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
               </button>
             ) : null}
           </div>

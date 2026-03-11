@@ -5,7 +5,14 @@ const COOKIE_NAME = "ccs_session";
 const SESSION_AGE_SECONDS = 60 * 60 * 12;
 
 function getSecret() {
-  return process.env.AUTH_SESSION_SECRET || "dev-only-change-me";
+  const secret = process.env.AUTH_SESSION_SECRET?.trim();
+  if (secret) return secret;
+
+  if (process.env.NODE_ENV !== "production") {
+    return "dev-only-change-me";
+  }
+
+  throw new Error("AUTH_SESSION_SECRET is required in production");
 }
 
 function sign(payloadBase64: string) {
@@ -41,7 +48,13 @@ export function verifySessionToken(token?: string | null): { userId: string } | 
 
   const [encodedPayload, signature] = parts;
   const expected = sign(encodedPayload);
-  if (signature !== expected) return null;
+  try {
+    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
 
   const payload = decodePayload<{ userId?: string; exp?: number }>(encodedPayload);
   if (!payload?.userId || !payload.exp) return null;

@@ -413,7 +413,7 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
-      <div className="mb-8 flex flex-col gap-4 rounded-3xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-sky-50 to-white p-7 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-8 flex flex-col gap-4 rounded-3xl border border-indigo-100 bg-linear-to-r from-indigo-50 via-sky-50 to-white p-7 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="mb-2 flex items-center gap-2">
             <Badge variant="info" className="px-3 py-1 text-xs">
@@ -446,7 +446,7 @@ export default function DashboardPage() {
       
       {abnormalHealthChecks.length > 0 && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 flex items-start gap-3 shadow-sm animate-in fade-in">
-          <div className="flex-shrink-0 mt-0.5">
+          <div className="shrink-0 mt-0.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-red-600">
               ⚠️
             </span>
@@ -473,7 +473,7 @@ export default function DashboardPage() {
 
       {missingHealthChecks.length > 0 && currentUser.role !== "家长" && presentCount > 0 && (
         <div className="mb-6 rounded-xl border border-orange-200 bg-orange-50 p-4 flex items-start gap-3 shadow-sm">
-          <div className="flex-shrink-0 mt-0.5">
+          <div className="shrink-0 mt-0.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-orange-600">
               📋
             </span>
@@ -499,7 +499,7 @@ export default function DashboardPage() {
       </div>
       </ScrollReveal>
 
-      <Card className="mt-6 border-indigo-100 bg-gradient-to-r from-indigo-50/80 via-white to-sky-50/70">
+      <Card className="mt-6 border-indigo-100 bg-linear-to-r from-indigo-50/80 via-white to-sky-50/70">
         <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -585,7 +585,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
-              <div className="h-[280px] w-full">
+              <div className="h-70 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <RadarChart data={nutritionRadarData} outerRadius="75%">
                     <PolarGrid stroke="#dbeafe" />
@@ -620,7 +620,7 @@ export default function DashboardPage() {
             <CardDescription>把今日出勤与缺勤比例直接图形化展示，适合作为演示开场数据。</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[220px] w-full">
+            <div className="h-55 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -664,7 +664,7 @@ export default function DashboardPage() {
             <CardDescription>柱越高代表风险越需要优先关注，统一对比高关注、低饮水和蔬果不足。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="h-[260px] w-full">
+            <div className="h-65 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={adminChartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />

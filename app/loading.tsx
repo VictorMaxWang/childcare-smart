@@ -20,7 +20,7 @@ export default function GlobalLoading() {
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2 rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
           <div className="h-5 w-32 rounded bg-slate-100 skeleton-pulse" />
-          <div className="mt-5 h-[280px] rounded-3xl bg-slate-50 skeleton-pulse" />
+          <div className="mt-5 h-70 rounded-3xl bg-slate-50 skeleton-pulse" />
         </div>
         <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
           <div className="h-5 w-28 rounded bg-slate-100 skeleton-pulse" />

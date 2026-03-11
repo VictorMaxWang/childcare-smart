@@ -45,7 +45,8 @@ export async function POST(request: Request) {
 
   try {
     payload = (await request.json()) as AiFollowUpPayload;
-  } catch {
+  } catch (error) {
+    console.error("[AI] Invalid follow-up payload", error);
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
     model: "follow-up-rule-fallback",
   } satisfies AiFollowUpResponse;
 
-  if (request.headers.get("x-ai-force-fallback") === "1") {
+  if (process.env.NODE_ENV !== "production" && request.headers.get("x-ai-force-fallback") === "1") {
     return NextResponse.json(fallback, { status: 200 });
   }
 

@@ -23,7 +23,8 @@ export async function POST(request: Request) {
 
   try {
     payload = (await request.json()) as AiSuggestionPayload;
-  } catch {
+  } catch (error) {
+    console.error("[AI] Invalid suggestion payload", error);
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
   } satisfies AiSuggestionResponse;
 
   // Test-only switch for smoke checks without affecting normal UI flow.
-  if (request.headers.get("x-ai-force-fallback") === "1") {
+  if (process.env.NODE_ENV !== "production" && request.headers.get("x-ai-force-fallback") === "1") {
     return NextResponse.json(fallback, { status: 200 });
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
 
 export type Role = "家长" | "教师" | "机构管理员";
@@ -40,6 +40,14 @@ export const FOOD_CATEGORY_OPTIONS: FoodCategory[] = ["蔬果", "蛋白", "主�
 export const INSTITUTION_NAME = "春芽普惠托育中心";
 
 const TODAY = new Date().toISOString().split("T")[0];
+const UNAUTHENTICATED_USER: User = {
+  id: "guest",
+  name: "未登录用户",
+  role: "家长",
+  avatar: "",
+  institutionId: "",
+  childIds: [],
+};
 
 export interface User {
   id: string;
@@ -321,6 +329,13 @@ function writeStorage<T>(key: string, value: T) {
 
 const GIRL_AVATARS = ["👧", "🧒", "👶"];
 const BOY_AVATARS = ["👦", "🧒", "👶"];
+
+function createClientId(prefix: string) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}`;
+}
 
 function shiftDate(baseDate: string, diff: number) {
   const date = new Date(baseDate);
@@ -1890,6 +1905,54 @@ export function calcNutritionScore(
   return Math.min(categoryScore + varietyScore + hydrationScore + preferenceScore, 100);
 }
 
+function summarizeWeeklyDietRecords(records: MealRecord[]): WeeklyDietTrend {
+  if (records.length === 0) {
+    return { balancedRate: 0, vegetableDays: 0, proteinDays: 0, stapleDays: 0, hydrationAvg: 0, monotonyDays: 0 };
+  }
+
+  const byDay = new Map<string, MealRecord[]>();
+  records.forEach((record) => {
+    const key = `${record.childId}-${record.date}`;
+    byDay.set(key, [...(byDay.get(key) ?? []), record]);
+  });
+
+  let balancedDays = 0;
+  let vegetableDays = 0;
+  let proteinDays = 0;
+  let stapleDays = 0;
+  let waterTotal = 0;
+  let monotonyDays = 0;
+
+  byDay.forEach((dailyRecords) => {
+    const categories = new Set(dailyRecords.flatMap((record) => record.foods.map((food) => food.category)));
+    if (categories.has("蔬果")) vegetableDays += 1;
+    if (categories.has("蛋白")) proteinDays += 1;
+    if (categories.has("主食")) stapleDays += 1;
+    if (categories.has("蔬果") && categories.has("蛋白") && categories.has("主食")) balancedDays += 1;
+
+    const names = new Set(dailyRecords.flatMap((record) => record.foods.map((food) => food.name)));
+    if (names.size <= 3) monotonyDays += 1;
+
+    waterTotal += dailyRecords.reduce((sum, record) => sum + record.waterMl, 0);
+  });
+
+  return {
+    balancedRate: Math.round((balancedDays / byDay.size) * 100),
+    vegetableDays,
+    proteinDays,
+    stapleDays,
+    hydrationAvg: Math.round(waterTotal / byDay.size),
+    monotonyDays,
+  };
+}
+
+function groupRecordsByChildId<T extends { childId: string }>(records: T[]) {
+  return records.reduce<Map<string, T[]>>((map, record) => {
+    map.set(record.childId, [...(map.get(record.childId) ?? []), record]);
+    return map;
+  }, new Map<string, T[]>());
+}
+
 export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const [users] = useState<User[]>(INITIAL_USERS);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -1904,7 +1967,29 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const [guardianFeedbacks, setGuardianFeedbacks] = useState<GuardianFeedback[]>(INITIAL_FEEDBACKS);
   const [healthCheckRecords, setHealthCheckRecords] = useState<HealthCheckRecord[]>(INITIAL_HEALTH_CHECKS);
   const [taskCheckInRecords, setTaskCheckInRecords] = useState<TaskCheckInRecord[]>(INITIAL_TASK_CHECKINS);
+  const lastSyncedSnapshotKeyRef = useRef<string | null>(null);
   const isAuthenticated = Boolean(currentUserId);
+
+  const remoteSnapshot = useMemo<AppStateSnapshot>(() => ({
+    children: childrenList,
+    attendance: attendanceRecords,
+    meals: mealRecords,
+    growth: growthRecords,
+    feedback: guardianFeedbacks,
+    health: healthCheckRecords,
+    taskCheckIns: taskCheckInRecords,
+    updatedAt: new Date().toISOString(),
+  }), [
+    childrenList,
+    attendanceRecords,
+    mealRecords,
+    growthRecords,
+    guardianFeedbacks,
+    healthCheckRecords,
+    taskCheckInRecords,
+  ]);
+
+  const remoteSnapshotKey = useMemo(() => JSON.stringify(remoteSnapshot), [remoteSnapshot]);
 
   useEffect(() => {
     const storedChildren = readStorage<Child[]>(STORAGE_KEYS.children, INITIAL_CHILDREN);
@@ -1953,6 +2038,8 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
           return;
         }
 
+        lastSyncedSnapshotKeyRef.current = JSON.stringify(data.snapshot);
+
         setChildrenList(data.snapshot.children);
         setAttendanceRecords(data.snapshot.attendance);
         setMealRecords(normalizeRecords(data.snapshot.meals));
@@ -1997,28 +2084,24 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   useEffect(() => {
     if (!storageReady || !remoteReady || !isAuthenticated) return;
 
-    const timer = window.setTimeout(async () => {
-      const snapshot: AppStateSnapshot = {
-        children: childrenList,
-        attendance: attendanceRecords,
-        meals: mealRecords,
-        growth: growthRecords,
-        feedback: guardianFeedbacks,
-        health: healthCheckRecords,
-        taskCheckIns: taskCheckInRecords,
-        updatedAt: new Date().toISOString(),
-      };
+    if (!shouldPromoteDemoSnapshot && lastSyncedSnapshotKeyRef.current === remoteSnapshotKey) {
+      return;
+    }
 
+    const timer = window.setTimeout(async () => {
       try {
         const response = await fetch("/api/state", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot }),
+          body: JSON.stringify({ snapshot: remoteSnapshot }),
         });
 
-        if (response.ok && shouldPromoteDemoSnapshot) {
-          writeStorage(STORAGE_KEYS.remoteDemoSeed, REMOTE_DEMO_SEED_VERSION);
-          setShouldPromoteDemoSnapshot(false);
+        if (response.ok) {
+          lastSyncedSnapshotKeyRef.current = remoteSnapshotKey;
+          if (shouldPromoteDemoSnapshot) {
+            writeStorage(STORAGE_KEYS.remoteDemoSeed, REMOTE_DEMO_SEED_VERSION);
+            setShouldPromoteDemoSnapshot(false);
+          }
         }
       } catch {
         // Keep local persistence available if remote sync fails.
@@ -2032,13 +2115,8 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     storageReady,
     remoteReady,
     isAuthenticated,
-    childrenList,
-    attendanceRecords,
-    mealRecords,
-    growthRecords,
-    guardianFeedbacks,
-    healthCheckRecords,
-    taskCheckInRecords,
+    remoteSnapshot,
+    remoteSnapshotKey,
     shouldPromoteDemoSnapshot,
   ]);
 
@@ -2068,29 +2146,89 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     };
   }, [users]);
 
-  const currentUser = users.find((user) => user.id === currentUserId) ?? users[1] ?? users[0];
+  const currentUser = users.find((user) => user.id === currentUserId) ?? UNAUTHENTICATED_USER;
   const visibleChildren = useMemo(() => filterChildrenByUser(childrenList, currentUser), [childrenList, currentUser]);
+  const visibleChildIds = useMemo(() => visibleChildren.map((child) => child.id), [visibleChildren]);
+  const visibleChildIdSet = useMemo(() => new Set(visibleChildIds), [visibleChildIds]);
+  const attendanceRecordsByDate = useMemo(
+    () => attendanceRecords.reduce<Map<string, AttendanceRecord[]>>((map, record) => {
+      map.set(record.date, [...(map.get(record.date) ?? []), record]);
+      return map;
+    }, new Map<string, AttendanceRecord[]>()),
+    [attendanceRecords]
+  );
+  const todayAttendanceRecords = useMemo(
+    () => attendanceRecords.filter((record) => record.date === TODAY),
+    [attendanceRecords]
+  );
+  const todayAttendanceMap = useMemo(
+    () => new Map(todayAttendanceRecords.map((record) => [record.childId, record] as const)),
+    [todayAttendanceRecords]
+  );
+  const todayMealRecordsMap = useMemo(
+    () => groupRecordsByChildId(mealRecords.filter((record) => record.date === TODAY)),
+    [mealRecords]
+  );
+  const weeklyMealRecordsMap = useMemo(
+    () => groupRecordsByChildId(mealRecords.filter((record) => isInLastDays(record.date, 7))),
+    [mealRecords]
+  );
+  const todayGrowthRecordsMap = useMemo(
+    () => groupRecordsByChildId(growthRecords.filter((record) => record.createdAt.startsWith(TODAY))),
+    [growthRecords]
+  );
+  const weeklyGrowthRecordsMap = useMemo(
+    () => groupRecordsByChildId(growthRecords.filter((record) => isInLastDays(record.createdAt, 7))),
+    [growthRecords]
+  );
+  const todayFeedbackMap = useMemo(
+    () => groupRecordsByChildId(guardianFeedbacks.filter((feedback) => feedback.date === TODAY)),
+    [guardianFeedbacks]
+  );
+  const todayHealthCheckMap = useMemo(
+    () => new Map(healthCheckRecords.filter((record) => record.date === TODAY).map((record) => [record.childId, record] as const)),
+    [healthCheckRecords]
+  );
+  const visibleWeeklyMealRecords = useMemo(
+    () => visibleChildIds.flatMap((childId) => weeklyMealRecordsMap.get(childId) ?? []),
+    [visibleChildIds, weeklyMealRecordsMap]
+  );
+  const weeklyAttentionGrowthCountMap = useMemo(
+    () => new Map(
+      Array.from(weeklyGrowthRecordsMap.entries(), ([childId, records]) => [
+        childId,
+        records.filter((record) => record.needsAttention).length,
+      ] as const)
+    ),
+    [weeklyGrowthRecordsMap]
+  );
+  const presentChildren = useMemo(() => visibleChildren.filter((child) => todayAttendanceMap.get(child.id)?.isPresent), [todayAttendanceMap, visibleChildren]);
+  const visibleWeeklyTrendMap = useMemo(() => {
+    const trends = new Map<string, WeeklyDietTrend>();
 
-  const getAttendanceByDate = (date: string, childId?: string) => {
-    const ids = childId ? [childId] : visibleChildren.map((child) => child.id);
-    return attendanceRecords.filter((record) => record.date === date && ids.includes(record.childId));
-  };
+    visibleChildren.forEach((child) => {
+      const weeklyRecords = weeklyMealRecordsMap.get(child.id) ?? [];
+      trends.set(child.id, summarizeWeeklyDietRecords(weeklyRecords));
+    });
 
-  const getTodayAttendance = () => getAttendanceByDate(TODAY);
+    return trends;
+  }, [visibleChildren, weeklyMealRecordsMap]);
 
-  const presentChildren = visibleChildren.filter((child) => {
-    const todayAttendance = attendanceRecords.find(
-      (record) => record.childId === child.id && record.date === TODAY
-    );
-    return todayAttendance?.isPresent;
-  });
+  const getAttendanceByDate = useCallback((date: string, childId?: string) => {
+    if (childId) {
+      return (attendanceRecordsByDate.get(date) ?? []).filter((record) => record.childId === childId);
+    }
+    return (attendanceRecordsByDate.get(date) ?? []).filter((record) => visibleChildIdSet.has(record.childId));
+  }, [attendanceRecordsByDate, visibleChildIdSet]);
 
-  const switchUser = (userId: string) => {
+  const getTodayAttendance = useCallback(() => getAttendanceByDate(TODAY), [getAttendanceByDate]);
+
+  const switchUser = useCallback((userId: string) => {
     const canSwitch = users.some((user) => user.id === userId);
     if (canSwitch) setCurrentUserId(userId);
-  };
+  }, [users]);
 
-  const login = async (userId: string, password: string) => {
+  const login = useCallback(async (userId: string, password: string) => {
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
@@ -2106,48 +2244,48 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     } catch {
       return { ok: false, error: "网络异常，请稍后重试。" };
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
       setCurrentUserId(null);
     }
-  };
+  }, []);
 
-  const addChild = (child: NewChildInput) => {
+  const addChild = useCallback((child: NewChildInput) => {
     const avatars = child.gender === "女" ? GIRL_AVATARS : BOY_AVATARS;
     setChildrenList((prev) => [
       ...prev,
       {
         ...child,
-        id: `c-${Date.now()}`,
+        id: createClientId("c"),
         avatar: avatars[Math.floor(Math.random() * avatars.length)],
       },
     ]);
-  };
+  }, []);
 
-  const removeChild = (id: string) => {
+  const removeChild = useCallback((id: string) => {
     setChildrenList((prev) => prev.filter((child) => child.id !== id));
     setAttendanceRecords((prev) => prev.filter((record) => record.childId !== id));
     setMealRecords((prev) => prev.filter((record) => record.childId !== id));
     setGrowthRecords((prev) => prev.filter((record) => record.childId !== id));
     setGuardianFeedbacks((prev) => prev.filter((record) => record.childId !== id));
-  };
+  }, []);
 
-  const markAttendance = (input: Omit<AttendanceRecord, "id">) => {
+  const markAttendance = useCallback((input: Omit<AttendanceRecord, "id">) => {
     setAttendanceRecords((prev) => {
       const existing = prev.find((record) => record.childId === input.childId && record.date === input.date);
       if (!existing) {
-        return [...prev, { ...input, id: `a-${Date.now()}` }];
+        return [...prev, { ...input, id: createClientId("a") }];
       }
       return prev.map((record) => (record.id === existing.id ? { ...existing, ...input } : record));
     });
-  };
+  }, []);
 
-  const toggleTodayAttendance = (childId: string) => {
-    const existing = attendanceRecords.find((record) => record.childId === childId && record.date === TODAY);
+  const toggleTodayAttendance = useCallback((childId: string) => {
+    const existing = todayAttendanceMap.get(childId);
     if (!existing) {
       markAttendance({ childId, date: TODAY, isPresent: true, checkInAt: "08:30", checkOutAt: "17:10" });
       return;
@@ -2159,25 +2297,25 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       checkInAt: existing.isPresent ? undefined : "08:35",
       checkOutAt: existing.isPresent ? undefined : "17:15",
     });
-  };
+  }, [markAttendance, todayAttendanceMap]);
 
-  const upsertMealRecord = (input: UpsertMealRecordInput) => {
+  const upsertMealRecord = useCallback((input: UpsertMealRecordInput) => {
     setMealRecords((prev) => {
       const existing = prev.find(
         (record) =>
           record.childId === input.childId && record.date === input.date && record.meal === input.meal
       );
       const next: MealRecord = {
-        ...(existing ?? { id: `m-${Date.now()}-${Math.random().toString(16).slice(2, 6)}` }),
+        ...(existing ?? { id: createClientId("m") }),
         ...input,
         nutritionScore: calcNutritionScore(input.foods, input.waterMl, input.preference),
       };
       if (!existing) return [...prev, next];
       return prev.map((record) => (record.id === existing.id ? next : record));
     });
-  };
+  }, []);
 
-  const previewBulkMealTemplate = (
+  const previewBulkMealTemplate = useCallback((
     input: Pick<BulkMealTemplateInput, "foods" | "excludedChildIds" | "onlyChildIds">
   ): BulkPreviewItem[] => {
     const base = presentChildren
@@ -2193,9 +2331,9 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         };
       });
     return base;
-  };
+  }, [presentChildren]);
 
-  const bulkApplyMealTemplate = (input: BulkMealTemplateInput) => {
+  const bulkApplyMealTemplate = useCallback((input: BulkMealTemplateInput) => {
     const preview = previewBulkMealTemplate({
       foods: input.foods,
       excludedChildIds: input.excludedChildIds,
@@ -2214,12 +2352,12 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     });
 
     return { applied, blocked };
-  };
+  }, [previewBulkMealTemplate, upsertMealRecord]);
 
-  const addGrowthRecord = (input: AddGrowthRecordInput) => {
+  const addGrowthRecord = useCallback((input: AddGrowthRecordInput) => {
     setGrowthRecords((prev) => [
       {
-        id: `g-${Date.now()}`,
+        id: createClientId("g"),
         childId: input.childId,
         createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
         recorder: currentUser.name,
@@ -2234,25 +2372,25 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       },
       ...prev,
     ]);
-  };
+  }, [currentUser.name, currentUser.role]);
 
-  const addGuardianFeedback = (input: Omit<GuardianFeedback, "id" | "createdBy" | "createdByRole">) => {
+  const addGuardianFeedback = useCallback((input: Omit<GuardianFeedback, "id" | "createdBy" | "createdByRole">) => {
     setGuardianFeedbacks((prev) => [
       {
         ...input,
-        id: `fb-${Date.now()}`,
+        id: createClientId("fb"),
         createdBy: currentUser.name,
         createdByRole: currentUser.role,
       },
       ...prev,
     ]);
-  };
+  }, [currentUser.name, currentUser.role]);
 
-  const getTodayHealthCheck = (childId: string) => {
-    return healthCheckRecords.find((record) => record.childId === childId && record.date === TODAY);
-  };
+  const getTodayHealthCheck = useCallback((childId: string) => {
+    return todayHealthCheckMap.get(childId);
+  }, [todayHealthCheckMap]);
 
-  const upsertHealthCheck = (input: Omit<HealthCheckRecord, "id" | "date" | "checkedBy" | "checkedByRole"> & { date?: string }) => {
+  const upsertHealthCheck = useCallback((input: Omit<HealthCheckRecord, "id" | "date" | "checkedBy" | "checkedByRole"> & { date?: string }) => {
     setHealthCheckRecords((prev) => {
       const existingIndex = prev.findIndex((record) => record.childId === input.childId && record.date === (input.date || TODAY));
       if (existingIndex > -1) {
@@ -2263,7 +2401,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       return [
         {
           ...input,
-          id: `hc-${Date.now()}`,
+          id: createClientId("hc"),
           date: input.date || TODAY,
           checkedBy: currentUser.name,
           checkedByRole: currentUser.role,
@@ -2271,86 +2409,100 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         ...prev,
       ];
     });
-  };
+  }, [currentUser.name, currentUser.role]);
 
-  const getTaskCheckIns = (childId: string, date?: string) => {
+  const getTaskCheckIns = useCallback((childId: string, date?: string) => {
     return taskCheckInRecords.filter((record) => record.childId === childId && (!date || record.date === date));
-  };
+  }, [taskCheckInRecords]);
 
-  const checkInTask = (childId: string, taskId: string, date: string) => {
+  const checkInTask = useCallback((childId: string, taskId: string, date: string) => {
     setTaskCheckInRecords((prev) => {
       const exists = prev.some((r) => r.childId === childId && r.taskId === taskId && r.date === date);
       if (exists) return prev;
-      return [...prev, { id: `tc-${Date.now()}`, childId, taskId, date }];
+      return [...prev, { id: createClientId("tc"), childId, taskId, date }];
     });
-  };
+  }, []);
 
-  const getTodayMealRecords = (childIds?: string[]) => {
-    const ids = childIds ?? visibleChildren.map((child) => child.id);
-    return mealRecords.filter((record) => record.date === TODAY && ids.includes(record.childId));
-  };
+  const getTodayMealRecords = useCallback((childIds?: string[]) => {
+    const ids = childIds ?? visibleChildIds;
+    return ids.flatMap((childId) => todayMealRecordsMap.get(childId) ?? []);
+  }, [todayMealRecordsMap, visibleChildIds]);
 
-  const getWeeklyDietTrend = (childId?: string): WeeklyDietTrend => {
-    const targetIds = childId ? [childId] : visibleChildren.map((child) => child.id);
-    const weeklyRecords = mealRecords.filter(
-      (record) => targetIds.includes(record.childId) && isInLastDays(record.date, 7)
-    );
+  const getWeeklyDietTrend = useCallback((childId?: string): WeeklyDietTrend => {
+    if (childId) {
+      const cachedTrend = visibleWeeklyTrendMap.get(childId);
+      if (cachedTrend) {
+        return cachedTrend;
+      }
 
-    if (weeklyRecords.length === 0) {
-      return { balancedRate: 0, vegetableDays: 0, proteinDays: 0, stapleDays: 0, hydrationAvg: 0, monotonyDays: 0 };
+      const weeklyRecords = weeklyMealRecordsMap.get(childId) ?? [];
+      return summarizeWeeklyDietRecords(weeklyRecords);
     }
 
-    const byDay = new Map<string, MealRecord[]>();
-    weeklyRecords.forEach((record) => {
-      const key = `${record.childId}-${record.date}`;
-      byDay.set(key, [...(byDay.get(key) ?? []), record]);
-    });
+    return summarizeWeeklyDietRecords(visibleWeeklyMealRecords);
+  }, [visibleWeeklyMealRecords, visibleWeeklyTrendMap, weeklyMealRecordsMap]);
 
-    let balancedDays = 0;
-    let vegetableDays = 0;
-    let proteinDays = 0;
-    let stapleDays = 0;
-    let waterTotal = 0;
-    let monotonyDays = 0;
+  const adminBoardData = useMemo<AdminBoardData>(() => {
+    const scopeChildren = filterChildrenByUser(childrenList, users.find((u) => u.role === "机构管理员") ?? currentUser);
 
-    byDay.forEach((records) => {
-      const categories = new Set(records.flatMap((record) => record.foods.map((food) => food.category)));
-      if (categories.has("蔬果")) vegetableDays += 1;
-      if (categories.has("蛋白")) proteinDays += 1;
-      if (categories.has("主食")) stapleDays += 1;
-      if (categories.has("蔬果") && categories.has("蛋白") && categories.has("主食")) balancedDays += 1;
+    const highAttentionChildren = scopeChildren
+      .map((child) => {
+        const count = weeklyAttentionGrowthCountMap.get(child.id) ?? 0;
+        return { childId: child.id, childName: child.name, count };
+      })
+      .filter((item) => item.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
 
-      const names = new Set(records.flatMap((record) => record.foods.map((food) => food.name)));
-      if (names.size <= 3) monotonyDays += 1;
+    const lowHydrationChildren = scopeChildren
+      .map((child) => ({
+        childId: child.id,
+        childName: child.name,
+        hydrationAvg: visibleWeeklyTrendMap.get(child.id)?.hydrationAvg ?? getWeeklyDietTrend(child.id).hydrationAvg,
+      }))
+      .sort((a, b) => a.hydrationAvg - b.hydrationAvg)
+      .slice(0, 5);
 
-      waterTotal += records.reduce((sum, record) => sum + record.waterMl, 0);
-    });
+    const lowVegTrendChildren = scopeChildren
+      .map((child) => ({
+        childId: child.id,
+        childName: child.name,
+        vegetableDays: visibleWeeklyTrendMap.get(child.id)?.vegetableDays ?? getWeeklyDietTrend(child.id).vegetableDays,
+      }))
+      .sort((a, b) => a.vegetableDays - b.vegetableDays)
+      .slice(0, 5);
 
-    return {
-      balancedRate: Math.round((balancedDays / byDay.size) * 100),
-      vegetableDays,
-      proteinDays,
-      stapleDays,
-      hydrationAvg: Math.round(waterTotal / byDay.size),
-      monotonyDays,
-    };
-  };
+    return { highAttentionChildren, lowHydrationChildren, lowVegTrendChildren };
+  }, [childrenList, currentUser, getWeeklyDietTrend, users, visibleWeeklyTrendMap, weeklyAttentionGrowthCountMap]);
 
-  const getSmartInsights = () => {
+  const smartInsights = useMemo(() => {
     const insights: SmartInsight[] = [];
-    const visibleIds = visibleChildren.map((child) => child.id);
+    const todayAttendance = todayAttendanceRecords.filter((record) => visibleChildIdSet.has(record.childId));
+    const todayPresent = todayAttendance.filter((item) => item.isPresent).length;
+    const todayMeals = visibleChildIds.reduce((sum, childId) => sum + (todayMealRecordsMap.get(childId)?.length ?? 0), 0);
 
     visibleChildren.forEach((child) => {
       const ageBand = getAgeBandFromBirthDate(child.birthDate);
-      const weekly = getWeeklyDietTrend(child.id);
-      const childGrowth = growthRecords.filter(
-        (record) => record.childId === child.id && isInLastDays(record.createdAt, 7)
-      );
-      const childMeals = mealRecords.filter(
-        (record) => record.childId === child.id && isInLastDays(record.date, 7)
-      );
+      const childGrowth = weeklyGrowthRecordsMap.get(child.id) ?? [];
+      const childMeals = weeklyMealRecordsMap.get(child.id) ?? [];
+      const byDay = new Map<string, MealRecord[]>();
 
-      if (weekly.monotonyDays >= 3) {
+      childMeals.forEach((record) => {
+        const key = `${record.childId}-${record.date}`;
+        byDay.set(key, [...(byDay.get(key) ?? []), record]);
+      });
+
+      let vegetableDays = 0;
+      let monotonyDays = 0;
+      byDay.forEach((records) => {
+        const categories = new Set(records.flatMap((record) => record.foods.map((food) => food.category)));
+        if (categories.has("蔬果")) vegetableDays += 1;
+
+        const names = new Set(records.flatMap((record) => record.foods.map((food) => food.name)));
+        if (names.size <= 3) monotonyDays += 1;
+      });
+
+      if (monotonyDays >= 3) {
         insights.push({
           id: `ins-monotony-${child.id}`,
           childId: child.id,
@@ -2361,7 +2513,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         });
       }
 
-      if (weekly.vegetableDays <= 2) {
+      if (vegetableDays <= 2) {
         insights.push({
           id: `ins-veg-${child.id}`,
           childId: child.id,
@@ -2414,10 +2566,6 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       }
     });
 
-    const todayAttendance = getTodayAttendance();
-    const todayPresent = todayAttendance.filter((item) => item.isPresent).length;
-    const todayMeals = getTodayMealRecords(visibleIds).length;
-
     insights.unshift({
       id: "ins-role-ready",
       level: "success",
@@ -2435,68 +2583,37 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     });
 
     return insights.slice(0, 10);
-  };
+  }, [currentUser.role, todayAttendanceRecords, todayMealRecordsMap, visibleChildIdSet, visibleChildIds, visibleChildren, weeklyGrowthRecordsMap, weeklyMealRecordsMap]);
 
-  const getParentFeed = () => {
+  const getSmartInsights = useCallback(() => smartInsights, [smartInsights]);
+
+  const parentFeedData = useMemo(() => {
     const parentChildren = currentUser.role === "家长"
       ? visibleChildren
       : visibleChildren.filter((child) => Boolean(child.parentUserId));
 
     return parentChildren.map((child) => {
-      const todayMeals = mealRecords.filter((record) => record.childId === child.id && record.date === TODAY);
-      const todayGrowth = growthRecords.filter(
-        (record) => record.childId === child.id && record.createdAt.startsWith(TODAY)
-      );
-      const suggestions = getSmartInsights().filter((insight) => !insight.childId || insight.childId === child.id);
-      const feedbacks = guardianFeedbacks.filter((feedback) => feedback.childId === child.id && feedback.date === TODAY);
+      const todayMeals = todayMealRecordsMap.get(child.id) ?? [];
+      const todayGrowth = todayGrowthRecordsMap.get(child.id) ?? [];
+      const suggestions = smartInsights.filter((insight) => !insight.childId || insight.childId === child.id);
+      const feedbacks = todayFeedbackMap.get(child.id) ?? [];
 
       return {
         child,
         todayMeals,
         todayGrowth,
-        weeklyTrend: getWeeklyDietTrend(child.id),
+        weeklyTrend: visibleWeeklyTrendMap.get(child.id) ?? getWeeklyDietTrend(child.id),
         suggestions,
         feedbacks,
       };
     });
-  };
+  }, [currentUser.role, getWeeklyDietTrend, smartInsights, todayFeedbackMap, todayGrowthRecordsMap, todayMealRecordsMap, visibleChildren, visibleWeeklyTrendMap]);
 
-  const getAdminBoardData = (): AdminBoardData => {
-    const scopeChildren = filterChildrenByUser(childrenList, users.find((u) => u.role === "机构管理员") ?? currentUser);
+  const getParentFeed = useCallback(() => parentFeedData, [parentFeedData]);
 
-    const highAttentionChildren = scopeChildren
-      .map((child) => {
-        const count = growthRecords.filter(
-          (record) => record.childId === child.id && record.needsAttention && isInLastDays(record.createdAt, 7)
-        ).length;
-        return { childId: child.id, childName: child.name, count };
-      })
-      .filter((item) => item.count > 0)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+  const getAdminBoardData = useCallback((): AdminBoardData => adminBoardData, [adminBoardData]);
 
-    const lowHydrationChildren = scopeChildren
-      .map((child) => ({
-        childId: child.id,
-        childName: child.name,
-        hydrationAvg: getWeeklyDietTrend(child.id).hydrationAvg,
-      }))
-      .sort((a, b) => a.hydrationAvg - b.hydrationAvg)
-      .slice(0, 5);
-
-    const lowVegTrendChildren = scopeChildren
-      .map((child) => ({
-        childId: child.id,
-        childName: child.name,
-        vegetableDays: getWeeklyDietTrend(child.id).vegetableDays,
-      }))
-      .sort((a, b) => a.vegetableDays - b.vegetableDays)
-      .slice(0, 5);
-
-    return { highAttentionChildren, lowHydrationChildren, lowVegTrendChildren };
-  };
-
-  const resetDemoData = async () => {
+  const resetDemoData = useCallback(async () => {
     const snapshot = createDemoSnapshot();
 
     setChildrenList(snapshot.children);
@@ -2538,49 +2655,91 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     }
 
     return { remoteSynced: false };
-  };
+  }, [isAuthenticated]);
+
+  const contextValue = useMemo<AppContextType>(() => ({
+    users,
+    currentUser,
+    isAuthenticated,
+    authLoading,
+    login,
+    logout,
+    switchUser,
+    children: childrenList,
+    visibleChildren,
+    attendanceRecords,
+    getAttendanceByDate,
+    getTodayAttendance,
+    markAttendance,
+    toggleTodayAttendance,
+    healthCheckRecords,
+    todayHealthCheckMap,
+    upsertHealthCheck,
+    getTodayHealthCheck,
+    taskCheckInRecords,
+    checkInTask,
+    getTaskCheckIns,
+    presentChildren,
+    addChild,
+    removeChild,
+    mealRecords,
+    upsertMealRecord,
+    bulkApplyMealTemplate,
+    previewBulkMealTemplate,
+    growthRecords,
+    addGrowthRecord,
+    guardianFeedbacks,
+    addGuardianFeedback,
+    getTodayMealRecords,
+    getWeeklyDietTrend,
+    getSmartInsights,
+    getParentFeed,
+    getAdminBoardData,
+    resetDemoData,
+  }), [
+    users,
+    currentUser,
+    isAuthenticated,
+    authLoading,
+    login,
+    logout,
+    switchUser,
+    childrenList,
+    visibleChildren,
+    attendanceRecords,
+    getAttendanceByDate,
+    getTodayAttendance,
+    markAttendance,
+    toggleTodayAttendance,
+    healthCheckRecords,
+    todayHealthCheckMap,
+    upsertHealthCheck,
+    getTodayHealthCheck,
+    taskCheckInRecords,
+    checkInTask,
+    getTaskCheckIns,
+    presentChildren,
+    addChild,
+    removeChild,
+    mealRecords,
+    upsertMealRecord,
+    bulkApplyMealTemplate,
+    previewBulkMealTemplate,
+    growthRecords,
+    addGrowthRecord,
+    guardianFeedbacks,
+    addGuardianFeedback,
+    getTodayMealRecords,
+    getWeeklyDietTrend,
+    getSmartInsights,
+    getParentFeed,
+    getAdminBoardData,
+    resetDemoData,
+  ]);
 
   return (
     <AppContext.Provider
-      value={{
-        users,
-        currentUser,
-        isAuthenticated,
-        authLoading,
-        login,
-        logout,
-        switchUser,
-        children: childrenList,
-        visibleChildren,
-        attendanceRecords,
-        getAttendanceByDate,
-        getTodayAttendance,
-        markAttendance,
-        toggleTodayAttendance,
-        healthCheckRecords,
-        upsertHealthCheck,
-        getTodayHealthCheck,
-        taskCheckInRecords,
-        checkInTask,
-        getTaskCheckIns,
-        presentChildren,
-        addChild,
-        removeChild,
-        mealRecords,
-        upsertMealRecord,
-        bulkApplyMealTemplate,
-        previewBulkMealTemplate,
-        growthRecords,
-        addGrowthRecord,
-        guardianFeedbacks,
-        addGuardianFeedback,
-        getTodayMealRecords,
-        getWeeklyDietTrend,
-        getSmartInsights,
-        getParentFeed,
-        getAdminBoardData,
-        resetDemoData,
-      }}
+      value={contextValue}
     >
       {authLoading ? (
         <div className="flex min-h-[calc(100vh-64px)] items-center justify-center">
