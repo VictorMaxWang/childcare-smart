@@ -20,6 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -55,6 +56,13 @@ const QUICK_FOODS: Record<MealType, { name: string; category: FoodCategory; amou
 const INTAKE_OPTIONS: IntakeLevel[] = ["少量", "适中", "充足"];
 const PREFERENCE_OPTIONS: PreferenceStatus[] = ["偏好", "正常", "拒食"];
 
+function createFoodId(prefix: string) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}`;
+}
+
 export default function DietPage() {
   const {
     currentUser,
@@ -81,6 +89,7 @@ export default function DietPage() {
   const [bulkWaterMl, setBulkWaterMl] = useState("150");
   const [bulkAllergyReaction, setBulkAllergyReaction] = useState("");
   const [bulkExcludedChildIds, setBulkExcludedChildIds] = useState<string[]>([]);
+  const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
 
   const resolvedSelectedChildId =
     visibleChildren.some((child) => child.id === selectedChildId) ? selectedChildId : (visibleChildren[0]?.id ?? "");
@@ -120,6 +129,13 @@ export default function DietPage() {
     [bulkExcludedChildIds, bulkFoods, previewBulkMealTemplate]
   );
 
+  const bulkPreviewSummary = useMemo(() => {
+    const applicable = bulkPreview.filter((item) => !item.excluded && !item.blockedByAllergy);
+    const blocked = bulkPreview.filter((item) => item.blockedByAllergy);
+    const excluded = bulkPreview.filter((item) => item.excluded);
+    return { applicable, blocked, excluded };
+  }, [bulkPreview]);
+
   function saveMealRecord(meal: MealType, patch: Partial<MealRecord>) {
     if (!selectedChild) return;
     const existing = selectedChildMeals[meal];
@@ -142,7 +158,7 @@ export default function DietPage() {
     setBulkFoods((prev) => [
       ...prev,
       {
-        id: `bulk-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+        id: createFoodId("bulk"),
         name: bulkFoodName.trim(),
         category: bulkFoodCategory,
         amount: bulkFoodAmount.trim() || "1份",
@@ -158,6 +174,19 @@ export default function DietPage() {
       });
       return;
     }
+
+    if (bulkPreviewSummary.applicable.length === 0) {
+      toast.warning("当前没有可执行的批量对象。", {
+        description: "请检查是否全部被手动排除，或餐单是否被过敏拦截。",
+      });
+      return;
+    }
+
+    setConfirmBulkOpen(true);
+  }
+
+  function confirmApplyBulkTemplate() {
+    setConfirmBulkOpen(false);
 
     const result = bulkApplyMealTemplate({
       date: TODAY,
@@ -194,7 +223,7 @@ export default function DietPage() {
         <div className="section-divider mt-5" />
       </div>
 
-      <Card className="mb-6 border-emerald-100 bg-gradient-to-r from-emerald-50 to-white">
+      <Card className="mb-6 border-emerald-100 bg-linear-to-r from-emerald-50 to-white">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <ChefHat className="h-5 w-5 text-emerald-600" />
@@ -286,7 +315,7 @@ export default function DietPage() {
                   setBulkFoods((prev) => [
                     ...prev,
                     {
-                      id: `quick-${Date.now()}-${food.name}`,
+                      id: createFoodId(`quick-${food.name}`),
                       name: food.name,
                       category: food.category,
                       amount: food.amount,
@@ -347,6 +376,51 @@ export default function DietPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={confirmBulkOpen} onOpenChange={setConfirmBulkOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>确认批量录入</DialogTitle>
+            <DialogDescription>
+              将为 {bulkPreviewSummary.applicable.length} 位幼儿应用当前餐单，另有 {bulkPreviewSummary.blocked.length} 位因过敏被拦截，{bulkPreviewSummary.excluded.length} 位被手动排除。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 text-sm">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+              <p className="font-medium text-slate-700">本次餐单</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {bulkFoods.map((food) => (
+                  <span key={food.id} className="rounded-full bg-white px-3 py-1 text-xs text-slate-600 shadow-sm">
+                    {food.name} · {food.amount} · {food.category}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-100 bg-white p-3">
+              <p className="font-medium text-slate-700">将被录入的幼儿</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                {bulkPreviewSummary.applicable.map((item) => item.childName).join("、")}
+              </p>
+            </div>
+
+            {bulkPreviewSummary.blocked.length > 0 ? (
+              <div className="rounded-2xl border border-amber-100 bg-amber-50 p-3">
+                <p className="font-medium text-amber-700">已自动拦截</p>
+                <p className="mt-2 text-xs leading-5 text-amber-700">
+                  {bulkPreviewSummary.blocked.map((item) => item.childName).join("、")}
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmBulkOpen(false)}>取消</Button>
+            <Button onClick={confirmApplyBulkTemplate}>确认录入</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-col gap-6 xl:flex-row">
         <aside className="w-full xl:w-80">
@@ -415,7 +489,7 @@ export default function DietPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="min-w-[220px] rounded-3xl bg-slate-50 p-4 text-right">
+                  <div className="min-w-55 rounded-3xl bg-slate-50 p-4 text-right">
                     <p className="text-xs text-slate-400">今日综合营养评分</p>
                     <p className="mt-2 text-4xl font-bold text-slate-800">{overallScore || "--"}</p>
                     <Progress
@@ -511,7 +585,7 @@ function MealEditorCard({ meal, record, onSave }: { meal: MealType; record?: Mea
     const nextFoods = [
       ...foods,
       {
-        id: `${meal}-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+        id: createFoodId(meal),
         name: nextName,
         category: item?.category ?? foodCategory,
         amount: item?.amount ?? (foodAmount.trim() || "1份"),

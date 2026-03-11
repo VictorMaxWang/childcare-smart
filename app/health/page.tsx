@@ -168,10 +168,10 @@ export default function HealthPage() {
   if (currentUser.role === "家长") {
     return (
       <div className="flex h-[80vh] items-center justify-center text-muted-foreground">
-        <div className="text-center">
-          <AlertTriangle className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
-          <h2 className="text-lg font-semibold">权限不足</h2>
-          <p>家长视图无法操作健康晨检页面，请返回主页或家长专属页。</p>
+        <div className="text-center" role="alert" aria-live="assertive" aria-labelledby="health-denied-title" aria-describedby="health-denied-desc">
+          <AlertTriangle className="mx-auto mb-4 h-12 w-12 text-yellow-500" aria-hidden="true" />
+          <h2 id="health-denied-title" className="text-lg font-semibold">权限不足</h2>
+          <p id="health-denied-desc">家长视图无法操作健康晨检页面，请返回主页或家长专属页。</p>
         </div>
       </div>
     );
@@ -249,7 +249,7 @@ export default function HealthPage() {
             <CardTitle>一周体温趋势</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[260px] w-full">
+            <div className="h-65 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={weeklyTemperatureData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -289,7 +289,7 @@ export default function HealthPage() {
             <CardTitle>情绪分布图</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[260px] w-full">
+            <div className="h-65 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={moodDistributionData} dataKey="value" nameKey="name" outerRadius={88} innerRadius={40}>
@@ -327,22 +327,34 @@ export default function HealthPage() {
                 className="pl-8"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                aria-label="搜索幼儿姓名或乳名"
               />
             </div>
-            <div className="flex gap-2 bg-muted p-1 rounded-md">
-              <button 
-                className={`px-3 py-1 text-sm rounded-sm transition-all ${filterStatus === "all" ? "bg-white shadow-sm font-medium" : "text-muted-foreground hover:bg-white/50"}`}
-                onClick={() => setFilterStatus("all")}
-              >全部</button>
-              <button 
-                className={`px-3 py-1 text-sm rounded-sm transition-all ${filterStatus === "unchecked" ? "bg-white shadow-sm font-medium" : "text-muted-foreground hover:bg-white/50"}`}
-                onClick={() => setFilterStatus("unchecked")}
-              >待晨检</button>
-              <button 
-                className={`px-3 py-1 text-sm rounded-sm transition-all ${filterStatus === "abnormal" ? "bg-white shadow-sm font-medium" : "text-muted-foreground hover:bg-white/50"}`}
-                onClick={() => setFilterStatus("abnormal")}
-              >异常警告</button>
-            </div>
+            <fieldset className="flex gap-2 rounded-md bg-muted p-1">
+              <legend className="sr-only">健康晨检筛选条件</legend>
+              {[
+                { value: "all", label: "全部" },
+                { value: "unchecked", label: "待晨检" },
+                { value: "abnormal", label: "异常警告" },
+              ].map((option) => (
+                <label
+                  key={option.value}
+                  className={`cursor-pointer rounded-sm px-3 py-1 text-sm transition-all ${
+                    filterStatus === option.value ? "bg-white font-medium shadow-sm" : "text-muted-foreground hover:bg-white/50"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="health-filter-status"
+                    value={option.value}
+                    checked={filterStatus === option.value}
+                    onChange={() => setFilterStatus(option.value as typeof filterStatus)}
+                    className="sr-only"
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </fieldset>
           </div>
         </CardHeader>
         <CardContent>
@@ -355,10 +367,15 @@ export default function HealthPage() {
                 <Card 
                   key={child.id} 
                   className={`overflow-hidden transition-all hover:shadow-md cursor-pointer border-l-4 ${!isChecked ? 'border-l-orange-300' : isAbnormal ? 'border-l-red-500 bg-red-50/30' : 'border-l-green-500'}`}
-                  onClick={() => handleOpenDialog(child.id)}
                 >
-                  <div className="p-4 flex gap-4">
-                    <div className="h-12 w-12 rounded-full flex items-center justify-center bg-primary/10 text-xl flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenDialog(child.id)}
+                    className="w-full p-4 text-left"
+                    aria-label={`打开 ${child.name} 的晨检记录`}
+                  >
+                  <div className="flex gap-4">
+                    <div className="h-12 w-12 rounded-full flex items-center justify-center bg-primary/10 text-xl shrink-0">
                       {child.gender === '男' ? '👦' : '👧'}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -394,6 +411,7 @@ export default function HealthPage() {
                       )}
                     </div>
                   </div>
+                  </button>
                 </Card>
               );
             })}
@@ -410,7 +428,7 @@ export default function HealthPage() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-106.25">
           <DialogHeader>
             <DialogTitle>
               晨检记录 - {childData.find((c) => c.id === selectedChildId)?.name}
@@ -483,27 +501,27 @@ export default function HealthPage() {
                   placeholder="检查补充说明..."
                 />
                 <div className="flex flex-wrap gap-2">
-                  <Badge 
-                    variant="outline" 
-                    className="cursor-pointer hover:bg-muted"
+                  <button
+                    type="button"
+                    className="inline-flex items-center rounded-full border border-input px-2.5 py-0.5 text-xs font-semibold transition-colors hover:bg-muted"
                     onClick={() => setRemark(TEMPLATE_REMARKS.NORMAL)}
                   >
                     常规正常
-                  </Badge>
-                  <Badge 
-                    variant="outline" 
-                    className="cursor-pointer hover:bg-muted"
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center rounded-full border border-input px-2.5 py-0.5 text-xs font-semibold transition-colors hover:bg-muted"
                     onClick={() => setRemark(TEMPLATE_REMARKS.SLIGHT_COUGH)}
                   >
                     轻微咳嗽
-                  </Badge>
-                  <Badge 
-                    variant="outline" 
-                    className="cursor-pointer hover:bg-muted"
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center rounded-full border border-input px-2.5 py-0.5 text-xs font-semibold transition-colors hover:bg-muted"
                     onClick={() => setRemark(TEMPLATE_REMARKS.LOW_FEVER)}
                   >
                     低烧观察
-                  </Badge>
+                  </button>
                 </div>
               </div>
             </div>

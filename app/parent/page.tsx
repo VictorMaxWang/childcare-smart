@@ -54,6 +54,7 @@ export default function ParentPage() {
   const [feedbackContent, setFeedbackContent] = useState("");
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestionResponse | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [exportingReport, setExportingReport] = useState(false);
   const [aiRefreshNonce, setAiRefreshNonce] = useState(0);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState("");
   const [followUpQuestion, setFollowUpQuestion] = useState("");
@@ -325,7 +326,13 @@ export default function ParentPage() {
         });
 
         if (!response.ok) {
-          setAiSuggestion(fallback);
+          if (!cancelled) {
+            aiSuggestionCacheRef.current.set(aiSnapshotKey, fallback);
+            setAiSuggestion(fallback);
+            toast.warning("AI 建议暂时不可用", {
+              description: "已切换为规则引擎建议，当前业务展示不受影响。",
+            });
+          }
           return;
         }
 
@@ -333,11 +340,19 @@ export default function ParentPage() {
         if (!cancelled) {
           aiSuggestionCacheRef.current.set(aiSnapshotKey, data);
           setAiSuggestion(data);
+          if (data.source === "fallback") {
+            toast.warning("AI 建议已回退为规则模式", {
+              description: "当前显示的是规则引擎生成的建议，可稍后手动刷新重试。",
+            });
+          }
         }
       } catch {
         if (!cancelled) {
           aiSuggestionCacheRef.current.set(aiSnapshotKey, fallback);
           setAiSuggestion(fallback);
+          toast.warning("AI 建议请求失败", {
+            description: "已自动回退为规则建议，请检查网络后稍后重试。",
+          });
         }
       } finally {
         if (!cancelled) {
@@ -376,7 +391,7 @@ export default function ParentPage() {
         const existing = followUpTurnsMap[firstActionableSuggestion.id] || [];
         setFollowUpQuestion(existing.length === 0 ? buildDefaultFollowUpQuestion(firstActionableSuggestion.title) : "");
       }
-  }, [selectedSuggestionId, suggestionCards]);
+  }, [followUpTurnsMap, selectedSuggestionId, suggestionCards]);
 
   function selectSuggestionForFollowUp(card: SuggestionCard) {
       if (!card.followUpEnabled) return;
@@ -453,8 +468,10 @@ export default function ParentPage() {
 
 
   async function exportReport() {
+    if (exportingReport) return;
     const el = document.getElementById("ai-report-card");
     if (!el) return;
+    setExportingReport(true);
     try {
       const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
       const dataUrl = canvas.toDataURL("image/png");
@@ -463,8 +480,10 @@ export default function ParentPage() {
       link.href = dataUrl;
       link.click();
       toast.success("导出成功", { description: "周报长图已下载到本地" });
-    } catch (e) {
+    } catch {
       toast.error("导出失败", { description: "生成图片时发生错误, 请稍后重试" });
+    } finally {
+      setExportingReport(false);
     }
   }
 
@@ -531,10 +550,10 @@ export default function ParentPage() {
         />
       ) : (
         <div className="space-y-6">
-          <Card className="border-rose-100 bg-gradient-to-r from-rose-50 to-white">
+          <Card className="border-rose-100 bg-linear-to-r from-rose-50 to-white">
             <CardContent className="flex flex-col gap-4 py-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-4xl shadow-sm">
+                <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-4xl shadow-sm" role="img" aria-label={`${selectedFeed.child.name} 的头像`}>
                   {selectedFeed.child.avatar}
                 </div>
                 <div>
@@ -556,20 +575,24 @@ export default function ParentPage() {
 
               <div className="rounded-3xl bg-white/80 p-4 text-sm text-slate-600 shadow-sm lg:w-96">
                 <p className="font-semibold text-slate-700">家长反馈动作</p>
-                <div className="mt-3 grid gap-2 md:grid-cols-3">
+                <fieldset className="mt-3 grid gap-2 md:grid-cols-3">
+                  <legend className="sr-only">反馈状态选择</legend>
                   {FEEDBACK_STATUSES.map((status) => (
                     <Button
                       key={status}
                       variant={feedbackStatus === status ? "default" : "outline"}
                       onClick={() => setFeedbackStatus(status)}
                       className="text-xs"
+                      aria-pressed={feedbackStatus === status}
                     >
                       {status}
                     </Button>
                   ))}
-                </div>
+                </fieldset>
+                <label htmlFor="parent-feedback-content" className="sr-only">家长反馈内容</label>
                 <Textarea
-                  className="mt-3 min-h-[90px]"
+                  id="parent-feedback-content"
+                  className="mt-3 min-h-22.5"
                   value={feedbackContent}
                   onChange={(event) => setFeedbackContent(event.target.value)}
                   placeholder="补充家庭执行情况，例如：今晚提前半小时睡前流程、已按建议加蔬菜加餐等。"
@@ -582,8 +605,8 @@ export default function ParentPage() {
           </Card>
 
           {currentTask && (
-            <Card className="border-indigo-100 bg-gradient-to-r from-indigo-50/50 to-white overflow-hidden relative">
-              <div className="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-indigo-50/80 to-transparent pointer-events-none" />
+            <Card className="border-indigo-100 bg-linear-to-r from-indigo-50/50 to-white overflow-hidden relative">
+              <div className="absolute right-0 top-0 h-full w-1/3 bg-linear-to-l from-indigo-50/80 to-transparent pointer-events-none" />
               <CardHeader className="relative z-10 pb-2">
                 <CardTitle className="flex items-center justify-between text-lg text-indigo-900">
                   <div className="flex items-center gap-2">
@@ -713,7 +736,7 @@ export default function ParentPage() {
                 <CardDescription>帮助家长快速理解是否存在饮食单一或饮水偏低问题。</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 text-sm text-slate-600">
-                <div className="h-[240px] w-full">
+                <div className="h-60 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={weeklyTrendChartData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
@@ -782,8 +805,8 @@ export default function ParentPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="mb-4 flex items-center justify-end gap-3">
-                  <Button variant="outline" size="sm" className="hidden lg:flex" onClick={exportReport} disabled={aiLoading || !aiSuggestion}>
-                    导出长图(推荐)
+                  <Button variant="outline" size="sm" className="hidden lg:flex" onClick={exportReport} disabled={aiLoading || !aiSuggestion || exportingReport}>
+                    {exportingReport ? "导出中..." : "导出长图(推荐)"}
                   </Button>
                   <Button variant="outline" size="sm" onClick={refreshAiSuggestion} disabled={aiLoading || !aiSnapshot}>
                     {aiLoading ? "刷新中..." : "刷新 AI 建议"}
@@ -898,10 +921,12 @@ export default function ParentPage() {
                           ))}
                         </div>
                       ) : null}
+                      <label htmlFor="parent-follow-up-question" className="sr-only">继续追问输入框</label>
                       <Textarea
+                        id="parent-follow-up-question"
                         value={followUpQuestion}
                         onChange={(event) => setFollowUpQuestion(event.target.value)}
-                        className="min-h-[96px] bg-white"
+                        className="min-h-24 bg-white"
                         placeholder={
                           followUpTurns.length > 0
                             ? "继续追问，例如：如果今晚还是不配合，明天园内要怎么调整？"

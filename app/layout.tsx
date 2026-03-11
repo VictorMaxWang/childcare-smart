@@ -20,7 +20,7 @@ export default function RootLayout({
       <body className="antialiased">
         <AppProvider>
           <Navbar />
-          <main className="min-h-[calc(100vh-64px)] bg-[var(--background)]">
+          <main className="min-h-[calc(100vh-64px)] bg-(--background)">
             {children}
           </main>
           <Toaster position="top-right" richColors closeButton />

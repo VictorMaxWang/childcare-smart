@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, Baby, BookHeart, LayoutDashboard, Salad, ShieldCheck, Users, LogOut, Monitor } from "lucide-react";
@@ -21,6 +21,9 @@ export default function MobileNav({ onLogout }: { onLogout: () => void }) {
   const pathname = usePathname();
   const { currentUser } = useApp();
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const firstLinkRef = useRef<HTMLAnchorElement>(null);
 
   const close = () => setOpen(false);
 
@@ -36,12 +39,58 @@ export default function MobileNav({ onLogout }: { onLogout: () => void }) {
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) {
+      triggerRef.current?.focus();
+      return;
+    }
+
+    firstLinkRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+        return;
+      }
+
+      if (event.key !== "Tab" || !panelRef.current) {
+        return;
+      }
+
+      const focusableItems = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusableItems.length === 0) {
+        return;
+      }
+
+      const firstItem = focusableItems[0];
+      const lastItem = focusableItems[focusableItems.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey && activeElement === firstItem) {
+        event.preventDefault();
+        lastItem.focus();
+      } else if (!event.shiftKey && activeElement === lastItem) {
+        event.preventDefault();
+        firstItem.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+
   return (
     <div className="md:hidden">
       <button
+        ref={triggerRef}
         onClick={() => setOpen((prev) => !prev)}
         className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
         aria-label={open ? "关闭导航菜单" : "打开导航菜单"}
+        aria-expanded={open}
+        aria-controls="mobile-nav-panel"
       >
         {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </button>
@@ -53,10 +102,14 @@ export default function MobileNav({ onLogout }: { onLogout: () => void }) {
           open ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={close}
+        aria-hidden="true"
       />
 
       {/* Slide-in panel */}
       <nav
+        ref={panelRef}
+        id="mobile-nav-panel"
+        aria-label="移动端主导航"
         className={cn(
           "fixed left-0 top-0 z-50 flex h-full w-72 flex-col bg-white shadow-xl transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "-translate-x-full"
@@ -87,6 +140,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void }) {
               return (
                 <Link
                   key={href}
+                  ref={href === navItems[0].href ? firstLinkRef : undefined}
                   href={href}
                   onClick={close}
                   className={cn(
@@ -108,7 +162,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void }) {
         <div className="border-t border-slate-100 px-5 py-4">
           <div className="mb-3 text-sm">
             <p className="text-xs text-slate-400">当前身份</p>
-            <p className="font-semibold text-slate-700">
+            <p className="font-semibold text-slate-700" aria-label={`当前身份 ${currentUser.name}，角色 ${currentUser.role}`}>
               {currentUser.avatar} {currentUser.name} · {currentUser.role}
             </p>
           </div>

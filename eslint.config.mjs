@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "fix.js",
+    "inspect.js",
+    "patch_export.js",
+    "patch_iot.js",
+    "patch_iot_revert.js",
   ]),
 ]);
 

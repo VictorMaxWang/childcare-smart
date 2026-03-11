@@ -107,12 +107,12 @@ export default function TeacherDashboardPage() {
             </span>
             <span className="text-xs font-medium text-slate-600">IoT网关在线</span>
           </div>
-          <div className="w-[1px] h-4 bg-slate-200"></div>
+          <div className="w-px h-4 bg-slate-200"></div>
           <div className="flex items-center gap-1.5 text-xs text-slate-600">
             <Wifi className="w-3.5 h-3.5 text-indigo-400" />
             智能手环活跃: {totalChildren}/{totalChildren}
           </div>
-          <div className="w-[1px] h-4 bg-slate-200"></div>
+          <div className="w-px h-4 bg-slate-200"></div>
           <div className="flex items-center gap-1.5 text-xs text-slate-600">
             <Thermometer className="w-3.5 h-3.5 text-orange-400" />
             实时室温: {envTemp}°C
@@ -123,7 +123,7 @@ export default function TeacherDashboardPage() {
       {/* KPI Cards Row */}
       <ScrollReveal>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="kpi-accent card-hover bg-gradient-to-br from-indigo-50 to-white border-indigo-100 shadow-sm relative overflow-hidden border-l-4 border-l-indigo-300">
+        <Card className="kpi-accent card-hover bg-linear-to-br from-indigo-50 to-white border-indigo-100 shadow-sm relative overflow-hidden border-l-4 border-l-indigo-300">
           <div className="absolute top-0 right-0 p-4 opacity-[0.07]">
             <Users className="w-20 h-20" />
           </div>
@@ -136,7 +136,7 @@ export default function TeacherDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="kpi-accent card-hover bg-gradient-to-br from-emerald-50 to-white border-emerald-100 shadow-sm relative overflow-hidden border-l-4 border-l-emerald-300">
+        <Card className="kpi-accent card-hover bg-linear-to-br from-emerald-50 to-white border-emerald-100 shadow-sm relative overflow-hidden border-l-4 border-l-emerald-300">
           <div className="absolute top-0 right-0 p-4 opacity-[0.07]">
             <ClipboardCheck className="w-20 h-20" />
           </div>
@@ -149,7 +149,7 @@ export default function TeacherDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="kpi-accent card-hover bg-gradient-to-br from-rose-50 to-white border-rose-100 shadow-sm relative overflow-hidden border-l-4 border-l-rose-300">
+        <Card className="kpi-accent card-hover bg-linear-to-br from-rose-50 to-white border-rose-100 shadow-sm relative overflow-hidden border-l-4 border-l-rose-300">
           <div className="absolute top-0 right-0 p-4 opacity-[0.07]">
             <AlertTriangle className="w-20 h-20" />
           </div>
@@ -162,7 +162,7 @@ export default function TeacherDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="kpi-accent card-hover bg-gradient-to-br from-amber-50 to-white border-amber-100 shadow-sm relative overflow-hidden border-l-4 border-l-amber-300">
+        <Card className="kpi-accent card-hover bg-linear-to-br from-amber-50 to-white border-amber-100 shadow-sm relative overflow-hidden border-l-4 border-l-amber-300">
           <div className="absolute top-0 right-0 p-4 opacity-[0.07]">
             <MessageSquare className="w-20 h-20" />
           </div>
@@ -194,7 +194,7 @@ export default function TeacherDashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px] w-full">
+              <div className="h-75 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={interventionData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
@@ -220,7 +220,7 @@ export default function TeacherDashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-[220px] w-full">
+              <div className="h-55 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={healthTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
@@ -278,7 +278,7 @@ export default function TeacherDashboardPage() {
                       <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">{alert.description}</p>
                       
                       {alert.followUpAction && (
-                       <div className="mt-3 bg-white p-2.5 rounded-lg border border-slate-100 text-xs text-slate-600 shadow-sm flex flex-col gap-1 relative before:absolute before:left-0 before:top-2 before:bottom-2 before:w-[3px] before:bg-indigo-400 before:rounded-r-md">
+                       <div className="mt-3 bg-white p-2.5 rounded-lg border border-slate-100 text-xs text-slate-600 shadow-sm flex flex-col gap-1 relative before:absolute before:left-0 before:top-2 before:bottom-2 before:w-0.75 before:bg-indigo-400 before:rounded-r-md">
                          <span className="font-semibold text-indigo-900 ml-2">建议干预措施：</span>
                          <span className="line-clamp-2 ml-2 leading-relaxed">{alert.followUpAction}</span>
                        </div>
