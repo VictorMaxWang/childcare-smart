@@ -588,13 +588,13 @@ export default function ParentPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                系统建议
+                AI 个性化分析与系统建议
                 {aiSuggestion?.source === "ai" ? <Badge variant="success">AI 建议</Badge> : null}
                 {aiSuggestion?.source === "fallback" ? <Badge variant="info">规则兜底</Badge> : null}
                 {aiSuggestion?.model ? <Badge variant="secondary">模型：{aiSuggestion.model}</Badge> : null}
               </CardTitle>
               <CardDescription>
-                AI 建议输出结构化建议；若 AI 不可用将自动回退到规则建议。当前会缓存同一份结果，避免重复请求。
+                AI 根据近 7 天个性化数据输出分析摘要和行动方案；系统规则建议同步展示，两者互为补充。
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-0">
@@ -604,9 +604,12 @@ export default function ParentPage() {
                 </Button>
               </div>
               {!aiLoading && aiSuggestion?.summary ? (
-                <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 text-sm leading-7 text-slate-700">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-indigo-500">AI 总结</p>
-                  <p>{aiSuggestion.summary}</p>
+                <div className="mb-5 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-5 text-sm leading-7 text-slate-700 shadow-sm">
+                  <div className="mb-2 flex items-center gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-500">AI 个性化总结</p>
+                    <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-600">基于近 7 天数据</span>
+                  </div>
+                  <p className="leading-7">{aiSuggestion.summary}</p>
                 </div>
               ) : null}
               {!aiLoading && (aiSuggestion?.actionPlan || aiSuggestion?.actions?.length) ? (
@@ -644,30 +647,61 @@ export default function ParentPage() {
                 </div>
               ) : null}
             </CardContent>
-            <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <CardContent className="space-y-4">
               {aiLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <div key={`skeleton-${i}`} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm skeleton-pulse">
-                    <div className="mb-3 h-5 w-20 rounded-full bg-slate-100" />
-                    <div className="h-4 w-3/4 rounded bg-slate-100" />
-                    <div className="mt-3 space-y-2">
-                      <div className="h-3 w-full rounded bg-slate-50" />
-                      <div className="h-3 w-5/6 rounded bg-slate-50" />
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={`skeleton-${i}`} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm skeleton-pulse">
+                      <div className="mb-3 h-5 w-20 rounded-full bg-slate-100" />
+                      <div className="h-4 w-3/4 rounded bg-slate-100" />
+                      <div className="mt-3 space-y-2">
+                        <div className="h-3 w-full rounded bg-slate-50" />
+                        <div className="h-3 w-5/6 rounded bg-slate-50" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {buildAiInsightCards(aiSuggestion).length > 0 && (
+                    <div>
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-indigo-500">AI 分析亮点与关注点</p>
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        {buildAiInsightCards(aiSuggestion).map((insight) => (
+                          <div key={insight.id} className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                            <div className="mb-2 flex items-center gap-2">
+                              <Badge variant="success" className="text-[10px]">AI</Badge>
+                              <Badge variant={insight.level === "warning" ? "warning" : insight.level === "success" ? "success" : "info"}>
+                                {insight.level === "warning" ? "需关注" : insight.level === "success" ? "风险等级" : "建议"}
+                              </Badge>
+                            </div>
+                            <p className="text-sm font-semibold text-slate-700">{insight.title}</p>
+                            <p className="mt-2 text-xs leading-5 text-slate-500">{insight.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">系统规则建议</p>
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      {selectedFeed.suggestions.map((insight) => (
+                        <div key={insight.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                          <div className="mb-2 flex items-center gap-2">
+                            <Badge variant={insight.level === "warning" ? "warning" : insight.level === "success" ? "success" : "info"}>
+                              {insight.level === "warning" ? "需关注" : insight.level === "success" ? "已准备好" : "建议"}
+                            </Badge>
+                          </div>
+                          <p className="text-sm font-semibold text-slate-700">{insight.title}</p>
+                          <p className="mt-2 text-xs leading-5 text-slate-500">{insight.description}</p>
+                        </div>
+                      ))}
+                      {selectedFeed.suggestions.length === 0 && (
+                        <p className="col-span-3 text-sm text-slate-400">暂无系统规则建议。</p>
+                      )}
                     </div>
                   </div>
-                ))
-              ) : (
-              buildSuggestionCards(aiSuggestion, selectedFeed.suggestions).map((insight) => (
-                <div key={insight.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-                  <div className="mb-2 flex items-center gap-2">
-                    <Badge variant={insight.level === "warning" ? "warning" : insight.level === "success" ? "success" : "info"}>
-                      {insight.level === "warning" ? "需关注" : insight.level === "success" ? "已准备好" : "建议"}
-                    </Badge>
-                  </div>
-                  <p className="text-sm font-semibold text-slate-700">{insight.title}</p>
-                  <p className="mt-2 text-xs leading-5 text-slate-500">{insight.description}</p>
-                </div>
-              ))
+                </>
               )}
             </CardContent>
           </Card>
@@ -738,13 +772,10 @@ function PlanSection({
   );
 }
 
-function buildSuggestionCards(
-  aiSuggestion: AiSuggestionResponse | null,
-  fallbackInsights: Array<{ id: string; title: string; description: string; level: "success" | "warning" | "info" }>
-) {
-  if (!aiSuggestion) {
-    return fallbackInsights;
-  }
+function buildAiInsightCards(
+  aiSuggestion: AiSuggestionResponse | null
+): Array<{ id: string; title: string; description: string; level: "success" | "warning" | "info" }> {
+  if (!aiSuggestion) return [];
 
   const cards: Array<{ id: string; title: string; description: string; level: "success" | "warning" | "info" }> = [];
 
@@ -766,16 +797,14 @@ function buildSuggestionCards(
     });
   }
 
-  if (cards.length === 0) {
-    return fallbackInsights;
+  if (cards.length > 0) {
+    cards.push({
+      id: "ai-disclaimer",
+      title: `风险等级：${aiSuggestion.riskLevel}`,
+      description: aiSuggestion.disclaimer,
+      level: "success",
+    });
   }
-
-  cards.push({
-    id: "ai-disclaimer",
-    title: `风险等级：${aiSuggestion.riskLevel}`,
-    description: aiSuggestion.disclaimer,
-    level: "success",
-  });
 
   return cards.slice(0, 6);
 }
