@@ -1,4 +1,12 @@
-import type { AiActionPlan, AiSuggestionResponse, ChildSuggestionSnapshot } from "@/lib/ai/types";
+import type {
+  AiActionPlan,
+  AiFollowUpPayload,
+  AiFollowUpResponse,
+  AiSuggestionResponse,
+  ChildSuggestionSnapshot,
+  WeeklyReportResponse,
+  WeeklyReportSnapshot,
+} from "@/lib/ai/types";
 
 const DASHSCOPE_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = 12000;
@@ -32,6 +40,13 @@ function normalizeRiskLevel(input: unknown): "low" | "medium" | "high" {
   return "low";
 }
 
+function normalizeTrendPrediction(input: unknown): "up" | "stable" | "down" {
+  const value = String(input ?? "").trim().toLowerCase();
+  if (value === "up") return "up";
+  if (value === "down") return "down";
+  return "stable";
+}
+
 function normalizeActionPlan(input: unknown): AiActionPlan | undefined {
   if (!input || typeof input !== "object") return undefined;
   const obj = input as Record<string, unknown>;
@@ -60,6 +75,7 @@ function normalizeAiOutput(raw: unknown): Omit<AiSuggestionResponse, "source"> |
   const concerns = normalizeArray(obj.concerns);
   const actions = normalizeArray(obj.actions);
   const actionPlan = normalizeActionPlan(obj.actionPlan);
+  const trendPrediction = normalizeTrendPrediction(obj.trendPrediction);
   const disclaimer = String(obj.disclaimer ?? "").trim();
 
   if (highlights.length === 0 && concerns.length === 0 && actions.length === 0) {
@@ -75,6 +91,68 @@ function normalizeAiOutput(raw: unknown): Omit<AiSuggestionResponse, "source"> |
     concerns: concerns.length > 0 ? concerns : ["暂无显著高风险信号。"],
     actions: actions.length > 0 ? actions : ["保持晨检、膳食、成长记录的连续性。"],
     actionPlan,
+    trendPrediction,
+    disclaimer:
+      disclaimer ||
+      "本建议仅用于托育观察与家园沟通参考，不构成医疗诊断；如出现持续发热或明显异常，请及时就医。",
+  };
+}
+
+function normalizeWeeklyReportOutput(raw: unknown): Omit<WeeklyReportResponse, "source"> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const summary = String(obj.summary ?? "").trim();
+  const highlights = normalizeArray(obj.highlights);
+  const risks = normalizeArray(obj.risks);
+  const nextWeekActions = normalizeArray(obj.nextWeekActions);
+  const trendPrediction = normalizeTrendPrediction(obj.trendPrediction);
+  const disclaimer = String(obj.disclaimer ?? "").trim();
+
+  if (!summary && highlights.length === 0 && risks.length === 0 && nextWeekActions.length === 0) {
+    return null;
+  }
+
+  return {
+    summary:
+      summary ||
+      "本周整体数据已形成可复盘闭环，建议继续围绕重点幼儿、关键风险和家园协同执行情况做持续跟踪。",
+    highlights: highlights.length > 0 ? highlights : ["本周关键业务数据已连续沉淀，可支持下周复盘。"],
+    risks: risks.length > 0 ? risks : ["当前暂无显著集中性高风险，但仍需保持复查节奏。"],
+    nextWeekActions:
+      nextWeekActions.length > 0
+        ? nextWeekActions
+        : ["围绕重点幼儿继续补齐晨检、饮食、成长和反馈记录。"],
+    trendPrediction,
+    disclaimer:
+      disclaimer ||
+      "本建议仅用于托育观察与家园沟通参考，不构成医疗诊断；如出现持续发热或明显异常，请及时就医。",
+  };
+}
+
+function normalizeFollowUpOutput(raw: unknown): Omit<AiFollowUpResponse, "source"> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const answer = String(obj.answer ?? "").trim();
+  const keyPoints = normalizeArray(obj.keyPoints);
+  const nextSteps = normalizeArray(obj.nextSteps);
+  const disclaimer = String(obj.disclaimer ?? "").trim();
+
+  if (!answer && keyPoints.length === 0 && nextSteps.length === 0) {
+    return null;
+  }
+
+  return {
+    answer:
+      answer ||
+      "建议先围绕当前这条提示对应的场景继续观察 1 到 2 天，把关键时段、触发因素和家庭配合结果记录下来，再根据变化微调执行动作。",
+    keyPoints:
+      keyPoints.length > 0
+        ? keyPoints
+        : ["先确认问题出现的具体时段、频率和触发场景。", "优先执行最容易当天落地的一项调整。"],
+    nextSteps:
+      nextSteps.length > 0
+        ? nextSteps
+        : ["今天先执行一项园内动作和一项家庭动作，48小时内回看变化。"],
     disclaimer:
       disclaimer ||
       "本建议仅用于托育观察与家园沟通参考，不构成医疗诊断；如出现持续发热或明显异常，请及时就医。",
@@ -115,9 +193,45 @@ function buildPrompt(snapshot: ChildSuggestionSnapshot): string {
   ].join("\n");
 }
 
-export async function requestDashscopeSuggestion(
-  snapshot: ChildSuggestionSnapshot
-): Promise<Omit<AiSuggestionResponse, "source"> | null> {
+function buildWeeklyReportPrompt(snapshot: WeeklyReportSnapshot): string {
+  return [
+    "你是托育机构周报分析助手。",
+    "你只能做托育运营分析和下周行动建议，不做医疗诊断，不输出任何额外文本。",
+    "请基于输入的周度运营摘要输出严格JSON。",
+    "JSON字段必须为: summary, highlights, risks, nextWeekActions, trendPrediction, disclaimer。",
+    "summary必须是中文字符串，长度控制在100到160字，适合用于比赛答辩或运营周报。",
+    "highlights、risks、nextWeekActions必须是字符串数组。",
+    "trendPrediction只能是up|stable|down，表示下周风险趋势上升、持平或下降。",
+    "请优先分析出勤率、饮食均衡、饮水、健康异常、待复查和家园反馈执行情况。",
+    "nextWeekActions写3到5条可执行动作，尽量具体到机构管理或班级执行层面。",
+    "disclaimer必须强调非医疗诊断。",
+    "输入:",
+    JSON.stringify(snapshot),
+  ].join("\n");
+}
+
+function buildFollowUpPrompt(payload: AiFollowUpPayload): string {
+  const recentHistory = (payload.history ?? []).slice(-6);
+
+  return [
+    "你是托育机构家园协同追问助手。",
+    "你只能围绕已有建议做进一步解释和执行拆解，不做医疗诊断，不输出任何额外文本。",
+    "请基于孩子7天摘要、当前被追问的建议、最近2到3轮追问历史，以及家长提出的新问题，输出严格JSON。",
+    "JSON字段必须为: answer, keyPoints, nextSteps, disclaimer。",
+    "answer必须是中文字符串，长度控制在90到160字，解释为什么要这样做，以及家长最先该做什么。",
+    "keyPoints必须是2到4条中文字符串，写清楚观察重点或执行要点。",
+    "nextSteps必须是2到4条中文字符串，尽量包含今天、今晚、明天、48小时内等时间词。",
+    "如果history存在，请承接上文，不要机械重复前一轮答案；优先回答本轮新问题。",
+    "disclaimer必须强调非医疗诊断。",
+    "输入:",
+    JSON.stringify({
+      ...payload,
+      history: recentHistory,
+    }),
+  ].join("\n");
+}
+
+async function requestDashscopeJson(prompt: string) {
   const apiKey = process.env.DASHSCOPE_API_KEY || "";
   const model = process.env.AI_MODEL || "qwen-turbo";
 
@@ -143,12 +257,11 @@ export async function requestDashscopeSuggestion(
         messages: [
           {
             role: "system",
-            content:
-              "你是托育建议助手。输出固定JSON，不输出额外文本，不给医疗诊断。",
+            content: "你是托育建议助手。输出固定JSON，不输出额外文本，不给医疗诊断。",
           },
           {
             role: "user",
-            content: buildPrompt(snapshot),
+            content: prompt,
           },
         ],
       }),
@@ -169,16 +282,56 @@ export async function requestDashscopeSuggestion(
         : ""
     );
 
-    const parsed = safeJsonParse(content);
-    const normalized = normalizeAiOutput(parsed);
-    if (!normalized) {
-      console.error("[AI] DashScope returned content that could not be normalized:", content.slice(0, 300));
-    }
-    return normalized;
+    return safeJsonParse(content);
   } catch (error) {
     console.error("[AI] DashScope request threw an exception:", error);
     return null;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+export async function requestDashscopeSuggestion(
+  snapshot: ChildSuggestionSnapshot
+): Promise<Omit<AiSuggestionResponse, "source"> | null> {
+  try {
+    const parsed = await requestDashscopeJson(buildPrompt(snapshot));
+    const normalized = normalizeAiOutput(parsed);
+    if (!normalized) {
+      console.error("[AI] DashScope returned suggestion content that could not be normalized.");
+    }
+    return normalized;
+  } catch {
+    return null;
+  }
+}
+
+export async function requestDashscopeWeeklyReport(
+  snapshot: WeeklyReportSnapshot
+): Promise<Omit<WeeklyReportResponse, "source"> | null> {
+  try {
+    const parsed = await requestDashscopeJson(buildWeeklyReportPrompt(snapshot));
+    const normalized = normalizeWeeklyReportOutput(parsed);
+    if (!normalized) {
+      console.error("[AI] DashScope returned weekly report content that could not be normalized.");
+    }
+    return normalized;
+  } catch {
+    return null;
+  }
+}
+
+export async function requestDashscopeFollowUp(
+  payload: AiFollowUpPayload
+): Promise<Omit<AiFollowUpResponse, "source"> | null> {
+  try {
+    const parsed = await requestDashscopeJson(buildFollowUpPrompt(payload));
+    const normalized = normalizeFollowUpOutput(parsed);
+    if (!normalized) {
+      console.error("[AI] DashScope returned follow-up content that could not be normalized.");
+    }
+    return normalized;
+  } catch {
+    return null;
   }
 }

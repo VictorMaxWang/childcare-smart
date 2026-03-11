@@ -3,6 +3,7 @@ import "./globals.css";
 import { AppProvider } from "../lib/store";
 import Navbar from "@/components/Navbar";
 import { Analytics } from "@vercel/analytics/react";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "普惠托育智慧管理平台",
@@ -22,6 +23,7 @@ export default function RootLayout({
           <main className="min-h-[calc(100vh-64px)] bg-[var(--background)]">
             {children}
           </main>
+          <Toaster position="top-right" richColors closeButton />
         </AppProvider>
         <Analytics />
       </body>

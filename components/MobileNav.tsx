@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Baby, BookHeart, LayoutDashboard, Salad, ShieldCheck, Users, LogOut } from "lucide-react";
+import { Menu, X, Baby, BookHeart, LayoutDashboard, Salad, ShieldCheck, Users, LogOut, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/store";
 
@@ -14,6 +14,7 @@ const navItems = [
   { href: "/growth", label: "成长行为", icon: BookHeart },
   { href: "/diet", label: "饮食记录", icon: Salad },
   { href: "/parent", label: "家长端", icon: Baby },
+  { href: "/teacher", label: "机构大屏", icon: Monitor },
 ];
 
 export default function MobileNav({ onLogout }: { onLogout: () => void }) {

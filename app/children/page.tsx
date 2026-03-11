@@ -12,9 +12,12 @@ import {
   type Guardian,
   useApp,
 } from "@/lib/store";
+import AnimatedNumber from "@/components/AnimatedNumber";
+import ScrollReveal from "@/components/ScrollReveal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import EmptyState from "@/components/EmptyState";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
 export default function ChildrenPage() {
   const {
@@ -109,6 +113,9 @@ export default function ChildrenPage() {
   function handleSubmit() {
     if (!form.name.trim() || !form.birthDate || !form.guardianName.trim()) {
       setError("请至少填写姓名、出生日期和一位监护人信息。");
+      toast.warning("请至少填写姓名、出生日期和一位监护人信息。", {
+        description: "补齐必填项后才能保存幼儿档案。",
+      });
       return;
     }
 
@@ -137,6 +144,9 @@ export default function ChildrenPage() {
     });
 
     setOpen(false);
+    toast.success("幼儿档案已保存", {
+      description: `${form.name.trim()} 已加入档案列表。`,
+    });
     resetForm();
   }
 
@@ -151,6 +161,7 @@ export default function ChildrenPage() {
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
             已升级为“出生日期 + 自动年龄段 + 每日出勤记录”模型，支持到离园统计、缺勤原因和后续周/月报表扩展。
           </p>
+          <div className="section-divider mt-5" />
         </div>
         <Button
           onClick={() => canManage && setOpen(true)}
@@ -162,6 +173,7 @@ export default function ChildrenPage() {
         </Button>
       </div>
 
+      <ScrollReveal>
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
         <SummaryCard title="当前可见幼儿" value={`${visibleChildren.length}位`} />
         <SummaryCard title="今日出勤" value={`${todayAttendance.filter((item) => item.isPresent).length}位`} />
@@ -171,6 +183,7 @@ export default function ChildrenPage() {
           value={currentUser.className ? `${INSTITUTION_NAME} · ${currentUser.className}` : INSTITUTION_NAME}
         />
       </div>
+      </ScrollReveal>
 
       <Card className="mb-6">
         <CardContent className="grid gap-4 py-5 lg:grid-cols-[1.4fr_1fr]">
@@ -194,9 +207,13 @@ export default function ChildrenPage() {
       </Card>
 
       {filteredChildren.length === 0 ? (
-        <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 py-20 text-center text-slate-500">
-          未找到匹配档案，请尝试更换搜索关键词。
-        </div>
+        <EmptyState
+          icon={<Search className="h-6 w-6" />}
+          title="未找到匹配档案"
+          description="请尝试调整搜索关键词，或先新增一位幼儿档案。"
+          actionLabel={canManage ? "新增幼儿档案" : undefined}
+          onAction={canManage ? () => setOpen(true) : undefined}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           {filteredChildren.map((child) => {
@@ -208,7 +225,10 @@ export default function ChildrenPage() {
                 canManage={canManage}
                 attendance={attendance}
                 onDelete={() => setDeleteId(child.id)}
-                onToggleAttendance={() => toggleTodayAttendance(child.id)}
+                onToggleAttendance={() => {
+                  toggleTodayAttendance(child.id);
+                  toast.success(`已切换 ${child.name} 的今日出勤状态`);
+                }}
               />
             );
           })}
@@ -328,7 +348,13 @@ export default function ChildrenPage() {
             <Button
               variant="destructive"
               onClick={() => {
-                if (deleteId) removeChild(deleteId);
+                if (deleteId) {
+                  const childName = visibleChildren.find((item) => item.id === deleteId)?.name ?? "该幼儿";
+                  removeChild(deleteId);
+                  toast.success("档案已删除", {
+                    description: `${childName} 及其关联记录已从当前视图移除。`,
+                  });
+                }
                 setDeleteId(null);
               }}
             >
@@ -342,11 +368,15 @@ export default function ChildrenPage() {
 }
 
 function SummaryCard({ title, value }: { title: string; value: string }) {
+  const parsed = Number(value.replace(/[^\d.-]/g, ""));
+  const suffix = value.replace(/[\d.-]/g, "");
   return (
-    <Card>
+    <Card className="kpi-accent card-hover border-l-4 border-l-indigo-300">
       <CardContent className="py-5">
         <p className="text-sm text-slate-500">{title}</p>
-        <p className="mt-2 text-lg font-semibold text-slate-800">{value}</p>
+        <p className="mt-2 text-lg font-semibold text-slate-800">
+          {Number.isNaN(parsed) ? value : <AnimatedNumber value={parsed} suffix={suffix} />}
+        </p>
       </CardContent>
     </Card>
   );
@@ -416,12 +446,12 @@ function ChildArchiveCard({
 
         <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
           <p className="font-medium text-slate-700">过敏信息</p>
-          <p className="mt-1">{child.allergies.length > 0 ? child.allergies.join("、") : "暂无过敏记录"}</p>
+          <p className="mt-1">{child.allergies.length > 0 ? child.allergies.join("、") : <span className="text-slate-400 italic">暂无过敏记录</span>}</p>
         </div>
 
         <div className="rounded-2xl bg-indigo-50 p-4 text-sm text-slate-600">
           <p className="font-medium text-indigo-700">特殊关注项</p>
-          <p className="mt-1 leading-6">{child.specialNotes || "暂无特殊关注项"}</p>
+          <p className="mt-1 leading-6">{child.specialNotes || <span className="text-slate-400 italic">暂无特殊关注项</span>}</p>
         </div>
 
         <div className="rounded-2xl border border-slate-100 bg-white p-4 text-sm text-slate-600">

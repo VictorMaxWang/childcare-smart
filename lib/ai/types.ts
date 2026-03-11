@@ -1,4 +1,5 @@
 export type AiRiskLevel = "low" | "medium" | "high";
+export type AiTrendPrediction = "up" | "stable" | "down";
 
 export interface RuleFallbackItem {
   title: string;
@@ -93,6 +94,74 @@ export interface AiSuggestionResponse {
   concerns: string[];
   actions: string[];
   actionPlan?: AiActionPlan;
+  trendPrediction?: AiTrendPrediction;
+  disclaimer: string;
+  source: "ai" | "fallback";
+  model?: string;
+}
+
+export interface AiFollowUpPayload {
+  snapshot: ChildSuggestionSnapshot;
+  suggestionTitle: string;
+  suggestionDescription?: string;
+  question: string;
+  history?: AiFollowUpMessage[];
+}
+
+export interface AiFollowUpMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AiFollowUpResponse {
+  answer: string;
+  keyPoints: string[];
+  nextSteps: string[];
+  disclaimer: string;
+  source: "ai" | "fallback";
+  model?: string;
+}
+
+export interface WeeklyReportSnapshot {
+  institutionName: string;
+  periodLabel: string;
+  role: string;
+  overview: {
+    visibleChildren: number;
+    attendanceRate: number;
+    mealRecordCount: number;
+    healthAbnormalCount: number;
+    growthAttentionCount: number;
+    pendingReviewCount: number;
+    feedbackCount: number;
+  };
+  diet: {
+    balancedRate: number;
+    hydrationAvg: number;
+    monotonyDays: number;
+    vegetableDays: number;
+    proteinDays: number;
+  };
+  topAttentionChildren: Array<{
+    childName: string;
+    attentionCount: number;
+    hydrationAvg: number;
+    vegetableDays: number;
+  }>;
+  highlights: string[];
+  risks: string[];
+}
+
+export interface WeeklyReportPayload {
+  snapshot: WeeklyReportSnapshot;
+}
+
+export interface WeeklyReportResponse {
+  summary: string;
+  highlights: string[];
+  risks: string[];
+  nextWeekActions: string[];
+  trendPrediction: AiTrendPrediction;
   disclaimer: string;
   source: "ai" | "fallback";
   model?: string;

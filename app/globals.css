@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 :root {
   --background: #f8fafc;
@@ -36,6 +37,11 @@ body {
   min-height: 100vh;
 }
 
+::selection {
+  background: rgb(99 102 241 / 0.18);
+  color: var(--foreground);
+}
+
 /* ── Page enter animation ── */
 @keyframes page-fade-in {
   from {
@@ -52,6 +58,35 @@ body {
   animation: page-fade-in 0.45s ease-out both;
 }
 
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
 /* ── Skeleton pulse for loading states ── */
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 1; }
@@ -60,4 +95,56 @@ body {
 
 .skeleton-pulse {
   animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.glass {
+  background: rgb(255 255 255 / 0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgb(255 255 255 / 0.35);
+  box-shadow: 0 20px 60px rgb(15 23 42 / 0.14);
+}
+
+.card-hover {
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 50px rgb(15 23 42 / 0.12);
+}
+
+.surface-shimmer {
+  background-image: linear-gradient(90deg, rgb(255 255 255 / 0) 0%, rgb(255 255 255 / 0.7) 50%, rgb(255 255 255 / 0) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2.6s linear infinite;
+}
+
+.float-soft {
+  animation: float 6s ease-in-out infinite;
+}
+
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgb(148 163 184 / 0.4) 0%, rgb(226 232 240 / 0.7) 45%, rgb(255 255 255 / 0) 100%);
+}
+
+.spotlight-bg {
+  background-image:
+    radial-gradient(circle at top right, rgb(129 140 248 / 0.22), transparent 30%),
+    radial-gradient(circle at bottom left, rgb(14 165 233 / 0.16), transparent 35%),
+    linear-gradient(180deg, rgb(248 250 252 / 0.95), rgb(255 255 255 / 0.96));
+}
+
+.kpi-accent {
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-accent::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.35), transparent 55%);
+  pointer-events: none;
 }

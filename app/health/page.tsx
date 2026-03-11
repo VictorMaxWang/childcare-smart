@@ -2,6 +2,20 @@
 
 import { useMemo, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, Search, Thermometer, Users } from "lucide-react";
+import {
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { useApp } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,9 +25,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
 import { HEALTH_MOOD_OPTIONS, HAND_MOUTH_EYE_OPTIONS, TEMPERATURE_THRESHOLD } from "@/lib/mock/health";
 import { getAgeText } from "@/lib/store";
+import AnimatedNumber from "@/components/AnimatedNumber";
+import ScrollReveal from "@/components/ScrollReveal";
+import EmptyState from "@/components/EmptyState";
 
 const TEMPLATE_REMARKS = {
   NORMAL: "体温正常，情绪稳定",
@@ -22,7 +40,7 @@ const TEMPLATE_REMARKS = {
 };
 
 export default function HealthPage() {
-  const { presentChildren, healthCheckRecords, upsertHealthCheck, currentUser } = useApp();
+  const { presentChildren, healthCheckRecords, upsertHealthCheck, currentUser, visibleChildren } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "abnormal" | "unchecked">("all");
   
@@ -64,6 +82,38 @@ export default function HealthPage() {
     return { total, checked, abnormal, unchecked: total - checked };
   }, [childData]);
 
+  const weeklyTemperatureData = useMemo(() => {
+    const visibleIds = new Set(visibleChildren.map((child) => child.id));
+    return buildRecentDateRange(7).map((date) => {
+      const records = healthCheckRecords.filter(
+        (record) => visibleIds.has(record.childId) && record.date === date
+      );
+      const avgTemperature =
+        records.length > 0
+          ? Math.round((records.reduce((sum, item) => sum + item.temperature, 0) / records.length) * 10) / 10
+          : null;
+      const abnormalCount = records.filter((record) => record.isAbnormal).length;
+
+      return {
+        label: formatShortDate(date),
+        avgTemperature,
+        abnormalCount,
+      };
+    });
+  }, [healthCheckRecords, visibleChildren]);
+
+  const moodDistributionData = useMemo(() => {
+    const visibleIds = new Set(visibleChildren.map((child) => child.id));
+    const counter = new Map<string, number>();
+
+    healthCheckRecords.forEach((record) => {
+      if (!visibleIds.has(record.childId) || !isRecentDate(record.date, 7)) return;
+      counter.set(record.mood, (counter.get(record.mood) ?? 0) + 1);
+    });
+
+    return Array.from(counter.entries()).map(([name, value]) => ({ name, value }));
+  }, [healthCheckRecords, visibleChildren]);
+
   // Actions
   const handleOpenDialog = (childId: string) => {
     const child = childData.find(c => c.id === childId);
@@ -101,6 +151,17 @@ export default function HealthPage() {
       remark
     });
 
+    const childName = childData.find((child) => child.id === selectedChildId)?.name ?? "该幼儿";
+    if (isAbnormal) {
+      toast.warning("晨检记录已保存", {
+        description: `${childName} 已标记为异常状态，请及时复核并通知家长。`,
+      });
+    } else {
+      toast.success("晨检记录已保存", {
+        description: `${childName} 的今日晨检状态已更新。`,
+      });
+    }
+
     setIsDialogOpen(false);
   };
   
@@ -125,44 +186,132 @@ export default function HealthPage() {
             晨检与健康
           </h1>
           <p className="text-muted-foreground mt-1">记录并追踪班级幼儿每日健康体征，及时预警异常情况。</p>
+          <div className="section-divider mt-5" />
         </div>
       </div>
 
+      <ScrollReveal>
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="shadow-sm border-blue-100 bg-blue-50/30">
+        <Card className="kpi-accent card-hover border-l-4 border-l-blue-300 shadow-sm border-blue-100 bg-blue-50/30 relative overflow-hidden">
+          <div className="absolute right-0 top-0 p-3 opacity-[0.07] pointer-events-none" aria-hidden>
+            <Users className="w-20 h-20" />
+          </div>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">总计出勤</CardTitle>
             <Users className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total} <span className="text-sm font-normal text-muted-foreground">人</span></div>
+            <div className="text-2xl font-bold"><AnimatedNumber value={stats.total} suffix="人" /></div>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-green-100 bg-green-50/30">
+        <Card className="kpi-accent card-hover border-l-4 border-l-green-300 shadow-sm border-green-100 bg-green-50/30 relative overflow-hidden">
+          <div className="absolute right-0 top-0 p-3 opacity-[0.07] pointer-events-none" aria-hidden>
+            <CheckCircle2 className="w-20 h-20" />
+          </div>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">已晨检</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.checked} <span className="text-sm font-normal text-muted-foreground">人</span></div>
+            <div className="text-2xl font-bold"><AnimatedNumber value={stats.checked} suffix="人" /></div>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-orange-100 bg-orange-50/30">
+        <Card className="kpi-accent card-hover border-l-4 border-l-orange-300 shadow-sm border-orange-100 bg-orange-50/30 relative overflow-hidden">
+          <div className="absolute right-0 top-0 p-3 opacity-[0.07] pointer-events-none" aria-hidden>
+            <Activity className="w-20 h-20" />
+          </div>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">待检查</CardTitle>
             <Activity className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.unchecked} <span className="text-sm font-normal text-muted-foreground">人</span></div>
+            <div className="text-2xl font-bold"><AnimatedNumber value={stats.unchecked} suffix="人" /></div>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-red-100 bg-red-50/30">
+        <Card className="kpi-accent card-hover border-l-4 border-l-red-300 shadow-sm border-red-100 bg-red-50/30 relative overflow-hidden">
+          <div className="absolute right-0 top-0 p-3 opacity-[0.07] pointer-events-none" aria-hidden>
+            <AlertTriangle className="w-20 h-20" />
+          </div>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">异常告警</CardTitle>
             <AlertTriangle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.abnormal} <span className="text-sm font-normal text-muted-foreground">人</span></div>
+            <div className="text-2xl font-bold text-red-600"><AnimatedNumber value={stats.abnormal} suffix="人" /></div>
+          </CardContent>
+        </Card>
+      </div>
+      </ScrollReveal>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle>一周体温趋势</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[260px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={weeklyTemperatureData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 12 }} />
+                  <YAxis yAxisId="temp" domain={[36, 38.5]} tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                  <YAxis yAxisId="count" orientation="right" allowDecimals={false} tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }} />
+                  <Legend />
+                  <ReferenceLine yAxisId="temp" y={TEMPERATURE_THRESHOLD} stroke="#ef4444" strokeDasharray="4 4" label="37.3°C" />
+                  <Line
+                    yAxisId="temp"
+                    type="monotone"
+                    dataKey="avgTemperature"
+                    name="平均体温"
+                    stroke="#0ea5e9"
+                    strokeWidth={3}
+                    dot={{ r: 4 }}
+                    connectNulls
+                  />
+                  <Line
+                    yAxisId="count"
+                    type="monotone"
+                    dataKey="abnormalCount"
+                    name="异常人数"
+                    stroke="#f97316"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle>情绪分布图</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[260px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={moodDistributionData} dataKey="value" nameKey="name" outerRadius={88} innerRadius={40}>
+                    {moodDistributionData.map((item, index) => (
+                      <Cell key={item.name} fill={HEALTH_CHART_COLORS[index % HEALTH_CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [`${value}次`, "记录数"]} contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {moodDistributionData.map((item, index) => (
+                <div key={item.name} className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: HEALTH_CHART_COLORS[index % HEALTH_CHART_COLORS.length] }} />
+                    <span>{item.name}</span>
+                  </div>
+                  <span className="font-semibold text-slate-800">{item.value}</span>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -251,9 +400,11 @@ export default function HealthPage() {
           </div>
           
           {filteredChildren.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              未找到符合条件的幼儿
-            </div>
+            <EmptyState
+              icon={<Search className="h-6 w-6" />}
+              title="未找到符合条件的幼儿"
+              description="可以尝试调整搜索词或切换筛选条件。"
+            />
           )}
         </CardContent>
       </Card>
@@ -369,4 +520,27 @@ export default function HealthPage() {
       </Dialog>
     </div>
   );
+}
+
+const HEALTH_CHART_COLORS = ["#38bdf8", "#818cf8", "#34d399", "#f59e0b", "#fb7185", "#c084fc"];
+
+function buildRecentDateRange(days: number) {
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (days - index - 1));
+    return date.toISOString().split("T")[0];
+  });
+}
+
+function formatShortDate(dateString: string) {
+  return new Date(dateString).toLocaleDateString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+function isRecentDate(dateString: string, days: number) {
+  const target = new Date(`${dateString}T00:00:00`).getTime();
+  const today = new Date(new Date().toISOString().split("T")[0]).getTime();
+  return today - target >= 0 && today - target <= (days - 1) * 24 * 60 * 60 * 1000;
 }

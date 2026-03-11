@@ -24,6 +24,8 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import EmptyState from "@/components/EmptyState";
+import { toast } from "sonner";
 
 const TODAY = new Date().toISOString().split("T")[0];
 
@@ -79,7 +81,6 @@ export default function DietPage() {
   const [bulkWaterMl, setBulkWaterMl] = useState("150");
   const [bulkAllergyReaction, setBulkAllergyReaction] = useState("");
   const [bulkExcludedChildIds, setBulkExcludedChildIds] = useState<string[]>([]);
-  const [bulkMessage, setBulkMessage] = useState("");
 
   const resolvedSelectedChildId =
     visibleChildren.some((child) => child.id === selectedChildId) ? selectedChildId : (visibleChildren[0]?.id ?? "");
@@ -152,7 +153,9 @@ export default function DietPage() {
 
   function applyBulkTemplate() {
     if (bulkFoods.length === 0 || presentChildren.length === 0) {
-      setBulkMessage("请先添加至少一种食物，并确保有已出勤幼儿。");
+      toast.warning("请先添加至少一种食物，并确保有已出勤幼儿。", {
+        description: "批量录入前需要先准备餐单并确认出勤名单。",
+      });
       return;
     }
 
@@ -169,7 +172,9 @@ export default function DietPage() {
       recordedByRole: currentUser.role,
     });
 
-    setBulkMessage(`同步完成：成功 ${result.applied.length} 人，拦截/排除 ${result.blocked.length} 人。`);
+    toast.success("批量录入已完成", {
+      description: `成功 ${result.applied.length} 人，拦截/排除 ${result.blocked.length} 人。`,
+    });
   }
 
   function toggleExcludeChild(id: string) {
@@ -186,6 +191,7 @@ export default function DietPage() {
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
           流程已升级为：先批量录入出勤幼儿，再做例外排除与过敏拦截，最后对个别幼儿进行单独调整。
         </p>
+        <div className="section-divider mt-5" />
       </div>
 
       <Card className="mb-6 border-emerald-100 bg-gradient-to-r from-emerald-50 to-white">
@@ -339,8 +345,6 @@ export default function DietPage() {
               </div>
             </div>
           </div>
-
-          {bulkMessage ? <p className="text-sm text-emerald-600">{bulkMessage}</p> : null}
         </CardContent>
       </Card>
 
@@ -476,9 +480,11 @@ export default function DietPage() {
               </div>
             </>
           ) : (
-            <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 py-20 text-center text-slate-500">
-              当前角色暂无可见幼儿。
-            </div>
+            <EmptyState
+              icon={<Salad className="h-6 w-6" />}
+              title="当前角色暂无可见幼儿"
+              description="请切换到有数据的角色，或先补充幼儿档案后再录入饮食。"
+            />
           )}
         </section>
       </div>
