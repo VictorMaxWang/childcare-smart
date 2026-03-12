@@ -299,10 +299,10 @@ export default function GrowthPage() {
                 <CardDescription>把近期观察重点直接转成图表，更容易讲清楚班级关注面。</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-65 w-full">
+                <div className="relative h-[320px] w-full sm:h-[340px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={categoryChartData} dataKey="value" nameKey="name" outerRadius={90} innerRadius={42}>
+                      <Pie data={categoryChartData} dataKey="value" nameKey="name" outerRadius={104} innerRadius={52} cy="50%">
                         {categoryChartData.map((item, index) => (
                           <Cell key={item.name} fill={GROWTH_CHART_COLORS[index % GROWTH_CHART_COLORS.length]} />
                         ))}
@@ -310,11 +310,11 @@ export default function GrowthPage() {
                       <Tooltip formatter={(value) => [`${value}条`, "记录数"]} contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }} />
                     </PieChart>
                   </ResponsiveContainer>
-                </div>
-                <div className="-mt-37.5 flex justify-center pointer-events-none">
-                  <div className="rounded-full bg-white/90 px-5 py-3 text-center shadow-sm ring-1 ring-slate-100">
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <div className="rounded-full bg-white/92 px-6 py-4 text-center shadow-sm ring-1 ring-slate-100">
                     <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">总记录</p>
                     <p className="mt-1 text-2xl font-black text-slate-800">{filteredRecords.length}</p>
+                    </div>
                   </div>
                 </div>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">

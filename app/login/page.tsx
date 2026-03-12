@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Baby, Eye, EyeOff, HeartPulse, ShieldCheck, Sparkles, Workflow } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { users, login, isAuthenticated, authLoading } = useApp();
 
   const [userId, setUserId] = useState(users[0]?.id ?? "u-teacher");
@@ -19,14 +20,13 @@ export default function LoginPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const nextPath = useMemo(() => searchParams.get("next") || "/", [searchParams]);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      const nextPath = new URLSearchParams(window.location.search).get("next") || "/";
       router.replace(nextPath);
-      router.refresh();
     }
-  }, [authLoading, isAuthenticated, router]);
+  }, [authLoading, isAuthenticated, nextPath, router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -36,11 +36,7 @@ export default function LoginPage() {
     setLoading(false);
     if (!result.ok) {
       setMessage(result.error || "登录失败");
-      return;
     }
-    const nextPath = new URLSearchParams(window.location.search).get("next") || "/";
-    router.replace(nextPath);
-    router.refresh();
   }
 
   return (
