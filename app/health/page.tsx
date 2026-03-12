@@ -115,6 +115,38 @@ export default function HealthPage() {
     return Array.from(counter.entries()).map(([name, value]) => ({ name, value }));
   }, [healthCheckRecords, visibleChildren]);
 
+  const moodColorMap = useMemo(
+    () => new Map(moodDistributionData.map((item, index) => [item.name, HEALTH_CHART_COLORS[index % HEALTH_CHART_COLORS.length]])),
+    [moodDistributionData]
+  );
+
+  const moodTrendKeys = useMemo(
+    () => [...moodDistributionData].sort((left, right) => right.value - left.value).slice(0, 3).map((item) => item.name),
+    [moodDistributionData]
+  );
+
+  const moodTrendData = useMemo(() => {
+    const visibleIds = new Set(visibleChildren.map((child) => child.id));
+
+    return buildRecentDateRange(7).map((date) => {
+      const dayCounter = new Map<string, number>();
+      healthCheckRecords.forEach((record) => {
+        if (!visibleIds.has(record.childId) || record.date !== date) return;
+        dayCounter.set(record.mood, (dayCounter.get(record.mood) ?? 0) + 1);
+      });
+
+      const row: Record<string, string | number> = {
+        label: formatShortDate(date),
+      };
+
+      moodTrendKeys.forEach((key) => {
+        row[key] = dayCounter.get(key) ?? 0;
+      });
+
+      return row;
+    });
+  }, [healthCheckRecords, visibleChildren, moodTrendKeys]);
+
   // Actions
   const handleOpenDialog = (childId: string) => {
     const child = childData.find(c => c.id === childId);
@@ -290,10 +322,64 @@ export default function HealthPage() {
             <CardTitle>情绪分布图</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-65 w-full">
+            <div className="rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-700">近 7 天情绪走势</p>
+                  <p className="text-xs text-slate-500">自动提取记录量最高的 3 类情绪，先看趋势再看占比。</p>
+                </div>
+                <div className="flex flex-wrap justify-end gap-2">
+                  {moodTrendKeys.map((key) => (
+                    <span key={key} className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs text-slate-600 ring-1 ring-slate-200">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: moodColorMap.get(key) }} />
+                      {key}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="h-44 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={moodTrendData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 12 }} />
+                    <YAxis allowDecimals={false} tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                    <Tooltip formatter={(value) => [`${value}次`, "出现次数"]} contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }} />
+                    {moodTrendKeys.map((key) => (
+                      <Line
+                        key={key}
+                        type="monotone"
+                        dataKey={key}
+                        name={key}
+                        stroke={moodColorMap.get(key) ?? "#94a3b8"}
+                        strokeWidth={2.5}
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="relative mt-5 h-[320px] w-full sm:h-[340px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={moodDistributionData} dataKey="value" nameKey="name" outerRadius={88} innerRadius={40}>
+                  <Pie
+                    data={moodDistributionData}
+                    dataKey="value"
+                    nameKey="name"
+                    outerRadius={96}
+                    innerRadius={46}
+                    cy="50%"
+                    labelLine={(props) => (
+                      <path
+                        d={props.points?.length ? `M ${props.points.map((point: { x: number; y: number }) => `${point.x},${point.y}`).join(" L ")}` : undefined}
+                        fill="none"
+                        stroke={props.stroke}
+                        strokeWidth={1.5}
+                      />
+                    )}
+                    label={renderMoodPieLabel}
+                  >
                     {moodDistributionData.map((item, index) => (
                       <Cell key={item.name} fill={HEALTH_CHART_COLORS[index % HEALTH_CHART_COLORS.length]} />
                     ))}
@@ -301,6 +387,12 @@ export default function HealthPage() {
                   <Tooltip formatter={(value) => [`${value}次`, "记录数"]} contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }} />
                 </PieChart>
               </ResponsiveContainer>
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="rounded-full bg-white/92 px-6 py-4 text-center shadow-sm ring-1 ring-slate-100">
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">近7天记录</p>
+                  <p className="mt-1 text-2xl font-black text-slate-800">{moodDistributionData.reduce((sum, item) => sum + item.value, 0)}</p>
+                </div>
+              </div>
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {moodDistributionData.map((item, index) => (
@@ -562,4 +654,49 @@ function isRecentDate(dateString: string, days: number) {
   const target = new Date(`${dateString}T00:00:00`).getTime();
   const today = new Date(new Date().toISOString().split("T")[0]).getTime();
   return today - target >= 0 && today - target <= (days - 1) * 24 * 60 * 60 * 1000;
+}
+
+function renderMoodPieLabel({
+  cx,
+  cy,
+  midAngle,
+  outerRadius,
+  x,
+  y,
+  name,
+  value,
+}: {
+  cx?: number;
+  cy?: number;
+  midAngle?: number;
+  outerRadius?: number;
+  x?: number;
+  y?: number;
+  name?: string;
+  value?: number;
+}) {
+  if (
+    typeof cx !== "number" ||
+    typeof cy !== "number" ||
+    typeof midAngle !== "number" ||
+    typeof outerRadius !== "number" ||
+    typeof x !== "number" ||
+    typeof y !== "number" ||
+    !name ||
+    typeof value !== "number"
+  ) {
+    return null;
+  }
+
+  const radius = outerRadius + 22;
+  const radians = (-midAngle * Math.PI) / 180;
+  const labelX = cx + radius * Math.cos(radians);
+  const labelY = cy + radius * Math.sin(radians);
+  const textAnchor = labelX > cx ? "start" : "end";
+
+  return (
+    <text x={labelX} y={labelY} fill="#475569" textAnchor={textAnchor} dominantBaseline="central" fontSize={12} fontWeight={600}>
+      {`${name} ${value}`}
+    </text>
+  );
 }
