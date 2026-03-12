@@ -123,11 +123,11 @@ export default function LoginPage() {
                     />
                     <button
                       type="button"
-                      aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                      aria-label={showPassword ? "当前为明文密码，点击隐藏" : "当前为隐藏密码，点击显示"}
                       onClick={() => setShowPassword((prev) => !prev)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600"
                     >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                     </button>
                   </div>
                 </div>
