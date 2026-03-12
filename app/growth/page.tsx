@@ -26,7 +26,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import EmptyState from "@/components/EmptyState";
-import ScrollReveal from "@/components/ScrollReveal";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -165,7 +164,6 @@ export default function GrowthPage() {
         <div className="section-divider mt-5" />
       </div>
 
-      <ScrollReveal>
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_1fr]">
         <div className="space-y-3 xl:sticky xl:top-24 xl:h-fit">
           <Button
@@ -507,7 +505,6 @@ export default function GrowthPage() {
           </Card>
         </div>
       </div>
-      </ScrollReveal>
     </div>
   );
 }
