@@ -2126,16 +2126,17 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       try {
         const response = await fetch("/api/auth/session", { cache: "no-store" });
         if (!response.ok) {
-          if (active) setCurrentUserId(null);
+          if (active) setCurrentUserId((previousUserId) => previousUserId ?? null);
           return;
         }
         const data = (await response.json()) as { userId?: string | null };
         const userExists = users.some((user) => user.id === data.userId);
+        const resolvedUserId = userExists ? (data.userId ?? null) : null;
         if (active) {
-          setCurrentUserId(userExists ? (data.userId ?? null) : null);
+          setCurrentUserId((previousUserId) => previousUserId ?? resolvedUserId);
         }
       } catch {
-        if (active) setCurrentUserId(null);
+        if (active) setCurrentUserId((previousUserId) => previousUserId ?? null);
       } finally {
         if (active) setAuthLoading(false);
       }
@@ -2240,6 +2241,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         return { ok: false, error: result.error ?? "登录失败，请检查账号和密码。" };
       }
       setCurrentUserId(result.userId);
+      setAuthLoading(false);
       return { ok: true };
     } catch {
       return { ok: false, error: "网络异常，请稍后重试。" };
