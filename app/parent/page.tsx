@@ -469,13 +469,20 @@ export default function ParentPage() {
 
   async function exportReport() {
     if (exportingReport) return;
-    const el = document.getElementById("ai-report-card");
+    const el = document.getElementById("report-export-sheet");
     if (!el) {
       toast.error("导出失败", { description: "找不到报告内容，请先生成 AI 建议" });
       return;
     }
     setExportingReport(true);
     try {
+      if (typeof document !== "undefined" && "fonts" in document) {
+        await document.fonts.ready;
+      }
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
+
       const dataUrl = await toPng(el, {
         pixelRatio: 2,
         backgroundColor: "#ffffff",
@@ -1009,6 +1016,120 @@ export default function ParentPage() {
               )}
             </CardContent>
           </Card>
+
+          <div
+            aria-hidden="true"
+            id="report-export-sheet"
+            className="pointer-events-none fixed left-[-10000px] top-0 z-[-1] w-[960px] bg-white p-8 text-slate-900"
+          >
+            <div className="space-y-6">
+              <div className="border-b border-slate-200 pb-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-500">Smart Childcare AI Report</p>
+                <h2 className="mt-3 text-3xl font-bold text-slate-900">{selectedFeed.child.name} 家园协同长图报告</h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  导出时间：{new Date().toLocaleString("zh-CN")} · 班级：{selectedFeed.child.className} · 年龄：{getAgeText(selectedFeed.child.birthDate)}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-xs text-slate-400">今日饮食记录</p>
+                  <p className="mt-2 text-2xl font-bold text-slate-800">{selectedFeed.todayMeals.length} 条</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-xs text-slate-400">今日成长记录</p>
+                  <p className="mt-2 text-2xl font-bold text-slate-800">{selectedFeed.todayGrowth.length} 条</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-xs text-slate-400">本周打卡</p>
+                  <p className="mt-2 text-2xl font-bold text-slate-800">{weeklyCheckInCount} 次</p>
+                </div>
+              </div>
+
+              {aiSuggestion?.summary ? (
+                <section className="rounded-3xl border border-indigo-100 bg-indigo-50 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-600">AI 总结</p>
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700">{aiSuggestion.summary}</p>
+                </section>
+              ) : null}
+
+              {aiSuggestion?.actionPlan || aiSuggestion?.actions?.length ? (
+                <section className="rounded-3xl border border-slate-200 p-5">
+                  <h3 className="text-lg font-semibold text-slate-900">详细个性化方案</h3>
+                  <div className="mt-4 grid grid-cols-3 gap-4">
+                    <div className="rounded-2xl bg-emerald-50 p-4">
+                      <p className="text-sm font-semibold text-emerald-700">今天园内</p>
+                      <div className="mt-3 space-y-2">
+                        {(aiSuggestion.actionPlan?.schoolActions?.length ? aiSuggestion.actionPlan.schoolActions : aiSuggestion.actions.slice(0, 2)).map((item, index) => (
+                          <p key={`school-${index}`} className="text-sm leading-6 text-slate-700">{index + 1}. {item}</p>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl bg-amber-50 p-4">
+                      <p className="text-sm font-semibold text-amber-700">今晚家庭</p>
+                      <div className="mt-3 space-y-2">
+                        {(aiSuggestion.actionPlan?.familyActions?.length ? aiSuggestion.actionPlan.familyActions : aiSuggestion.actions.slice(2, 4)).map((item, index) => (
+                          <p key={`family-${index}`} className="text-sm leading-6 text-slate-700">{index + 1}. {item}</p>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl bg-sky-50 p-4">
+                      <p className="text-sm font-semibold text-sky-700">48小时内复查</p>
+                      <div className="mt-3 space-y-2">
+                        {(aiSuggestion.actionPlan?.reviewActions?.length ? aiSuggestion.actionPlan.reviewActions : aiSuggestion.actions.slice(4, 5)).map((item, index) => (
+                          <p key={`review-${index}`} className="text-sm leading-6 text-slate-700">{index + 1}. {item}</p>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+
+              <section className="rounded-3xl border border-slate-200 p-5">
+                <h3 className="text-lg font-semibold text-slate-900">建议卡片</h3>
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  {suggestionCards.map((insight) => (
+                    <div key={`export-${insight.id}`} className="rounded-2xl border border-slate-200 p-4">
+                      <p className="text-xs font-semibold text-slate-400">{insight.level === "warning" ? "需关注" : insight.level === "success" ? "已准备好" : "建议"}</p>
+                      <p className="mt-2 text-base font-semibold text-slate-800">{insight.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{insight.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {latestFollowUpAnswer ? (
+                <section className="rounded-3xl border border-slate-200 p-5">
+                  <h3 className="text-lg font-semibold text-slate-900">AI 追问补充</h3>
+                  <div className="mt-4 space-y-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-500">详细解释</p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">{latestFollowUpAnswer.answer}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-sm font-semibold text-slate-800">观察重点</p>
+                        <div className="mt-3 space-y-2">
+                          {latestFollowUpAnswer.keyPoints.map((item, index) => (
+                            <p key={`export-key-${index}`} className="text-sm leading-6 text-slate-600">{index + 1}. {item}</p>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-sm font-semibold text-slate-800">建议动作</p>
+                        <div className="mt-3 space-y-2">
+                          {latestFollowUpAnswer.nextSteps.map((item, index) => (
+                            <p key={`export-next-${index}`} className="text-sm leading-6 text-slate-600">{index + 1}. {item}</p>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-xs leading-5 text-slate-400">{latestFollowUpAnswer.disclaimer}</p>
+                  </div>
+                </section>
+              ) : null}
+            </div>
+          </div>
         </div>
       )}
     </div>
