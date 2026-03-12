@@ -15,7 +15,7 @@ export default function LoginPage() {
   const { users, login, isAuthenticated, authLoading } = useApp();
 
   const [userId, setUserId] = useState(users[0]?.id ?? "u-teacher");
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState("123456");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);

@@ -788,7 +788,7 @@ export default function ParentPage() {
             </Card>
           </div>
 
-          <Card>
+          <Card id="ai-report-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 系统建议

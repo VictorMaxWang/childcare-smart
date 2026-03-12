@@ -655,6 +655,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        {currentUser.role !== "家长" ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -684,6 +685,7 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+        ) : null}
 
         <Card>
           <CardHeader>
