@@ -1,6 +1,6 @@
 "use client";
 
-import html2canvas from "html2canvas";
+import { toPng } from "html-to-image";
 import ReactMarkdown from "react-markdown";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BellRing, HeartHandshake, LineChart as LineChartIcon, MessageCircleHeart, CheckCircle, Goal } from "lucide-react";
@@ -470,17 +470,24 @@ export default function ParentPage() {
   async function exportReport() {
     if (exportingReport) return;
     const el = document.getElementById("ai-report-card");
-    if (!el) return;
+    if (!el) {
+      toast.error("导出失败", { description: "找不到报告内容，请先生成 AI 建议" });
+      return;
+    }
     setExportingReport(true);
     try {
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
-      const dataUrl = canvas.toDataURL("image/png");
+      const dataUrl = await toPng(el, {
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+        cacheBust: true,
+      });
       const link = document.createElement("a");
       link.download = `${selectedFeed?.child.name ?? "child"}-AI健康报告.png`;
       link.href = dataUrl;
       link.click();
       toast.success("导出成功", { description: "周报长图已下载到本地" });
-    } catch {
+    } catch (err) {
+      console.error("[ExportReport]", err);
       toast.error("导出失败", { description: "生成图片时发生错误, 请稍后重试" });
     } finally {
       setExportingReport(false);

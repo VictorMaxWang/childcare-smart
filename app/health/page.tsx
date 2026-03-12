@@ -52,16 +52,17 @@ export default function HealthPage() {
   const [remark, setRemark] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Computed data
+  // Computed data — use visibleChildren so admin/teacher can see all children, not just present ones
   const childData = useMemo(() => {
-    return presentChildren.map(child => {
-      const todayRecord = healthCheckRecords.find(r => r.childId === child.id && r.date === new Date().toISOString().split("T")[0]);
+    const today = new Date().toISOString().split("T")[0];
+    return visibleChildren.map(child => {
+      const todayRecord = healthCheckRecords.find(r => r.childId === child.id && r.date === today);
       return { 
         ...child, 
         health: todayRecord 
       };
     });
-  }, [presentChildren, healthCheckRecords]);
+  }, [visibleChildren, healthCheckRecords]);
 
   const filteredChildren = useMemo(() => {
     return childData.filter(child => {
