@@ -20,7 +20,13 @@ export default function LoginPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const nextPath = useMemo(() => searchParams.get("next") || "/", [searchParams]);
+  const nextPath = useMemo(() => {
+    const rawNextPath = searchParams.get("next") || "/";
+    if (rawNextPath === "/login" || rawNextPath === "/auth/login") {
+      return "/";
+    }
+    return rawNextPath;
+  }, [searchParams]);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
@@ -36,7 +42,9 @@ export default function LoginPage() {
     setLoading(false);
     if (!result.ok) {
       setMessage(result.error || "登录失败");
+      return;
     }
+    router.replace(nextPath);
   }
 
   return (

@@ -7,6 +7,8 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -111,6 +113,25 @@ export default function GrowthPage() {
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
   }, [filteredRecords]);
+
+  const trendKeys = useMemo(
+    () => categoryChartData.slice(0, 3).map((item) => item.name),
+    [categoryChartData]
+  );
+
+  const categoryTrendData = useMemo(() => {
+    return buildRecentDateRange(7).map((date) => {
+      const row: Record<string, string | number> = {
+        label: formatShortDate(date),
+      };
+
+      trendKeys.forEach((key) => {
+        row[key] = filteredRecords.filter((record) => record.category === key && normalizeRecordDate(record.createdAt) === date).length;
+      });
+
+      return row;
+    });
+  }, [filteredRecords, trendKeys]);
 
   const reviewChartData = useMemo(
     () => [
@@ -299,7 +320,37 @@ export default function GrowthPage() {
                 <CardDescription>把近期观察重点直接转成图表，更容易讲清楚班级关注面。</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="relative h-[320px] w-full sm:h-[340px]">
+                <div className="rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700">近 7 天维度趋势</p>
+                      <p className="text-xs text-slate-500">先看变化，再看占比。默认展示记录量最高的 3 个维度。</p>
+                    </div>
+                  </div>
+                  <div className="h-44 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={categoryTrendData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 12 }} />
+                        <YAxis allowDecimals={false} tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                        <Tooltip formatter={(value) => [`${value}条`, "记录数"]} contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }} />
+                        {trendKeys.map((key, index) => (
+                          <Line
+                            key={key}
+                            type="monotone"
+                            dataKey={key}
+                            name={key}
+                            stroke={GROWTH_CHART_COLORS[index % GROWTH_CHART_COLORS.length]}
+                            strokeWidth={2.5}
+                            dot={{ r: 3 }}
+                            activeDot={{ r: 5 }}
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div className="relative mt-5 h-[320px] w-full sm:h-[340px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={categoryChartData} dataKey="value" nameKey="name" outerRadius={104} innerRadius={52} cy="50%">
@@ -524,3 +575,30 @@ function InfoStat({ title, value, icon }: { title: string; value: string; icon?:
 }
 
 const GROWTH_CHART_COLORS = ["#818cf8", "#f59e0b", "#34d399", "#f472b6", "#38bdf8", "#fb7185"];
+
+function buildRecentDateRange(days: number) {
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (days - index - 1));
+    return date.toISOString().split("T")[0];
+  });
+}
+
+function formatShortDate(dateString: string) {
+  return new Date(dateString).toLocaleDateString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+function normalizeRecordDate(value: string) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match?.[1]) return match[1];
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().split("T")[0];
+  }
+  return "";
+}
