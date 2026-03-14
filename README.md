@@ -376,7 +376,6 @@ npm run release:go:all
 
 MIT License
 
-## Star
 
 ## Star
 
