@@ -1967,6 +1967,114 @@ function groupRecordsByChildId<T extends { childId: string }>(records: T[]) {
   }, new Map<string, T[]>());
 }
 
+const EXTRA_NAMES = ["陈子昂", "李沐宸", "张依诺", "王梓瑜", "刘佳怡", "赵梓轩", "黄语桐", "周浩轩", "吴雨桐", "孙可馨", "徐皓轩", "马伊诺", "朱俊熙", "胡子萱", "郭梓睿", "何瑾瑜", "高梦琪", "林子涵", "郑宇辰", "梁奕辰"];
+const EXTRA_GENDERS = ["男", "男", "女", "女", "女", "男", "女", "男", "女", "女", "男", "女", "男", "女", "男", "女", "女", "女", "男", "男"];
+
+const EXTRA_GEN_CHILDREN: Child[] = EXTRA_NAMES.map((name, i) => {
+  const isBoy = EXTRA_GENDERS[i] === "男";
+  return {
+    id: `c-${i + 17}`,
+    name,
+    nickname: name.slice(1),
+    birthDate: `2022-0${Math.floor(Math.random() * 8) + 1}-1${Math.floor(Math.random() * 8)}`,
+    gender: EXTRA_GENDERS[i] as "男" | "女",
+    allergies: Math.random() < 0.2 ? ["芒果"] : [],
+    heightCm: Math.floor(Math.random() * 20) + 90,
+    weightKg: Number((Math.random() * 5 + 13).toFixed(1)),
+    guardians: [{ name: `${name[0]}${isBoy ? "爸爸" : "妈妈"}`, relation: isBoy ? "父亲" : "母亲", phone: `138****${1000 + i * 7}` }],
+    institutionId: "inst-1",
+    className: i % 2 === 0 ? "向阳班" : "晨曦班",
+    specialNotes: "已适应托育环境。",
+    avatar: isBoy ? "👦" : "👧",
+  };
+});
+
+const EXTRA_GEN_MEALS: MealRecord[] = EXTRA_GEN_CHILDREN.flatMap((child) =>
+  DEMO_WEEK_DATES.flatMap((date, i) => [
+    createMealRecord(
+      `m-${child.id}-breakfast-${i + 1}`,
+      child.id,
+      date,
+      "早餐",
+      [["牛奶", "奶制品", "180ml"], ["鸡蛋", "蛋白", "1个"], ["全麦面包", "主食", "2片"]],
+      120 + (i % 3) * 5,
+      "正常",
+      "李老师",
+      "教师",
+      "适中"
+    ),
+    createMealRecord(
+      `m-${child.id}-lunch-${i + 1}`,
+      child.id,
+      date,
+      "午餐",
+      [["米饭", "主食", "1碗"], i % 2 === 0 ? ["鸡肉", "蛋白", "60g"] : ["牛肉", "蛋白", "50g"], ["青菜", "蔬果", "50g"]],
+      150 + (i % 5) * 5,
+      "正常",
+      "李老师",
+      "教师",
+      "充足"
+    ),
+    createMealRecord(
+      `m-${child.id}-snack-${i + 1}`,
+      child.id,
+      date,
+      "加餐",
+      [["香蕉", "蔬果", "半根"], ["酸奶", "奶制品", "100ml"]],
+      100 + (i % 2) * 10,
+      "正常",
+      "李老师",
+      "教师",
+      "适中"
+    )
+  ])
+);
+
+const EXTRA_GEN_ATTENDANCE: AttendanceRecord[] = EXTRA_GEN_CHILDREN.flatMap((child) =>
+  DEMO_WEEK_DATES.map((date, i) => ({
+    id: `a-${child.id}-${i + 1}`,
+    childId: child.id,
+    date,
+    isPresent: true,
+    checkInAt: `08:${20 + (i % 10)}`,
+    checkOutAt: `17:${10 + (i % 10)}`,
+  }))
+);
+
+const EXTRA_GEN_HEALTH_CHECKS: HealthCheckRecord[] = EXTRA_GEN_CHILDREN.flatMap((child) =>
+  DEMO_WEEK_DATES.map((date, i) =>
+    createHealthRecord(
+      `hc-${child.id}-${i + 1}`,
+      child.id,
+      date,
+      36.5 + (i % 3) * 0.1,
+      "平稳",
+      "状态良好",
+      "李老师",
+      "教师"
+    )
+  )
+);
+
+const EXTRA_GEN_GROWTH: GrowthRecord[] = EXTRA_GEN_CHILDREN.map((child, i) => ({
+  id: `g-extra-${child.id}`,
+  childId: child.id,
+  createdAt: `${DEMO_WEEK_DATES[i % 7]} 10:15`,
+  recorder: "李老师",
+  recorderRole: "教师",
+  category: ["情绪表现", "精细动作", "社交互动", "大动作", "语言表达", "独立进食", "睡眠情况"][i % 7] as GrowthCategory,
+  tags: ["表现良好", "持续进步"],
+  description: "日常活动中表现积极，能够较好地融入集体。",
+  needsAttention: false,
+  reviewStatus: "已完成",
+}));
+
+const ALL_INITIAL_CHILDREN = [...INITIAL_CHILDREN, ...EXTRA_GEN_CHILDREN];
+const ALL_INITIAL_ATTENDANCE = [...INITIAL_ATTENDANCE, ...EXTRA_GEN_ATTENDANCE];
+const ALL_INITIAL_MEALS = [...INITIAL_MEALS, ...EXTRA_GEN_MEALS];
+const ALL_INITIAL_HEALTH_CHECKS = [...INITIAL_HEALTH_CHECKS, ...EXTRA_GEN_HEALTH_CHECKS];
+const ALL_INITIAL_GROWTH = [...INITIAL_GROWTH, ...EXTRA_GEN_GROWTH];
+
 export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const [users] = useState<User[]>(INITIAL_USERS);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -1974,12 +2082,12 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const [storageReady, setStorageReady] = useState(false);
   const [remoteReady, setRemoteReady] = useState(false);
   const [shouldPromoteDemoSnapshot, setShouldPromoteDemoSnapshot] = useState(false);
-  const [childrenList, setChildrenList] = useState<Child[]>(INITIAL_CHILDREN);
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(INITIAL_ATTENDANCE);
-  const [mealRecords, setMealRecords] = useState<MealRecord[]>(normalizeRecords(INITIAL_MEALS));
-  const [growthRecords, setGrowthRecords] = useState<GrowthRecord[]>(INITIAL_GROWTH);
+  const [childrenList, setChildrenList] = useState<Child[]>(ALL_INITIAL_CHILDREN);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(ALL_INITIAL_ATTENDANCE);
+  const [mealRecords, setMealRecords] = useState<MealRecord[]>(normalizeRecords(ALL_INITIAL_MEALS));
+  const [growthRecords, setGrowthRecords] = useState<GrowthRecord[]>(ALL_INITIAL_GROWTH);
   const [guardianFeedbacks, setGuardianFeedbacks] = useState<GuardianFeedback[]>(INITIAL_FEEDBACKS);
-  const [healthCheckRecords, setHealthCheckRecords] = useState<HealthCheckRecord[]>(INITIAL_HEALTH_CHECKS);
+  const [healthCheckRecords, setHealthCheckRecords] = useState<HealthCheckRecord[]>(ALL_INITIAL_HEALTH_CHECKS);
   const [taskCheckInRecords, setTaskCheckInRecords] = useState<TaskCheckInRecord[]>(INITIAL_TASK_CHECKINS);
   const lastSyncedSnapshotKeyRef = useRef<string | null>(null);
   const isAuthenticated = Boolean(currentUserId);
@@ -2006,13 +2114,26 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const remoteSnapshotKey = useMemo(() => JSON.stringify(remoteSnapshot), [remoteSnapshot]);
 
   useEffect(() => {
-    const storedChildren = readStorage<Child[]>(STORAGE_KEYS.children, INITIAL_CHILDREN);
-    const storedAttendance = readStorage<AttendanceRecord[]>(STORAGE_KEYS.attendance, INITIAL_ATTENDANCE);
-    const storedMeals = normalizeRecords(readStorage<MealRecord[]>(STORAGE_KEYS.meals, INITIAL_MEALS));
-    const storedGrowth = readStorage<GrowthRecord[]>(STORAGE_KEYS.growth, INITIAL_GROWTH);
+    let storedChildren = readStorage<Child[]>(STORAGE_KEYS.children, ALL_INITIAL_CHILDREN);
+    let storedAttendance = readStorage<AttendanceRecord[]>(STORAGE_KEYS.attendance, ALL_INITIAL_ATTENDANCE);
+    let storedMeals = normalizeRecords(readStorage<MealRecord[]>(STORAGE_KEYS.meals, ALL_INITIAL_MEALS));
+    let storedGrowth = readStorage<GrowthRecord[]>(STORAGE_KEYS.growth, ALL_INITIAL_GROWTH);
     const storedFeedback = readStorage<GuardianFeedback[]>(STORAGE_KEYS.feedback, INITIAL_FEEDBACKS);
-    const storedHealth = readStorage<HealthCheckRecord[]>(STORAGE_KEYS.health, INITIAL_HEALTH_CHECKS);
+    let storedHealth = readStorage<HealthCheckRecord[]>(STORAGE_KEYS.health, ALL_INITIAL_HEALTH_CHECKS);
     const storedTaskCheckIns = readStorage<TaskCheckInRecord[]>(STORAGE_KEYS.taskCheckIns, INITIAL_TASK_CHECKINS);
+
+    // Merge in new extra generation data without destructing existing modifications
+    const mergeNewItems = <T extends { id: string }>(stored: T[], defaultAll: T[]) => {
+      const storedIds = new Set(stored.map((item) => item.id));
+      const missing = defaultAll.filter((item) => !storedIds.has(item.id));
+      return missing.length > 0 ? [...stored, ...missing] : stored;
+    };
+
+    storedChildren = mergeNewItems(storedChildren, ALL_INITIAL_CHILDREN);
+    storedAttendance = mergeNewItems(storedAttendance, ALL_INITIAL_ATTENDANCE);
+    storedMeals = mergeNewItems(storedMeals, ALL_INITIAL_MEALS);
+    storedHealth = mergeNewItems(storedHealth, ALL_INITIAL_HEALTH_CHECKS);
+    storedGrowth = mergeNewItems(storedGrowth, ALL_INITIAL_GROWTH);
 
     setChildrenList(storedChildren);
     setAttendanceRecords(storedAttendance);
