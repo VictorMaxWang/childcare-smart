@@ -353,7 +353,22 @@ export default function GrowthPage() {
                 <div className="relative mt-5 h-[320px] w-full sm:h-[340px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={categoryChartData} dataKey="value" nameKey="name" outerRadius={104} innerRadius={52} cy="50%">
+                      <Pie 
+                        data={categoryChartData} 
+                        dataKey="value" 
+                        nameKey="name" 
+                        outerRadius={90} 
+                        innerRadius={52} 
+                        cy="50%" 
+                        stroke="#ffffff" 
+                        strokeWidth={3}
+                        labelLine={{ stroke: '#94a3b8', strokeWidth: 1.5 }}
+                        label={({ cx, x, y, name, value }) => (
+                          <text x={x} y={y} fill="#475569" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="13" fontWeight="600">
+                            {name} {value}
+                          </text>
+                        )}
+                      >
                         {categoryChartData.map((item, index) => (
                           <Cell key={item.name} fill={GROWTH_CHART_COLORS[index % GROWTH_CHART_COLORS.length]} />
                         ))}
