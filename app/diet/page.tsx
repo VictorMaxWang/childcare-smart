@@ -148,6 +148,10 @@ export default function DietPage() {
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
   const [evaluatingMeal, setEvaluatingMeal] = useState<MealType | null>(null);
 
+  const [bulkVisionLoading, setBulkVisionLoading] = useState(false);
+  const [bulkPhotoPreview, setBulkPhotoPreview] = useState("");
+  const [bulkVisionModel, setBulkVisionModel] = useState("");
+
   const resolvedSelectedChildId =
     visibleChildren.some((child) => child.id === selectedChildId) ? selectedChildId : (visibleChildren[0]?.id ?? "");
 
@@ -335,6 +339,52 @@ export default function DietPage() {
     });
   }
 
+  async function handleBulkVisionUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setBulkVisionLoading(true);
+    try {
+      const originDataUrl = await readFileAsDataUrl(file);
+      const compressedDataUrl = await clampImageSize(originDataUrl);
+      setBulkPhotoPreview(compressedDataUrl);
+
+      const response = await fetch("/api/ai/vision-meal", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          imageDataUrl: compressedDataUrl,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("识别请求失败");
+      }
+
+      const data = (await response.json()) as VisionMealResponse;
+      const normalizedFoods = data.foods.map((item, index) => ({
+        id: createFoodId(`bulk-vision-${index}`),
+        name: item.name,
+        category: item.category,
+        amount: item.amount || "1份",
+      }));
+      setBulkFoods((prev) => [...prev, ...normalizedFoods]);
+      setBulkVisionModel(data.model);
+      toast.success("识别成功", {
+        description: `已为你添加 ${normalizedFoods.length} 种食物，使用模型 ${data.model}。`,
+      });
+    } catch {
+      toast.error("识别失败", {
+        description: "抱歉，无法识别图片中的食物，请重试或手动添加。",
+      });
+    } finally {
+      setBulkVisionLoading(false);
+      event.target.value = "";
+    }
+  }
+
   function toggleExcludeChild(id: string) {
     setBulkExcludedChildIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
   }
@@ -434,6 +484,30 @@ export default function DietPage() {
                 </button>
               </span>
             ))}
+          </div>
+
+          <div className="space-y-3 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-emerald-700">拍照识别食物（批量）</p>
+              {bulkVisionModel ? <Badge variant="secondary">{bulkVisionModel}</Badge> : null}
+            </div>
+
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-emerald-300 bg-white px-3 py-2 text-xs text-emerald-700 transition hover:bg-emerald-50">
+              <Camera className="h-4 w-4" />
+              {bulkVisionLoading ? "识别中..." : "拍照 / 上传餐盘图片"}
+              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleBulkVisionUpload} />
+            </label>
+
+            {bulkPhotoPreview ? (
+              <Image
+                src={bulkPhotoPreview}
+                alt="bulk meal preview"
+                width={640}
+                height={224}
+                unoptimized
+                className="h-28 w-full rounded-xl object-cover"
+              />
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2">
