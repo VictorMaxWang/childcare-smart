@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, ChefHat, Plus, Salad, ShieldAlert, X } from "lucide-react";
+import Image from "next/image";
+import { AlertTriangle, Camera, ChefHat, Loader2, Plus, Salad, ShieldAlert, Sparkles, X } from "lucide-react";
 import {
   calcNutritionScore,
   FOOD_CATEGORY_OPTIONS,
@@ -12,6 +13,7 @@ import {
   type FoodCategory,
   type FoodItem,
   type IntakeLevel,
+  type MealAiEvaluation,
   type MealRecord,
   type MealType,
   type PreferenceStatus,
@@ -56,6 +58,60 @@ const QUICK_FOODS: Record<MealType, { name: string; category: FoodCategory; amou
 const INTAKE_OPTIONS: IntakeLevel[] = ["少量", "适中", "充足"];
 const PREFERENCE_OPTIONS: PreferenceStatus[] = ["偏好", "正常", "拒食"];
 
+interface VisionMealResponse {
+  foods: Array<{ name: string; category: FoodCategory; amount: string }>;
+  source: "ai" | "fallback";
+  model: string;
+}
+
+interface DietEvaluationResponse {
+  evaluation: Omit<MealAiEvaluation, "generatedAt" | "model">;
+  source: "ai" | "fallback";
+  model: string;
+}
+
+function clampImageSize(imageDataUrl: string, maxWidth = 800, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const ratio = image.width > maxWidth ? maxWidth / image.width : 1;
+      const targetWidth = Math.max(1, Math.round(image.width * ratio));
+      const targetHeight = Math.max(1, Math.round(image.height * ratio));
+      const canvas = document.createElement("canvas");
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("Canvas 初始化失败"));
+        return;
+      }
+      context.drawImage(image, 0, 0, targetWidth, targetHeight);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    image.onerror = () => reject(new Error("图片解析失败"));
+    image.src = imageDataUrl;
+  });
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error("文件读取失败"));
+        return;
+      }
+      resolve(reader.result);
+    };
+    reader.onerror = () => reject(new Error("文件读取失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function parseIsoDate(date: string) {
+  return new Date(`${date}T00:00:00`).getTime();
+}
+
 function createFoodId(prefix: string) {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `${prefix}-${crypto.randomUUID()}`;
@@ -90,6 +146,7 @@ export default function DietPage() {
   const [bulkAllergyReaction, setBulkAllergyReaction] = useState("");
   const [bulkExcludedChildIds, setBulkExcludedChildIds] = useState<string[]>([]);
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
+  const [evaluatingMeal, setEvaluatingMeal] = useState<MealType | null>(null);
 
   const resolvedSelectedChildId =
     visibleChildren.some((child) => child.id === selectedChildId) ? selectedChildId : (visibleChildren[0]?.id ?? "");
@@ -148,9 +205,81 @@ export default function DietPage() {
       preference: patch.preference ?? existing?.preference ?? "正常",
       allergyReaction: patch.allergyReaction ?? existing?.allergyReaction ?? "",
       waterMl: patch.waterMl ?? existing?.waterMl ?? 120,
+      aiEvaluation: patch.aiEvaluation ?? existing?.aiEvaluation,
       recordedBy: currentUser.name,
       recordedByRole: currentUser.role,
     });
+  }
+
+  async function runDietEvaluation(meal: MealType) {
+    if (!selectedChild) return;
+    const target = selectedChildMeals[meal];
+    if (!target || target.foods.length === 0) {
+      toast.warning("请先录入本餐食物后再生成建议。");
+      return;
+    }
+
+    const childAllRecords = mealRecords.filter((record) => record.childId === selectedChild.id);
+    const todayMeals = childAllRecords.filter((record) => record.date === TODAY);
+    const recentMeals = childAllRecords.filter((record) => {
+      const diff = parseIsoDate(TODAY) - parseIsoDate(record.date);
+      return diff >= 0 && diff <= 2 * 24 * 60 * 60 * 1000;
+    });
+
+    setEvaluatingMeal(meal);
+    try {
+      const response = await fetch("/api/ai/diet-evaluation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          input: {
+            childName: selectedChild.name,
+            ageText: getAgeText(selectedChild.birthDate),
+            ageBand: getAgeBandFromBirthDate(selectedChild.birthDate),
+            mealType: meal,
+            mealFoods: target.foods.map((item) => ({
+              name: item.name,
+              category: item.category,
+              amount: item.amount,
+            })),
+            todayMeals: todayMeals.map((item) => ({
+              meal: item.meal,
+              foods: item.foods.map((food) => ({ name: food.name, category: food.category, amount: food.amount })),
+              waterMl: item.waterMl,
+            })),
+            recentMeals: recentMeals.map((item) => ({
+              date: item.date,
+              meal: item.meal,
+              foods: item.foods.map((food) => ({ name: food.name, category: food.category, amount: food.amount })),
+              waterMl: item.waterMl,
+            })),
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("营养评估请求失败");
+      }
+
+      const data = (await response.json()) as DietEvaluationResponse;
+      saveMealRecord(meal, {
+        aiEvaluation: {
+          ...data.evaluation,
+          generatedAt: new Date().toISOString(),
+          model: data.model,
+        },
+      });
+
+      toast.success("AI 营养建议已生成", {
+        description: `${meal}评分 ${data.evaluation.mealScore} 分（${data.source === "ai" ? "AI" : "规则兜底"}）。`,
+      });
+    } catch {
+      toast.error("暂时无法生成建议，请稍后重试。");
+    } finally {
+      setEvaluatingMeal(null);
+    }
   }
 
   function addBulkFood() {
@@ -508,6 +637,8 @@ export default function DietPage() {
                     meal={meal}
                     record={selectedChildMeals[meal]}
                     onSave={(patch) => saveMealRecord(meal, patch)}
+                    onGenerateEvaluation={() => void runDietEvaluation(meal)}
+                    evaluating={evaluatingMeal === meal}
                   />
                 ))}
               </div>
@@ -566,7 +697,19 @@ export default function DietPage() {
   );
 }
 
-function MealEditorCard({ meal, record, onSave }: { meal: MealType; record?: MealRecord; onSave: (patch: Partial<MealRecord>) => void }) {
+function MealEditorCard({
+  meal,
+  record,
+  onSave,
+  onGenerateEvaluation,
+  evaluating,
+}: {
+  meal: MealType;
+  record?: MealRecord;
+  onSave: (patch: Partial<MealRecord>) => void;
+  onGenerateEvaluation: () => void;
+  evaluating: boolean;
+}) {
   const [foodName, setFoodName] = useState("");
   const [foodAmount, setFoodAmount] = useState("1份");
   const [foodCategory, setFoodCategory] = useState<FoodCategory>("主食");
@@ -574,6 +717,10 @@ function MealEditorCard({ meal, record, onSave }: { meal: MealType; record?: Mea
   const [preference, setPreference] = useState<PreferenceStatus>(record?.preference ?? "正常");
   const [waterMl, setWaterMl] = useState(String(record?.waterMl ?? 120));
   const [allergyReaction, setAllergyReaction] = useState(record?.allergyReaction ?? "");
+  const [visionLoading, setVisionLoading] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState("");
+  const [visionFoods, setVisionFoods] = useState<FoodItem[]>([]);
+  const [visionModel, setVisionModel] = useState("");
 
   const foods = record?.foods ?? [];
   const mealScore = calcNutritionScore(foods, Number(waterMl) || 0, preference);
@@ -594,6 +741,105 @@ function MealEditorCard({ meal, record, onSave }: { meal: MealType; record?: Mea
 
     onSave({ foods: nextFoods, intakeLevel, preference, allergyReaction, waterMl: Number(waterMl) || 0 });
     setFoodName("");
+  }
+
+  function updateVisionFood(index: number, key: "name" | "category" | "amount", value: string) {
+    setVisionFoods((prev) =>
+      prev.map((item, currentIndex) => {
+        if (currentIndex !== index) return item;
+        if (key === "category") {
+          return { ...item, category: value as FoodCategory };
+        }
+        return { ...item, [key]: value };
+      })
+    );
+  }
+
+  function appendVisionFood() {
+    setVisionFoods((prev) => [
+      ...prev,
+      {
+        id: createFoodId(`${meal}-vision`),
+        name: "",
+        category: "其他",
+        amount: "1份",
+      },
+    ]);
+  }
+
+  async function handleVisionUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setVisionLoading(true);
+    try {
+      const originDataUrl = await readFileAsDataUrl(file);
+      const compressedDataUrl = await clampImageSize(originDataUrl);
+      setPhotoPreview(compressedDataUrl);
+
+      const response = await fetch("/api/ai/vision-meal", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          imageDataUrl: compressedDataUrl,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("识别请求失败");
+      }
+
+      const data = (await response.json()) as VisionMealResponse;
+      const normalizedFoods = data.foods.map((item, index) => ({
+        id: createFoodId(`${meal}-vision-${index}`),
+        name: item.name,
+        category: item.category,
+        amount: item.amount || "1份",
+      }));
+      setVisionFoods(normalizedFoods);
+      setVisionModel(data.model);
+      toast.success("图片识别完成", {
+        description: `识别到 ${normalizedFoods.length} 项食物，可继续修改后录入。`,
+      });
+    } catch {
+      toast.error("图片识别失败，请重试或改用手动录入。");
+    } finally {
+      setVisionLoading(false);
+      event.target.value = "";
+    }
+  }
+
+  function confirmVisionFoods() {
+    const cleaned = visionFoods
+      .map((item) => ({
+        ...item,
+        name: item.name.trim(),
+        amount: item.amount.trim() || "1份",
+      }))
+      .filter((item) => item.name.length > 0);
+
+    if (cleaned.length === 0) {
+      toast.warning("请至少保留一项有效食物后再录入。");
+      return;
+    }
+
+    onSave({
+      foods: [
+        ...foods,
+        ...cleaned.map((item) => ({
+          ...item,
+          id: createFoodId(`${meal}-final`),
+        })),
+      ],
+      intakeLevel,
+      preference,
+      allergyReaction,
+      waterMl: Number(waterMl) || 0,
+    });
+    setVisionFoods([]);
+    toast.success("识别食物已录入本餐记录。");
   }
 
   return (
@@ -667,6 +913,81 @@ function MealEditorCard({ meal, record, onSave }: { meal: MealType; record?: Mea
           ))}
         </div>
 
+        <div className="space-y-3 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-emerald-700">拍照识别食物</p>
+            {visionModel ? <Badge variant="secondary">{visionModel}</Badge> : null}
+          </div>
+
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-emerald-300 bg-white px-3 py-2 text-xs text-emerald-700 transition hover:bg-emerald-50">
+            <Camera className="h-4 w-4" />
+            {visionLoading ? "识别中..." : "拍照 / 上传餐盘图片"}
+            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleVisionUpload} />
+          </label>
+
+          {photoPreview ? (
+            <Image
+              src={photoPreview}
+              alt="meal preview"
+              width={640}
+              height={224}
+              unoptimized
+              className="h-28 w-full rounded-xl object-cover"
+            />
+          ) : null}
+
+          {visionFoods.length > 0 ? (
+            <div className="space-y-2 rounded-xl bg-white p-2">
+              {visionFoods.map((food, index) => (
+                <div key={food.id} className="grid grid-cols-12 gap-2">
+                  <Input
+                    value={food.name}
+                    onChange={(event) => updateVisionFood(index, "name", event.target.value)}
+                    className="col-span-4"
+                    placeholder="食物名"
+                  />
+                  <Select value={food.category} onValueChange={(value) => updateVisionFood(index, "category", value)}>
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="分类" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FOOD_CATEGORY_OPTIONS.map((category) => (
+                        <SelectItem key={`${food.id}-${category}`} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    value={food.amount}
+                    onChange={(event) => updateVisionFood(index, "amount", event.target.value)}
+                    className="col-span-4"
+                    placeholder="分量"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="col-span-1"
+                    onClick={() => setVisionFoods((prev) => prev.filter((_, currentIndex) => currentIndex !== index))}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+
+              <div className="flex gap-2 pt-1">
+                <Button size="sm" variant="outline" onClick={appendVisionFood}>
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  添加一项
+                </Button>
+                <Button size="sm" onClick={confirmVisionFoods}>
+                  确定录入
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
         <div className="grid gap-3 md:grid-cols-2">
           <Select
             value={intakeLevel}
@@ -734,6 +1055,39 @@ function MealEditorCard({ meal, record, onSave }: { meal: MealType; record?: Mea
             </p>
           </div>
         ) : null}
+
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-slate-700">AI 营养评分与建议</p>
+            <Button size="sm" onClick={onGenerateEvaluation} disabled={evaluating || foods.length === 0}>
+              {evaluating ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1 h-4 w-4" />}
+              生成建议
+            </Button>
+          </div>
+
+          {record?.aiEvaluation ? (
+            <div className="mt-3 space-y-2 text-xs text-slate-600">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-xl bg-white p-2">本餐：{record.aiEvaluation.mealScore}分</div>
+                <div className="rounded-xl bg-white p-2">今日：{record.aiEvaluation.todayScore}分</div>
+                <div className="rounded-xl bg-white p-2">近期：{record.aiEvaluation.recentScore}分</div>
+              </div>
+              <p className="rounded-xl bg-white p-2">本餐分析：{record.aiEvaluation.mealComment}</p>
+              <p className="rounded-xl bg-white p-2">今日分析：{record.aiEvaluation.todayComment}</p>
+              <p className="rounded-xl bg-white p-2">近期分析：{record.aiEvaluation.recentComment}</p>
+              <div className="rounded-xl bg-white p-2">
+                <p className="font-medium text-slate-700">建议</p>
+                <ul className="mt-1 space-y-1">
+                  {record.aiEvaluation.suggestions.map((item, index) => (
+                    <li key={`${record.id}-suggest-${index}`}>- {item}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-slate-500">录入完成后点击“生成建议”，将基于年龄评估本餐、今日和近期饮食。</p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

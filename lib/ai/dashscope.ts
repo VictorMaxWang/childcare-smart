@@ -11,6 +11,36 @@ import type {
 const DASHSCOPE_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = 12000;
 
+type DashscopeTextPart = { type: "text"; text: string };
+type DashscopeImagePart = { type: "image_url"; image_url: { url: string } };
+type DashscopeContent = string | Array<DashscopeTextPart | DashscopeImagePart>;
+
+export interface VisionDetectedFood {
+  name: string;
+  category: "蔬果" | "蛋白" | "主食" | "奶制品" | "饮品" | "其他";
+  amount: string;
+}
+
+export interface DietEvaluationInput {
+  childName: string;
+  ageText: string;
+  ageBand: string;
+  mealType: string;
+  mealFoods: Array<{ name: string; category: string; amount: string }>;
+  todayMeals: Array<{ meal: string; foods: Array<{ name: string; category: string; amount: string }>; waterMl: number }>;
+  recentMeals: Array<{ date: string; meal: string; foods: Array<{ name: string; category: string; amount: string }>; waterMl: number }>;
+}
+
+export interface DietEvaluationResult {
+  mealScore: number;
+  mealComment: string;
+  todayScore: number;
+  todayComment: string;
+  recentScore: number;
+  recentComment: string;
+  suggestions: string[];
+}
+
 function safeJsonParse(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -289,6 +319,186 @@ async function requestDashscopeJson(prompt: string) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function requestDashscopeJsonWithMessages({
+  model,
+  messages,
+}: {
+  model: string;
+  messages: Array<{ role: "system" | "user" | "assistant"; content: DashscopeContent }>;
+}) {
+  const apiKey = process.env.DASHSCOPE_API_KEY || "";
+
+  if (!apiKey) {
+    console.warn("[AI] DASHSCOPE_API_KEY is missing, falling back to rules.");
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(DASHSCOPE_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+        messages,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.error(`[AI] DashScope request failed: ${response.status} ${response.statusText}`, errorText.slice(0, 300));
+      return null;
+    }
+
+    const raw = (await response.json()) as Record<string, unknown>;
+    const message = (raw.choices as Array<Record<string, unknown>> | undefined)?.[0]?.message as
+      | Record<string, unknown>
+      | undefined;
+    const content = message?.content;
+
+    if (typeof content === "string") {
+      return safeJsonParse(content);
+    }
+
+    if (Array.isArray(content)) {
+      const text = content
+        .map((part) => {
+          if (!part || typeof part !== "object") return "";
+          const textPart = part as Record<string, unknown>;
+          return typeof textPart.text === "string" ? textPart.text : "";
+        })
+        .join("\n");
+      return safeJsonParse(text);
+    }
+
+    return null;
+  } catch (error) {
+    console.error("[AI] DashScope request threw an exception:", error);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function normalizeFoodCategory(input: unknown): VisionDetectedFood["category"] {
+  const value = String(input ?? "").trim();
+  if (["蔬果", "蛋白", "主食", "奶制品", "饮品", "其他"].includes(value)) {
+    return value as VisionDetectedFood["category"];
+  }
+  if (value.includes("菜") || value.includes("蔬") || value.includes("果")) return "蔬果";
+  if (value.includes("肉") || value.includes("蛋") || value.includes("豆") || value.includes("鱼")) return "蛋白";
+  if (value.includes("饭") || value.includes("面") || value.includes("粥") || value.includes("主食")) return "主食";
+  if (value.includes("奶")) return "奶制品";
+  if (value.includes("饮") || value.includes("汤") || value.includes("水")) return "饮品";
+  return "其他";
+}
+
+function normalizeVisionFoods(raw: unknown): VisionDetectedFood[] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const foods = (raw as Record<string, unknown>).foods;
+  if (!Array.isArray(foods)) return null;
+
+  return foods
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const obj = item as Record<string, unknown>;
+      const name = String(obj.name ?? "").trim();
+      if (!name) return null;
+      return {
+        name,
+        category: normalizeFoodCategory(obj.category),
+        amount: String(obj.amount ?? "1份").trim() || "1份",
+      } satisfies VisionDetectedFood;
+    })
+    .filter((item): item is VisionDetectedFood => Boolean(item))
+    .slice(0, 12);
+}
+
+function normalizeDietEvaluation(raw: unknown): DietEvaluationResult | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const suggestions = normalizeArray(obj.suggestions);
+  return {
+    mealScore: Math.max(0, Math.min(100, Number(obj.mealScore) || 0)),
+    mealComment: String(obj.mealComment ?? "").trim() || "本餐搭配基本达标，可继续优化食材多样性。",
+    todayScore: Math.max(0, Math.min(100, Number(obj.todayScore) || 0)),
+    todayComment: String(obj.todayComment ?? "").trim() || "今日整体饮食较稳定，建议继续保持饮水与蔬菜摄入。",
+    recentScore: Math.max(0, Math.min(100, Number(obj.recentScore) || 0)),
+    recentComment: String(obj.recentComment ?? "").trim() || "近期趋势总体平稳，建议围绕薄弱项持续跟进。",
+    suggestions: suggestions.length > 0 ? suggestions : ["保持主食、蛋白、蔬果三类食物的均衡搭配。"],
+  };
+}
+
+export async function requestDashscopeMealVision(imageDataUrl: string): Promise<VisionDetectedFood[] | null> {
+  const model = process.env.AI_VISION_MODEL || "qwen3-vl-plus";
+  const prompt = [
+    "你是托育饮食识别助手。",
+    "请识别图片中可见食物并输出严格JSON。",
+    "JSON字段必须为 foods，且 foods 是数组，每项字段为 name, category, amount。",
+    "category 只能是: 蔬果, 蛋白, 主食, 奶制品, 饮品, 其他。",
+    "不要输出除JSON之外的任何文本。",
+  ].join("\n");
+
+  const parsed = await requestDashscopeJsonWithMessages({
+    model,
+    messages: [
+      {
+        role: "system",
+        content: "你是托育饮食识别助手，输出严格JSON。",
+      },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          { type: "image_url", image_url: { url: imageDataUrl } },
+        ],
+      },
+    ],
+  });
+
+  return normalizeVisionFoods(parsed);
+}
+
+export async function requestDashscopeDietEvaluation(
+  input: DietEvaluationInput
+): Promise<DietEvaluationResult | null> {
+  const model = process.env.AI_DIET_MODEL || process.env.AI_MODEL || "qwen-turbo";
+  const prompt = [
+    "你是托育机构营养分析助手。",
+    "请结合孩子年龄与饮食记录给出评分和建议，输出严格JSON。",
+    "JSON字段必须为: mealScore, mealComment, todayScore, todayComment, recentScore, recentComment, suggestions。",
+    "mealScore/todayScore/recentScore 取值0到100。",
+    "comments 为中文简短解释，suggestions 为3到5条可执行中文建议。",
+    "不要输出任何额外文本。",
+    "输入:",
+    JSON.stringify(input),
+  ].join("\n");
+
+  const parsed = await requestDashscopeJsonWithMessages({
+    model,
+    messages: [
+      {
+        role: "system",
+        content: "你是托育机构营养分析助手，输出严格JSON，不做医疗诊断。",
+      },
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
+  });
+
+  return normalizeDietEvaluation(parsed);
 }
 
 export async function requestDashscopeSuggestion(

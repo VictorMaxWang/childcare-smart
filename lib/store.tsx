@@ -112,6 +112,18 @@ export interface FoodItem {
   amount: string;
 }
 
+export interface MealAiEvaluation {
+  mealScore: number;
+  mealComment: string;
+  todayScore: number;
+  todayComment: string;
+  recentScore: number;
+  recentComment: string;
+  suggestions: string[];
+  generatedAt: string;
+  model?: string;
+}
+
 export interface MealRecord {
   id: string;
   childId: string;
@@ -123,6 +135,7 @@ export interface MealRecord {
   allergyReaction?: string;
   waterMl: number;
   nutritionScore: number;
+  aiEvaluation?: MealAiEvaluation;
   recordedBy: string;
   recordedByRole: Role;
 }
@@ -217,6 +230,7 @@ export interface UpsertMealRecordInput {
   preference: PreferenceStatus;
   allergyReaction?: string;
   waterMl: number;
+  aiEvaluation?: MealAiEvaluation;
   recordedBy: string;
   recordedByRole: Role;
 }
@@ -2311,6 +2325,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         ...(existing ?? { id: createClientId("m") }),
         ...input,
         nutritionScore: calcNutritionScore(input.foods, input.waterMl, input.preference),
+        aiEvaluation: input.aiEvaluation ?? existing?.aiEvaluation,
       };
       if (!existing) return [...prev, next];
       return prev.map((record) => (record.id === existing.id ? next : record));
