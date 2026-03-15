@@ -72,7 +72,7 @@ interface DietEvaluationResponse {
 
 function clampImageSize(imageDataUrl: string, maxWidth = 800, quality = 0.82): Promise<string> {
   return new Promise((resolve, reject) => {
-    const image = new Image();
+    const image = new window.Image();
     image.onload = () => {
       const ratio = image.width > maxWidth ? maxWidth / image.width : 1;
       const targetWidth = Math.max(1, Math.round(image.width * ratio));
