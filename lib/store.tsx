@@ -2062,7 +2062,7 @@ const EXTRA_GEN_GROWTH: GrowthRecord[] = EXTRA_GEN_CHILDREN.map((child, i) => ({
   createdAt: `${DEMO_WEEK_DATES[i % 7]} 10:15`,
   recorder: "李老师",
   recorderRole: "教师",
-  category: ["情绪表现", "精细动作", "社交互动", "大动作", "语言表达", "独立进食", "睡眠情况"][i % 7] as GrowthCategory,
+  category: ["情绪表现", "精细动作", "社交互动", "大动作", "语言表达", "独立进食", "睡眠情况"][i % 7] as BehaviorCategory,
   tags: ["表现良好", "持续进步"],
   description: "日常活动中表现积极，能够较好地融入集体。",
   needsAttention: false,
