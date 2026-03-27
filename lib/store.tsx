@@ -2113,6 +2113,18 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
   const remoteSnapshotKey = useMemo(() => JSON.stringify(remoteSnapshot), [remoteSnapshot]);
 
+  const isSnapshotEffectivelyEmpty = useCallback((snapshot: AppStateSnapshot) => {
+    return (
+      snapshot.children.length === 0 &&
+      snapshot.attendance.length === 0 &&
+      snapshot.meals.length === 0 &&
+      snapshot.growth.length === 0 &&
+      snapshot.feedback.length === 0 &&
+      snapshot.health.length === 0 &&
+      snapshot.taskCheckIns.length === 0
+    );
+  }, []);
+
   useEffect(() => {
     let storedChildren = readStorage<Child[]>(STORAGE_KEYS.children, ALL_INITIAL_CHILDREN);
     let storedAttendance = readStorage<AttendanceRecord[]>(STORAGE_KEYS.attendance, ALL_INITIAL_ATTENDANCE);
@@ -2173,6 +2185,12 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
           return;
         }
 
+        if (isSnapshotEffectivelyEmpty(data.snapshot)) {
+          // Keep local demo dataset and let the sync effect promote it to remote.
+          setShouldPromoteDemoSnapshot(true);
+          return;
+        }
+
         lastSyncedSnapshotKeyRef.current = JSON.stringify(data.snapshot);
 
         setChildrenList(data.snapshot.children);
@@ -2194,7 +2212,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [authLoading, isAuthenticated, shouldPromoteDemoSnapshot]);
+  }, [authLoading, isAuthenticated, isSnapshotEffectivelyEmpty, shouldPromoteDemoSnapshot]);
 
   useEffect(() => {
     if (!storageReady) return;

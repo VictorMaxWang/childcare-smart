@@ -8,7 +8,6 @@ import {
   ClipboardList,
   CalendarDays,
   History,
-  RotateCcw,
   Salad,
   ShieldCheck,
   Sparkles,
@@ -83,7 +82,6 @@ export default function DashboardPage() {
     healthCheckRecords,
     mealRecords,
     presentChildren,
-    resetDemoData,
   } = useApp();
 
   const todayAttendance = getTodayAttendance();
@@ -96,7 +94,6 @@ export default function DashboardPage() {
   const [weeklyReport, setWeeklyReport] = useState<WeeklyReportResponse | null>(null);
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
   const [weeklyReportRefreshNonce, setWeeklyReportRefreshNonce] = useState(0);
-  const [demoResetting, setDemoResetting] = useState(false);
   const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
 
   // Health Calculation
@@ -294,25 +291,6 @@ export default function DashboardPage() {
     setWeeklyReportRefreshNonce((prev) => prev + 1);
   }
 
-  async function handleResetDemoData() {
-    const confirmed = window.confirm("确认将当前机构数据重置为演示样本吗？这会覆盖当前本地数据，并在已登录时同步覆盖远端快照。");
-    if (!confirmed) return;
-
-    setDemoResetting(true);
-    weeklyReportCacheRef.current.clear();
-    setWeeklyReport(null);
-
-    try {
-      const result = await resetDemoData();
-      setWeeklyReportRefreshNonce((prev) => prev + 1);
-      toast.success(result.remoteSynced ? "演示数据已恢复，并已同步远端快照。" : "演示数据已恢复，本地已生效，远端将继续自动同步。");
-    } catch {
-      toast.error("演示数据恢复失败，请稍后重试。");
-    } finally {
-      setDemoResetting(false);
-    }
-  }
-
   const attendanceChartData = useMemo(
     () => [
       { name: "出勤", value: presentCount, fill: "#34d399" },
@@ -428,14 +406,9 @@ export default function DashboardPage() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
             已将功能升级为业务闭环：出勤 → 批量录入餐食 → 个别调整 → 成长观察 → 家长反馈，并以规则引擎输出可解释建议。
           </p>
-          {currentUser.role !== "家长" ? (
-            <div className="mt-4">
-              <Button variant="outline" size="sm" onClick={handleResetDemoData} disabled={demoResetting}>
-                <RotateCcw className="mr-2 h-4 w-4" />
-                {demoResetting ? "正在恢复演示数据..." : "重置为演示数据"}
-              </Button>
-            </div>
-          ) : null}
+          <p className="mt-3 text-xs text-slate-500">
+            平台默认内置近七天评审示例数据，首次进入即可直接预览全链路效果。
+          </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <QuickLink href="/health" title="晨检与健康" description="记录每日体温、情绪、手口眼" />
