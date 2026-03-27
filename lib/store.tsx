@@ -1854,25 +1854,45 @@ function normalizeRecords(records: MealRecord[]) {
   }));
 }
 
+function getLatestSnapshotDate(snapshot: AppStateSnapshot): string | null {
+  const dates = [
+    ...snapshot.attendance.map((record) => record.date),
+    ...snapshot.meals.map((record) => record.date),
+    ...snapshot.health.map((record) => record.date),
+    ...snapshot.growth.map((record) => record.createdAt.split(" ")[0]),
+    ...snapshot.feedback.map((record) => record.date),
+    ...snapshot.taskCheckIns.map((record) => record.date),
+  ];
+
+  if (dates.length === 0) return null;
+  return dates.reduce((latest, current) => (current > latest ? current : latest));
+}
+
+function isDemoSnapshotStale(snapshot: AppStateSnapshot): boolean {
+  const latestDate = getLatestSnapshotDate(snapshot);
+  if (!latestDate) return true;
+  return latestDate < TODAY;
+}
+
 function createDemoSnapshot(): AppStateSnapshot {
   return {
-    children: INITIAL_CHILDREN.map((child) => ({
+    children: ALL_INITIAL_CHILDREN.map((child) => ({
       ...child,
       allergies: [...child.allergies],
       guardians: child.guardians.map((guardian) => ({ ...guardian })),
     })),
-    attendance: INITIAL_ATTENDANCE.map((record) => ({ ...record })),
-    meals: INITIAL_MEALS.map((record) => ({
+    attendance: ALL_INITIAL_ATTENDANCE.map((record) => ({ ...record })),
+    meals: ALL_INITIAL_MEALS.map((record) => ({
       ...record,
       foods: record.foods.map((food) => ({ ...food })),
     })),
-    growth: INITIAL_GROWTH.map((record) => ({
+    growth: ALL_INITIAL_GROWTH.map((record) => ({
       ...record,
       tags: [...record.tags],
       selectedIndicators: record.selectedIndicators ? [...record.selectedIndicators] : undefined,
     })),
     feedback: INITIAL_FEEDBACKS.map((record) => ({ ...record })),
-    health: INITIAL_HEALTH_CHECKS.map((record) => ({ ...record })),
+    health: ALL_INITIAL_HEALTH_CHECKS.map((record) => ({ ...record })),
     taskCheckIns: INITIAL_TASK_CHECKINS.map((record) => ({ ...record })),
     updatedAt: new Date().toISOString(),
   };
@@ -2130,9 +2150,10 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     let storedAttendance = readStorage<AttendanceRecord[]>(STORAGE_KEYS.attendance, ALL_INITIAL_ATTENDANCE);
     let storedMeals = normalizeRecords(readStorage<MealRecord[]>(STORAGE_KEYS.meals, ALL_INITIAL_MEALS));
     let storedGrowth = readStorage<GrowthRecord[]>(STORAGE_KEYS.growth, ALL_INITIAL_GROWTH);
-    const storedFeedback = readStorage<GuardianFeedback[]>(STORAGE_KEYS.feedback, INITIAL_FEEDBACKS);
+    let storedFeedback = readStorage<GuardianFeedback[]>(STORAGE_KEYS.feedback, INITIAL_FEEDBACKS);
     let storedHealth = readStorage<HealthCheckRecord[]>(STORAGE_KEYS.health, ALL_INITIAL_HEALTH_CHECKS);
-    const storedTaskCheckIns = readStorage<TaskCheckInRecord[]>(STORAGE_KEYS.taskCheckIns, INITIAL_TASK_CHECKINS);
+    let storedTaskCheckIns = readStorage<TaskCheckInRecord[]>(STORAGE_KEYS.taskCheckIns, INITIAL_TASK_CHECKINS);
+    const storedDemoSeedVersion = readStorage<string | null>(STORAGE_KEYS.remoteDemoSeed, null);
 
     // Merge in new extra generation data without destructing existing modifications
     const mergeNewItems = <T extends { id: string }>(stored: T[], defaultAll: T[]) => {
@@ -2147,6 +2168,34 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     storedHealth = mergeNewItems(storedHealth, ALL_INITIAL_HEALTH_CHECKS);
     storedGrowth = mergeNewItems(storedGrowth, ALL_INITIAL_GROWTH);
 
+    const localSnapshot: AppStateSnapshot = {
+      children: storedChildren,
+      attendance: storedAttendance,
+      meals: storedMeals,
+      growth: storedGrowth,
+      feedback: storedFeedback,
+      health: storedHealth,
+      taskCheckIns: storedTaskCheckIns,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const shouldAutoRefreshDemo =
+      storedDemoSeedVersion === REMOTE_DEMO_SEED_VERSION && isDemoSnapshotStale(localSnapshot);
+
+    if (shouldAutoRefreshDemo) {
+      const refreshed = createDemoSnapshot();
+      storedChildren = refreshed.children;
+      storedAttendance = refreshed.attendance;
+      storedMeals = normalizeRecords(refreshed.meals);
+      storedGrowth = refreshed.growth;
+      storedFeedback = refreshed.feedback;
+      storedHealth = refreshed.health;
+      storedTaskCheckIns = refreshed.taskCheckIns;
+      setShouldPromoteDemoSnapshot(true);
+    } else {
+      setShouldPromoteDemoSnapshot(storedDemoSeedVersion !== REMOTE_DEMO_SEED_VERSION);
+    }
+
     setChildrenList(storedChildren);
     setAttendanceRecords(storedAttendance);
     setMealRecords(storedMeals);
@@ -2154,9 +2203,6 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     setGuardianFeedbacks(storedFeedback);
     setHealthCheckRecords(storedHealth);
     setTaskCheckInRecords(storedTaskCheckIns);
-    setShouldPromoteDemoSnapshot(
-      readStorage<string | null>(STORAGE_KEYS.remoteDemoSeed, null) !== REMOTE_DEMO_SEED_VERSION
-    );
     setStorageReady(true);
   }, []);
 
@@ -2187,6 +2233,16 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
         if (isSnapshotEffectivelyEmpty(data.snapshot)) {
           // Keep local demo dataset and let the sync effect promote it to remote.
+          setShouldPromoteDemoSnapshot(true);
+          return;
+        }
+
+        const localDemoSeedVersion = readStorage<string | null>(STORAGE_KEYS.remoteDemoSeed, null);
+        if (
+          localDemoSeedVersion === REMOTE_DEMO_SEED_VERSION &&
+          isDemoSnapshotStale(data.snapshot)
+        ) {
+          // Demo mode uses rolling seven-day data; stale remote snapshots should be refreshed.
           setShouldPromoteDemoSnapshot(true);
           return;
         }
