@@ -137,7 +137,7 @@ export default function ChildrenPage() {
       heightCm: Number(form.heightCm) || 0,
       weightKg: Number(form.weightKg) || 0,
       guardians: [guardian],
-      institutionId: "inst-1",
+      institutionId: currentUser.institutionId,
       className: form.className.trim() || currentUser.className || "向阳班",
       specialNotes: form.specialNotes.trim(),
       parentUserId: currentUser.role === "家长" ? currentUser.id : undefined,
@@ -403,6 +403,8 @@ function ChildArchiveCard({
   const ageBand = getAgeBandFromBirthDate(child.birthDate);
   const guardianText = child.guardians.map((guardian) => `${guardian.name}（${guardian.relation}）`).join("、");
   const isPresent = attendance?.isPresent ?? false;
+  const heightText = child.heightCm > 0 ? `${child.heightCm} cm` : "--";
+  const weightText = child.weightKg > 0 ? `${child.weightKg} kg` : "--";
 
   return (
     <Card className="overflow-hidden border-slate-100 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -440,7 +442,7 @@ function ChildArchiveCard({
         <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-2">
           <InfoItem label="监护人" value={guardianText} />
           <InfoItem label="联系电话" value={child.guardians.map((guardian) => guardian.phone).join(" / ")} />
-          <InfoItem label="身高体重" value={`${child.heightCm} cm / ${child.weightKg} kg`} />
+          <InfoItem label="身高体重" value={`${heightText} / ${weightText}`} />
           <InfoItem label="机构班级" value={`${INSTITUTION_NAME} · ${child.className}`} />
         </div>
 

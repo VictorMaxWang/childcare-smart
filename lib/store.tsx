@@ -2,8 +2,16 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
+import {
+  DEMO_ACCOUNTS,
+  type AccountRole,
+  type DemoAccount,
+  type RegisterAccountInput,
+  type SessionUser,
+} from "@/lib/auth/accounts";
+import { emptyInstitutionSnapshot } from "@/lib/persistence/bootstrap";
 
-export type Role = "家长" | "教师" | "机构管理员";
+export type Role = AccountRole;
 export type Gender = "男" | "女";
 export type AgeBand = "0–6个月" | "6–12个月" | "1–3岁" | "3–6岁" | "6–7岁";
 export type BehaviorCategory =
@@ -47,17 +55,10 @@ const UNAUTHENTICATED_USER: User = {
   avatar: "",
   institutionId: "",
   childIds: [],
+  accountKind: "normal",
 };
 
-export interface User {
-  id: string;
-  name: string;
-  role: Role;
-  avatar: string;
-  institutionId: string;
-  className?: string;
-  childIds?: string[];
-}
+export type User = SessionUser;
 
 export interface Guardian {
   name: string;
@@ -261,13 +262,14 @@ export interface AddGrowthRecordInput {
 }
 
 interface AppContextType {
-  users: User[];
+  demoAccounts: DemoAccount[];
   currentUser: User;
   isAuthenticated: boolean;
   authLoading: boolean;
-  login: (userId: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  login: (username: string, password: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
+  loginWithDemo: (accountId: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
+  register: (input: RegisterAccountInput & { confirmPassword: string }) => Promise<{ ok: boolean; error?: string; user?: User }>;
   logout: () => Promise<void>;
-  switchUser: (userId: string) => void;
 
   children: Child[];
   visibleChildren: Child[];
@@ -313,17 +315,14 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | null>(null);
 
 const STORAGE_KEYS = {
-  children: "childcare.children.v2",
-  attendance: "childcare.attendance.v2",
-  meals: "childcare.meals.v2",
-  growth: "childcare.growth.v2",
-  feedback: "childcare.feedback.v2",
-  health: "childcare.health.v2",
-  taskCheckIns: "childcare.taskcheckins.v2",
-  remoteDemoSeed: "childcare.remote-demo-seed.v2",
+  children: "children.v3",
+  attendance: "attendance.v3",
+  meals: "meals.v3",
+  growth: "growth.v3",
+  feedback: "feedback.v3",
+  health: "health.v3",
+  taskCheckIns: "taskcheckins.v3",
 } as const;
-
-const REMOTE_DEMO_SEED_VERSION = "2026-03-demo-v2";
 
 function readStorage<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -339,6 +338,47 @@ function readStorage<T>(key: string, fallback: T): T {
 function writeStorage<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function readScopedSnapshot(namespace: string, fallbackSnapshot: AppStateSnapshot): AppStateSnapshot {
+  return {
+    children: readStorage<Child[]>(buildScopedStorageKey(namespace, "children"), fallbackSnapshot.children),
+    attendance: readStorage<AttendanceRecord[]>(
+      buildScopedStorageKey(namespace, "attendance"),
+      fallbackSnapshot.attendance
+    ),
+    meals: normalizeRecords(
+      readStorage<MealRecord[]>(buildScopedStorageKey(namespace, "meals"), fallbackSnapshot.meals)
+    ),
+    growth: readStorage<GrowthRecord[]>(buildScopedStorageKey(namespace, "growth"), fallbackSnapshot.growth),
+    feedback: readStorage<GuardianFeedback[]>(
+      buildScopedStorageKey(namespace, "feedback"),
+      fallbackSnapshot.feedback
+    ),
+    health: readStorage<HealthCheckRecord[]>(
+      buildScopedStorageKey(namespace, "health"),
+      fallbackSnapshot.health
+    ),
+    taskCheckIns: readStorage<TaskCheckInRecord[]>(
+      buildScopedStorageKey(namespace, "taskCheckIns"),
+      fallbackSnapshot.taskCheckIns
+    ),
+    updatedAt: fallbackSnapshot.updatedAt,
+  };
+}
+
+function writeScopedSnapshot(namespace: string, snapshot: AppStateSnapshot) {
+  writeStorage(buildScopedStorageKey(namespace, "children"), snapshot.children);
+  writeStorage(buildScopedStorageKey(namespace, "attendance"), snapshot.attendance);
+  writeStorage(buildScopedStorageKey(namespace, "meals"), snapshot.meals);
+  writeStorage(buildScopedStorageKey(namespace, "growth"), snapshot.growth);
+  writeStorage(buildScopedStorageKey(namespace, "feedback"), snapshot.feedback);
+  writeStorage(buildScopedStorageKey(namespace, "health"), snapshot.health);
+  writeStorage(buildScopedStorageKey(namespace, "taskCheckIns"), snapshot.taskCheckIns);
+}
+
+function buildScopedStorageKey(namespace: string, key: keyof typeof STORAGE_KEYS) {
+  return `childcare.${namespace}.${STORAGE_KEYS[key]}`;
 }
 
 const GIRL_AVATARS = ["👧", "🧒", "👶"];
@@ -360,7 +400,8 @@ function shiftDate(baseDate: string, diff: number) {
 type DemoAttendanceSeed = Pick<AttendanceRecord, "isPresent" | "checkInAt" | "checkOutAt" | "absenceReason">;
 type DemoMealFoodSeed = [name: string, category: FoodCategory, amount: string];
 
-const DEMO_WEEK_DATES = Array.from({ length: 7 }, (_, index) => shiftDate(TODAY, index - 6));
+const DEMO_TEMPLATE_LATEST_DATE = "2026-03-31";
+const DEMO_WEEK_DATES = Array.from({ length: 7 }, (_, index) => shiftDate(DEMO_TEMPLATE_LATEST_DATE, index - 6));
 
 function createMealRecord(
   id: string,
@@ -421,12 +462,7 @@ function createHealthRecord(
   };
 }
 
-const INITIAL_USERS: User[] = [
-  { id: "u-admin", name: "陈园长", role: "机构管理员", avatar: "🧑‍💼", institutionId: "inst-1" },
-  { id: "u-teacher", name: "李老师", role: "教师", avatar: "👩‍🏫", institutionId: "inst-1", className: "向阳班" },
-  { id: "u-teacher2", name: "周老师", role: "教师", avatar: "👩‍🏫", institutionId: "inst-1", className: "晨曦班" },
-  { id: "u-parent", name: "林妈妈", role: "家长", avatar: "👩", institutionId: "inst-1", childIds: ["c-1"] },
-];
+const INITIAL_USERS: DemoAccount[] = DEMO_ACCOUNTS;
 
 const INITIAL_CHILDREN: Child[] = [
   {
@@ -1868,13 +1904,7 @@ function getLatestSnapshotDate(snapshot: AppStateSnapshot): string | null {
   return dates.reduce((latest, current) => (current > latest ? current : latest));
 }
 
-function isDemoSnapshotStale(snapshot: AppStateSnapshot): boolean {
-  const latestDate = getLatestSnapshotDate(snapshot);
-  if (!latestDate) return true;
-  return latestDate < TODAY;
-}
-
-function createDemoSnapshot(): AppStateSnapshot {
+function cloneDemoSnapshotTemplate(): AppStateSnapshot {
   return {
     children: ALL_INITIAL_CHILDREN.map((child) => ({
       ...child,
@@ -1896,6 +1926,68 @@ function createDemoSnapshot(): AppStateSnapshot {
     taskCheckIns: INITIAL_TASK_CHECKINS.map((record) => ({ ...record })),
     updatedAt: new Date().toISOString(),
   };
+}
+
+function shiftDemoDate(dateString: string, diffDays: number) {
+  return shiftDate(dateString, diffDays);
+}
+
+function shiftDemoDateTime(dateTime: string, diffDays: number) {
+  const [datePart, ...timeParts] = dateTime.split(" ");
+  const shiftedDate = shiftDate(datePart, diffDays);
+  return timeParts.length > 0 ? `${shiftedDate} ${timeParts.join(" ")}` : shiftedDate;
+}
+
+function shiftDemoSnapshotDates(snapshot: AppStateSnapshot, targetToday: string): AppStateSnapshot {
+  const latestDate = getLatestSnapshotDate(snapshot);
+  if (!latestDate) {
+    return {
+      ...snapshot,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  const diffDays = Math.round((startOfDay(targetToday) - startOfDay(latestDate)) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) {
+    return {
+      ...snapshot,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  return {
+    ...snapshot,
+    attendance: snapshot.attendance.map((record) => ({
+      ...record,
+      date: shiftDemoDate(record.date, diffDays),
+    })),
+    meals: snapshot.meals.map((record) => ({
+      ...record,
+      date: shiftDemoDate(record.date, diffDays),
+    })),
+    growth: snapshot.growth.map((record) => ({
+      ...record,
+      createdAt: shiftDemoDateTime(record.createdAt, diffDays),
+      reviewDate: record.reviewDate ? shiftDemoDate(record.reviewDate, diffDays) : undefined,
+    })),
+    feedback: snapshot.feedback.map((record) => ({
+      ...record,
+      date: shiftDemoDate(record.date, diffDays),
+    })),
+    health: snapshot.health.map((record) => ({
+      ...record,
+      date: shiftDemoDate(record.date, diffDays),
+    })),
+    taskCheckIns: snapshot.taskCheckIns.map((record) => ({
+      ...record,
+      date: shiftDemoDate(record.date, diffDays),
+    })),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function buildFreshDemoSnapshot(targetToday = TODAY): AppStateSnapshot {
+  return shiftDemoSnapshotDates(cloneDemoSnapshotTemplate(), targetToday);
 }
 
 function filterChildrenByUser(children: Child[], user: User) {
@@ -2096,21 +2188,32 @@ const ALL_INITIAL_HEALTH_CHECKS = [...INITIAL_HEALTH_CHECKS, ...EXTRA_GEN_HEALTH
 const ALL_INITIAL_GROWTH = [...INITIAL_GROWTH, ...EXTRA_GEN_GROWTH];
 
 export function AppProvider({ children: childNodes }: { children: ReactNode }) {
-  const [users] = useState<User[]>(INITIAL_USERS);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const demoAccounts = INITIAL_USERS;
+  const [currentUser, setCurrentUser] = useState<User>(UNAUTHENTICATED_USER);
   const [authLoading, setAuthLoading] = useState(true);
-  const [storageReady, setStorageReady] = useState(false);
-  const [remoteReady, setRemoteReady] = useState(false);
-  const [shouldPromoteDemoSnapshot, setShouldPromoteDemoSnapshot] = useState(false);
-  const [childrenList, setChildrenList] = useState<Child[]>(ALL_INITIAL_CHILDREN);
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(ALL_INITIAL_ATTENDANCE);
-  const [mealRecords, setMealRecords] = useState<MealRecord[]>(normalizeRecords(ALL_INITIAL_MEALS));
-  const [growthRecords, setGrowthRecords] = useState<GrowthRecord[]>(ALL_INITIAL_GROWTH);
-  const [guardianFeedbacks, setGuardianFeedbacks] = useState<GuardianFeedback[]>(INITIAL_FEEDBACKS);
-  const [healthCheckRecords, setHealthCheckRecords] = useState<HealthCheckRecord[]>(ALL_INITIAL_HEALTH_CHECKS);
-  const [taskCheckInRecords, setTaskCheckInRecords] = useState<TaskCheckInRecord[]>(INITIAL_TASK_CHECKINS);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [childrenList, setChildrenList] = useState<Child[]>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [mealRecords, setMealRecords] = useState<MealRecord[]>([]);
+  const [growthRecords, setGrowthRecords] = useState<GrowthRecord[]>([]);
+  const [guardianFeedbacks, setGuardianFeedbacks] = useState<GuardianFeedback[]>([]);
+  const [healthCheckRecords, setHealthCheckRecords] = useState<HealthCheckRecord[]>([]);
+  const [taskCheckInRecords, setTaskCheckInRecords] = useState<TaskCheckInRecord[]>([]);
   const lastSyncedSnapshotKeyRef = useRef<string | null>(null);
-  const isAuthenticated = Boolean(currentUserId);
+  const isAuthenticated = currentUser.id !== UNAUTHENTICATED_USER.id;
+  const isDemoUser = isAuthenticated && currentUser.accountKind === "demo";
+  const isNormalUser = isAuthenticated && currentUser.accountKind === "normal";
+  const currentStorageNamespace = isNormalUser && currentUser.institutionId ? currentUser.institutionId : null;
+
+  const applySnapshot = useCallback((snapshot: AppStateSnapshot) => {
+    setChildrenList(snapshot.children);
+    setAttendanceRecords(snapshot.attendance);
+    setMealRecords(normalizeRecords(snapshot.meals));
+    setGrowthRecords(snapshot.growth);
+    setGuardianFeedbacks(snapshot.feedback);
+    setHealthCheckRecords(snapshot.health);
+    setTaskCheckInRecords(snapshot.taskCheckIns);
+  }, []);
 
   const remoteSnapshot = useMemo<AppStateSnapshot>(() => ({
     children: childrenList,
@@ -2146,154 +2249,125 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    let storedChildren = readStorage<Child[]>(STORAGE_KEYS.children, ALL_INITIAL_CHILDREN);
-    let storedAttendance = readStorage<AttendanceRecord[]>(STORAGE_KEYS.attendance, ALL_INITIAL_ATTENDANCE);
-    let storedMeals = normalizeRecords(readStorage<MealRecord[]>(STORAGE_KEYS.meals, ALL_INITIAL_MEALS));
-    let storedGrowth = readStorage<GrowthRecord[]>(STORAGE_KEYS.growth, ALL_INITIAL_GROWTH);
-    let storedFeedback = readStorage<GuardianFeedback[]>(STORAGE_KEYS.feedback, INITIAL_FEEDBACKS);
-    let storedHealth = readStorage<HealthCheckRecord[]>(STORAGE_KEYS.health, ALL_INITIAL_HEALTH_CHECKS);
-    let storedTaskCheckIns = readStorage<TaskCheckInRecord[]>(STORAGE_KEYS.taskCheckIns, INITIAL_TASK_CHECKINS);
-    const storedDemoSeedVersion = readStorage<string | null>(STORAGE_KEYS.remoteDemoSeed, null);
-
-    // Merge in new extra generation data without destructing existing modifications
-    const mergeNewItems = <T extends { id: string }>(stored: T[], defaultAll: T[]) => {
-      const storedIds = new Set(stored.map((item) => item.id));
-      const missing = defaultAll.filter((item) => !storedIds.has(item.id));
-      return missing.length > 0 ? [...stored, ...missing] : stored;
+    let active = true;
+    const loadSession = async () => {
+      try {
+        const response = await fetch("/api/auth/session", { cache: "no-store" });
+        if (!response.ok) {
+          if (active) {
+            setCurrentUser(UNAUTHENTICATED_USER);
+          }
+          return;
+        }
+        const data = (await response.json()) as { ok?: boolean; user?: User | null };
+        if (!active) {
+          return;
+        }
+        setCurrentUser(data.ok && data.user ? data.user : UNAUTHENTICATED_USER);
+      } catch {
+        if (active) {
+          setCurrentUser(UNAUTHENTICATED_USER);
+        }
+      } finally {
+        if (active) {
+          setAuthLoading(false);
+        }
+      }
     };
 
-    storedChildren = mergeNewItems(storedChildren, ALL_INITIAL_CHILDREN);
-    storedAttendance = mergeNewItems(storedAttendance, ALL_INITIAL_ATTENDANCE);
-    storedMeals = mergeNewItems(storedMeals, ALL_INITIAL_MEALS);
-    storedHealth = mergeNewItems(storedHealth, ALL_INITIAL_HEALTH_CHECKS);
-    storedGrowth = mergeNewItems(storedGrowth, ALL_INITIAL_GROWTH);
+    void loadSession();
 
-    const localSnapshot: AppStateSnapshot = {
-      children: storedChildren,
-      attendance: storedAttendance,
-      meals: storedMeals,
-      growth: storedGrowth,
-      feedback: storedFeedback,
-      health: storedHealth,
-      taskCheckIns: storedTaskCheckIns,
-      updatedAt: new Date().toISOString(),
+    return () => {
+      active = false;
     };
-
-    const shouldAutoRefreshDemo =
-      storedDemoSeedVersion === REMOTE_DEMO_SEED_VERSION && isDemoSnapshotStale(localSnapshot);
-
-    if (shouldAutoRefreshDemo) {
-      const refreshed = createDemoSnapshot();
-      storedChildren = refreshed.children;
-      storedAttendance = refreshed.attendance;
-      storedMeals = normalizeRecords(refreshed.meals);
-      storedGrowth = refreshed.growth;
-      storedFeedback = refreshed.feedback;
-      storedHealth = refreshed.health;
-      storedTaskCheckIns = refreshed.taskCheckIns;
-      setShouldPromoteDemoSnapshot(true);
-    } else {
-      setShouldPromoteDemoSnapshot(storedDemoSeedVersion !== REMOTE_DEMO_SEED_VERSION);
-    }
-
-    setChildrenList(storedChildren);
-    setAttendanceRecords(storedAttendance);
-    setMealRecords(storedMeals);
-    setGrowthRecords(storedGrowth);
-    setGuardianFeedbacks(storedFeedback);
-    setHealthCheckRecords(storedHealth);
-    setTaskCheckInRecords(storedTaskCheckIns);
-    setStorageReady(true);
   }, []);
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!isAuthenticated) {
-      setRemoteReady(true);
-      return;
-    }
-    setRemoteReady(false);
-
-    if (shouldPromoteDemoSnapshot) {
-      setRemoteReady(true);
+    if (authLoading) {
       return;
     }
 
     let active = true;
-    const loadRemoteSnapshot = async () => {
+    setDataLoading(true);
+
+    const loadSnapshotForUser = async () => {
+      if (!isAuthenticated) {
+        lastSyncedSnapshotKeyRef.current = null;
+        applySnapshot(emptyInstitutionSnapshot());
+        if (active) {
+          setDataLoading(false);
+        }
+        return;
+      }
+
+      if (isDemoUser) {
+        lastSyncedSnapshotKeyRef.current = null;
+        applySnapshot(buildFreshDemoSnapshot(TODAY));
+        if (active) {
+          setDataLoading(false);
+        }
+        return;
+      }
+
+      if (!currentStorageNamespace) {
+        lastSyncedSnapshotKeyRef.current = null;
+        applySnapshot(emptyInstitutionSnapshot());
+        if (active) {
+          setDataLoading(false);
+        }
+        return;
+      }
+
+      const fallbackSnapshot = emptyInstitutionSnapshot();
+      const localSnapshot = readScopedSnapshot(currentStorageNamespace, fallbackSnapshot);
+      applySnapshot(localSnapshot);
+      lastSyncedSnapshotKeyRef.current = null;
+
       try {
         const response = await fetch("/api/state", { cache: "no-store" });
         if (!response.ok) {
           return;
         }
-        const data = (await response.json()) as { ok: boolean; snapshot: AppStateSnapshot | null };
-        if (!data.ok || !data.snapshot || !active) {
+        const data = (await response.json()) as {
+          ok?: boolean;
+          snapshot?: AppStateSnapshot | null;
+          isDemo?: boolean;
+        };
+        if (!active || !data.ok || data.isDemo) {
+          return;
+        }
+        if (!data.snapshot || isSnapshotEffectivelyEmpty(data.snapshot)) {
           return;
         }
 
-        if (isSnapshotEffectivelyEmpty(data.snapshot)) {
-          // Keep local demo dataset and let the sync effect promote it to remote.
-          setShouldPromoteDemoSnapshot(true);
-          return;
-        }
-
-        const localDemoSeedVersion = readStorage<string | null>(STORAGE_KEYS.remoteDemoSeed, null);
-        if (
-          localDemoSeedVersion === REMOTE_DEMO_SEED_VERSION &&
-          isDemoSnapshotStale(data.snapshot)
-        ) {
-          // Demo mode uses rolling seven-day data; stale remote snapshots should be refreshed.
-          setShouldPromoteDemoSnapshot(true);
-          return;
-        }
-
+        applySnapshot(data.snapshot);
         lastSyncedSnapshotKeyRef.current = JSON.stringify(data.snapshot);
-
-        setChildrenList(data.snapshot.children);
-        setAttendanceRecords(data.snapshot.attendance);
-        setMealRecords(normalizeRecords(data.snapshot.meals));
-        setGrowthRecords(data.snapshot.growth);
-        setGuardianFeedbacks(data.snapshot.feedback);
-        setHealthCheckRecords(data.snapshot.health);
-        setTaskCheckInRecords(data.snapshot.taskCheckIns);
       } catch {
-        // Remote sync is optional for local development fallback.
+        // Remote sync remains optional during local development.
       } finally {
-        if (active) setRemoteReady(true);
+        if (active) {
+          setDataLoading(false);
+        }
       }
     };
 
-    void loadRemoteSnapshot();
+    void loadSnapshotForUser();
 
     return () => {
       active = false;
     };
-  }, [authLoading, isAuthenticated, isSnapshotEffectivelyEmpty, shouldPromoteDemoSnapshot]);
+  }, [authLoading, applySnapshot, currentStorageNamespace, isAuthenticated, isDemoUser, isSnapshotEffectivelyEmpty]);
 
   useEffect(() => {
-    if (!storageReady) return;
-    writeStorage(STORAGE_KEYS.children, childrenList);
-    writeStorage(STORAGE_KEYS.attendance, attendanceRecords);
-    writeStorage(STORAGE_KEYS.meals, mealRecords);
-    writeStorage(STORAGE_KEYS.growth, growthRecords);
-    writeStorage(STORAGE_KEYS.feedback, guardianFeedbacks);
-    writeStorage(STORAGE_KEYS.health, healthCheckRecords);
-    writeStorage(STORAGE_KEYS.taskCheckIns, taskCheckInRecords);
-  }, [
-    storageReady,
-    childrenList,
-    attendanceRecords,
-    mealRecords,
-    growthRecords,
-    guardianFeedbacks,
-    healthCheckRecords,
-    taskCheckInRecords,
-  ]);
+    if (authLoading || dataLoading || !isNormalUser || !currentStorageNamespace) {
+      return;
+    }
+
+    writeScopedSnapshot(currentStorageNamespace, remoteSnapshot);
+  }, [authLoading, currentStorageNamespace, dataLoading, isNormalUser, remoteSnapshot]);
 
   useEffect(() => {
-    if (!storageReady || !remoteReady || !isAuthenticated) return;
-
-    if (!shouldPromoteDemoSnapshot && lastSyncedSnapshotKeyRef.current === remoteSnapshotKey) {
+    if (authLoading || dataLoading || !isNormalUser || lastSyncedSnapshotKeyRef.current === remoteSnapshotKey) {
       return;
     }
 
@@ -2307,10 +2381,6 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
         if (response.ok) {
           lastSyncedSnapshotKeyRef.current = remoteSnapshotKey;
-          if (shouldPromoteDemoSnapshot) {
-            writeStorage(STORAGE_KEYS.remoteDemoSeed, REMOTE_DEMO_SEED_VERSION);
-            setShouldPromoteDemoSnapshot(false);
-          }
         }
       } catch {
         // Keep local persistence available if remote sync fails.
@@ -2320,43 +2390,8 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [
-    storageReady,
-    remoteReady,
-    isAuthenticated,
-    remoteSnapshot,
-    remoteSnapshotKey,
-    shouldPromoteDemoSnapshot,
-  ]);
+  }, [authLoading, dataLoading, isNormalUser, remoteSnapshot, remoteSnapshotKey]);
 
-  useEffect(() => {
-    let active = true;
-    const loadSession = async () => {
-      try {
-        const response = await fetch("/api/auth/session", { cache: "no-store" });
-        if (!response.ok) {
-          if (active) setCurrentUserId((previousUserId) => previousUserId ?? null);
-          return;
-        }
-        const data = (await response.json()) as { userId?: string | null };
-        const userExists = users.some((user) => user.id === data.userId);
-        const resolvedUserId = userExists ? (data.userId ?? null) : null;
-        if (active) {
-          setCurrentUserId((previousUserId) => previousUserId ?? resolvedUserId);
-        }
-      } catch {
-        if (active) setCurrentUserId((previousUserId) => previousUserId ?? null);
-      } finally {
-        if (active) setAuthLoading(false);
-      }
-    };
-    void loadSession();
-    return () => {
-      active = false;
-    };
-  }, [users]);
-
-  const currentUser = users.find((user) => user.id === currentUserId) ?? UNAUTHENTICATED_USER;
   const visibleChildren = useMemo(() => filterChildrenByUser(childrenList, currentUser), [childrenList, currentUser]);
   const visibleChildIds = useMemo(() => visibleChildren.map((child) => child.id), [visibleChildren]);
   const visibleChildIdSet = useMemo(() => new Set(visibleChildIds), [visibleChildIds]);
@@ -2433,25 +2468,58 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
   const getTodayAttendance = useCallback(() => getAttendanceByDate(TODAY), [getAttendanceByDate]);
 
-  const switchUser = useCallback((userId: string) => {
-    const canSwitch = users.some((user) => user.id === userId);
-    if (canSwitch) setCurrentUserId(userId);
-  }, [users]);
-
-  const login = useCallback(async (userId: string, password: string) => {
+  const login = useCallback(async (username: string, password: string) => {
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, password }),
+        body: JSON.stringify({ username, password }),
       });
-      const result = (await response.json()) as { ok: boolean; error?: string; userId?: string };
-      if (!response.ok || !result.ok || !result.userId) {
+      const result = (await response.json()) as { ok: boolean; error?: string; user?: User };
+      if (!response.ok || !result.ok || !result.user) {
         return { ok: false, error: result.error ?? "登录失败，请检查账号和密码。" };
       }
-      setCurrentUserId(result.userId);
-      setAuthLoading(false);
-      return { ok: true };
+      lastSyncedSnapshotKeyRef.current = null;
+      setCurrentUser(result.user);
+      return { ok: true, user: result.user };
+    } catch {
+      return { ok: false, error: "网络异常，请稍后重试。" };
+    }
+  }, []);
+
+  const loginWithDemo = useCallback(async (accountId: string) => {
+    try {
+      const response = await fetch("/api/auth/demo-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId }),
+      });
+      const result = (await response.json()) as { ok: boolean; error?: string; user?: User };
+      if (!response.ok || !result.ok || !result.user) {
+        return { ok: false, error: result.error ?? "示例账号进入失败，请稍后重试。" };
+      }
+      lastSyncedSnapshotKeyRef.current = null;
+      setCurrentUser(result.user);
+      return { ok: true, user: result.user };
+    } catch {
+      return { ok: false, error: "网络异常，请稍后重试。" };
+    }
+  }, []);
+
+  const register = useCallback(async (input: RegisterAccountInput & { confirmPassword: string }) => {
+    try {
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const result = (await response.json()) as { ok: boolean; error?: string; user?: User };
+      if (!response.ok || !result.ok || !result.user) {
+        return { ok: false, error: result.error ?? "注册失败，请稍后重试。" };
+      }
+      lastSyncedSnapshotKeyRef.current = null;
+      setCurrentUser(result.user);
+      return { ok: true, user: result.user };
     } catch {
       return { ok: false, error: "网络异常，请稍后重试。" };
     }
@@ -2461,9 +2529,12 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
-      setCurrentUserId(null);
+      lastSyncedSnapshotKeyRef.current = null;
+      setCurrentUser(UNAUTHENTICATED_USER);
+      applySnapshot(emptyInstitutionSnapshot());
+      setDataLoading(false);
     }
-  }, []);
+  }, [applySnapshot]);
 
   const addChild = useCallback((child: NewChildInput) => {
     const avatars = child.gender === "女" ? GIRL_AVATARS : BOY_AVATARS;
@@ -2655,7 +2726,9 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   }, [visibleWeeklyMealRecords, visibleWeeklyTrendMap, weeklyMealRecordsMap]);
 
   const adminBoardData = useMemo<AdminBoardData>(() => {
-    const scopeChildren = filterChildrenByUser(childrenList, users.find((u) => u.role === "机构管理员") ?? currentUser);
+    const scopeChildren = currentUser.institutionId
+      ? childrenList.filter((child) => child.institutionId === currentUser.institutionId)
+      : visibleChildren;
 
     const highAttentionChildren = scopeChildren
       .map((child) => {
@@ -2685,7 +2758,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       .slice(0, 5);
 
     return { highAttentionChildren, lowHydrationChildren, lowVegTrendChildren };
-  }, [childrenList, currentUser, getWeeklyDietTrend, users, visibleWeeklyTrendMap, weeklyAttentionGrowthCountMap]);
+  }, [childrenList, currentUser.institutionId, getWeeklyDietTrend, visibleChildren, visibleWeeklyTrendMap, weeklyAttentionGrowthCountMap]);
 
   const smartInsights = useMemo(() => {
     const insights: SmartInsight[] = [];
@@ -2826,57 +2899,25 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const getAdminBoardData = useCallback((): AdminBoardData => adminBoardData, [adminBoardData]);
 
   const resetDemoData = useCallback(async () => {
-    const snapshot = createDemoSnapshot();
-
-    setChildrenList(snapshot.children);
-    setAttendanceRecords(snapshot.attendance);
-    setMealRecords(normalizeRecords(snapshot.meals));
-    setGrowthRecords(snapshot.growth);
-    setGuardianFeedbacks(snapshot.feedback);
-    setHealthCheckRecords(snapshot.health);
-    setTaskCheckInRecords(snapshot.taskCheckIns);
-    setShouldPromoteDemoSnapshot(true);
-
-    writeStorage(STORAGE_KEYS.children, snapshot.children);
-    writeStorage(STORAGE_KEYS.attendance, snapshot.attendance);
-    writeStorage(STORAGE_KEYS.meals, normalizeRecords(snapshot.meals));
-    writeStorage(STORAGE_KEYS.growth, snapshot.growth);
-    writeStorage(STORAGE_KEYS.feedback, snapshot.feedback);
-    writeStorage(STORAGE_KEYS.health, snapshot.health);
-    writeStorage(STORAGE_KEYS.taskCheckIns, snapshot.taskCheckIns);
-    writeStorage<string | null>(STORAGE_KEYS.remoteDemoSeed, null);
-
-    if (!isAuthenticated) {
+    if (!isDemoUser) {
       return { remoteSynced: false };
     }
 
-    try {
-      const response = await fetch("/api/state", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ snapshot }),
-      });
-
-      if (response.ok) {
-        writeStorage(STORAGE_KEYS.remoteDemoSeed, REMOTE_DEMO_SEED_VERSION);
-        setShouldPromoteDemoSnapshot(false);
-        return { remoteSynced: true };
-      }
-    } catch {
-      // Fallback to the normal sync effect if the immediate remote write fails.
-    }
-
+    const snapshot = buildFreshDemoSnapshot(TODAY);
+    lastSyncedSnapshotKeyRef.current = null;
+    applySnapshot(snapshot);
     return { remoteSynced: false };
-  }, [isAuthenticated]);
+  }, [applySnapshot, isDemoUser]);
 
   const contextValue = useMemo<AppContextType>(() => ({
-    users,
+    demoAccounts,
     currentUser,
     isAuthenticated,
     authLoading,
+    loginWithDemo,
+    register,
     login,
     logout,
-    switchUser,
     children: childrenList,
     visibleChildren,
     attendanceRecords,
@@ -2909,13 +2950,14 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     getAdminBoardData,
     resetDemoData,
   }), [
-    users,
+    demoAccounts,
     currentUser,
     isAuthenticated,
     authLoading,
+    loginWithDemo,
+    register,
     login,
     logout,
-    switchUser,
     childrenList,
     visibleChildren,
     attendanceRecords,
@@ -2953,7 +2995,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     <AppContext.Provider
       value={contextValue}
     >
-      {authLoading ? (
+      {authLoading || dataLoading ? (
         <div className="flex min-h-[calc(100vh-64px)] items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />

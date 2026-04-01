@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUserId } from "@/lib/auth/session";
+import { getCurrentSessionUser } from "@/lib/auth/account-server";
 import { getServerSupabaseClient } from "@/lib/supabase/server";
 
 type ChildRow = {
@@ -17,28 +17,19 @@ type NotificationEventRow = {
   retry_count?: number | null;
 };
 
-const ADMIN_USER_IDS = new Set(["u-admin"]);
-const USER_INSTITUTION_MAP: Record<string, string> = {
-  "u-admin": "inst-1",
-  "u-teacher": "inst-1",
-  "u-teacher2": "inst-1",
-  "u-parent": "inst-1",
-};
-
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 async function getAdminProfile() {
-  const userId = await getSessionUserId();
-  if (!userId) {
+  const user = await getCurrentSessionUser();
+  if (!user) {
     return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) };
   }
 
-  if (!ADMIN_USER_IDS.has(userId)) {
+  if (user.role !== "机构管理员") {
     return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
   }
 
-  const institutionId = USER_INSTITUTION_MAP[userId] || "";
-  if (!institutionId) {
+  if (!user.institutionId) {
     return { error: NextResponse.json({ error: "institution not found" }, { status: 403 }) };
   }
 
@@ -49,8 +40,8 @@ async function getAdminProfile() {
 
   return {
     supabase,
-    actorId: userId,
-    institutionId,
+    actorId: user.id,
+    institutionId: user.institutionId,
   };
 }
 

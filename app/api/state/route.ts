@@ -1,28 +1,16 @@
 import { NextResponse } from "next/server";
-import { getSessionUserId } from "@/lib/auth/session";
+import { getCurrentSessionUser } from "@/lib/auth/account-server";
 import { getServerSupabaseClient } from "@/lib/supabase/server";
 import { isAppStateSnapshot, type AppStateSnapshot } from "@/lib/persistence/snapshot";
 
-const USER_INSTITUTION_MAP: Record<string, string> = {
-  "u-admin": "inst-1",
-  "u-teacher": "inst-1",
-  "u-teacher2": "inst-1",
-  "u-parent": "inst-1",
-};
-
-function getInstitutionId(userId: string) {
-  return USER_INSTITUTION_MAP[userId] || null;
-}
-
 export async function GET() {
-  const userId = await getSessionUserId();
-  if (!userId) {
+  const user = await getCurrentSessionUser();
+  if (!user) {
     return NextResponse.json({ ok: false, error: "未登录" }, { status: 401 });
   }
 
-  const institutionId = getInstitutionId(userId);
-  if (!institutionId) {
-    return NextResponse.json({ ok: false, error: "账号未绑定机构" }, { status: 403 });
+  if (user.accountKind === "demo") {
+    return NextResponse.json({ ok: true, snapshot: null, isDemo: true });
   }
 
   const supabase = getServerSupabaseClient();
@@ -33,7 +21,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("app_state_snapshots")
     .select("snapshot")
-    .eq("institution_id", institutionId)
+    .eq("institution_id", user.institutionId)
     .maybeSingle();
 
   if (error) {
@@ -54,14 +42,13 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const userId = await getSessionUserId();
-  if (!userId) {
+  const user = await getCurrentSessionUser();
+  if (!user) {
     return NextResponse.json({ ok: false, error: "未登录" }, { status: 401 });
   }
 
-  const institutionId = getInstitutionId(userId);
-  if (!institutionId) {
-    return NextResponse.json({ ok: false, error: "账号未绑定机构" }, { status: 403 });
+  if (user.accountKind === "demo") {
+    return NextResponse.json({ ok: false, error: "示例账号不写入远端快照" }, { status: 403 });
   }
 
   const supabase = getServerSupabaseClient();
@@ -75,9 +62,9 @@ export async function PUT(request: Request) {
   }
 
   const payload = {
-    institution_id: institutionId,
+    institution_id: user.institutionId,
     snapshot: body.snapshot,
-    updated_by: userId,
+    updated_by: user.id,
   };
 
   const { error } = await supabase.from("app_state_snapshots").upsert(payload, {
