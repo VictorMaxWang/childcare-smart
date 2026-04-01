@@ -9,6 +9,7 @@ import {
   type RegisterAccountInput,
   type SessionUser,
 } from "@/lib/auth/accounts";
+import { getLocalToday, isDateWithinLastDays, normalizeLocalDate, shiftLocalDate, startOfLocalDay } from "@/lib/date";
 import { emptyInstitutionSnapshot } from "@/lib/persistence/bootstrap";
 
 export type Role = AccountRole;
@@ -47,7 +48,7 @@ export const MEAL_TYPES: MealType[] = ["早餐", "午餐", "晚餐", "加餐"];
 export const FOOD_CATEGORY_OPTIONS: FoodCategory[] = ["蔬果", "蛋白", "主食", "奶制品", "饮品", "其他"];
 export const INSTITUTION_NAME = "春芽普惠托育中心";
 
-const TODAY = new Date().toISOString().split("T")[0];
+const TODAY = getLocalToday();
 const UNAUTHENTICATED_USER: User = {
   id: "guest",
   name: "未登录用户",
@@ -392,9 +393,7 @@ function createClientId(prefix: string) {
 }
 
 function shiftDate(baseDate: string, diff: number) {
-  const date = new Date(baseDate);
-  date.setDate(date.getDate() + diff);
-  return date.toISOString().split("T")[0];
+  return shiftLocalDate(baseDate, diff);
 }
 
 type DemoAttendanceSeed = Pick<AttendanceRecord, "isPresent" | "checkInAt" | "checkOutAt" | "absenceReason">;
@@ -402,6 +401,7 @@ type DemoMealFoodSeed = [name: string, category: FoodCategory, amount: string];
 
 const DEMO_TEMPLATE_LATEST_DATE = "2026-03-31";
 const DEMO_WEEK_DATES = Array.from({ length: 7 }, (_, index) => shiftDate(DEMO_TEMPLATE_LATEST_DATE, index - 6));
+const DEMO_TEMPLATE_TODAY = DEMO_WEEK_DATES[6];
 
 function createMealRecord(
   id: string,
@@ -1237,7 +1237,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "自由活动转午睡环节出现短暂烦躁，阅读绘本后恢复。",
     needsAttention: true,
     followUpAction: "固定午睡前 5 分钟阅读过渡",
-    reviewDate: shiftDate(TODAY, 1),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 1),
     reviewStatus: "待复查",
   },
   {
@@ -1251,13 +1251,13 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "家庭反馈当晚较平时晚睡约 40 分钟，次日晨起困倦。",
     needsAttention: true,
     followUpAction: "提前半小时进入洗漱和绘本流程",
-    reviewDate: TODAY,
+    reviewDate: DEMO_TEMPLATE_TODAY,
     reviewStatus: "待复查",
   },
   {
     id: "g-3",
     childId: "c-1",
-    createdAt: `${TODAY} 09:20`,
+    createdAt: `${DEMO_TEMPLATE_TODAY} 09:20`,
     recorder: "李老师",
     recorderRole: "教师",
     category: "情绪表现",
@@ -1283,7 +1283,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
   {
     id: "g-5",
     childId: "c-2",
-    createdAt: `${TODAY} 10:10`,
+    createdAt: `${DEMO_TEMPLATE_TODAY} 10:10`,
     recorder: "李老师",
     recorderRole: "教师",
     category: "大动作",
@@ -1309,7 +1309,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
   {
     id: "g-7",
     childId: "c-3",
-    createdAt: `${TODAY} 14:40`,
+    createdAt: `${DEMO_TEMPLATE_TODAY} 14:40`,
     recorder: "陈园长",
     recorderRole: "机构管理员",
     category: "社交互动",
@@ -1330,7 +1330,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "刚入园时依恋家长，10 分钟后愿意在老师陪伴下参与桌面玩具。",
     needsAttention: true,
     followUpAction: "维持固定接园交接话术与过渡玩具",
-    reviewDate: shiftDate(TODAY, 2),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 2),
     reviewStatus: "待复查",
   },
   {
@@ -1358,7 +1358,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "午睡醒来后突然哭泣，呼唤妈妈。安抚约 8 分钟后恢复参与活动。",
     needsAttention: true,
     followUpAction: "午睡后固定安抚流程，播放轻音乐过渡",
-    reviewDate: shiftDate(TODAY, 1),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 1),
     reviewStatus: "待复查",
   },
   // --- c-4 分离焦虑相关 ---
@@ -1373,7 +1373,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "入园后哭泣约 12 分钟，家长离开后情绪逐渐缓解，能在老师陪伴下参与水彩活动。",
     needsAttention: true,
     followUpAction: "每日交接时使用固定安抚语和过渡玩具",
-    reviewDate: shiftDate(TODAY, 3),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 3),
     reviewStatus: "待复查",
   },
   // --- c-5 独立进食 ---
@@ -1402,7 +1402,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "在自由活动区多数时间独自拼拼图，同伴邀请时会短暂参与后退回。",
     needsAttention: true,
     followUpAction: "安排与性格温和的同伴进行两人小组活动",
-    reviewDate: shiftDate(TODAY, 2),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 2),
     reviewStatus: "待复查",
   },
   {
@@ -1457,7 +1457,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "整个上午紧跟老师，不愿独自走向同伴区域。参与集体活动时需手牵手引导。",
     needsAttention: true,
     followUpAction: "维持固定照护人，逐步拉大距离",
-    reviewDate: shiftDate(TODAY, 3),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 3),
     reviewStatus: "待复查",
   },
   // --- c-9 精细动作 + 握笔 ---
@@ -1512,7 +1512,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "午餐排队时因等待过久推搡同伴，经提醒后道歉。",
     needsAttention: true,
     followUpAction: "提前告知流程顺序，减少空等时间",
-    reviewDate: shiftDate(TODAY, 2),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 2),
     reviewStatus: "待复查",
   },
   // --- c-11 独立进食（偏食） ---
@@ -1527,7 +1527,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "午餐将所有蔬菜拨到碗边不吃，仅吃米饭和肉末。已多次引导但效果有限。",
     needsAttention: true,
     followUpAction: "与家长沟通家庭饮食习惯，尝试将蔬菜融入肉馅",
-    reviewDate: shiftDate(TODAY, 3),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 3),
     reviewStatus: "待复查",
   },
   // --- c-13 社交互动 + 语言表达 ---
@@ -1569,7 +1569,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "午睡时翻转超过 30 分钟才入睡，期间多次坐起。家长反馈前一晚 11 点半才睡。",
     needsAttention: true,
     followUpAction: "建议家庭 9 点前关闭屏幕，建立固定睡前流程",
-    reviewDate: shiftDate(TODAY, 1),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 1),
     reviewStatus: "待复查",
   },
   {
@@ -1583,7 +1583,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "午睡仅 25 分钟即醒，醒后哭闹不愿再躺下。连续多日午睡质量差。",
     needsAttention: true,
     followUpAction: "尝试白噪音辅助入睡，安排靠窗安静床位",
-    reviewDate: TODAY,
+    reviewDate: DEMO_TEMPLATE_TODAY,
     reviewStatus: "待复查",
   },
   {
@@ -1597,7 +1597,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "因长期睡眠不足，上午活动时对同伴抢玩具反应过激，大声哭闹。",
     needsAttention: true,
     followUpAction: "结合睡眠干预，降低活动节奏",
-    reviewDate: shiftDate(TODAY, 1),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 1),
     reviewStatus: "待复查",
   },
   // --- c-15 独立进食 ---
@@ -1612,7 +1612,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "午餐进食正常但全天饮水不足 100ml，需多次提醒才喝水。",
     needsAttention: true,
     followUpAction: "设置半小时饮水提醒，使用有刻度的趣味水杯",
-    reviewDate: shiftDate(TODAY, 2),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 2),
     reviewStatus: "待复查",
   },
   // --- c-16 情绪敏感（2 条 needsAttention 触发 AI）+ 社交 ---
@@ -1627,7 +1627,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "中转换教室后情绪崩溃，蹲在角落哭泣约 10 分钟。经拥抱安抚后逐渐平复。",
     needsAttention: true,
     followUpAction: "提前告知环境变化，使用图片卡预告流程",
-    reviewDate: shiftDate(TODAY, 1),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 1),
     reviewStatus: "待复查",
   },
   {
@@ -1641,7 +1641,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "户外活动结束铃声响起后捂耳哭泣，不愿回到教室。需要单独陪伴 5 分钟过渡。",
     needsAttention: true,
     followUpAction: "减少突发声响刺激，改用视觉信号提示转换",
-    reviewDate: TODAY,
+    reviewDate: DEMO_TEMPLATE_TODAY,
     reviewStatus: "待复查",
   },
   {
@@ -1655,7 +1655,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "小组活动时不主动参与，等待老师点名才开口。与熟悉同伴有少量眼神交流。",
     needsAttention: true,
     followUpAction: "安排固定小组搭档，创造安全社交情境",
-    reviewDate: shiftDate(TODAY, 2),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 2),
     reviewStatus: "待复查",
   },
   // --- c-12 语言发育 ---
@@ -1670,7 +1670,7 @@ const INITIAL_GROWTH: GrowthRecord[] = [
     description: "能发出'妈''不'等单音节词，对老师叫名有明确回头反应。",
     needsAttention: true,
     followUpAction: "增加一对一语言互动时间，搭配指物命名训练",
-    reviewDate: shiftDate(TODAY, 7),
+    reviewDate: shiftDate(DEMO_TEMPLATE_TODAY, 7),
     reviewStatus: "待复查",
   },
 ];
@@ -1697,7 +1697,7 @@ const INITIAL_FEEDBACKS: GuardianFeedback[] = [
   {
     id: "fb-3",
     childId: "c-1",
-    date: TODAY,
+    date: DEMO_TEMPLATE_TODAY,
     status: "今晚反馈",
     content: "今天计划继续保持固定睡前故事时光，明早反馈晨起状态。",
     createdBy: "林妈妈",
@@ -1724,7 +1724,7 @@ const INITIAL_FEEDBACKS: GuardianFeedback[] = [
   {
     id: "fb-6",
     childId: "c-1",
-    date: TODAY,
+    date: DEMO_TEMPLATE_TODAY,
     status: "在家已配合",
     content: "已看到老师关于今日情绪恢复的反馈，会继续保持稳定接送节奏。",
     createdBy: "林妈妈",
@@ -1787,7 +1787,7 @@ const INITIAL_FEEDBACKS: GuardianFeedback[] = [
   {
     id: "fb-13",
     childId: "c-11",
-    date: TODAY,
+    date: DEMO_TEMPLATE_TODAY,
     status: "今晚反馈",
     content: "今晚继续尝试把蔬菜藏在面食里，看孩子能不能接受。",
     createdBy: "周爸爸",
@@ -1876,7 +1876,10 @@ export function getAgeText(birthDate: string) {
 }
 
 export function formatDisplayDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString("zh-CN", {
+  const normalizedDate = normalizeLocalDate(dateString);
+  if (!normalizedDate) return dateString;
+
+  return new Date(`${normalizedDate}T00:00:00`).toLocaleDateString("zh-CN", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -1892,13 +1895,13 @@ function normalizeRecords(records: MealRecord[]) {
 
 function getLatestSnapshotDate(snapshot: AppStateSnapshot): string | null {
   const dates = [
-    ...snapshot.attendance.map((record) => record.date),
-    ...snapshot.meals.map((record) => record.date),
-    ...snapshot.health.map((record) => record.date),
-    ...snapshot.growth.map((record) => record.createdAt.split(" ")[0]),
-    ...snapshot.feedback.map((record) => record.date),
-    ...snapshot.taskCheckIns.map((record) => record.date),
-  ];
+    ...snapshot.attendance.map((record) => normalizeLocalDate(record.date)),
+    ...snapshot.meals.map((record) => normalizeLocalDate(record.date)),
+    ...snapshot.health.map((record) => normalizeLocalDate(record.date)),
+    ...snapshot.growth.map((record) => normalizeLocalDate(record.createdAt)),
+    ...snapshot.feedback.map((record) => normalizeLocalDate(record.date)),
+    ...snapshot.taskCheckIns.map((record) => normalizeLocalDate(record.date)),
+  ].filter(Boolean);
 
   if (dates.length === 0) return null;
   return dates.reduce((latest, current) => (current > latest ? current : latest));
@@ -1986,8 +1989,34 @@ function shiftDemoSnapshotDates(snapshot: AppStateSnapshot, targetToday: string)
   };
 }
 
-function buildFreshDemoSnapshot(targetToday = TODAY): AppStateSnapshot {
-  return shiftDemoSnapshotDates(cloneDemoSnapshotTemplate(), targetToday);
+function validateDemoSnapshotCoverage(snapshot: AppStateSnapshot, targetToday: string) {
+  const todayGrowthCount = snapshot.growth.filter((record) => normalizeLocalDate(record.createdAt) === targetToday).length;
+  const todayFeedbackCount = snapshot.feedback.filter((record) => record.date === targetToday).length;
+  const todayHealthCount = snapshot.health.filter((record) => record.date === targetToday).length;
+  const todayAttendanceCount = snapshot.attendance.filter((record) => record.date === targetToday && record.isPresent).length;
+  const todayMealCount = snapshot.meals.filter((record) => record.date === targetToday).length;
+
+  const hasCoverage =
+    todayAttendanceCount > 0 &&
+    todayMealCount > 0 &&
+    todayGrowthCount > 0 &&
+    (todayFeedbackCount > 0 || todayHealthCount > 0);
+
+  if (hasCoverage) {
+    return snapshot;
+  }
+
+  const message = `[DEMO] Snapshot coverage invalid for ${targetToday}: attendance=${todayAttendanceCount}, meals=${todayMealCount}, growth=${todayGrowthCount}, feedback=${todayFeedbackCount}, health=${todayHealthCount}`;
+  if (process.env.NODE_ENV !== "production") {
+    throw new Error(message);
+  }
+
+  console.error(message);
+  return snapshot;
+}
+
+function buildFreshDemoSnapshot(targetToday = getLocalToday()): AppStateSnapshot {
+  return validateDemoSnapshotCoverage(shiftDemoSnapshotDates(cloneDemoSnapshotTemplate(), targetToday), targetToday);
 }
 
 function filterChildrenByUser(children: Child[], user: User) {
@@ -2003,13 +2032,11 @@ function filterChildrenByUser(children: Child[], user: User) {
 }
 
 function startOfDay(dateString: string) {
-  return new Date(`${dateString}T00:00:00`).getTime();
+  return startOfLocalDay(dateString);
 }
 
 function isInLastDays(dateString: string, days: number) {
-  const pureDate = dateString.split(" ")[0];
-  const diff = startOfDay(TODAY) - startOfDay(pureDate);
-  return diff >= 0 && diff <= (days - 1) * 24 * 60 * 60 * 1000;
+  return isDateWithinLastDays(dateString, days, TODAY);
 }
 
 function containsAllergyWord(foods: FoodItem[], allergies: string[]) {
@@ -2302,7 +2329,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
       if (isDemoUser) {
         lastSyncedSnapshotKeyRef.current = null;
-        applySnapshot(buildFreshDemoSnapshot(TODAY));
+        applySnapshot(buildFreshDemoSnapshot(getLocalToday()));
         if (active) {
           setDataLoading(false);
         }
@@ -2419,7 +2446,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     [mealRecords]
   );
   const todayGrowthRecordsMap = useMemo(
-    () => groupRecordsByChildId(growthRecords.filter((record) => record.createdAt.startsWith(TODAY))),
+    () => groupRecordsByChildId(growthRecords.filter((record) => normalizeLocalDate(record.createdAt) === TODAY)),
     [growthRecords]
   );
   const weeklyGrowthRecordsMap = useMemo(
@@ -2903,7 +2930,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       return { remoteSynced: false };
     }
 
-    const snapshot = buildFreshDemoSnapshot(TODAY);
+    const snapshot = buildFreshDemoSnapshot(getLocalToday());
     lastSyncedSnapshotKeyRef.current = null;
     applySnapshot(snapshot);
     return { remoteSynced: false };

@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { buildRecentLocalDateRange, getLocalToday, isDateWithinLastDays } from "@/lib/date";
 import { toast } from "sonner";
 
 import { HEALTH_MOOD_OPTIONS, HAND_MOUTH_EYE_OPTIONS, TEMPERATURE_THRESHOLD } from "@/lib/mock/health";
@@ -54,7 +55,7 @@ export default function HealthPage() {
 
   // Computed data — use visibleChildren so admin/teacher can see all children, not just present ones
   const childData = useMemo(() => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getLocalToday();
     return visibleChildren.map(child => {
       const todayRecord = healthCheckRecords.find(r => r.childId === child.id && r.date === today);
       return { 
@@ -636,11 +637,7 @@ export default function HealthPage() {
 const HEALTH_CHART_COLORS = ["#38bdf8", "#818cf8", "#34d399", "#f59e0b", "#fb7185", "#c084fc"];
 
 function buildRecentDateRange(days: number) {
-  return Array.from({ length: days }, (_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (days - index - 1));
-    return date.toISOString().split("T")[0];
-  });
+  return buildRecentLocalDateRange(days);
 }
 
 function formatShortDate(dateString: string) {
@@ -651,9 +648,7 @@ function formatShortDate(dateString: string) {
 }
 
 function isRecentDate(dateString: string, days: number) {
-  const target = new Date(`${dateString}T00:00:00`).getTime();
-  const today = new Date(new Date().toISOString().split("T")[0]).getTime();
-  return today - target >= 0 && today - target <= (days - 1) * 24 * 60 * 60 * 1000;
+  return isDateWithinLastDays(dateString, days);
 }
 
 function renderMoodPieLabel({

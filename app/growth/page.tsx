@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";  
+import { buildRecentLocalDateRange, normalizeLocalDate } from "@/lib/date";
 import { OBSERVATION_INDICATOR_MAP, type ObservationIndicatorOption } from "@/lib/mock/observation";
 import { toast } from "sonner";
 
@@ -592,11 +593,7 @@ function InfoStat({ title, value, icon }: { title: string; value: string; icon?:
 const GROWTH_CHART_COLORS = ["#818cf8", "#f59e0b", "#34d399", "#f472b6", "#38bdf8", "#fb7185"];
 
 function buildRecentDateRange(days: number) {
-  return Array.from({ length: days }, (_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (days - index - 1));
-    return date.toISOString().split("T")[0];
-  });
+  return buildRecentLocalDateRange(days);
 }
 
 function formatShortDate(dateString: string) {
@@ -607,13 +604,5 @@ function formatShortDate(dateString: string) {
 }
 
 function normalizeRecordDate(value: string) {
-  if (!value) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (match?.[1]) return match[1];
-  const parsed = new Date(value);
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString().split("T")[0];
-  }
-  return "";
+  return normalizeLocalDate(value);
 }

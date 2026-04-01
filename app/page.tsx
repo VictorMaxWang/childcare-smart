@@ -34,6 +34,7 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import type { WeeklyReportResponse, WeeklyReportSnapshot } from "@/lib/ai/types";
+import { getLocalToday, isDateWithinLastDays, shiftLocalDate } from "@/lib/date";
 import { useApp, INSTITUTION_NAME } from "@/lib/store";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import ScrollReveal from "@/components/ScrollReveal";
@@ -97,7 +98,7 @@ export default function DashboardPage() {
   const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
 
   // Health Calculation
-  const todayDate = new Date().toISOString().split("T")[0];
+  const todayDate = getLocalToday();
   const abnormalHealthChecks = healthCheckRecords.filter(
     (record) => record.date === todayDate && record.isAbnormal && visibleIds.has(record.childId)
   );
@@ -130,7 +131,7 @@ export default function DashboardPage() {
       type: "meal",
     })),
     ...guardianFeedbacks
-      .filter((item) => visibleIds.has(item.childId) && item.date === new Date().toISOString().split("T")[0])
+      .filter((item) => visibleIds.has(item.childId) && item.date === todayDate)
       .map((item) => ({
         id: `feedback-${item.id}`,
         dateTime: `${item.date} 20:00`,
@@ -918,16 +919,12 @@ function getTrendPredictionLabel(value: "up" | "stable" | "down") {
 }
 
 function isRecentDate(dateString: string, days: number) {
-  const today = new Date();
-  const target = new Date(`${dateString}T00:00:00`);
-  const diff = new Date(today.toISOString().split("T")[0]).getTime() - target.getTime();
-  return diff >= 0 && diff <= (days - 1) * 24 * 60 * 60 * 1000;
+  return isDateWithinLastDays(dateString, days);
 }
 
 function formatRangeDate(offsetDays: number) {
-  const date = new Date();
-  date.setDate(date.getDate() - offsetDays);
-  return date.toLocaleDateString("zh-CN", {
+  const date = shiftLocalDate(getLocalToday(), -offsetDays);
+  return new Date(`${date}T00:00:00`).toLocaleDateString("zh-CN", {
     month: "2-digit",
     day: "2-digit",
   });

@@ -26,11 +26,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getLocalToday } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import EmptyState from "@/components/EmptyState";
 import { toast } from "sonner";
 
-const TODAY = new Date().toISOString().split("T")[0];
+const TODAY = getLocalToday();
 
 const QUICK_FOODS: Record<MealType, { name: string; category: FoodCategory; amount: string }[]> = {
   早餐: [

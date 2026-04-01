@@ -21,11 +21,12 @@ import {
 } from "recharts";
 import { Users, ClipboardCheck, AlertTriangle, MessageSquare, Activity, Monitor, Wifi, Thermometer, HeartPulse } from "lucide-react";
 import { useState, useEffect } from "react";
+import { buildRecentLocalDateRange, getLocalToday } from "@/lib/date";
 
 export default function TeacherDashboardPage() {
   const { visibleChildren, getTodayAttendance, healthCheckRecords, guardianFeedbacks, growthRecords } = useApp();
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getLocalToday();
 
   const totalChildren = visibleChildren.length;
   const attendanceToday = getTodayAttendance();
@@ -58,11 +59,7 @@ export default function TeacherDashboardPage() {
   // Health Chart Data - Last 7 Days Avg Temp
   const healthTrendData = useMemo(() => {
     const arr = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const ds = d.toISOString().split("T")[0];
-      
+    for (const ds of buildRecentLocalDateRange(7)) {
       const records = healthCheckRecords.filter(r => r.date === ds);
       const avgTemp = records.length > 0 
         ? records.reduce((sum, r) => sum + r.temperature, 0) / records.length 

@@ -29,6 +29,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import EmptyState from "@/components/EmptyState";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { buildRecentLocalDateRange, getLocalToday, isDateWithinLastDays } from "@/lib/date";
 import { getWeeklyTaskForChild } from "@/lib/mock/coparenting";
 import { toast } from "sonner";
 
@@ -72,7 +73,7 @@ export default function ParentPage() {
     [parentFeed, selectedChildId]
   );
   
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getLocalToday();
 
   const currentTask = useMemo(() => {
     if (!selectedFeed) return null;
@@ -113,14 +114,9 @@ export default function ParentPage() {
   const aiSnapshot = useMemo(() => {
     if (!selectedFeed) return null;
 
-    const now = new Date();
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-
     const inLastSevenDays = (dateText?: string) => {
       if (!dateText) return false;
-      const ts = Date.parse(dateText.split(" ")[0]);
-      return !Number.isNaN(ts) && ts >= sevenDaysAgo.getTime() && ts <= now.getTime();
+      return isDateWithinLastDays(dateText, 7, todayStr);
     };
 
     const childHealth = healthCheckRecords.filter((record) => {
@@ -270,7 +266,7 @@ export default function ParentPage() {
       },
       ruleFallback,
     } satisfies ChildSuggestionSnapshot;
-  }, [selectedFeed, healthCheckRecords, mealRecords, growthRecords, guardianFeedbacks]);
+  }, [selectedFeed, healthCheckRecords, mealRecords, growthRecords, guardianFeedbacks, todayStr]);
 
   const aiSnapshotKey = useMemo(() => {
     return aiSnapshot ? `${JSON.stringify(aiSnapshot)}::${aiRefreshNonce}` : "";
@@ -511,7 +507,7 @@ export default function ParentPage() {
 
     addGuardianFeedback({
       childId: selectedFeed.child.id,
-      date: new Date().toISOString().split("T")[0],
+      date: todayStr,
       status: feedbackStatus,
       content: feedbackContent.trim(),
     });
@@ -1245,11 +1241,7 @@ function getTrendLabel(value: "up" | "stable" | "down") {
 }
 
 function buildRecentDateRange(days: number) {
-  return Array.from({ length: days }, (_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (days - index - 1));
-    return date.toISOString().split("T")[0];
-  });
+  return buildRecentLocalDateRange(days);
 }
 
 function formatShortDate(dateString: string) {
