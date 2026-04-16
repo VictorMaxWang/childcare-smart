@@ -1,0 +1,18 @@
+=http://127.0.0.1:8000 : 无法将“=http://127.0.0.1:8000”项识别为 cmdlet、函数、脚本文件或可运行程序的名称。请检查名称
+的拼写，如果包括路径，请确保路径正确，然后再试一次。
+所在位置 行:1 字符: 1
++ ='http://127.0.0.1:8000'; ='45000'; npm run start -- --hostname 127.0 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (=http://127.0.0.1:8000:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+=45000 : 无法将“=45000”项识别为 cmdlet、函数、脚本文件或可运行程序的名称。请检查名称的拼写，如果包括路径，请确保路径
+正确，然后再试一次。
+所在位置 行:1 字符: 27
++ ='http://127.0.0.1:8000'; ='45000'; npm run start -- --hostname 127.0 ...
++                           ~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (=45000:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+Error: Could not find a production build in the '.next' directory. Try building your app with 'next build' before starting the production server. https://nextjs.org/docs/messages/production-start-no-build-id
+    at ignore-listed frames

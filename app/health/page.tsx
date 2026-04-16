@@ -66,23 +66,26 @@ export default function HealthPage() {
   }, [visibleChildren, healthCheckRecords]);
 
   const filteredChildren = useMemo(() => {
+    const presentChildIds = new Set(presentChildren.map((child) => child.id));
     return childData.filter(child => {
       const matchesSearch = child.name.includes(searchTerm) || (child.nickname && child.nickname.includes(searchTerm));
       if (!matchesSearch) return false;
       
-      if (filterStatus === "unchecked") return !child.health;
+      if (filterStatus === "unchecked") return presentChildIds.has(child.id) && !child.health;
       if (filterStatus === "abnormal") return child.health?.isAbnormal;
       
       return true;
     });
-  }, [childData, searchTerm, filterStatus]);
+  }, [childData, presentChildren, searchTerm, filterStatus]);
 
   const stats = useMemo(() => {
+    const presentChildIds = new Set(presentChildren.map((child) => child.id));
     const total = childData.length;
-    const checked = childData.filter(c => c.health).length;
-    const abnormal = childData.filter(c => c.health?.isAbnormal).length;
-    return { total, checked, abnormal, unchecked: total - checked };
-  }, [childData]);
+    const present = presentChildren.length;
+    const checked = childData.filter((child) => presentChildIds.has(child.id) && child.health).length;
+    const abnormal = childData.filter((child) => presentChildIds.has(child.id) && child.health?.isAbnormal).length;
+    return { total, present, checked, abnormal, unchecked: Math.max(present - checked, 0) };
+  }, [childData, presentChildren]);
 
   const weeklyTemperatureData = useMemo(() => {
     const visibleIds = new Set(visibleChildren.map((child) => child.id));
@@ -231,7 +234,7 @@ export default function HealthPage() {
             <Users className="w-20 h-20" />
           </div>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">总计出勤</CardTitle>
+            <CardTitle className="text-sm font-medium">可见幼儿</CardTitle>
             <Users className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
@@ -243,11 +246,11 @@ export default function HealthPage() {
             <CheckCircle2 className="w-20 h-20" />
           </div>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">已晨检</CardTitle>
+            <CardTitle className="text-sm font-medium">今日出勤</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold"><AnimatedNumber value={stats.checked} suffix="人" /></div>
+            <div className="text-2xl font-bold"><AnimatedNumber value={stats.present} suffix="人" /></div>
           </CardContent>
         </Card>
         <Card className="kpi-accent card-hover border-l-4 border-l-orange-300 shadow-sm border-orange-100 bg-orange-50/30 relative overflow-hidden">
@@ -255,11 +258,11 @@ export default function HealthPage() {
             <Activity className="w-20 h-20" />
           </div>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">待检查</CardTitle>
+            <CardTitle className="text-sm font-medium">已晨检</CardTitle>
             <Activity className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold"><AnimatedNumber value={stats.unchecked} suffix="人" /></div>
+            <div className="text-2xl font-bold"><AnimatedNumber value={stats.checked} suffix="人" /></div>
           </CardContent>
         </Card>
         <Card className="kpi-accent card-hover border-l-4 border-l-red-300 shadow-sm border-red-100 bg-red-50/30 relative overflow-hidden">

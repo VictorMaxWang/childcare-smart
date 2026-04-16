@@ -1,0 +1,5 @@
+INFO:     Started server process [46876]
+INFO:     Waiting for application startup.
+2026-04-10 17:06:46,014 INFO [app.main] backend.startup environment=development llm_provider=mock vivo_configured=False configured_memory_backend=memory memory_backend=memory degraded=False cors_origins=http://127.0.0.1:3000,http://localhost:3000
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)

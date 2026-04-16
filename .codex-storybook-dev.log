@@ -1,0 +1,13 @@
+
+> childcare-smart@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.24.0.252:3000
+- Environments: .env.local
+
+✓ Starting...
+⨯ Unable to acquire lock at C:\Users\12804\Desktop\smartchildcare-agent\childcare-smart\.next\dev\lock, is another instance of next dev running?
+  Suggestion: If you intended to restart next dev, terminate the other process, and then try again.
+[?25h

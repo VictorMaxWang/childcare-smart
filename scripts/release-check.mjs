@@ -67,19 +67,45 @@ function diagnoseHttp(status, endpoint) {
   return `Unexpected HTTP ${status} at ${endpoint}.`;
 }
 
+function parseJsonSafe(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function validateBrainHealthPayload(payload) {
+  const issues = [];
+  const providers = payload?.providers;
+  if (payload?.status !== "ok") issues.push("status != ok");
+  if (payload?.provider_assertion_scope !== "configuration_only") {
+    issues.push("provider_assertion_scope != configuration_only");
+  }
+  if (!payload?.brain_provider) issues.push("brain_provider missing");
+  if (!payload?.llm_provider_selected) issues.push("llm_provider_selected missing");
+  if (payload?.environment === "development") issues.push("environment == development");
+  if (!providers || typeof providers !== "object" || !("llm" in providers)) {
+    issues.push("providers.llm missing");
+  } else if (providers.llm === "mock") {
+    issues.push("providers.llm == mock");
+  }
+  return issues;
+}
+
 async function fetchCheck(url) {
   const start = Date.now();
   const res = await fetch(url, { method: "GET" });
   const elapsedMs = Date.now() - start;
   const text = await res.text();
-  return { res, elapsedMs, preview: text.slice(0, 200) };
+  return { res, elapsedMs, text, preview: text.slice(0, 200) };
 }
 
 const report = {
   generatedAt: new Date().toISOString(),
   runtime: { node: process.version, cwd },
   local: { passed: true, checks: [] },
-  remote: { enabled: false, passed: true, baseUrl: "", checks: [] },
+  remote: { enabled: false, passed: true, baseUrl: "", brainBaseUrl: "", checks: [] },
   summary: { passed: false, blockers: [], warnings: [] },
 };
 
@@ -158,8 +184,10 @@ async function main() {
       "RELEASE_BASE_URL",
       "RELEASE_ADMIN_COOKIE",
       "CRON_SECRET",
-      "NEXT_PUBLIC_SUPABASE_URL",
-      "SUPABASE_SERVICE_ROLE_KEY",
+      "BRAIN_API_BASE_URL",
+      "DATABASE_URL",
+      "DATABASE_SSL",
+      "AUTH_SESSION_SECRET",
       "DASHSCOPE_API_KEY",
     ];
     for (const key of requiredEnvKeys) {
@@ -173,16 +201,21 @@ async function main() {
   }
 
   const baseUrl = String(process.env.RELEASE_BASE_URL ?? "").trim().replace(/\/$/, "");
+  const brainBaseUrl = String(process.env.BRAIN_API_BASE_URL ?? "").trim().replace(/\/$/, "");
   const cookie = String(process.env.RELEASE_ADMIN_COOKIE ?? "").trim();
   const cronSecret = String(process.env.CRON_SECRET ?? "").trim();
   report.remote.baseUrl = baseUrl;
+  report.remote.brainBaseUrl = brainBaseUrl;
 
   if (!baseUrl) {
     if (requireRemote) {
       pushRemote("remote-required-base-url", false, { reason: "RELEASE_BASE_URL missing" });
+      pushRemote("remote-required-brain-base-url", Boolean(brainBaseUrl), {
+        reason: brainBaseUrl ? undefined : "BRAIN_API_BASE_URL missing",
+      });
       pushRemote("remote-required-admin-cookie", Boolean(cookie), { reason: cookie ? undefined : "RELEASE_ADMIN_COOKIE missing" });
       pushRemote("remote-required-cron-secret", Boolean(cronSecret), { reason: cronSecret ? undefined : "CRON_SECRET missing" });
-      console.error("[FAIL] Remote mode requires RELEASE_BASE_URL / RELEASE_ADMIN_COOKIE / CRON_SECRET");
+      console.error("[FAIL] Remote mode requires RELEASE_BASE_URL / BRAIN_API_BASE_URL / RELEASE_ADMIN_COOKIE / CRON_SECRET");
     } else {
       report.remote.enabled = false;
       report.summary.warnings.push("Remote checks skipped because RELEASE_BASE_URL is not set.");
@@ -205,6 +238,51 @@ async function main() {
       } catch (e) {
         pushRemote(`remote:${endpoint}`, false, { reason: e instanceof Error ? e.message : "request failed" });
         console.error(`[FAIL] ${endpoint} request failed`);
+      }
+    }
+
+    if (!brainBaseUrl) {
+      pushRemote("remote:brain-health", false, { reason: "BRAIN_API_BASE_URL missing" });
+      console.error("[FAIL] BRAIN_API_BASE_URL missing. Cannot verify remote brain health.");
+    } else {
+      const brainHealthEndpoint = `${brainBaseUrl}/api/v1/health`;
+      try {
+        const r = await fetchCheck(brainHealthEndpoint);
+        if (!r.res.ok) {
+          const diagnosis = diagnoseHttp(r.res.status, brainHealthEndpoint);
+          pushRemote(`remote:${brainHealthEndpoint}`, false, {
+            status: r.res.status,
+            diagnosis,
+            preview: r.preview,
+          });
+          console.error(`[FAIL] ${brainHealthEndpoint} HTTP ${r.res.status}`);
+        } else {
+          const payload = parseJsonSafe(r.text);
+          const issues = validateBrainHealthPayload(payload);
+          if (issues.length > 0) {
+            pushRemote(`remote:${brainHealthEndpoint}`, false, {
+              status: r.res.status,
+              elapsedMs: r.elapsedMs,
+              issues,
+              preview: r.preview,
+            });
+            console.error(`[FAIL] ${brainHealthEndpoint} returned stale or incomplete health schema`);
+          } else {
+            pushRemote(`remote:${brainHealthEndpoint}`, true, {
+              status: r.res.status,
+              elapsedMs: r.elapsedMs,
+              environment: payload.environment,
+              brainProvider: payload.brain_provider,
+              llmMode: payload.providers?.llm,
+            });
+            console.log(`[OK] ${brainHealthEndpoint} reachable with current health schema (${r.elapsedMs}ms)`);
+          }
+        }
+      } catch (e) {
+        pushRemote(`remote:${brainHealthEndpoint}`, false, {
+          reason: e instanceof Error ? e.message : "request failed",
+        });
+        console.error(`[FAIL] ${brainHealthEndpoint} request failed`);
       }
     }
   }

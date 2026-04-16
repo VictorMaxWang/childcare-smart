@@ -4,7 +4,7 @@ import path from "node:path";
 
 const cwd = process.cwd();
 const envPath = path.join(cwd, ".env.release");
-const required = ["RELEASE_BASE_URL", "RELEASE_ADMIN_COOKIE", "CRON_SECRET"];
+const required = ["RELEASE_BASE_URL", "RELEASE_ADMIN_COOKIE", "CRON_SECRET", "BRAIN_API_BASE_URL"];
 
 function parseEnv(text) {
   const out = {};

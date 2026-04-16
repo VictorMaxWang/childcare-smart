@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900">
+  <rect width="1200" height="900" fill="#eef6ea"/>
+  <rect x="90" y="90" width="1020" height="720" rx="44" fill="#d1eac2"/>
+  <rect x="120" y="120" width="960" height="220" rx="36" fill="#9fd1ff"/>
+  <rect x="120" y="340" width="960" height="440" rx="36" fill="#9fd07d"/>
+  <circle cx="290" cy="250" r="54" fill="#ffd966"/>
+  <rect x="540" y="450" width="26" height="170" rx="13" fill="#6d5238"/>
+  <rect x="420" y="600" width="280" height="22" rx="11" fill="#8a6a4a"/>
+  <rect x="388" y="430" width="332" height="18" rx="9" fill="#6d5238"/>
+  <circle cx="438" cy="404" r="72" fill="#ffd7b8"/>
+  <circle cx="438" cy="382" r="42" fill="#41332f"/>
+  <rect x="386" y="454" width="104" height="104" rx="34" fill="#f4a261"/>
+  <circle cx="672" cy="404" r="72" fill="#ffd7b8"/>
+  <circle cx="672" cy="382" r="42" fill="#5b463e"/>
+  <rect x="620" y="454" width="104" height="104" rx="34" fill="#7ecf86"/>
+  <path d="M280 650c54-94 104-140 150-140 44 0 92 38 146 116-82 34-186 46-296 24z" fill="#6eb36b"/>
+  <path d="M816 674c40-80 88-126 146-126 44 0 90 28 138 86-80 50-190 68-284 40z" fill="#5ca15a"/>
+</svg>

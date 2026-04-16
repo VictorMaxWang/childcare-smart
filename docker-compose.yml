@@ -1,0 +1,53 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smartchildcare-backend-staging
+    restart: unless-stopped
+    env_file:
+      - ./.env.release
+    expose:
+      - "8000"
+    volumes:
+      - backend_data:/data
+    networks:
+      - staging
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, urllib.request; payload = json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=5)); ok = payload.get('status') == 'ok' and payload.get('environment') != 'development' and payload.get('provider_assertion_scope') == 'configuration_only' and bool(payload.get('brain_provider')) and bool(payload.get('llm_provider_selected')); raise SystemExit(0 if ok else 1)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: smartchildcare-caddy-staging
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - staging
+
+networks:
+  staging:
+    driver: bridge
+
+volumes:
+  backend_data:
+  caddy_data:
+  caddy_config:

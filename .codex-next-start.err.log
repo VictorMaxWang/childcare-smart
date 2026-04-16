@@ -1,0 +1,10 @@
+[BRAIN_PROXY] Falling back for /api/v1/agents/intent-router: BRAIN_API_BASE_URL is not configured.
+[BRAIN_PROXY] Falling back for /api/v1/agents/metrics/admin-quality: BRAIN_API_BASE_URL is not configured.
+[BRAIN_PROXY] Falling back for /api/v1/agents/consultations/high-risk/feed?limit=4&escalated_only=true: BRAIN_API_BASE_URL is not configured.
+[BRAIN_PROXY] Falling back for /api/v1/agents/reports/weekly: BRAIN_API_BASE_URL is not configured.
+[BRAIN_PROXY] Falling back for /api/v1/agents/intent-router: BRAIN_API_BASE_URL is not configured.
+[BRAIN_PROXY] Falling back for /api/v1/agents/parent/suggestions: BRAIN_API_BASE_URL is not configured.
+[BRAIN_PROXY] Falling back for /api/v1/agents/reports/weekly: BRAIN_API_BASE_URL is not configured.
+[BRAIN_PROXY] Falling back for /api/v1/agents/intent-router: BRAIN_API_BASE_URL is not configured.
+[BRAIN_PROXY] Falling back for /api/v1/agents/parent/suggestions: BRAIN_API_BASE_URL is not configured.
+[BRAIN_PROXY] Falling back for /api/v1/agents/parent/trend-query: BRAIN_API_BASE_URL is not configured.

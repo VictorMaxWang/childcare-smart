@@ -1,18 +1,17 @@
 import { NextResponse } from "next/server";
-import { requestDashscopeWeeklyReport } from "@/lib/ai/dashscope";
-import { buildFallbackWeeklyReport } from "@/lib/ai/fallback";
-import { buildMockWeeklyReport } from "@/lib/ai/mock";
-import type { WeeklyReportPayload, WeeklyReportResponse, WeeklyReportSnapshot } from "@/lib/ai/types";
-
-function isValidSnapshot(snapshot: unknown): snapshot is WeeklyReportSnapshot {
-  if (!snapshot || typeof snapshot !== "object") return false;
-  const obj = snapshot as Record<string, unknown>;
-  return Boolean(obj.institutionName && obj.periodLabel && obj.overview && obj.diet);
-}
+import {
+  executeWeeklyReport,
+  getAiRuntimeOptions,
+  isValidWeeklyReportPayload,
+  resolveWeeklyReportRoleFromPayload,
+} from "@/lib/ai/server";
+import type { WeeklyReportPayload } from "@/lib/ai/types";
+import { forwardBrainRequest } from "@/lib/server/brain-client";
 
 export async function POST(request: Request) {
-  const configuredModel = process.env.AI_MODEL || "qwen-turbo";
-  const forceMock = process.env.NEXT_PUBLIC_FORCE_MOCK_MODE === "true";
+  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/reports/weekly");
+  if (brainForward.response) return brainForward.response;
+
   let payload: WeeklyReportPayload | null = null;
 
   try {
@@ -22,41 +21,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!payload || !isValidSnapshot(payload.snapshot)) {
+  if (!isValidWeeklyReportPayload(payload)) {
     return NextResponse.json({ error: "Invalid snapshot payload" }, { status: 400 });
   }
 
-  if (forceMock) {
-    return NextResponse.json(
-      {
-        ...buildMockWeeklyReport(payload.snapshot),
-        model: "mock-weekly-report",
-      } satisfies WeeklyReportResponse,
-      { status: 200 }
-    );
+  if (!resolveWeeklyReportRoleFromPayload(payload)) {
+    return NextResponse.json({ error: "Weekly report role is required" }, { status: 400 });
   }
 
-  const fallback = {
-    ...buildFallbackWeeklyReport(payload.snapshot),
-    model: "weekly-rule-fallback",
-  } satisfies WeeklyReportResponse;
-
-  if (process.env.NODE_ENV !== "production" && request.headers.get("x-ai-force-fallback") === "1") {
-    return NextResponse.json(fallback, { status: 200 });
-  }
-
-  const aiResult = await requestDashscopeWeeklyReport(payload.snapshot);
-  if (!aiResult) {
-    console.warn(`[AI] Falling back to weekly report rules using model ${configuredModel}.`);
-    return NextResponse.json(fallback, { status: 200 });
-  }
-
-  return NextResponse.json(
-    {
-      ...aiResult,
-      source: "ai",
-      model: configuredModel,
-    } satisfies WeeklyReportResponse,
-    { status: 200 }
-  );
+  const result = await executeWeeklyReport(payload, getAiRuntimeOptions(request));
+  return NextResponse.json(result, { status: 200 });
 }

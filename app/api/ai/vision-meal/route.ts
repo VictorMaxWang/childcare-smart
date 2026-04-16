@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requestDashscopeMealVision, type VisionDetectedFood } from "@/lib/ai/dashscope";
+import { forwardBrainRequest } from "@/lib/server/brain-client";
 
 interface VisionMealPayload {
   imageDataUrl: string;
@@ -20,6 +21,9 @@ function buildFallbackFoods(): VisionDetectedFood[] {
 }
 
 export async function POST(request: Request) {
+  const brainForward = await forwardBrainRequest(request, "/api/v1/multimodal/vision-meal");
+  if (brainForward.response) return brainForward.response;
+
   const configuredModel = process.env.AI_VISION_MODEL || "qwen3-vl-plus";
   let payload: VisionMealPayload | null = null;
 

@@ -1,0 +1,12 @@
+
+> childcare-smart@0.1.0 dev
+> next dev --hostname 127.0.0.1 --port 3200
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://127.0.0.1:3200
+- Network:       http://127.0.0.1:3200
+- Environments: .env.local
+
+✓ Starting...
+  Suggestion: If you intended to restart next dev, terminate the other process, and then try again.
+[?25h

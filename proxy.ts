@@ -1,19 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getAuthSessionSecret } from "@/lib/auth/session-config";
 
 const SESSION_COOKIE = "ccs_session";
 const encoder = new TextEncoder();
-
-function getSecret() {
-  const secret = process.env.AUTH_SESSION_SECRET?.trim();
-  if (secret) return secret;
-
-  if (process.env.NODE_ENV !== "production") {
-    return "dev-only-change-me";
-  }
-
-  throw new Error("AUTH_SESSION_SECRET is required in production");
-}
 
 function normalizeBase64Url(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -53,7 +43,7 @@ function equalBytes(left: Uint8Array, right: Uint8Array) {
 async function sign(payloadBase64: string) {
   const key = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(getSecret()),
+    encoder.encode(getAuthSessionSecret()),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
@@ -83,7 +73,7 @@ async function verifySessionToken(token?: string | null) {
 }
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
 
   if (
     pathname.startsWith("/_next") ||
@@ -99,7 +89,7 @@ export async function proxy(request: NextRequest) {
   const isValidSession = await verifySessionToken(token);
   if (!isValidSession) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", pathname);
+    loginUrl.searchParams.set("next", `${pathname}${search}`);
     const response = NextResponse.redirect(loginUrl);
     response.cookies.set(SESSION_COOKIE, "", {
       httpOnly: true,

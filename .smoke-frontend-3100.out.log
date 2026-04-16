@@ -1,0 +1,38 @@
+
+> childcare-smart@0.1.0 dev
+> next dev --hostname 127.0.0.1 --port 3100
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://127.0.0.1:3100
+- Network:       http://127.0.0.1:3100
+- Environments: .env.local
+
+✓ Starting...
+✓ Ready in 2.4s
+ GET /login?next=%2Fparent%2Fstorybook%3Fchild%3Dc-1 200 in 2.7s (compile: 2.3s, proxy.ts: 6ms, render: 396ms)
+ GET /login?next=%2Fparent%2Fstorybook%3Fchild%3Dc-1 200 in 159ms (compile: 5ms, proxy.ts: 7ms, render: 147ms)
+ GET /api/auth/session 401 in 401ms (compile: 351ms, proxy.ts: 33ms, render: 16ms)
+ OPTIONS /api/auth/demo-login 204 in 107ms (compile: 80ms, proxy.ts: 8ms, render: 18ms)
+ POST /api/auth/demo-login 400 in 313ms (compile: 24ms, proxy.ts: 6ms, render: 283ms)
+ GET /api/auth/session 401 in 40ms (compile: 6ms, proxy.ts: 28ms, render: 6ms)
+ GET /login?next=%2Fparent%2Fstorybook%3Fchild%3Dc-1 200 in 91ms (compile: 5ms, proxy.ts: 5ms, render: 80ms)
+ GET /api/auth/session 401 in 40ms (compile: 6ms, proxy.ts: 7ms, render: 27ms)
+ POST /api/auth/demo-login 200 in 40ms (compile: 3ms, proxy.ts: 5ms, render: 32ms)
+ POST /api/auth/demo-login 400 in 205ms (compile: 3ms, proxy.ts: 6ms, render: 196ms)
+ POST /api/auth/demo-login 200 in 39ms (compile: 9ms, proxy.ts: 8ms, render: 22ms)
+ GET /parent/storybook?child=c-1 200 in 1565ms (compile: 1325ms, proxy.ts: 13ms, render: 227ms)
+ GET /api/auth/session 200 in 57ms (compile: 6ms, proxy.ts: 19ms, render: 32ms)
+[BRAIN_PROXY] Remote brain proxy succeeded for /api/v1/agents/parent/storybook via 127.0.0.1:8010.
+ POST /api/ai/parent-storybook 200 in 968ms (compile: 521ms, proxy.ts: 12ms, render: 435ms)
+[BRAIN_PROXY] Remote brain proxy succeeded for /api/v1/agents/parent/storybook/media/storybook-media-fe7c94b5766b8980 via 127.0.0.1:8010.
+ GET /api/ai/parent-storybook/media/storybook-media-fe7c94b5766b8980 200 in 1767ms (compile: 1603ms, proxy.ts: 75ms, render: 89ms)
+[BRAIN_PROXY] Remote brain proxy succeeded for /api/v1/agents/parent/storybook/media/storybook-media-c98761c33b5f15cc via 127.0.0.1:8010.
+ GET /api/ai/parent-storybook/media/storybook-media-c98761c33b5f15cc 200 in 1768ms (compile: 1598ms, proxy.ts: 73ms, render: 97ms)
+[BRAIN_PROXY] Remote brain proxy succeeded for /api/v1/agents/parent/storybook/media/storybook-media-1ab37c268a389321 via 127.0.0.1:8010.
+ GET /api/ai/parent-storybook/media/storybook-media-1ab37c268a389321 200 in 1784ms (compile: 1597ms, proxy.ts: 67ms, render: 120ms)
+[BRAIN_PROXY] Remote brain proxy succeeded for /api/v1/agents/parent/storybook/media/storybook-media-3d3318a32f4a893e via 127.0.0.1:8010.
+ GET /api/ai/parent-storybook/media/storybook-media-3d3318a32f4a893e 200 in 1800ms (compile: 1602ms, proxy.ts: 75ms, render: 124ms)
+[BRAIN_PROXY] Remote brain proxy succeeded for /api/v1/agents/parent/storybook/media/storybook-media-afd5a86dbd451812 via 127.0.0.1:8010.
+ GET /api/ai/parent-storybook/media/storybook-media-afd5a86dbd451812 200 in 1800ms (compile: 1599ms, proxy.ts: 74ms, render: 127ms)
+[BRAIN_PROXY] Remote brain proxy succeeded for /api/v1/agents/parent/storybook/media/storybook-media-a3e214a49fe43941 via 127.0.0.1:8010.
+ GET /api/ai/parent-storybook/media/storybook-media-a3e214a49fe43941 200 in 1805ms (compile: 1600ms, proxy.ts: 75ms, render: 130ms)

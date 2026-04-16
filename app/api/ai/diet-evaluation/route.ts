@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requestDashscopeDietEvaluation, type DietEvaluationInput, type DietEvaluationResult } from "@/lib/ai/dashscope";
+import { forwardBrainRequest } from "@/lib/server/brain-client";
 
 interface DietEvaluationPayload {
   input: DietEvaluationInput;
@@ -106,6 +107,9 @@ function buildFallbackEvaluation(input: DietEvaluationInput): DietEvaluationResu
 }
 
 export async function POST(request: Request) {
+  const brainForward = await forwardBrainRequest(request, "/api/v1/multimodal/diet-evaluation");
+  if (brainForward.response) return brainForward.response;
+
   const configuredModel = process.env.AI_DIET_MODEL || process.env.AI_MODEL || "qwen-turbo";
   let payload: DietEvaluationPayload | null = null;
 
