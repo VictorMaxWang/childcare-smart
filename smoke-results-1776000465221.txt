@@ -1,0 +1,6 @@
+﻿ROUTE u-teacher /teacher BAD=none
+ROUTE u-teacher /teacher/health-file-bridge BAD=none
+ROUTE u-admin /admin BAD=none
+ROUTE u-admin /admin/agent?action=weekly-report BAD=none
+ROUTE u-parent /parent BAD=none
+ROUTE u-parent /parent/agent BAD=none

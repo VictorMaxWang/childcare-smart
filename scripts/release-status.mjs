@@ -73,10 +73,10 @@ const remoteReport = readJsonSafe(remoteReportPath);
 const sqlCheck = readJsonSafe(sqlCheckPath);
 const env = readEnv(envFilePath);
 
-const missingEnv = ["RELEASE_BASE_URL", "RELEASE_ADMIN_COOKIE", "CRON_SECRET"].filter(
+const missingEnv = ["RELEASE_BASE_URL", "RELEASE_ADMIN_COOKIE", "CRON_SECRET", "BRAIN_API_BASE_URL"].filter(
   (k) => !String(env.map[k] ?? "").trim()
 );
-const placeholderEnv = ["RELEASE_BASE_URL", "RELEASE_ADMIN_COOKIE", "CRON_SECRET"].filter((k) =>
+const placeholderEnv = ["RELEASE_BASE_URL", "RELEASE_ADMIN_COOKIE", "CRON_SECRET", "BRAIN_API_BASE_URL"].filter((k) =>
   isPlaceholderValue(env.map[k])
 );
 

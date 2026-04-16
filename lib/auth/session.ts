@@ -1,22 +1,12 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
+import { getAuthSessionSecret } from "@/lib/auth/session-config";
 
 const COOKIE_NAME = "ccs_session";
 const SESSION_AGE_SECONDS = 60 * 60 * 12;
 
-function getSecret() {
-  const secret = process.env.AUTH_SESSION_SECRET?.trim();
-  if (secret) return secret;
-
-  if (process.env.NODE_ENV !== "production") {
-    return "dev-only-change-me";
-  }
-
-  throw new Error("AUTH_SESSION_SECRET is required in production");
-}
-
 function sign(payloadBase64: string) {
-  return crypto.createHmac("sha256", getSecret()).update(payloadBase64).digest("base64url");
+  return crypto.createHmac("sha256", getAuthSessionSecret()).update(payloadBase64).digest("base64url");
 }
 
 function encodePayload(payload: Record<string, unknown>) {

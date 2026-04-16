@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { AlertTriangle, Camera, ChefHat, Loader2, Plus, Salad, ShieldAlert, Sparkles, X } from "lucide-react";
 import {
@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getLocalToday } from "@/lib/date";
+import { getHydrationDisplayState } from "@/lib/hydration-display";
 import { cn } from "@/lib/utils";
 import EmptyState from "@/components/EmptyState";
 import { toast } from "sonner";
@@ -134,7 +135,7 @@ export default function DietPage() {
     getTodayAttendance,
   } = useApp();
 
-  const [selectedChildId, setSelectedChildId] = useState<string>(visibleChildren[0]?.id ?? "");
+  const [selectedChildId, setSelectedChildId] = useState<string>("");
 
   const [bulkMeal, setBulkMeal] = useState<MealType>("午餐");
   const [bulkFoodName, setBulkFoodName] = useState("");
@@ -153,8 +154,21 @@ export default function DietPage() {
   const [bulkPhotoPreview, setBulkPhotoPreview] = useState("");
   const [bulkVisionModel, setBulkVisionModel] = useState("");
 
+  const defaultSelectedChildId =
+    presentChildren.find((child) => mealRecords.some((record) => record.childId === child.id && record.date === TODAY))?.id ??
+    presentChildren[0]?.id ??
+    visibleChildren[0]?.id ??
+    "";
+
+  useEffect(() => {
+    if (!defaultSelectedChildId) return;
+    if (!selectedChildId || !visibleChildren.some((child) => child.id === selectedChildId)) {
+      setSelectedChildId(defaultSelectedChildId);
+    }
+  }, [defaultSelectedChildId, selectedChildId, visibleChildren]);
+
   const resolvedSelectedChildId =
-    visibleChildren.some((child) => child.id === selectedChildId) ? selectedChildId : (visibleChildren[0]?.id ?? "");
+    visibleChildren.some((child) => child.id === selectedChildId) ? selectedChildId : defaultSelectedChildId;
 
   const selectedChild = visibleChildren.find((child) => child.id === resolvedSelectedChildId) ?? null;
   const todayAttendance = getTodayAttendance();
@@ -178,6 +192,7 @@ export default function DietPage() {
   }, [selectedChildMeals]);
 
   const weeklyTrend = getWeeklyDietTrend(selectedChild?.id);
+  const hydrationDisplay = getHydrationDisplayState(weeklyTrend.hydrationAvg);
   const childInsights = selectedChild
     ? getSmartInsights().filter((item) => !item.childId || item.childId === selectedChild.id)
     : [];
@@ -472,7 +487,7 @@ export default function DietPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Input value={bulkWaterMl} onChange={(event) => setBulkWaterMl(event.target.value)} placeholder="饮水量 ml" />
+            <Input value={bulkWaterMl} onChange={(event) => setBulkWaterMl(event.target.value)} placeholder="补水内部记录（ml）" />
             <Input value={bulkAllergyReaction} onChange={(event) => setBulkAllergyReaction(event.target.value)} placeholder="过敏反应（可留空）" />
           </div>
 
@@ -722,14 +737,14 @@ export default function DietPage() {
                 <Card className="xl:col-span-2">
                   <CardHeader>
                     <CardTitle>最近一周饮食趋势</CardTitle>
-                    <CardDescription>可用于识别饮食单一、营养失衡与低饮水风险。</CardDescription>
+                    <CardDescription>可用于识别饮食单一、营养失衡与补水需关注情况。</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {[
                       { label: "均衡天数占比", value: `${weeklyTrend.balancedRate}%`, progress: weeklyTrend.balancedRate },
                       { label: "含蔬果天数", value: `${weeklyTrend.vegetableDays}天`, progress: Math.min(weeklyTrend.vegetableDays * 14, 100) },
                       { label: "含蛋白天数", value: `${weeklyTrend.proteinDays}天`, progress: Math.min(weeklyTrend.proteinDays * 14, 100) },
-                      { label: "平均饮水量", value: `${weeklyTrend.hydrationAvg}ml`, progress: Math.min(Math.round(weeklyTrend.hydrationAvg / 3), 100) },
+                      { label: "近 7 天补水状态", value: hydrationDisplay.statusLabel, progress: hydrationDisplay.progress },
                       { label: "饮食单一天数", value: `${weeklyTrend.monotonyDays}天`, progress: Math.min(weeklyTrend.monotonyDays * 14, 100) },
                     ].map((item) => (
                       <div key={item.label}>
@@ -954,6 +969,24 @@ function MealEditorCard({
           )}
         </div>
 
+        {record?.photoUrls?.length ? (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-slate-500">示例餐食图</p>
+            <div className="grid gap-2">
+              {record.photoUrls.map((photoUrl, index) => (
+                <Image
+                  key={`${record.id}-demo-photo-${index}`}
+                  src={photoUrl}
+                  alt={`${meal}示例餐食图 ${index + 1}`}
+                  width={640}
+                  height={240}
+                  className="h-32 w-full rounded-2xl object-cover ring-1 ring-slate-100"
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid gap-2 md:grid-cols-3">
           <Input value={foodName} onChange={(event) => setFoodName(event.target.value)} placeholder="食物名称" />
           <Select value={foodCategory} onValueChange={(value) => setFoodCategory(value as FoodCategory)}>
@@ -1109,7 +1142,7 @@ function MealEditorCard({
               setWaterMl(next);
               onSave({ foods, intakeLevel, preference, allergyReaction, waterMl: Number(next) || 0 });
             }}
-            placeholder="饮水量 ml"
+            placeholder="补水内部记录（ml）"
           />
           <Input
             value={allergyReaction}

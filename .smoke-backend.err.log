@@ -1,0 +1,7 @@
+INFO:     Started server process [34184]
+INFO:     Waiting for application startup.
+2026-04-10 17:05:24,017 INFO [app.main] backend.startup environment=development llm_provider=mock vivo_configured=False configured_memory_backend=memory memory_backend=memory degraded=False cors_origins=http://127.0.0.1:3000,http://localhost:3000
+INFO:     Application startup complete.
+ERROR:    [Errno 13] error while attempting to bind on address ('127.0.0.1', 8000): 以一种访问权限不允许的方式做了一个访问套接字的尝试。
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.

@@ -1,0 +1,36 @@
+(backend_proxy) {
+	header {
+		X-SmartChildcare-Gateway "caddy-staging-s1"
+		defer
+	}
+
+	@consultation_sse path /api/v1/agents/consultations/high-risk/stream
+	header @consultation_sse X-SmartChildcare-SSE "unbuffered"
+
+	# Consultation SSE must flush incrementally instead of being buffered.
+	reverse_proxy backend:8000 {
+		flush_interval -1
+		health_uri /api/v1/health
+		health_interval 30s
+		health_timeout 5s
+		transport http {
+			dial_timeout 10s
+			# Keep this above the storybook brain proxy budget so Caddy does not emit 504 first.
+			response_header_timeout 50s
+			read_timeout 3600s
+			write_timeout 3600s
+		}
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
+}
+
+api-staging.smartchildcareagent.cn {
+	import backend_proxy
+}
+
+# Temporary HTTP-only debug entry for manual VPS troubleshooting before DNS/TLS is ready.
+http://150.109.77.178 {
+	import backend_proxy
+}

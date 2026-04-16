@@ -1,0 +1,12 @@
+
+> childcare-smart@0.1.0 start
+> next start
+
+▲ Next.js 16.1.6
+- Local:         http://localhost:3011
+- Network:       http://10.24.0.252:3011
+
+✓ Starting...
+✓ Ready in 2.5s
+[BRAIN_PROXY] Falling back for /api/v1/agents/parent/storybook: BRAIN_API_BASE_URL is not configured.
+^C^C

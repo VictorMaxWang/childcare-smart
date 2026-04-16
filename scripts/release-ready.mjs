@@ -72,7 +72,7 @@ const blockers = [];
 let next = "npm run release:go:remote";
 
 const env = readEnv(envFilePath);
-const requiredEnv = ["RELEASE_BASE_URL", "RELEASE_ADMIN_COOKIE", "CRON_SECRET"];
+const requiredEnv = ["RELEASE_BASE_URL", "RELEASE_ADMIN_COOKIE", "CRON_SECRET", "BRAIN_API_BASE_URL"];
 const missingEnv = requiredEnv.filter((k) => !String(env.map[k] ?? "").trim());
 const placeholderEnv = requiredEnv.filter((k) => isPlaceholderValue(env.map[k]));
 

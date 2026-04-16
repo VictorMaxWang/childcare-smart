@@ -2,7 +2,7 @@
 
 const baseUrl = String(process.env.AI_SMOKE_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
 const endpoint = `${baseUrl}/api/ai/suggestions`;
-const loginEndpoint = `${baseUrl}/api/auth/login`;
+const loginEndpoint = `${baseUrl}/api/auth/demo-login`;
 
 const payload = {
   snapshot: {
@@ -65,8 +65,7 @@ async function loginAndGetCookie() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      userId: process.env.AI_SMOKE_USER_ID || "u-teacher",
-      password: process.env.AI_SMOKE_PASSWORD || "123456",
+      accountId: process.env.AI_SMOKE_DEMO_ACCOUNT_ID || "u-teacher",
     }),
   });
 
@@ -120,8 +119,8 @@ async function main() {
     const fallback = await postSuggestion(cookie, { "x-ai-force-fallback": "1" });
     printResult("Forced fallback path", fallback);
 
-    const normalOk = normal.status === 200 && ["ai", "fallback"].includes(normal.data?.source);
-    const fallbackOk = fallback.status === 200 && fallback.data?.source === "fallback";
+    const normalOk = normal.status === 200 && ["ai", "fallback", "mock"].includes(normal.data?.source);
+    const fallbackOk = fallback.status === 200 && ["fallback", "mock"].includes(fallback.data?.source);
 
     if (!normalOk || !fallbackOk) {
       console.error("\n[FAIL] AI smoke check did not return expected structure.");

@@ -4,9 +4,13 @@ import type {
   AiFollowUpResponse,
   AiSuggestionResponse,
   ChildSuggestionSnapshot,
+  InstitutionSuggestionSnapshot,
+  PromptMemoryContext,
+  WeeklyReportRole,
   WeeklyReportResponse,
   WeeklyReportSnapshot,
 } from "@/lib/ai/types";
+import { buildActionizedWeeklyReportResponse } from "@/lib/ai/weekly-report";
 
 const DASHSCOPE_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = 12000;
@@ -95,6 +99,17 @@ function normalizeActionPlan(input: unknown): AiActionPlan | undefined {
   };
 }
 
+function normalizePromptMemoryContext(input: PromptMemoryContext | undefined) {
+  if (!input) return undefined;
+
+  return {
+    longTermTraits: input.longTermTraits.slice(0, 3),
+    recentContinuitySignals: input.recentContinuitySignals.slice(0, 3),
+    lastConsultationTakeaways: input.lastConsultationTakeaways.slice(0, 2),
+    openLoops: input.openLoops.slice(0, 2),
+  };
+}
+
 function normalizeAiOutput(raw: unknown): Omit<AiSuggestionResponse, "source"> | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
@@ -128,7 +143,11 @@ function normalizeAiOutput(raw: unknown): Omit<AiSuggestionResponse, "source"> |
   };
 }
 
-function normalizeWeeklyReportOutput(raw: unknown): Omit<WeeklyReportResponse, "source"> | null {
+function normalizeWeeklyReportOutput(
+  raw: unknown,
+  snapshot: WeeklyReportSnapshot,
+  role: WeeklyReportRole
+): Omit<WeeklyReportResponse, "source"> | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
   const summary = String(obj.summary ?? "").trim();
@@ -142,7 +161,9 @@ function normalizeWeeklyReportOutput(raw: unknown): Omit<WeeklyReportResponse, "
     return null;
   }
 
-  return {
+  return buildActionizedWeeklyReportResponse({
+    role,
+    snapshot,
     summary:
       summary ||
       "本周整体数据已形成可复盘闭环，建议继续围绕重点幼儿、关键风险和家园协同执行情况做持续跟踪。",
@@ -156,7 +177,8 @@ function normalizeWeeklyReportOutput(raw: unknown): Omit<WeeklyReportResponse, "
     disclaimer:
       disclaimer ||
       "本建议仅用于托育观察与家园沟通参考，不构成医疗诊断；如出现持续发热或明显异常，请及时就医。",
-  };
+    source: "ai",
+  });
 }
 
 function normalizeFollowUpOutput(raw: unknown): Omit<AiFollowUpResponse, "source"> | null {
@@ -195,12 +217,15 @@ function buildPrompt(snapshot: ChildSuggestionSnapshot): string {
       id: snapshot.child.id,
       name: snapshot.child.name,
       ageBand: snapshot.child.ageBand,
+      ageBandContext: snapshot.child.ageBandContext,
       className: snapshot.child.className,
       allergies: snapshot.child.allergies,
       specialNotes: snapshot.child.specialNotes,
     },
     summary: snapshot.summary,
     recentDetails: snapshot.recentDetails,
+    continuityNotes: snapshot.continuityNotes,
+    memoryContext: normalizePromptMemoryContext(snapshot.memoryContext),
   };
 
   return [
@@ -217,18 +242,43 @@ function buildPrompt(snapshot: ChildSuggestionSnapshot): string {
     "schoolActions写今天园内教师或机构要做的动作，familyActions写今晚家庭配合动作，reviewActions写24到72小时内的复查节奏和观察节点。",
     "每一条尽量直接带上时间词，例如今天、今晚、明早、48小时内、本周末前，不要写成泛泛的长期建议。",
     "如果存在过敏、睡眠、情绪、饮水、饮食单一、家长反馈执行情况，请优先结合这些信息，不要空泛重复。",
+    "如果输入包含 child.ageBandContext.policy，请显式融合 teacherObservationFocus、defaultInterventionFocus、parentActionTone 和 doNotOverstateSignals，输出必须体现月龄阶段差异。",
+    "0-12m 更偏照护、安抚、喂养补水和睡眠节律；12-24m 更偏分离过渡、语言回应、模仿和自主进食；24-36m 更偏同伴互动、情绪命名、规则切换和自理。",
     "disclaimer必须强调非医疗诊断。",
     "输入: ",
     JSON.stringify(modelInput),
   ].join("\n");
 }
 
-function buildWeeklyReportPrompt(snapshot: WeeklyReportSnapshot): string {
+function buildInstitutionPrompt(snapshot: InstitutionSuggestionSnapshot): string {
   return [
+    "你是托育机构的园长运营决策助手。",
+    "你只做机构级风险归因、优先级判断和动作建议，不做医疗诊断，不输出任何额外文本。",
+    "请基于机构近7天汇总、优先级列表、高风险儿童、高风险班级、家长协同风险和待处理派单，输出严格JSON。",
+    "JSON字段必须包含 riskLevel, summary, highlights, concerns, actions, actionPlan, disclaimer。",
+    "summary 要说明今天园长最该优先推动什么、为什么、先动谁。",
+    "highlights 写机构层面可直接用于UI展示的重点摘要。",
+    "concerns 写当前需要优先处理的 TOP 问题，不要泛泛而谈。",
+    "actions 写 3-5 条可执行动作，要带责任人角色和完成时点。",
+    "actionPlan.schoolActions 写园内教师/班级动作，familyActions 写家长协同动作，reviewActions 写园长复盘动作。",
+    "如果 priorityTopItems 已经给出明确排序，优先顺着排序解释，不要重新发明完全不同的结论。",
+    "disclaimer 必须强调非医疗诊断。",
+    "输入:",
+    JSON.stringify({
+      ...snapshot,
+      memoryContext: normalizePromptMemoryContext(snapshot.memoryContext),
+    }),
+  ].join("\n");
+}
+
+function buildWeeklyReportPrompt(snapshot: WeeklyReportSnapshot, role: WeeklyReportRole): string {
+  return [
+    `role=${role}`,
     "你是托育机构周报分析助手。",
     "你只能做托育运营分析和下周行动建议，不做医疗诊断，不输出任何额外文本。",
     "请基于输入的周度运营摘要输出严格JSON。",
     "JSON字段必须为: summary, highlights, risks, nextWeekActions, trendPrediction, disclaimer。",
+    "如果输入包含 ageBandContext，请把该年龄阶段的 weeklyReportFocus、parentActionTone 和 doNotOverstateSignals 融入输出，避免写成泛儿童建议。",
     "summary必须是中文字符串，长度控制在100到160字，适合用于比赛答辩或运营周报。",
     "highlights、risks、nextWeekActions必须是字符串数组。",
     "trendPrediction只能是up|stable|down，表示下周风险趋势上升、持平或下降。",
@@ -236,11 +286,18 @@ function buildWeeklyReportPrompt(snapshot: WeeklyReportSnapshot): string {
     "nextWeekActions写3到5条可执行动作，尽量具体到机构管理或班级执行层面。",
     "disclaimer必须强调非医疗诊断。",
     "输入:",
-    JSON.stringify(snapshot),
+    JSON.stringify({
+      ...snapshot,
+      memoryContext: normalizePromptMemoryContext(snapshot.memoryContext),
+    }),
   ].join("\n");
 }
 
 function buildFollowUpPrompt(payload: AiFollowUpPayload): string {
+  if ("institutionName" in payload.snapshot) {
+    return buildInstitutionFollowUpPrompt(payload, payload.snapshot);
+  }
+
   const recentHistory = (payload.history ?? []).slice(-6);
 
   return [
@@ -252,11 +309,43 @@ function buildFollowUpPrompt(payload: AiFollowUpPayload): string {
     "keyPoints必须是2到4条中文字符串，写清楚观察重点或执行要点。",
     "nextSteps必须是2到4条中文字符串，尽量包含今天、今晚、明天、48小时内等时间词。",
     "如果history存在，请承接上文，不要机械重复前一轮答案；优先回答本轮新问题。",
+    "如果输入包含 snapshot.child.ageBandContext.policy，请继续沿用该年龄阶段的 teacherObservationFocus、defaultInterventionFocus、parentActionTone 和 doNotOverstateSignals，不要退回泛儿童建议。",
     "disclaimer必须强调非医疗诊断。",
     "输入:",
     JSON.stringify({
       ...payload,
+      memoryContext: normalizePromptMemoryContext(payload.memoryContext),
       history: recentHistory,
+    }),
+  ].join("\n");
+}
+
+function buildInstitutionFollowUpPrompt(
+  payload: AiFollowUpPayload,
+  snapshot: InstitutionSuggestionSnapshot
+) {
+  const recentHistory = (payload.history ?? []).slice(-6);
+
+  return [
+    "你是托育机构的园长运营追问助手。",
+    "你只围绕机构级优先事项回答园长追问，帮助其判断今天最该先做什么、分配给谁、什么时候复盘。",
+    "不要输出任何额外文本，只输出严格JSON。",
+    "JSON字段必须包含 answer, keyPoints, nextSteps, disclaimer。",
+    "answer 要紧扣园长问题，直接给出优先顺序和动作建议。",
+    "keyPoints 要引用 priorityTopItems、风险儿童、风险班级或待处理派单中的真实对象。",
+    "nextSteps 要给出 3 条明确动作，尽量包含 今日上午、今日放学前、今晚21:00前、本周五前 等时间词。",
+    "如果历史里已有上一轮回答，要承接上下文，不要重复。",
+    "disclaimer 必须强调非医疗诊断。",
+    "输入:",
+    JSON.stringify({
+      snapshot,
+      suggestionTitle: payload.suggestionTitle,
+      suggestionDescription: payload.suggestionDescription,
+      question: payload.question,
+      history: recentHistory,
+      institutionContext: payload.institutionContext,
+      memoryContext: normalizePromptMemoryContext(payload.memoryContext),
+      continuityNotes: payload.continuityNotes,
     }),
   ].join("\n");
 }
@@ -502,10 +591,12 @@ export async function requestDashscopeDietEvaluation(
 }
 
 export async function requestDashscopeSuggestion(
-  snapshot: ChildSuggestionSnapshot
+  snapshot: ChildSuggestionSnapshot | InstitutionSuggestionSnapshot
 ): Promise<Omit<AiSuggestionResponse, "source"> | null> {
   try {
-    const parsed = await requestDashscopeJson(buildPrompt(snapshot));
+    const parsed = await requestDashscopeJson(
+      "institutionName" in snapshot ? buildInstitutionPrompt(snapshot) : buildPrompt(snapshot)
+    );
     const normalized = normalizeAiOutput(parsed);
     if (!normalized) {
       console.error("[AI] DashScope returned suggestion content that could not be normalized.");
@@ -517,11 +608,12 @@ export async function requestDashscopeSuggestion(
 }
 
 export async function requestDashscopeWeeklyReport(
-  snapshot: WeeklyReportSnapshot
+  snapshot: WeeklyReportSnapshot,
+  role: WeeklyReportRole
 ): Promise<Omit<WeeklyReportResponse, "source"> | null> {
   try {
-    const parsed = await requestDashscopeJson(buildWeeklyReportPrompt(snapshot));
-    const normalized = normalizeWeeklyReportOutput(parsed);
+    const parsed = await requestDashscopeJson(buildWeeklyReportPrompt(snapshot, role));
+    const normalized = normalizeWeeklyReportOutput(parsed, snapshot, role);
     if (!normalized) {
       console.error("[AI] DashScope returned weekly report content that could not be normalized.");
     }

@@ -148,3 +148,91 @@ body {
   background: linear-gradient(135deg, rgb(255 255 255 / 0.35), transparent 55%);
   pointer-events: none;
 }
+
+@keyframes voice-assistant-bob {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-6px) scale(1.01);
+  }
+}
+
+@keyframes voice-assistant-pulse {
+  0% {
+    transform: scale(0.86);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.42;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+@keyframes voice-assistant-glow {
+  0%, 100% {
+    opacity: 0.44;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 0.78;
+    transform: scale(1.12);
+  }
+}
+
+.teacher-voice-safe-space {
+  padding-bottom: max(7rem, calc(env(safe-area-inset-bottom) + 6.75rem));
+}
+
+.voice-assistant-fab {
+  animation: voice-assistant-bob 4.8s ease-in-out infinite;
+  touch-action: manipulation;
+}
+
+.voice-assistant-glow {
+  position: absolute;
+  inset: 0.5rem;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 30% 30%, rgb(255 255 255 / 0.8), transparent 40%),
+    radial-gradient(circle at 70% 70%, rgb(255 255 255 / 0.18), transparent 52%);
+  filter: blur(2px);
+  animation: voice-assistant-glow 2.8s ease-in-out infinite;
+}
+
+.voice-assistant-wave {
+  position: absolute;
+  inset: -0.2rem;
+  border-radius: 9999px;
+  border: 1px solid rgb(255 255 255 / 0.52);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.voice-assistant-fab:hover .voice-assistant-wave,
+.voice-assistant-fab:focus-visible .voice-assistant-wave,
+.voice-assistant-fab[aria-pressed="true"] .voice-assistant-wave {
+  animation: voice-assistant-pulse 2.2s ease-out infinite;
+}
+
+.voice-assistant-wave-delay-0 {
+  animation-delay: 0s;
+}
+
+.voice-assistant-wave-delay-1 {
+  animation-delay: 0.45s;
+}
+
+.voice-assistant-wave-delay-2 {
+  animation-delay: 0.9s;
+}
+
+.voice-assistant-sheet-header {
+  background:
+    radial-gradient(circle at top right, rgb(99 102 241 / 0.18), transparent 36%),
+    radial-gradient(circle at bottom left, rgb(14 165 233 / 0.12), transparent 42%),
+    linear-gradient(180deg, rgb(248 250 252 / 0.95), rgb(255 255 255 / 0.98));
+}

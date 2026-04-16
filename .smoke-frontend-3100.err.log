@@ -1,0 +1,30 @@
+[AUTH] Invalid demo login request SyntaxError: Unexpected token 'a', "accountId=u-parent" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at async POST (app\api\auth\demo-login\route.ts:13:19)
+  11 | export async function POST(request: Request) {
+  12 |   try {
+> 13 |     const body = (await request.json()) as { accountId?: string };
+     |                   ^
+  14 |     const account = getDemoAccountById(body.accountId ?? "");
+  15 |
+  16 |     if (!account) {
+[AUTH] Invalid demo login request SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at async POST (app\api\auth\demo-login\route.ts:13:19)
+  11 | export async function POST(request: Request) {
+  12 |   try {
+> 13 |     const body = (await request.json()) as { accountId?: string };
+     |                   ^
+  14 |     const account = getDemoAccountById(body.accountId ?? "");
+  15 |
+  16 |     if (!account) {
+[AI] Invalid parent storybook payload SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>)
+    at POST (app\api\ai\parent-storybook\route.ts:183:43)
+  181 |
+  182 |   try {
+> 183 |     const parsed = (await request.clone().json()) as unknown;
+      |                                           ^
+  184 |     if (!isParentStoryBookRequest(parsed)) {
+  185 |       return NextResponse.json(
+  186 |         { error: "Invalid parent storybook payload" },

@@ -1,18 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   BookHeart,
-  ClipboardList,
   CalendarDays,
+  ClipboardList,
   History,
-  Salad,
-  ShieldCheck,
-  Sparkles,
   TrendingDown,
-  TrendingUp,
+  Sparkles,
   TriangleAlert,
   Users,
 } from "lucide-react";
@@ -20,28 +18,21 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  PolarAngleAxis,
-  PolarGrid,
-  Radar,
-  RadarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import { toast } from "sonner";
 import type { WeeklyReportResponse, WeeklyReportSnapshot } from "@/lib/ai/types";
 import { getLocalToday, isDateWithinLastDays, shiftLocalDate } from "@/lib/date";
-import { useApp, INSTITUTION_NAME } from "@/lib/store";
+import type { AdminBoardData } from "@/lib/store";
+import { INSTITUTION_NAME, useApp } from "@/lib/store";
 import AnimatedNumber from "@/components/AnimatedNumber";
+import EmptyState from "@/components/EmptyState";
 import ScrollReveal from "@/components/ScrollReveal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import EmptyState from "@/components/EmptyState";
 
 const TODAY_TEXT = new Date().toLocaleDateString("zh-CN", {
   year: "numeric",
@@ -68,8 +59,38 @@ const TEMPLATE_ENTRIES = [
   },
 ];
 
-export default function DashboardPage() {
+type BoardExposureView = Pick<
+  AdminBoardData,
+  "highAttentionChildren" | "lowHydrationChildren" | "lowVegTrendChildren"
+>;
+
+function dedupeBoardExposure(board: BoardExposureView): BoardExposureView {
+  const seen = new Set<string>();
+
+  const takeUnique = <T extends { childId: string }>(items: T[]) => {
+    const next: T[] = [];
+
+    for (const item of items) {
+      if (seen.has(item.childId)) continue;
+      seen.add(item.childId);
+      next.push(item);
+    }
+
+    return next;
+  };
+
+  return {
+    highAttentionChildren: takeUnique(board.highAttentionChildren),
+    lowHydrationChildren: takeUnique(board.lowHydrationChildren),
+    lowVegTrendChildren: takeUnique(board.lowVegTrendChildren),
+  };
+}
+
+export default function RootOverviewPage() {
+  const router = useRouter();
   const {
+    authLoading,
+    isAuthenticated,
     currentUser,
     visibleChildren,
     attendanceRecords,
@@ -82,34 +103,76 @@ export default function DashboardPage() {
     guardianFeedbacks,
     healthCheckRecords,
     mealRecords,
-    presentChildren,
   } = useApp();
 
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authLoading, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && currentUser.role === "家长") {
+      router.replace("/parent");
+    }
+  }, [authLoading, currentUser.role, isAuthenticated, router]);
+
+  const visibleIds = useMemo(() => new Set(visibleChildren.map((child) => child.id)), [visibleChildren]);
   const todayAttendance = getTodayAttendance();
   const presentCount = todayAttendance.filter((item) => item.isPresent).length;
   const todayMeals = getTodayMealRecords();
   const weeklyTrend = getWeeklyDietTrend();
   const insights = getSmartInsights();
   const adminBoard = getAdminBoardData();
-  const visibleIds = useMemo(() => new Set(visibleChildren.map((child) => child.id)), [visibleChildren]);
-  const [weeklyReport, setWeeklyReport] = useState<WeeklyReportResponse | null>(null);
-  const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
-  const [weeklyReportRefreshNonce, setWeeklyReportRefreshNonce] = useState(0);
-  const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
+  const uniqueAdminBoard = useMemo(() => dedupeBoardExposure(adminBoard), [adminBoard]);
+  const adminChartData = useMemo(() => {
+    const merged = new Map<
+      string,
+      { childName: string; attentionRisk: number; hydrationRisk: number; vegetableRisk: number }
+    >();
 
-  // Health Calculation
-  const todayDate = getLocalToday();
-  const abnormalHealthChecks = healthCheckRecords.filter(
-    (record) => record.date === todayDate && record.isAbnormal && visibleIds.has(record.childId)
-  );
-  
-  const missingHealthChecks = presentChildren.filter(
-    (child) => !healthCheckRecords.some(r => r.childId === child.id && r.date === todayDate)
-  );
+    adminBoard.highAttentionChildren.forEach((item) => {
+      merged.set(item.childId, {
+        childName: item.childName,
+        attentionRisk: item.count,
+        hydrationRisk: 0,
+        vegetableRisk: 0,
+      });
+    });
 
+    adminBoard.lowHydrationChildren.forEach((item) => {
+      const next = merged.get(item.childId) ?? {
+        childName: item.childName,
+        attentionRisk: 0,
+        hydrationRisk: 0,
+        vegetableRisk: 0,
+      };
+      next.hydrationRisk = Math.max(0, 220 - item.hydrationAvg);
+      merged.set(item.childId, next);
+    });
+
+    adminBoard.lowVegTrendChildren.forEach((item) => {
+      const next = merged.get(item.childId) ?? {
+        childName: item.childName,
+        attentionRisk: 0,
+        hydrationRisk: 0,
+        vegetableRisk: 0,
+      };
+      next.vegetableRisk = Math.max(0, 7 - item.vegetableDays);
+      merged.set(item.childId, next);
+    });
+
+    return Array.from(merged.values())
+      .sort(
+        (left, right) =>
+          right.attentionRisk + right.hydrationRisk + right.vegetableRisk -
+          (left.attentionRisk + left.hydrationRisk + left.vegetableRisk)
+      )
+      .slice(0, 5);
+  }, [adminBoard]);
   const pendingReviews = growthRecords
     .filter((record) => visibleIds.has(record.childId) && record.reviewStatus === "待复查")
-    .sort((a, b) => (a.reviewDate ?? "9999-12-31").localeCompare(b.reviewDate ?? "9999-12-31"));
+    .sort((left, right) => (left.reviewDate ?? "9999-12-31").localeCompare(right.reviewDate ?? "9999-12-31"));
 
   const recentTimeline = [
     ...todayAttendance.map((item) => ({
@@ -119,7 +182,6 @@ export default function DashboardPage() {
       detail: `${visibleChildren.find((child) => child.id === item.childId)?.name ?? "幼儿"} · ${
         item.isPresent ? `在园 ${item.checkInAt ?? "08:30"} 入园` : item.absenceReason ?? "未到园"
       }`,
-      type: item.isPresent ? "attendance" : "absence",
     })),
     ...todayMeals.map((item) => ({
       id: `meal-${item.id}`,
@@ -128,62 +190,25 @@ export default function DashboardPage() {
       detail: `${visibleChildren.find((child) => child.id === item.childId)?.name ?? "幼儿"} · ${item.foods
         .map((food) => food.name)
         .join("、")}`,
-      type: "meal",
     })),
     ...guardianFeedbacks
-      .filter((item) => visibleIds.has(item.childId) && item.date === todayDate)
+      .filter((item) => visibleIds.has(item.childId) && item.date === getLocalToday())
       .map((item) => ({
         id: `feedback-${item.id}`,
         dateTime: `${item.date} 20:00`,
         title: `收到家长反馈：${item.status}`,
         detail: `${visibleChildren.find((child) => child.id === item.childId)?.name ?? "幼儿"} · ${item.content}`,
-        type: "feedback",
       })),
   ]
-    .sort((a, b) => b.dateTime.localeCompare(a.dateTime))
-    .slice(0, 8);
-
-  const flowSteps = [
-    {
-      title: "出勤",
-      desc: `${presentCount} 人出勤，${todayAttendance.filter((item) => !item.isPresent).length} 人缺勤`,
-      href: "/children",
-      icon: "1",
-    },
-    {
-      title: "健康晨检",
-      desc: "支持批量出勤的幼儿进行健康状况快速录入",
-      href: "/health",
-      icon: "2",
-    },
-    {
-      title: "批量录入餐食",
-      desc: "按出勤名单一键录入，并支持过敏拦截",
-      href: "/diet",
-      icon: "3",
-    },
-    {
-      title: "成长观察",
-      desc: "记录行为、情绪、睡眠并标记复查",
-      href: "/growth",
-      icon: "4",
-    },
-    {
-      title: "家园共育",
-      desc: "家长打卡并提交已知晓/配合/今晚反馈",
-      href: "/parent",
-      icon: "5",
-    },
-  ];
+    .sort((left, right) => right.dateTime.localeCompare(left.dateTime))
+    .slice(0, 6);
 
   const weeklyReportSnapshot = useMemo(() => {
     const weekAttendance = attendanceRecords.filter(
       (record) => visibleIds.has(record.childId) && isRecentDate(record.date, 7)
     );
     const weekPresent = weekAttendance.filter((record) => record.isPresent).length;
-    const weekMeals = mealRecords.filter(
-      (record) => visibleIds.has(record.childId) && isRecentDate(record.date, 7)
-    );
+    const weekMeals = mealRecords.filter((record) => visibleIds.has(record.childId) && isRecentDate(record.date, 7));
     const weekHealth = healthCheckRecords.filter(
       (record) => visibleIds.has(record.childId) && isRecentDate(record.date, 7)
     );
@@ -193,18 +218,6 @@ export default function DashboardPage() {
     const weekFeedback = guardianFeedbacks.filter(
       (record) => visibleIds.has(record.childId) && isRecentDate(record.date, 7)
     );
-
-    const topAttentionChildren = visibleChildren
-      .map((child) => ({
-        childName: child.name,
-        attentionCount: growthRecords.filter(
-          (record) => record.childId === child.id && record.needsAttention && isRecentDate(record.createdAt.split(" ")[0], 7)
-        ).length,
-        hydrationAvg: getWeeklyDietTrend(child.id).hydrationAvg,
-        vegetableDays: getWeeklyDietTrend(child.id).vegetableDays,
-      }))
-      .sort((a, b) => b.attentionCount - a.attentionCount)
-      .slice(0, 5);
 
     return {
       institutionName: INSTITUTION_NAME,
@@ -226,18 +239,47 @@ export default function DashboardPage() {
         vegetableDays: weeklyTrend.vegetableDays,
         proteinDays: weeklyTrend.proteinDays,
       },
-      topAttentionChildren,
+      topAttentionChildren: adminBoard.highAttentionChildren.slice(0, 5).map((item) => ({
+        childName: item.childName,
+        attentionCount: item.count,
+        hydrationAvg: adminBoard.lowHydrationChildren.find((entry) => entry.childId === item.childId)?.hydrationAvg ?? 0,
+        vegetableDays: adminBoard.lowVegTrendChildren.find((entry) => entry.childId === item.childId)?.vegetableDays ?? 0,
+      })),
       highlights: insights.filter((item) => item.level !== "warning").map((item) => item.title).slice(0, 4),
       risks: insights.filter((item) => item.level === "warning").map((item) => item.title).slice(0, 4),
     } satisfies WeeklyReportSnapshot;
-  }, [attendanceRecords, currentUser.role, getWeeklyDietTrend, guardianFeedbacks, growthRecords, healthCheckRecords, insights, mealRecords, visibleChildren, visibleIds, weeklyTrend.balancedRate, weeklyTrend.hydrationAvg, weeklyTrend.monotonyDays, weeklyTrend.proteinDays, weeklyTrend.vegetableDays]);
+  }, [
+    adminBoard.highAttentionChildren,
+    adminBoard.lowHydrationChildren,
+    adminBoard.lowVegTrendChildren,
+    attendanceRecords,
+    currentUser.role,
+    guardianFeedbacks,
+    growthRecords,
+    healthCheckRecords,
+    insights,
+    mealRecords,
+    visibleChildren,
+    visibleIds,
+    weeklyTrend.balancedRate,
+    weeklyTrend.hydrationAvg,
+    weeklyTrend.monotonyDays,
+    weeklyTrend.proteinDays,
+    weeklyTrend.vegetableDays,
+  ]);
 
+  const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
+  const [weeklyReport, setWeeklyReport] = useState<WeeklyReportResponse | null>(null);
+  const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
+  const [weeklyReportRefreshNonce, setWeeklyReportRefreshNonce] = useState(0);
   const weeklyReportKey = useMemo(
     () => `${JSON.stringify(weeklyReportSnapshot)}::${weeklyReportRefreshNonce}`,
     [weeklyReportRefreshNonce, weeklyReportSnapshot]
   );
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const cached = weeklyReportCacheRef.current.get(weeklyReportKey);
     if (cached) {
       setWeeklyReport(cached);
@@ -258,9 +300,7 @@ export default function DashboardPage() {
           signal: controller.signal,
         });
 
-        if (!response.ok) {
-          return;
-        }
+        if (!response.ok) return;
 
         const data = (await response.json()) as WeeklyReportResponse;
         if (!cancelled) {
@@ -284,111 +324,30 @@ export default function DashboardPage() {
       cancelled = true;
       controller.abort();
     };
-  }, [weeklyReportKey, weeklyReportSnapshot]);
+  }, [isAuthenticated, weeklyReportKey, weeklyReportSnapshot]);
 
-  function refreshWeeklyReport() {
-    weeklyReportCacheRef.current.delete(weeklyReportKey);
-    setWeeklyReport(null);
-    setWeeklyReportRefreshNonce((prev) => prev + 1);
+  if (authLoading || !isAuthenticated || currentUser.role === "家长") {
+    return (
+      <div className="flex min-h-[calc(100vh-64px)] items-center justify-center px-6">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
+          <p className="text-sm text-slate-500">正在加载平台首页…</p>
+        </div>
+      </div>
+    );
   }
 
-  const attendanceChartData = useMemo(
-    () => [
-      { name: "出勤", value: presentCount, fill: "#34d399" },
-      {
-        name: "缺勤",
-        value: Math.max(visibleChildren.length - presentCount, 0),
-        fill: "#fda4af",
-      },
-    ],
-    [presentCount, visibleChildren.length]
-  );
-
-  const adminChartData = useMemo(() => {
-    const merged = new Map<
-      string,
-      { childName: string; attentionRisk: number; hydrationRisk: number; vegetableRisk: number }
-    >();
-
-    adminBoard.highAttentionChildren.forEach((item) => {
-      merged.set(item.childId, {
-        childName: item.childName,
-        attentionRisk: item.count,
-        hydrationRisk: 0,
-        vegetableRisk: 0,
-      });
-    });
-
-    adminBoard.lowHydrationChildren.forEach((item) => {
-      const existing = merged.get(item.childId) ?? {
-        childName: item.childName,
-        attentionRisk: 0,
-        hydrationRisk: 0,
-        vegetableRisk: 0,
-      };
-      existing.hydrationRisk = Math.max(0, 220 - item.hydrationAvg);
-      merged.set(item.childId, existing);
-    });
-
-    adminBoard.lowVegTrendChildren.forEach((item) => {
-      const existing = merged.get(item.childId) ?? {
-        childName: item.childName,
-        attentionRisk: 0,
-        hydrationRisk: 0,
-        vegetableRisk: 0,
-      };
-      existing.vegetableRisk = Math.max(0, 7 - item.vegetableDays);
-      merged.set(item.childId, existing);
-    });
-
-    return Array.from(merged.values())
-      .sort(
-        (a, b) =>
-          b.attentionRisk + b.hydrationRisk + b.vegetableRisk -
-          (a.attentionRisk + a.hydrationRisk + a.vegetableRisk)
-      )
-      .slice(0, 5);
-  }, [adminBoard]);
-
-  const nutritionRadarData = useMemo(() => {
-    const visibleSet = new Set(visibleChildren.map((child) => child.id));
-    const weeklyMeals = mealRecords.filter(
-      (record) => visibleSet.has(record.childId) && isRecentDate(record.date, 7)
+  if (visibleChildren.length === 0) {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        <EmptyState
+          icon={<Users className="h-6 w-6" />}
+          title="当前账号还没有可展示的首页数据"
+          description="请先使用示例账号，或为当前账号关联班级、儿童与基础记录。"
+        />
+      </div>
     );
-
-    const dayCategoryMap = new Map<string, Set<string>>();
-    weeklyMeals.forEach((record) => {
-      const key = `${record.childId}-${record.date}`;
-      const categories = dayCategoryMap.get(key) ?? new Set<string>();
-      record.foods.forEach((food) => categories.add(food.category));
-      dayCategoryMap.set(key, categories);
-    });
-
-    const totalDays = Math.max(dayCategoryMap.size, 1);
-    const categoryDays = {
-      主食: 0,
-      蛋白: 0,
-      蔬果: 0,
-      奶制品: 0,
-      饮品: 0,
-    };
-
-    dayCategoryMap.forEach((categories) => {
-      if (categories.has("主食")) categoryDays.主食 += 1;
-      if (categories.has("蛋白")) categoryDays.蛋白 += 1;
-      if (categories.has("蔬果")) categoryDays.蔬果 += 1;
-      if (categories.has("奶制品")) categoryDays.奶制品 += 1;
-      if (categories.has("饮品")) categoryDays.饮品 += 1;
-    });
-
-    return [
-      { subject: "主食", value: Math.round((categoryDays.主食 / totalDays) * 100) },
-      { subject: "蛋白", value: Math.round((categoryDays.蛋白 / totalDays) * 100) },
-      { subject: "蔬果", value: Math.round((categoryDays.蔬果 / totalDays) * 100) },
-      { subject: "奶制品", value: Math.round((categoryDays.奶制品 / totalDays) * 100) },
-      { subject: "饮水", value: Math.min(Math.round((weeklyTrend.hydrationAvg / 220) * 100), 100) },
-    ];
-  }, [mealRecords, visibleChildren, weeklyTrend.hydrationAvg]);
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
@@ -407,9 +366,7 @@ export default function DashboardPage() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
             已将功能升级为业务闭环：出勤 → 批量录入餐食 → 个别调整 → 成长观察 → 家长反馈，并以规则引擎输出可解释建议。
           </p>
-          <p className="mt-3 text-xs text-slate-500">
-            平台默认内置近七天评审示例数据，首次进入即可直接预览全链路效果。
-          </p>
+          <p className="mt-3 text-xs text-slate-500">平台默认内置近七天评审示例数据，首次进入即可直接预览全链路效果。</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <QuickLink href="/health" title="晨检与健康" description="记录每日体温、情绪、手口眼" />
@@ -417,60 +374,14 @@ export default function DashboardPage() {
           <QuickLink href="/parent" title="家长反馈时间线" description="已知晓 / 在家已配合 / 今晚反馈" />
         </div>
       </div>
-      
-      {abnormalHealthChecks.length > 0 && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 flex items-start gap-3 shadow-sm animate-in fade-in">
-          <div className="shrink-0 mt-0.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-red-600">
-              ⚠️
-            </span>
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-red-800">健康晨检告警 ({abnormalHealthChecks.length}人)</h3>
-            <p className="mt-1 text-sm text-red-700">
-              存在晨检异常（如体温偏高、情绪哭闹或手口眼异常），请及时关注并通知家长。
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {abnormalHealthChecks.map(r => {
-                const child = visibleChildren.find(c => c.id === r.childId);
-                if (!child) return null;
-                return (
-                  <Badge key={r.id} variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-200">
-                    {child.name} ({r.temperature}°C, {r.mood}, {r.handMouthEye})
-                  </Badge>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {missingHealthChecks.length > 0 && currentUser.role !== "家长" && presentCount > 0 && (
-        <div className="mb-6 rounded-xl border border-orange-200 bg-orange-50 p-4 flex items-start gap-3 shadow-sm">
-          <div className="shrink-0 mt-0.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-orange-600">
-              📋
-            </span>
-          </div>
-          <div className="flex-1">
-            <h3 className="text-sm font-bold text-orange-800">晨检待完善</h3>
-            <p className="mt-1 text-sm text-orange-700">
-              今日出勤 {presentCount} 人，尚有 {missingHealthChecks.length} 人未完成晨检记录。
-            </p>
-          </div>
-          <Button variant="outline" size="sm" asChild className="border-orange-200 text-orange-700 hover:bg-orange-100">
-            <Link href="/health">前往登记</Link>
-          </Button>
-        </div>
-      )}
 
       <ScrollReveal>
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="可见幼儿" value={`${visibleChildren.length}`} desc={`${currentUser.role}权限范围`} icon={<Users className="h-5 w-5 text-indigo-500" />} />
-        <StatCard title="今日出勤" value={`${presentCount}`} desc={visibleChildren.length ? `出勤率 ${Math.round((presentCount / visibleChildren.length) * 100)}%` : "暂无数据"} icon={<TrendingUp className="h-5 w-5 text-emerald-500" />} />
-        <StatCard title="今日饮食记录" value={`${todayMeals.length}`} desc="含早餐/午餐/晚餐/加餐" icon={<Salad className="h-5 w-5 text-amber-500" />} />
-        <StatCard title="规则建议" value={`${insights.length}`} desc="按年龄段、过敏、连续异常生成" icon={<Sparkles className="h-5 w-5 text-rose-500" />} />
-      </div>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard title="可见幼儿" value={`${visibleChildren.length}`} desc={`${currentUser.role}权限范围`} />
+          <StatCard title="今日出勤" value={`${presentCount}`} desc={visibleChildren.length ? `出勤率 ${Math.round((presentCount / visibleChildren.length) * 100)}%` : "暂无数据"} />
+          <StatCard title="今日饮食记录" value={`${todayMeals.length}`} desc="含早餐/午餐/晚餐/加餐" />
+          <StatCard title="规则建议" value={`${insights.length}`} desc="按年龄段、过敏、连续异常生成" />
+        </div>
       </ScrollReveal>
 
       <Card className="mt-6 border-indigo-100 bg-linear-to-r from-indigo-50/80 via-white to-sky-50/70">
@@ -484,30 +395,21 @@ export default function DashboardPage() {
             </CardTitle>
             <CardDescription>聚合近 7 天出勤、健康、饮食、成长与家园反馈数据，用于答辩展示和运营复盘。</CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={refreshWeeklyReport} disabled={weeklyReportLoading}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              weeklyReportCacheRef.current.delete(weeklyReportKey);
+              setWeeklyReport(null);
+              setWeeklyReportRefreshNonce((prev) => prev + 1);
+            }}
+            disabled={weeklyReportLoading}
+          >
             {weeklyReportLoading ? "生成中..." : "刷新周报"}
           </Button>
         </CardHeader>
         <CardContent>
-          {weeklyReportLoading ? (
-            <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-              <div className="rounded-3xl border border-white/70 bg-white/80 p-5 skeleton-pulse">
-                <div className="h-5 w-36 rounded bg-slate-100" />
-                <div className="mt-4 h-4 w-full rounded bg-slate-100" />
-                <div className="mt-2 h-4 w-5/6 rounded bg-slate-100" />
-                <div className="mt-2 h-4 w-4/6 rounded bg-slate-100" />
-              </div>
-              <div className="grid gap-3">
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <div key={index} className="rounded-2xl border border-white/70 bg-white/80 p-4 skeleton-pulse">
-                    <div className="h-4 w-24 rounded bg-slate-100" />
-                    <div className="mt-3 h-3 w-full rounded bg-slate-100" />
-                    <div className="mt-2 h-3 w-4/5 rounded bg-slate-100" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : weeklyReport ? (
+          {weeklyReport ? (
             <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
               <div className="rounded-3xl border border-white/70 bg-white/85 p-5 shadow-sm">
                 <div className="flex flex-wrap items-center gap-2">
@@ -530,106 +432,14 @@ export default function DashboardPage() {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-slate-500">AI 周报暂不可用，请稍后重试。</p>
+            <div className="rounded-3xl border border-dashed border-slate-200 bg-white/70 p-5 text-sm text-slate-500">
+              {weeklyReportLoading ? "正在生成 AI 周报…" : "AI 周报暂不可用，请稍后重试。"}
+            </div>
           )}
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>业务闭环流程</CardTitle>
-          <CardDescription>比赛演示可按此顺序操作，逻辑完整且可解释。</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {flowSteps.map((step) => (
-            <Link key={step.title} href={step.href} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow">
-              <p className="text-lg font-bold text-indigo-500">{step.icon}</p>
-              <p className="mt-2 text-sm font-semibold text-slate-700">{step.title}</p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">{step.desc}</p>
-            </Link>
-          ))}
-        </CardContent>
-      </Card>
-
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader>
-            <CardTitle>全园营养雷达图</CardTitle>
-            <CardDescription>把主食、蛋白、蔬果、奶制品和饮水覆盖度统一可视化，答辩时更容易讲清楚。</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
-              <div className="h-70 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={nutritionRadarData} outerRadius="75%">
-                    <PolarGrid stroke="#dbeafe" />
-                    <PolarAngleAxis dataKey="subject" tick={{ fill: "#475569", fontSize: 12 }} />
-                    <Radar
-                      name="覆盖度"
-                      dataKey="value"
-                      stroke="#6366f1"
-                      fill="#818cf8"
-                      fillOpacity={0.45}
-                    />
-                    <Tooltip formatter={(value) => [`${value}%`, "覆盖度"]} />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="space-y-3">
-                <TrendSummaryCard label="膳食均衡占比" value={`${weeklyTrend.balancedRate}%`} tone="indigo" />
-                <TrendSummaryCard label="含蔬果天数" value={`${weeklyTrend.vegetableDays}天`} tone="emerald" />
-                <TrendSummaryCard label="平均饮水量" value={`${weeklyTrend.hydrationAvg}ml`} tone="sky" />
-                <TrendSummaryCard label="饮食单一天数" value={`${weeklyTrend.monotonyDays}天`} tone="rose" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <ShieldCheck className="h-5 w-5 text-indigo-500" />
-              出勤环形图
-            </CardTitle>
-            <CardDescription>把今日出勤与缺勤比例直接图形化展示，适合作为演示开场数据。</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-55 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={attendanceChartData}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={52}
-                    outerRadius={82}
-                    paddingAngle={3}
-                  >
-                    {attendanceChartData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [`${value}人`, "人数"]} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
-              {attendanceChartData.map((item) => (
-                <div key={item.name} className="rounded-2xl bg-slate-50 p-3">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
-                    <span>{item.name}</span>
-                  </div>
-                  <p className="mt-2 text-lg font-semibold text-slate-800">{item.value}人</p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {currentUser.role !== "家长" ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -642,7 +452,7 @@ export default function DashboardPage() {
             <div className="h-65 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={adminChartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="childName" tick={{ fill: "#64748b", fontSize: 12 }} />
                   <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
                   <Tooltip />
@@ -652,14 +462,29 @@ export default function DashboardPage() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+
             <div className="grid gap-3 md:grid-cols-3">
-              <BoardList title="高频关注儿童" icon={<AlertIcon />} items={adminBoard.highAttentionChildren.map((item) => `${item.childName}（${item.count}次）`)} emptyText="暂无" />
-              <BoardList title="低饮水提醒" icon={<TrendingDown className="h-4 w-4 text-sky-400" />} items={adminBoard.lowHydrationChildren.map((item) => `${item.childName}（${item.hydrationAvg}ml）`)} emptyText="暂无" />
-              <BoardList title="蔬果不足趋势" icon={<TrendingDown className="h-4 w-4 text-emerald-400" />} items={adminBoard.lowVegTrendChildren.map((item) => `${item.childName}（${item.vegetableDays}天）`)} emptyText="暂无" />
+              <BoardList
+                title="高频关注儿童"
+                icon={<AlertIcon />}
+                items={uniqueAdminBoard.highAttentionChildren.map((item) => `${item.childName}（${item.count}次）`)}
+                emptyText="暂无"
+              />
+              <BoardList
+                title="低饮水提醒"
+                icon={<TrendingDown className="h-4 w-4 text-sky-400" />}
+                items={uniqueAdminBoard.lowHydrationChildren.map((item) => `${item.childName}（${item.hydrationAvg}ml）`)}
+                emptyText="暂无"
+              />
+              <BoardList
+                title="蔬果不足趋势"
+                icon={<TrendingDown className="h-4 w-4 text-emerald-400" />}
+                items={uniqueAdminBoard.lowVegTrendChildren.map((item) => `${item.childName}（${item.vegetableDays}天）`)}
+                emptyText="暂无"
+              />
             </div>
           </CardContent>
         </Card>
-        ) : null}
 
         <Card>
           <CardHeader>
@@ -689,6 +514,56 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      <div className="hidden mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <CardHeader>
+            <CardTitle>业务闭环流程</CardTitle>
+            <CardDescription>比赛演示可按此顺序操作，逻辑完整且可解释。</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {[
+              ["1", "出勤", `${presentCount} 人出勤，进入今日闭环起点`, "/children"],
+              ["2", "健康晨检", "支持批量出勤幼儿进行健康状况快速录入", "/health"],
+              ["3", "批量录餐", "按出勤名单一键录入，并支持过敏拦截", "/diet"],
+              ["4", "成长观察", "记录行为、情绪、睡眠并标记复查", "/growth"],
+              ["5", "家长反馈", "已知晓 / 在家已配合 / 今晚反馈", "/parent"],
+            ].map(([icon, title, desc, href]) => (
+              <Link key={title} href={href} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow">
+                <p className="text-lg font-bold text-indigo-500">{icon}</p>
+                <p className="mt-2 text-sm font-semibold text-slate-700">{title}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{desc}</p>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <History className="h-5 w-5 text-indigo-500" />
+              今日运营时间线
+            </CardTitle>
+            <CardDescription>把出勤、录餐、反馈串成一条可讲清楚的业务路径。</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {recentTimeline.map((item) => (
+              <div key={item.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                <p className="text-sm font-semibold text-slate-700">{item.title}</p>
+                <p className="mt-2 text-xs leading-5 text-slate-500">{item.detail}</p>
+                <p className="mt-2 text-[11px] text-slate-400">{item.dateTime}</p>
+              </div>
+            ))}
+            {recentTimeline.length === 0 ? (
+              <EmptyState
+                icon={<History className="h-6 w-6" />}
+                title="今日时间线尚未生成"
+                description="当出勤、饮食或家长反馈开始产生后，这里会自动聚合为运营时间线。"
+              />
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card>
           <CardHeader>
@@ -699,29 +574,21 @@ export default function DashboardPage() {
             <CardDescription>聚焦待复查事项，便于教师和机构管理员安排追踪。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-end justify-between rounded-2xl bg-amber-50 p-4">
-              <div>
-                <p className="text-xs text-amber-600">待复查事项</p>
-                <p className="mt-2 text-3xl font-bold text-amber-700">{pendingReviews.length}</p>
-              </div>
-              <Link href="/growth">
-                <Button size="sm" variant="outline">进入复查台账</Button>
-              </Link>
+            <div className="rounded-2xl bg-amber-50 p-4">
+              <p className="text-xs text-amber-600">待复查事项</p>
+              <p className="mt-2 text-3xl font-bold text-amber-700">
+                <AnimatedNumber value={pendingReviews.length} />
+              </p>
             </div>
             {pendingReviews.slice(0, 4).map((record) => {
               const child = visibleChildren.find((item) => item.id === record.childId);
               return (
                 <div key={record.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <Badge variant="warning">{record.category}</Badge>
-                    <span className="text-xs text-slate-400">{record.reviewDate ?? "待安排"}</span>
-                  </div>
-                  <p className="mt-2 text-sm font-semibold text-slate-700">{child?.name ?? "幼儿"}</p>
+                  <p className="text-sm font-semibold text-slate-700">{child?.name ?? "幼儿"}</p>
                   <p className="mt-1 text-xs leading-5 text-slate-500">{record.followUpAction ?? record.description}</p>
                 </div>
               );
             })}
-            {pendingReviews.length === 0 ? <p className="text-sm text-slate-400">当前暂无待复查事项。</p> : null}
           </CardContent>
         </Card>
 
@@ -731,7 +598,7 @@ export default function DashboardPage() {
               <ClipboardList className="h-5 w-5 text-emerald-500" />
               批量模板入口
             </CardTitle>
-            <CardDescription>用于演示“模板化录入 + 例外处理 + 过敏拦截”的效率优势。</CardDescription>
+            <CardDescription>用于演示模板化录入、例外处理和过敏拦截。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {TEMPLATE_ENTRIES.map((template) => (
@@ -766,12 +633,7 @@ export default function DashboardPage() {
           <CardContent className="space-y-3">
             {recentTimeline.map((item) => (
               <div key={item.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-slate-700">{item.title}</p>
-                  <Badge variant={item.type === "feedback" ? "info" : item.type === "absence" ? "warning" : "secondary"}>
-                    {item.type === "feedback" ? "反馈" : item.type === "absence" ? "缺勤" : item.type === "meal" ? "饮食" : "出勤"}
-                  </Badge>
-                </div>
+                <p className="text-sm font-semibold text-slate-700">{item.title}</p>
                 <p className="mt-2 text-xs leading-5 text-slate-500">{item.detail}</p>
                 <p className="mt-2 text-[11px] text-slate-400">{item.dateTime}</p>
               </div>
@@ -804,51 +666,33 @@ function QuickLink({ href, title, description }: { href: string; title: string; 
   );
 }
 
-function StatCard({ title, value, desc, icon }: { title: string; value: string; desc: string; icon: React.ReactNode }) {
-  const parsed = Number(value.replace(/[^\d.-]/g, ""));
-  const suffix = value.replace(/[\d.-]/g, "");
+function StatCard({ title, value, desc }: { title: string; value: string; desc: string }) {
   return (
-    <Card className="kpi-accent card-hover border-l-4 border-l-indigo-300 relative overflow-hidden">
-      <div className="absolute right-0 top-0 p-3 opacity-[0.07] pointer-events-none" aria-hidden style={{ transform: "scale(4)", transformOrigin: "top right" }}>{icon}</div>
+    <Card className="kpi-accent card-hover border-l-4 border-l-indigo-300">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardDescription>{title}</CardDescription>
-          {icon}
-        </div>
+        <CardDescription>{title}</CardDescription>
       </CardHeader>
       <CardContent>
-        <p className="text-4xl font-bold text-slate-800">{Number.isNaN(parsed) ? value : <AnimatedNumber value={parsed} suffix={suffix} />}</p>
+        <p className="text-4xl font-bold text-slate-800">
+          <AnimatedNumber value={Number(value)} />
+        </p>
         <p className="mt-2 text-xs text-slate-500">{desc}</p>
       </CardContent>
     </Card>
   );
 }
 
-function TrendSummaryCard({
-  label,
-  value,
-  tone,
+function BoardList({
+  title,
+  items,
+  emptyText,
+  icon,
 }: {
-  label: string;
-  value: string;
-  tone: "indigo" | "emerald" | "sky" | "rose";
+  title: string;
+  items: string[];
+  emptyText: string;
+  icon: ReactNode;
 }) {
-  const toneClass = {
-    indigo: "bg-indigo-50 text-indigo-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    sky: "bg-sky-50 text-sky-700",
-    rose: "bg-rose-50 text-rose-700",
-  }[tone];
-
-  return (
-    <div className={`rounded-2xl p-4 ${toneClass}`}>
-      <p className="text-xs opacity-80">{label}</p>
-      <p className="mt-2 text-xl font-semibold">{value}</p>
-    </div>
-  );
-}
-
-function BoardList({ title, items, emptyText, icon }: { title: string; items: string[]; emptyText: string; icon: React.ReactNode }) {
   return (
     <div className="rounded-2xl bg-slate-50 p-3">
       <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -856,7 +700,7 @@ function BoardList({ title, items, emptyText, icon }: { title: string; items: st
         {title}
       </p>
       {items.length === 0 ? (
-        <p className="py-2 text-center text-xs text-slate-400 italic">{emptyText}</p>
+        <p className="py-2 text-center text-xs italic text-slate-400">{emptyText}</p>
       ) : (
         <div className="space-y-1.5 text-xs text-slate-600">
           {items.map((text) => (
@@ -866,6 +710,10 @@ function BoardList({ title, items, emptyText, icon }: { title: string; items: st
       )}
     </div>
   );
+}
+
+function AlertIcon() {
+  return <Sparkles className="h-4 w-4 text-rose-400" />;
 }
 
 function WeeklyReportPanel({
@@ -903,13 +751,11 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/70 bg-white/85 p-4 shadow-sm">
       <p className="text-xs text-slate-400">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-slate-800">{Number.isNaN(parsed) ? value : <AnimatedNumber value={parsed} suffix={suffix} />}</p>
+      <p className="mt-2 text-2xl font-semibold text-slate-800">
+        {Number.isNaN(parsed) ? value : <AnimatedNumber value={parsed} suffix={suffix} />}
+      </p>
     </div>
   );
-}
-
-function AlertIcon() {
-  return <Sparkles className="h-4 w-4 text-rose-400" />;
 }
 
 function getTrendPredictionLabel(value: "up" | "stable" | "down") {

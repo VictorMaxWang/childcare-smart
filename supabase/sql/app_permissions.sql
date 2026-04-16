@@ -1,0 +1,4 @@
+-- Optional MySQL privilege example.
+-- Adjust the database name, username, and host to match your environment.
+--
+-- grant select, insert, update, delete on `childcare`.* to 'childcare_app'@'%';

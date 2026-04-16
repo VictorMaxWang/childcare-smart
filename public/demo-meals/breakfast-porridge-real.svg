@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fff6ea"/>
+      <stop offset="100%" stop-color="#f0dfcb"/>
+    </linearGradient>
+    <radialGradient id="table" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" stop-color="#d7b28a"/>
+      <stop offset="100%" stop-color="#b07f56"/>
+    </radialGradient>
+    <radialGradient id="bowl" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#fef9f2"/>
+      <stop offset="100%" stop-color="#d8d8dd"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <rect x="80" y="110" width="1040" height="680" rx="36" fill="url(#table)"/>
+  <ellipse cx="600" cy="458" rx="292" ry="248" fill="#ffffff" opacity=".22"/>
+  <ellipse cx="600" cy="468" rx="230" ry="186" fill="url(#bowl)"/>
+  <ellipse cx="600" cy="438" rx="185" ry="122" fill="#f7ebd5"/>
+  <ellipse cx="600" cy="442" rx="150" ry="92" fill="#efe0c2"/>
+  <ellipse cx="520" cy="402" rx="28" ry="18" fill="#f4b866"/>
+  <ellipse cx="568" cy="384" rx="24" ry="16" fill="#f6c06f"/>
+  <ellipse cx="640" cy="395" rx="26" ry="17" fill="#f5bb6a"/>
+  <ellipse cx="700" cy="430" rx="22" ry="15" fill="#f0ad59"/>
+  <ellipse cx="638" cy="468" rx="20" ry="14" fill="#f0b76d"/>
+  <ellipse cx="548" cy="472" rx="24" ry="16" fill="#efb15b"/>
+  <circle cx="740" cy="310" r="68" fill="#ffffff" opacity=".92"/>
+  <circle cx="740" cy="310" r="51" fill="#ffeaa7"/>
+  <circle cx="740" cy="310" r="33" fill="#ffcf4d"/>
+  <rect x="774" y="255" width="102" height="20" rx="10" fill="#7e532e"/>
+  <rect x="762" y="282" width="112" height="18" rx="9" fill="#8a603a"/>
+  <rect x="244" y="292" width="172" height="112" rx="30" fill="#fff4e7"/>
+  <rect x="258" y="308" width="144" height="84" rx="24" fill="#ffd5a4"/>
+  <rect x="274" y="324" width="112" height="52" rx="18" fill="#ffc374"/>
+  <circle cx="324" cy="628" r="72" fill="#f7fbff"/>
+  <path d="M286 622c12-24 44-42 74-42s54 10 74 24c-8 38-36 60-82 60-34 0-56-15-66-42z" fill="#b7d37f"/>
+  <path d="M302 620c12-12 30-20 54-20 18 0 36 4 48 10-10 20-30 34-60 34-18 0-32-7-42-24z" fill="#88b04b"/>
+  <circle cx="878" cy="612" r="62" fill="#f4f8fb"/>
+  <ellipse cx="878" cy="610" rx="34" ry="26" fill="#ff9c74"/>
+  <ellipse cx="852" cy="608" rx="20" ry="16" fill="#ffbf8e"/>
+  <ellipse cx="902" cy="620" rx="16" ry="14" fill="#f27952"/>
+</svg>

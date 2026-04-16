@@ -1,1252 +1,861 @@
 "use client";
 
-import { toPng } from "html-to-image";
-import ReactMarkdown from "react-markdown";
+import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BellRing, HeartHandshake, LineChart as LineChartIcon, MessageCircleHeart, CheckCircle, Goal } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { formatDisplayDate, getAgeText, getAgeBandFromBirthDate, type CollaborationStatus, useApp } from "@/lib/store";
-import type {
-  AiFollowUpMessage,
-  AiFollowUpResponse,
-  AiSuggestionResponse,
-  ChildSuggestionSnapshot,
-  RuleFallbackItem,
-} from "@/lib/ai/types";
-import { buildFallbackSuggestion } from "@/lib/ai/fallback";
+  BookOpenText,
+  BrainCircuit,
+  CalendarDays,
+  CheckCircle2,
+  MessageCircleMore,
+  MoonStar,
+  TrendingUp,
+} from "lucide-react";
+import EmptyState from "@/components/EmptyState";
+import UnifiedIntentEntryCard from "@/components/intent/UnifiedIntentEntryCard";
+import CareModeToggle from "@/components/parent/CareModeToggle";
+import ParentCareFocusCard from "@/components/parent/ParentCareFocusCard";
+import ParentSpeakButton from "@/components/parent/ParentSpeakButton";
+import ParentTransparencyPanel from "@/components/parent/ParentTransparencyPanel";
+import WeeklyReportPreviewCard from "@/components/weekly-report/WeeklyReportPreviewCard";
+import {
+  InlineLinkButton,
+  MetricGrid,
+  RolePageShell,
+  RoleSplitLayout,
+  SectionCard,
+} from "@/components/role-shell/RoleScaffold";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import EmptyState from "@/components/EmptyState";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { buildRecentLocalDateRange, getLocalToday, isDateWithinLastDays } from "@/lib/date";
-import { getWeeklyTaskForChild } from "@/lib/mock/coparenting";
-import { toast } from "sonner";
+import {
+  buildParentAgentChildContext,
+  buildParentAgentSuggestionResult,
+  buildParentChildSuggestionSnapshot,
+  type ParentAgentResult,
+} from "@/lib/agent/parent-agent";
+import { buildParentHomeTransparencyModel } from "@/lib/agent/parent-transparency";
+import { buildParentWeeklyReportSnapshot } from "@/lib/agent/parent-weekly-report";
+import { resolveDefaultParentStoryBookDemoSeedId } from "@/lib/agent/parent-storybook-demo-seeds";
+import { fetchWeeklyReport } from "@/lib/agent/weekly-report-client";
+import { buildFallbackSuggestion } from "@/lib/ai/fallback";
+import type { AiSuggestionResponse, WeeklyReportResponse } from "@/lib/ai/types";
+import { useCareMode } from "@/lib/care-mode";
+import { buildParentSpeechScript } from "@/lib/voice/browser-tts";
+import { buildParentHomeViewModel } from "@/lib/view-models/role-home";
+import { formatDisplayDate, getAgeText, useApp } from "@/lib/store";
 
-const FEEDBACK_STATUSES: CollaborationStatus[] = ["已知晓", "在家已配合", "今晚反馈"];
-const FOLLOW_UP_HISTORY_LIMIT = 3;
+const TODAY_TEXT = new Date().toLocaleDateString("zh-CN", {
+  month: "long",
+  day: "numeric",
+  weekday: "long",
+});
 
-export default function ParentPage() {
+function formatTimelineTime(value: string) {
+  return new Date(value).toLocaleString("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export default function ParentHomePage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const {
     currentUser,
     getParentFeed,
-    addGuardianFeedback,
-    checkInTask,
-    getTaskCheckIns,
     healthCheckRecords,
     mealRecords,
     growthRecords,
     guardianFeedbacks,
+    taskCheckInRecords,
+    getChildInterventionCard,
+    getLatestConsultationForChild,
   } = useApp();
+  const { careMode, setCareMode } = useCareMode();
+  const [showMoreContent, setShowMoreContent] = useState(false);
   const parentFeed = getParentFeed();
-
-  const [selectedChildId, setSelectedChildId] = useState(parentFeed[0]?.child.id ?? "");
-  const [feedbackStatus, setFeedbackStatus] = useState<CollaborationStatus>("已知晓");
-  const [feedbackContent, setFeedbackContent] = useState("");
-  const [aiSuggestion, setAiSuggestion] = useState<AiSuggestionResponse | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [exportingReport, setExportingReport] = useState(false);
-  const [aiRefreshNonce, setAiRefreshNonce] = useState(0);
-  const [selectedSuggestionId, setSelectedSuggestionId] = useState("");
-  const [followUpQuestion, setFollowUpQuestion] = useState("");
-  const [followUpTurnsMap, setFollowUpTurnsMap] = useState<Record<string, FollowUpTurn[]>>({});
-  const [followUpLoading, setFollowUpLoading] = useState(false);
-  const aiSuggestionCacheRef = useRef<Map<string, AiSuggestionResponse>>(new Map());
-  const followUpCacheRef = useRef<Map<string, AiFollowUpResponse>>(new Map());
-
-  const followUpTurns = useMemo(() => {
-    return selectedSuggestionId ? (followUpTurnsMap[selectedSuggestionId] ?? []) : [];
-  }, [followUpTurnsMap, selectedSuggestionId]);
-
-  const selectedFeed = useMemo(
-    () => parentFeed.find((item) => item.child.id === selectedChildId) ?? parentFeed[0],
-    [parentFeed, selectedChildId]
+  const childFromQuery = searchParams.get("child");
+  const authorizedChildIds = useMemo(
+    () => new Set(parentFeed.map((item) => item.child.id)),
+    [parentFeed]
   );
-  
-  const todayStr = getLocalToday();
-
-  const currentTask = useMemo(() => {
-    if (!selectedFeed) return null;
-    const ageBand = getAgeBandFromBirthDate(selectedFeed.child.birthDate);
-    return getWeeklyTaskForChild(selectedFeed.child.id, ageBand);
-  }, [selectedFeed]);
-
-  const taskCheckIns = getTaskCheckIns(selectedFeed?.child.id ?? "");
-  const isTaskCheckedInToday = Boolean(currentTask && taskCheckIns.some(t => t.taskId === currentTask.id && t.date === todayStr));
-  const weeklyCheckInCount = taskCheckIns.filter(t => t.taskId === currentTask?.id).length;
-
-  const weeklyTrendChartData = useMemo(() => {
-    if (!selectedFeed) return [];
-
-    const dateList = buildRecentDateRange(7);
-    return dateList.map((date) => {
-      const records = mealRecords.filter(
-        (record) => record.childId === selectedFeed.child.id && record.date === date
-      );
-      const nutritionScore =
-        records.length > 0
-          ? Math.round(records.reduce((sum, item) => sum + item.nutritionScore, 0) / records.length)
-          : 0;
-      const waterMl = records.reduce((sum, item) => sum + item.waterMl, 0);
-      const balancedMeals = records.filter((item) => item.nutritionScore >= 75).length;
-      const balancedRate = records.length > 0 ? Math.round((balancedMeals / records.length) * 100) : 0;
-
-      return {
-        date,
-        label: formatShortDate(date),
-        nutritionScore,
-        waterMl,
-        balancedRate,
-      };
-    });
-  }, [mealRecords, selectedFeed]);
-
-  const aiSnapshot = useMemo(() => {
-    if (!selectedFeed) return null;
-
-    const inLastSevenDays = (dateText?: string) => {
-      if (!dateText) return false;
-      return isDateWithinLastDays(dateText, 7, todayStr);
-    };
-
-    const childHealth = healthCheckRecords.filter((record) => {
-      if (record.childId !== selectedFeed.child.id) return false;
-      return inLastSevenDays(record.date);
-    });
-
-    const childMeals = mealRecords.filter((record) => {
-      if (record.childId !== selectedFeed.child.id) return false;
-      return inLastSevenDays(record.date);
-    });
-
-    const childGrowth = growthRecords.filter((record) => {
-      if (record.childId !== selectedFeed.child.id) return false;
-      return inLastSevenDays(record.createdAt);
-    });
-
-    const childFeedbacks = guardianFeedbacks.filter((record) => {
-      if (record.childId !== selectedFeed.child.id) return false;
-      return inLastSevenDays(record.date);
-    });
-
-    const avgTemp =
-      childHealth.length > 0
-        ? Math.round((childHealth.reduce((sum, item) => sum + item.temperature, 0) / childHealth.length) * 10) / 10
-        : undefined;
-
-    const categoryCounter = new Map<string, number>();
-    childGrowth.forEach((record) => {
-      categoryCounter.set(record.category, (categoryCounter.get(record.category) ?? 0) + 1);
-    });
-
-    const topCategories = Array.from(categoryCounter.entries())
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 3);
-
-    const statusCounts = childFeedbacks.reduce<Record<string, number>>((acc, item) => {
-      acc[item.status] = (acc[item.status] ?? 0) + 1;
-      return acc;
-    }, {});
-
-    const ruleFallback: RuleFallbackItem[] = selectedFeed.suggestions.map((item) => ({
-      title: item.title,
-      description: item.description,
-      level: item.level,
-      tags: item.tags,
-    }));
-
-    const recentHealth = childHealth
-      .slice()
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 4)
-      .map((record) => ({
-        date: record.date,
-        temperature: record.temperature,
-        mood: record.mood,
-        handMouthEye: record.handMouthEye,
-        isAbnormal: record.isAbnormal,
-        remark: record.remark,
-      }));
-
-    const recentMeals = childMeals
-      .slice()
-      .sort((a, b) => `${b.date}-${b.meal}`.localeCompare(`${a.date}-${a.meal}`))
-      .slice(0, 5)
-      .map((record) => ({
-        date: record.date,
-        meal: record.meal,
-        foods: record.foods.map((food) => `${food.name}(${food.amount})`),
-        waterMl: record.waterMl,
-        preference: record.preference,
-        allergyReaction: record.allergyReaction,
-      }));
-
-    const recentGrowth = childGrowth
-      .slice()
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, 5)
-      .map((record) => ({
-        createdAt: record.createdAt,
-        category: record.category,
-        description: record.description,
-        needsAttention: record.needsAttention,
-        followUpAction: record.followUpAction,
-        reviewStatus: record.reviewStatus,
-      }));
-
-    const recentFeedback = childFeedbacks
-      .slice()
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 4)
-      .map((record) => ({
-        date: record.date,
-        status: record.status,
-        content: record.content,
-      }));
-
-    return {
-      child: {
-        id: selectedFeed.child.id,
-        name: selectedFeed.child.name,
-        ageBand: getAgeBandFromBirthDate(selectedFeed.child.birthDate),
-        className: selectedFeed.child.className,
-        allergies: selectedFeed.child.allergies,
-        specialNotes: selectedFeed.child.specialNotes,
-      },
-      summary: {
-        health: {
-          abnormalCount: childHealth.filter((item) => item.isAbnormal).length,
-          handMouthEyeAbnormalCount: childHealth.filter((item) => item.handMouthEye === "异常").length,
-          avgTemperature: avgTemp,
-          moodKeywords: Array.from(new Set(childHealth.map((item) => item.mood))).slice(0, 5),
-        },
-        meals: {
-          recordCount: childMeals.length,
-          hydrationAvg:
-            childMeals.length > 0
-              ? Math.round(childMeals.reduce((sum, item) => sum + (item.waterMl || 0), 0) / childMeals.length)
-              : 0,
-          balancedRate:
-            childMeals.length > 0
-              ? Math.round(
-                  (childMeals.filter((item) => item.nutritionScore >= 75).length / childMeals.length) * 100
-                )
-              : 0,
-          monotonyDays: Math.max(0, 7 - new Set(childMeals.map((item) => item.date)).size),
-          allergyRiskCount: childMeals.filter((record) => Boolean(record.allergyReaction)).length,
-        },
-        growth: {
-          recordCount: childGrowth.length,
-          attentionCount: childGrowth.filter((record) => record.needsAttention).length,
-          pendingReviewCount: childGrowth.filter((record) => record.reviewStatus === "待复查").length,
-          topCategories,
-        },
-        feedback: {
-          count: childFeedbacks.length,
-          statusCounts,
-          keywords: childFeedbacks.map((item) => item.content).filter(Boolean).slice(0, 5),
-        },
-      },
-      recentDetails: {
-        health: recentHealth,
-        meals: recentMeals,
-        growth: recentGrowth,
-        feedback: recentFeedback,
-      },
-      ruleFallback,
-    } satisfies ChildSuggestionSnapshot;
-  }, [selectedFeed, healthCheckRecords, mealRecords, growthRecords, guardianFeedbacks, todayStr]);
-
-  const aiSnapshotKey = useMemo(() => {
-    return aiSnapshot ? `${JSON.stringify(aiSnapshot)}::${aiRefreshNonce}` : "";
-  }, [aiSnapshot, aiRefreshNonce]);
-
-  const suggestionCards = useMemo(
-    () => buildSuggestionCards(aiSuggestion, selectedFeed?.suggestions ?? []),
-    [aiSuggestion, selectedFeed]
-  );
-
-  const selectedSuggestion = useMemo(
-    () => suggestionCards.find((item) => item.id === selectedSuggestionId) ?? null,
-    [selectedSuggestionId, suggestionCards]
-  );
-
-  const followUpHistoryMessages = useMemo(
-    () =>
-      followUpTurns.flatMap<AiFollowUpMessage>((turn) => [
-        { role: "user", content: turn.question },
-        { role: "assistant", content: turn.response.answer },
-      ]),
-    [followUpTurns]
-  );
-
-  const latestFollowUpAnswer = followUpTurns.at(-1)?.response ?? null;
+  const resolvedChildId =
+    childFromQuery && authorizedChildIds.has(childFromQuery)
+      ? childFromQuery
+      : parentFeed[0]?.child.id ?? "";
+  const feed = parentFeed.find((item) => item.child.id === resolvedChildId) ?? parentFeed[0];
+  const viewModel = buildParentHomeViewModel(feed);
+  const [previewResult, setPreviewResult] = useState<ParentAgentResult | null>(null);
+  const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
+  const [weeklyReport, setWeeklyReport] = useState<WeeklyReportResponse | null>(null);
+  const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
+  const [weeklyReportError, setWeeklyReportError] = useState<string | null>(null);
+  const latestInterventionCard = feed ? getChildInterventionCard(feed.child.id) : undefined;
+  const latestConsultation = feed ? getLatestConsultationForChild(feed.child.id) : undefined;
 
   useEffect(() => {
-    if (!aiSnapshotKey || !aiSnapshot) {
-      setAiSuggestion(null);
-      setAiLoading(false);
+    if (!feed) {
       return;
     }
 
-    const cached = aiSuggestionCacheRef.current.get(aiSnapshotKey);
-    if (cached) {
-      setAiSuggestion(cached);
-      setAiLoading(false);
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("child", feed.child.id);
+    const nextQuery = nextParams.toString();
+    const currentQuery = searchParams.toString();
+    if (nextQuery === currentQuery) {
       return;
     }
 
-    const fallback = buildFallbackSuggestion(aiSnapshot.ruleFallback);
-    const controller = new AbortController();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [feed, pathname, router, searchParams]);
+
+  const previewContext = useMemo(() => {
+    if (!feed) return null;
+
+    return buildParentAgentChildContext({
+      child: feed.child,
+      smartInsights: feed.suggestions,
+      healthCheckRecords,
+      mealRecords,
+      growthRecords,
+      guardianFeedbacks,
+      taskCheckInRecords,
+      weeklyTrend: feed.weeklyTrend,
+    });
+  }, [
+    feed,
+    guardianFeedbacks,
+    growthRecords,
+    healthCheckRecords,
+    mealRecords,
+    taskCheckInRecords,
+  ]);
+
+  const snapshot = useMemo(
+    () => (previewContext ? buildParentChildSuggestionSnapshot(previewContext) : null),
+    [previewContext]
+  );
+  const weeklyReportPayload = useMemo(
+    () =>
+      previewContext
+        ? {
+            role: "parent" as const,
+            snapshot: buildParentWeeklyReportSnapshot(previewContext),
+          }
+        : null,
+    [previewContext]
+  );
+  const weeklyReportKey = useMemo(
+    () => (weeklyReportPayload ? JSON.stringify(weeklyReportPayload) : null),
+    [weeklyReportPayload]
+  );
+  const homeTransparencyModel = useMemo(
+    () =>
+      feed && previewContext
+        ? buildParentHomeTransparencyModel({
+            context: previewContext,
+            suggestionResult: previewResult,
+            weeklyReport,
+            weeklyReportError,
+            latestConsultation,
+            pendingFeedback: !feed.hasFeedbackToday,
+          })
+        : null,
+    [feed, latestConsultation, previewContext, previewResult, weeklyReport, weeklyReportError]
+  );
+
+  useEffect(() => {
+    if (!previewContext || !snapshot) return;
+
     let cancelled = false;
+    const controller = new AbortController();
+    const context = previewContext;
+    const snapshotPayload = snapshot;
 
-    async function fetchAiSuggestion() {
-      setAiLoading(true);
+    async function fetchPreview() {
       try {
         const response = await fetch("/api/ai/suggestions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot: aiSnapshot }),
+          body: JSON.stringify({ snapshot: snapshotPayload }),
           signal: controller.signal,
         });
 
         if (!response.ok) {
-          if (!cancelled) {
-            aiSuggestionCacheRef.current.set(aiSnapshotKey, fallback);
-            setAiSuggestion(fallback);
-            toast.warning("AI 建议暂时不可用", {
-              description: "已切换为规则引擎建议，当前业务展示不受影响。",
-            });
-          }
-          return;
+          throw new Error("fetch preview failed");
         }
 
         const data = (await response.json()) as AiSuggestionResponse;
         if (!cancelled) {
-          aiSuggestionCacheRef.current.set(aiSnapshotKey, data);
-          setAiSuggestion(data);
-          if (data.source === "fallback") {
-            toast.warning("AI 建议已回退为规则模式", {
-              description: "当前显示的是规则引擎生成的建议，可稍后手动刷新重试。",
-            });
-          }
+          setPreviewResult(buildParentAgentSuggestionResult({ context, suggestion: data }));
         }
       } catch {
         if (!cancelled) {
-          aiSuggestionCacheRef.current.set(aiSnapshotKey, fallback);
-          setAiSuggestion(fallback);
-          toast.warning("AI 建议请求失败", {
-            description: "已自动回退为规则建议，请检查网络后稍后重试。",
-          });
-        }
-      } finally {
-        if (!cancelled) {
-          setAiLoading(false);
+          const fallback = buildFallbackSuggestion(snapshotPayload);
+          setPreviewResult(buildParentAgentSuggestionResult({ context, suggestion: fallback }));
         }
       }
     }
 
-    fetchAiSuggestion();
+    void fetchPreview();
 
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [aiSnapshotKey, aiSnapshot]);
-
-  function refreshAiSuggestion() {
-    if (!aiSnapshot) return;
-    aiSuggestionCacheRef.current.delete(aiSnapshotKey);
-    setAiSuggestion(null);
-    setAiRefreshNonce((prev) => prev + 1);
-    setFollowUpTurnsMap({});
-  }
+  }, [previewContext, snapshot]);
 
   useEffect(() => {
-    const firstActionableSuggestion = suggestionCards.find((item) => item.followUpEnabled);
-    if (!firstActionableSuggestion) {
-        setSelectedSuggestionId("");
-        setFollowUpQuestion("");
-        return;
-      }
+    const payload = weeklyReportPayload;
+    const key = weeklyReportKey;
+    if (!payload || !key) return;
+    const cacheKey = key;
+    const nextPayload = payload;
 
-    const hasCurrent = suggestionCards.some((item) => item.id === selectedSuggestionId && item.followUpEnabled);
-    if (!hasCurrent) {
-        setSelectedSuggestionId(firstActionableSuggestion.id);
-        const existing = followUpTurnsMap[firstActionableSuggestion.id] || [];
-        setFollowUpQuestion(existing.length === 0 ? buildDefaultFollowUpQuestion(firstActionableSuggestion.title) : "");
-      }
-  }, [followUpTurnsMap, selectedSuggestionId, suggestionCards]);
-
-  function selectSuggestionForFollowUp(card: SuggestionCard) {
-      if (!card.followUpEnabled) return;
-      setSelectedSuggestionId(card.id);
-      const existing = followUpTurnsMap[card.id] || [];
-      if (existing.length === 0) {
-        setFollowUpQuestion(buildDefaultFollowUpQuestion(card.title));
-      } else {
-        setFollowUpQuestion("");
-      }
-    }
-
-  async function submitFollowUp() {
-    if (!aiSnapshot || !selectedSuggestion || !followUpQuestion.trim()) {
-      toast.warning("请先选择建议并填写追问问题。", {
-        description: "例如：这条建议今天园内应该怎么执行，家里晚上怎么配合？",
-      });
-      return;
-    }
-
-    const historyKey = followUpTurns.map((turn) => `${turn.question}::${turn.response.answer}`).join("||");
-    const cacheKey = `${aiSnapshotKey}::${selectedSuggestion.id}::${historyKey}::${followUpQuestion.trim()}`;
-    const cached = followUpCacheRef.current.get(cacheKey);
+    const cached = weeklyReportCacheRef.current.get(cacheKey);
     if (cached) {
-      setFollowUpTurnsMap((prevMap) => {
-          const prevList = prevMap[selectedSuggestion.id] || [];
-          return {
-            ...prevMap,
-            [selectedSuggestion.id]: [...prevList, { id: `${selectedSuggestion.id}-${Date.now()}`, question: followUpQuestion.trim(), response: cached }].slice(-FOLLOW_UP_HISTORY_LIMIT)
-          };
+      setWeeklyReport(cached);
+      setWeeklyReportError(null);
+      setWeeklyReportLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    async function loadWeeklyReportPreview() {
+      setWeeklyReportLoading(true);
+      setWeeklyReportError(null);
+
+      try {
+        const data = await fetchWeeklyReport(nextPayload, {
+          signal: controller.signal,
         });
-      setFollowUpQuestion("");
-      return;
-    }
 
-    const currentQuestion = followUpQuestion.trim();
-    setFollowUpLoading(true);
-    try {
-      const response = await fetch("/api/ai/follow-up", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          snapshot: aiSnapshot,
-          suggestionTitle: selectedSuggestion.title,
-          suggestionDescription: selectedSuggestion.description,
-          question: currentQuestion,
-          history: followUpHistoryMessages,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("follow-up request failed");
+        if (!cancelled) {
+          weeklyReportCacheRef.current.set(cacheKey, data);
+          setWeeklyReport(data);
+        }
+      } catch (requestError) {
+        if (!cancelled && !controller.signal.aborted) {
+          setWeeklyReportError(
+            requestError instanceof Error ? requestError.message : "家长周报预览暂时不可用。"
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setWeeklyReportLoading(false);
+        }
       }
-
-      const data = (await response.json()) as AiFollowUpResponse;
-      followUpCacheRef.current.set(cacheKey, data);
-      setFollowUpTurnsMap((prevMap) => {
-          const prevList = prevMap[selectedSuggestion.id] || [];
-          return {
-            ...prevMap,
-            [selectedSuggestion.id]: [...prevList, { id: `${selectedSuggestion.id}-${Date.now()}`, question: currentQuestion, response: data }].slice(-FOLLOW_UP_HISTORY_LIMIT)
-          };
-        });
-      setFollowUpQuestion("");
-    } catch {
-      toast.error("AI 追问失败", {
-        description: "请稍后重试，系统会继续保留当前建议内容。",
-      });
-    } finally {
-      setFollowUpLoading(false);
-    }
-  }
-
-
-
-  async function exportReport() {
-    if (exportingReport) return;
-    const el = document.getElementById("report-export-sheet");
-    if (!el) {
-      toast.error("导出失败", { description: "找不到报告内容，请先生成 AI 建议" });
-      return;
-    }
-    setExportingReport(true);
-    try {
-      if (typeof document !== "undefined" && "fonts" in document) {
-        await document.fonts.ready;
-      }
-      await new Promise<void>((resolve) => {
-        window.requestAnimationFrame(() => resolve());
-      });
-
-      const dataUrl = await toPng(el, {
-        pixelRatio: 2,
-        backgroundColor: "#ffffff",
-        cacheBust: true,
-      });
-      const link = document.createElement("a");
-      link.download = `${selectedFeed?.child.name ?? "child"}-AI健康报告.png`;
-      link.href = dataUrl;
-      link.click();
-      toast.success("导出成功", { description: "周报长图已下载到本地" });
-    } catch (err) {
-      console.error("[ExportReport]", err);
-      toast.error("导出失败", { description: "生成图片时发生错误, 请稍后重试" });
-    } finally {
-      setExportingReport(false);
-    }
-  }
-
-  function submitFeedback() {
-    if (!selectedFeed || !feedbackContent.trim()) {
-      toast.warning("请先填写反馈内容。", {
-        description: "家园反馈需要补充具体执行情况后再提交。",
-      });
-      return;
     }
 
-    addGuardianFeedback({
-      childId: selectedFeed.child.id,
-      date: todayStr,
-      status: feedbackStatus,
-      content: feedbackContent.trim(),
-    });
+    void loadWeeklyReportPreview();
 
-    toast.success("反馈已提交", {
-      description: "教师和机构管理员已可实时查看这条家园反馈。",
-    });
-    setFeedbackContent("");
-    setFeedbackStatus("已知晓");
-  }
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [weeklyReportKey, weeklyReportPayload]);
 
-  return (
-    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
-      <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
-            <HeartHandshake className="h-8 w-8 text-rose-500" />
-            家长端同步查看
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-            家长端已从“只看”升级为“可反馈”：可提交已知晓、在家已配合、今晚反馈，形成家园闭环。
-            当前为 {currentUser.role} 视角预览。
-          </p>
-          <div className="section-divider mt-5" />
-        </div>
-
-        {parentFeed.length > 0 ? (
-          <div className="w-full lg:w-72">
-            <Select value={selectedFeed?.child.id ?? ""} onValueChange={setSelectedChildId}>
-              <SelectTrigger>
-                <SelectValue placeholder="选择孩子" />
-              </SelectTrigger>
-              <SelectContent>
-                {parentFeed.map((feed) => (
-                  <SelectItem key={feed.child.id} value={feed.child.id}>
-                    {feed.child.name} · {getAgeText(feed.child.birthDate)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        ) : null}
-      </div>
-
-      {!selectedFeed ? (
+  if (!viewModel || !feed || !previewContext) {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
         <EmptyState
-          icon={<HeartHandshake className="h-6 w-6" />}
-          title="当前没有可展示的家长端数据"
-          description="请先给当前家长账号绑定幼儿，或补充家园共育记录后再查看。"
+          icon={<BrainCircuit className="h-6 w-6" />}
+          title="当前家长账号还没有可展示的孩子数据。"
+          description="请先使用示例家长账号，或完成普通家长账号的孩子建档。"
         />
-      ) : (
-        <div className="space-y-6">
-          <Card className="border-rose-100 bg-linear-to-r from-rose-50 to-white">
-            <CardContent className="flex flex-col gap-4 py-6 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-4xl shadow-sm" role="img" aria-label={`${selectedFeed.child.name} 的头像`}>
-                  {selectedFeed.child.avatar}
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-800">{selectedFeed.child.name}</h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    出生日期：{formatDisplayDate(selectedFeed.child.birthDate)} · {getAgeText(selectedFeed.child.birthDate)}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Badge variant="secondary">班级：{selectedFeed.child.className}</Badge>
-                    <Badge variant="info">今日饮食 {selectedFeed.todayMeals.length} 条</Badge>
-                    <Badge
-                      variant={selectedFeed.todayGrowth.some((record) => record.needsAttention) ? "warning" : "success"}
-                    >
-                      今日成长记录 {selectedFeed.todayGrowth.length} 条
-                    </Badge>
-                  </div>
-                </div>
-              </div>
+      </div>
+    );
+  }
 
-              <div className="rounded-3xl bg-white/80 p-4 text-sm text-slate-600 shadow-sm lg:w-96">
-                <p className="font-semibold text-slate-700">家长反馈动作</p>
-                <fieldset className="mt-3 grid gap-2 md:grid-cols-3">
-                  <legend className="sr-only">反馈状态选择</legend>
-                  {FEEDBACK_STATUSES.map((status) => (
-                    <Button
-                      key={status}
-                      variant={feedbackStatus === status ? "default" : "outline"}
-                      onClick={() => setFeedbackStatus(status)}
-                      className="text-xs"
-                      aria-pressed={feedbackStatus === status}
-                    >
-                      {status}
-                    </Button>
+  const agentHref = `/parent/agent?child=${feed.child.id}`;
+  const storybookDemoSeedId = resolveDefaultParentStoryBookDemoSeedId({
+    childId: feed.child.id,
+    currentUserId: currentUser.id,
+    accountKind: currentUser.accountKind,
+  });
+  const storybookHref = storybookDemoSeedId
+    ? `/parent/storybook?child=${feed.child.id}&demoSeed=${storybookDemoSeedId}`
+    : `/parent/storybook?child=${feed.child.id}`;
+  const primaryAgentLabel = previewResult ? "继续追问" : "进入 AI 助手";
+  const displayInterventionCard = latestInterventionCard ?? previewResult?.interventionCard;
+  const displayTonightTaskTitle = displayInterventionCard?.title ?? viewModel.tonightTask.title;
+  const displayTonightTaskDescription =
+    displayInterventionCard?.tonightHomeAction ??
+    previewResult?.tonightTopAction ??
+    viewModel.tonightTask.description;
+  const displayWhyRecommended =
+    latestConsultation?.summary ??
+    previewResult?.whyNow ??
+    "系统综合最近 7 天观察、园内风险和家庭反馈，优先给出今晚最值得执行的一件事。";
+  const displayReviewIn48h =
+    latestConsultation?.followUp48h?.[0] ??
+    displayInterventionCard?.reviewIn48h ??
+    "48 小时内继续观察今晚任务执行后的变化。";
+  const recentCriticalReminder = previewResult?.title ?? viewModel.aiReminder.title;
+  const careFocusSpeechText = buildParentSpeechScript({
+    title: `${feed.child.name} 关怀模式摘要`,
+    sections: [
+      { label: "今晚做什么", text: displayTonightTaskDescription },
+      { label: "明天看什么", text: displayReviewIn48h },
+      { label: "最近一次关键提醒", text: recentCriticalReminder },
+    ],
+    outro: "浏览器播报，仅用于当前设备预览，不是后端真实语音。",
+  });
+  const reminderSpeechText = buildParentSpeechScript({
+    title: "AI 今日提醒",
+    sections: [
+      { label: "提醒", text: previewResult?.title ?? viewModel.aiReminder.title },
+      { label: "为什么现在看", text: previewResult?.whyNow ?? displayWhyRecommended },
+    ],
+    outro: "浏览器播报，仅用于当前设备预览，不是后端真实语音。",
+  });
+
+  const headerActions = (
+    <>
+      <CareModeToggle careMode={careMode} onChange={setCareMode} />
+      <InlineLinkButton href={agentHref} label={primaryAgentLabel} variant="premium" />
+      <InlineLinkButton href={`${agentHref}#feedback`} label="今晚做完后去反馈" />
+    </>
+  );
+
+  const growthAndMediaSection = (
+    <SectionCard
+      title="成长行为与影像记录"
+      description="恢复到孩子维度的真实记录流，家长在首页就能看到今天和最近几天的成长观察与影像。"
+    >
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+        <div className="space-y-3">
+          {viewModel.growthTimeline.length > 0 ? (
+            viewModel.growthTimeline.map((item) => (
+              <div key={item.id} className="rounded-3xl border border-slate-100 bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{item.category}</p>
+                    <p className="mt-1 text-xs text-slate-400">{formatTimelineTime(item.recordedAt)}</p>
+                  </div>
+                  <Badge variant={item.needsAttention ? "warning" : "success"}>
+                    {item.needsAttention ? "需继续观察" : "稳定亮点"}
+                  </Badge>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{item.description}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {item.tags.slice(0, 4).map((tag) => (
+                    <Badge key={`${item.id}-${tag}`} variant="secondary">
+                      {tag}
+                    </Badge>
                   ))}
-                </fieldset>
-                <label htmlFor="parent-feedback-content" className="sr-only">家长反馈内容</label>
-                <Textarea
-                  id="parent-feedback-content"
-                  className="mt-3 min-h-22.5"
-                  value={feedbackContent}
-                  onChange={(event) => setFeedbackContent(event.target.value)}
-                  placeholder="补充家庭执行情况，例如：今晚提前半小时睡前流程、已按建议加蔬菜加餐等。"
-                />
-                <Button className="mt-3 w-full" onClick={submitFeedback}>
-                  提交反馈
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {currentTask && (
-            <Card className="border-indigo-100 bg-linear-to-r from-indigo-50/50 to-white overflow-hidden relative">
-              <div className="absolute right-0 top-0 h-full w-1/3 bg-linear-to-l from-indigo-50/80 to-transparent pointer-events-none" />
-              <CardHeader className="relative z-10 pb-2">
-                <CardTitle className="flex items-center justify-between text-lg text-indigo-900">
-                  <div className="flex items-center gap-2">
-                    <Goal className="h-5 w-5 text-indigo-500" />
-                    本周家园共育任务
-                  </div>
-                  {isTaskCheckedInToday && (
-                    <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none font-medium text-xs">
-                      <CheckCircle className="w-3.5 h-3.5 mr-1" />
-                      今日已打卡
-                    </Badge>
-                  )}
-                </CardTitle>
-                <CardDescription className="text-indigo-700/70">每周更新适合相应月龄段的亲子互动，陪伴成长每一天。</CardDescription>
-              </CardHeader>
-              <CardContent className="relative z-10">
-                <div className="flex flex-col md:flex-row gap-5 items-start">
-                  <div className="flex-1 bg-white rounded-2xl p-5 border border-indigo-50 shadow-sm">
-                    <h3 className="font-bold text-lg text-slate-800 tracking-tight">{currentTask.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-600">{currentTask.description}</p>
-                    <div className="mt-4 flex gap-2">
-                      <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none">
-                        领域：{currentTask.tag}
-                      </Badge>
-                      <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none">
-                        时长：{currentTask.durationText}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="w-full md:w-64 bg-white rounded-2xl p-5 border border-indigo-50 shadow-sm flex flex-col justify-center items-center h-full text-center">
-                    <div className="text-3xl font-black text-indigo-600 mb-1">{weeklyCheckInCount}<span className="text-sm font-normal text-slate-400 ml-1">天</span></div>
-                    <p className="text-xs font-medium text-slate-500 mb-4">本周已坚持打卡</p>
-                    <Button 
-                      className={`w-full rounded-xl font-medium transition-all ${isTaskCheckedInToday ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200'}`}
-                      disabled={isTaskCheckedInToday}
-                      onClick={() => checkInTask(selectedFeed.child.id, currentTask.id, todayStr)}
-                    >
-                      {isTaskCheckedInToday ? "已完成今日打卡" : "完成今日任务打卡"}
-                    </Button>
-                  </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-3xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+              当前还没有可展示的成长行为记录。
+            </div>
           )}
-
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <MessageCircleHeart className="h-5 w-5 text-indigo-500" />
-                  今日成长记录
-                </CardTitle>
-                <CardDescription>同步教师 / 家长双方观察，避免信息断层。</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {selectedFeed.todayGrowth.length > 0 ? (
-                  selectedFeed.todayGrowth.map((record) => (
-                    <div key={record.id} className="rounded-2xl bg-slate-50 p-4">
-                      <div className="flex items-center gap-2">
-                        <Badge variant={record.needsAttention ? "warning" : "secondary"}>{record.category}</Badge>
-                        <span className="text-xs text-slate-400">{record.recorderRole}</span>
-                      </div>
-                      <p className="mt-2 text-sm text-slate-700">{record.description}</p>
-                      <p className="mt-2 text-xs text-slate-400">{record.createdAt}</p>
+        </div>
+        <div className="space-y-3">
+          {viewModel.mediaGallery.length > 0 ? (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {viewModel.mediaGallery.slice(0, 4).map((item) => (
+                  <div key={item.id} className="overflow-hidden rounded-3xl border border-slate-100 bg-white">
+                    <div className="relative aspect-[4/3] bg-slate-100">
+                      <Image
+                        src={item.thumbnailUrl}
+                        alt={item.title}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, 320px"
+                      />
                     </div>
-                  ))
-                ) : (
-                  <EmptyState
-                    icon={<MessageCircleHeart className="h-5 w-5" />}
-                    title="今日暂无成长记录"
-                    description="教师与家长今日还没有新增成长观察，后续会自动同步到这里。"
-                  />
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <BellRing className="h-5 w-5 text-emerald-500" />
-                  今日饮食记录
-                </CardTitle>
-                <CardDescription>早餐 / 午餐 / 晚餐 / 加餐均可同步给家长查看。</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {selectedFeed.todayMeals.length > 0 ? (
-                  selectedFeed.todayMeals.map((record) => (
-                    <div key={record.id} className="rounded-2xl bg-slate-50 p-4">
-                      <div className="flex items-center justify-between">
-                        <p className="font-semibold text-slate-700">{record.meal}</p>
-                        <Badge
-                          variant={
-                            record.nutritionScore >= 85
-                              ? "success"
-                              : record.nutritionScore >= 70
-                              ? "warning"
-                              : "secondary"
-                          }
-                        >
-                          {record.nutritionScore}分
+                    <div className="space-y-2 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                        <Badge variant={item.source === "meal" ? "info" : "secondary"}>
+                          {item.source === "meal" ? "餐食图" : "成长影像"}
                         </Badge>
                       </div>
-                      <p className="mt-2 text-sm text-slate-600">
-                        {record.foods.map((food) => `${food.name}(${food.amount})`).join("、")}
-                      </p>
-                      <p className="mt-2 text-xs text-slate-400">
-                        摄入：{record.intakeLevel} · 偏好：{record.preference} · 饮水：{record.waterMl}ml
-                      </p>
+                      <p className="text-xs leading-5 text-slate-500">{item.summary}</p>
                     </div>
-                  ))
-                ) : (
-                  <EmptyState
-                    icon={<BellRing className="h-5 w-5" />}
-                    title="今日暂无饮食记录"
-                    description="园内尚未同步今天的用餐数据，稍后刷新即可查看。"
-                  />
-                )}
-              </CardContent>
-            </Card>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-slate-400">
+                这里只展示当前孩子可看的影像与记录，不会带出其他孩子的信息。
+              </p>
+            </>
+          ) : (
+            <div className="rounded-3xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+              当前还没有可展示的图片或影像记录。
+            </div>
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  );
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <LineChartIcon className="h-5 w-5 text-amber-500" />
-                  本周变化趋势
-                </CardTitle>
-                <CardDescription>帮助家长快速理解是否存在饮食单一或饮水偏低问题。</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 text-sm text-slate-600">
-                <div className="h-60 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={weeklyTrendChartData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                      <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 12 }} />
-                      <YAxis yAxisId="score" tick={{ fill: "#64748b", fontSize: 12 }} domain={[0, 100]} />
-                      <YAxis yAxisId="water" orientation="right" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                      <Tooltip contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }} />
-                      <Legend />
-                      <Line
-                        yAxisId="score"
-                        type="monotone"
-                        dataKey="nutritionScore"
-                        name="营养评分"
-                        stroke="#f59e0b"
-                        strokeWidth={3}
-                        dot={{ r: 4 }}
-                        activeDot={{ r: 6 }}
-                      />
-                      <Line
-                        yAxisId="score"
-                        type="monotone"
-                        dataKey="balancedRate"
-                        name="均衡率"
-                        stroke="#6366f1"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        dot={{ r: 3 }}
-                      />
-                      <Line
-                        yAxisId="water"
-                        type="monotone"
-                        dataKey="waterMl"
-                        name="饮水量"
-                        stroke="#0ea5e9"
-                        strokeWidth={2}
-                        dot={{ r: 3 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <TrendItem label="均衡天数占比" value={`${selectedFeed.weeklyTrend.balancedRate}%`} />
-                  <TrendItem label="含蔬果天数" value={`${selectedFeed.weeklyTrend.vegetableDays}天`} />
-                  <TrendItem label="含蛋白天数" value={`${selectedFeed.weeklyTrend.proteinDays}天`} />
-                  <TrendItem label="平均饮水量" value={`${selectedFeed.weeklyTrend.hydrationAvg}ml`} />
-                  <TrendItem label="饮食单一天数" value={`${selectedFeed.weeklyTrend.monotonyDays}天`} />
-                </div>
-              </CardContent>
-            </Card>
+  const storybookEntrySection = (
+    <SectionCard
+      title="今日成长小故事"
+      description="把今天的亮点写成 3 屏睡前绘本，家长在手机上滑一下就能看完。"
+      actions={<Badge variant="success">微绘本入口</Badge>}
+    >
+      <div className="rounded-[28px] border border-amber-100 bg-linear-to-br from-amber-50 via-white to-sky-50 p-5 shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+            <BookOpenText className="h-6 w-6" />
           </div>
-
-          <Card id="ai-report-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                系统建议
-                {aiSuggestion?.source === "ai" ? <Badge variant="success">AI 建议</Badge> : null}
-                {aiSuggestion?.source === "fallback" ? <Badge variant="info">规则兜底</Badge> : null}
-                {aiSuggestion?.model ? <Badge variant="secondary">模型：{aiSuggestion.model}</Badge> : null}
-                {aiSuggestion?.trendPrediction ? (
-                  <Badge variant="secondary">趋势：{getTrendLabel(aiSuggestion.trendPrediction)}</Badge>
-                ) : null}
-              </CardTitle>
-              <CardDescription>
-                AI 建议输出结构化建议；若 AI 不可用将自动回退到规则建议。当前会缓存同一份结果，避免重复请求。
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="mb-4 flex items-center justify-end gap-3">
-                  <Button variant="outline" size="sm" className="hidden lg:flex" onClick={exportReport} disabled={aiLoading || !aiSuggestion || exportingReport}>
-                    {exportingReport ? "导出中..." : "导出长图(推荐)"}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={refreshAiSuggestion} disabled={aiLoading || !aiSnapshot}>
-                    {aiLoading ? "刷新中..." : "刷新 AI 建议"}
-                  </Button>
-                </div>
-              {!aiLoading && aiSuggestion?.summary ? (
-                <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 text-sm leading-7 text-slate-700">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-indigo-500">AI 总结</p>
-                  <p>{aiSuggestion.summary}</p>
-                </div>
-              ) : null}
-              {!aiLoading && (aiSuggestion?.actionPlan || aiSuggestion?.actions?.length) ? (
-                <div className="mb-6 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                  <p className="mb-3 text-sm font-semibold text-slate-800">详细个性化方案</p>
-                  <div className="grid gap-4 lg:grid-cols-3">
-                    <PlanSection
-                      title="今天园内"
-                      accentClassName="bg-emerald-100 text-emerald-700"
-                      items={
-                        aiSuggestion.actionPlan?.schoolActions?.length
-                          ? aiSuggestion.actionPlan.schoolActions
-                          : aiSuggestion.actions.slice(0, 2)
-                      }
-                    />
-                    <PlanSection
-                      title="今晚家庭"
-                      accentClassName="bg-amber-100 text-amber-700"
-                      items={
-                        aiSuggestion.actionPlan?.familyActions?.length
-                          ? aiSuggestion.actionPlan.familyActions
-                          : aiSuggestion.actions.slice(2, 4)
-                      }
-                    />
-                    <PlanSection
-                      title="48小时内复查"
-                      accentClassName="bg-indigo-100 text-indigo-700"
-                      items={
-                        aiSuggestion.actionPlan?.reviewActions?.length
-                          ? aiSuggestion.actionPlan.reviewActions
-                          : aiSuggestion.actions.slice(4, 5)
-                      }
-                    />
-                  </div>
-                </div>
-              ) : null}
-            </CardContent>
-            <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {aiLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <div key={`skeleton-${i}`} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm skeleton-pulse">
-                    <div className="mb-3 h-5 w-20 rounded-full bg-slate-100" />
-                    <div className="h-4 w-3/4 rounded bg-slate-100" />
-                    <div className="mt-3 space-y-2">
-                      <div className="h-3 w-full rounded bg-slate-50" />
-                      <div className="h-3 w-5/6 rounded bg-slate-50" />
-                    </div>
-                  </div>
-                ))
-              ) : (
-              buildSuggestionCards(aiSuggestion, selectedFeed.suggestions).map((insight) => (
-                <button
-                  key={insight.id}
-                  type="button"
-                  onClick={() => selectSuggestionForFollowUp(insight)}
-                  className={`rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-                    selectedSuggestionId === insight.id && insight.followUpEnabled
-                      ? "border-indigo-300 ring-2 ring-indigo-100"
-                      : "border-slate-100"
-                  } ${insight.followUpEnabled ? "cursor-pointer" : "cursor-default"}`}
-                  disabled={!insight.followUpEnabled}
-                >
-                  <div className="mb-2 flex items-center gap-2">
-                    <Badge variant={insight.level === "warning" ? "warning" : insight.level === "success" ? "success" : "info"}>
-                      {insight.level === "warning" ? "需关注" : insight.level === "success" ? "已准备好" : "建议"}
-                    </Badge>
-                    {insight.followUpEnabled ? <Badge variant="secondary">可追问</Badge> : null}
-                  </div>
-                  <p className="text-sm font-semibold text-slate-700">{insight.title}</p>
-                  <p className="mt-2 text-xs leading-5 text-slate-500">{insight.description}</p>
-                </button>
-              ))
-              )}
-            </CardContent>
-            {selectedSuggestion?.followUpEnabled ? (
-              <CardContent className="pt-0">
-                <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="lg:max-w-sm">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-500">AI 继续追问</p>
-                      <p className="mt-2 text-sm font-semibold text-slate-800">当前建议：{selectedSuggestion.title}</p>
-                      <p className="mt-2 text-xs leading-5 text-slate-500">{selectedSuggestion.description}</p>
-                      <p className="mt-3 text-xs text-slate-400">将保留最近 3 轮问答，便于连续追问。</p>
-                    </div>
-                    <div className="w-full lg:max-w-2xl">
-                      {followUpTurns.length > 0 ? (
-                        <div className="mb-3 space-y-3 rounded-2xl border border-white/80 bg-white p-3 shadow-sm">
-                          {followUpTurns.map((turn, index) => (
-                            <div key={turn.id} className="space-y-2">
-                              <div className="flex justify-end">
-                                <div className="max-w-[85%] rounded-2xl bg-indigo-600 px-4 py-3 text-sm leading-6 text-white">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-100">第 {index + 1} 轮提问</p>
-                                  <p className="mt-1">{turn.question}</p>
-                                </div>
-                              </div>
-                              <div className="flex justify-start">
-                                <div className="max-w-[90%] rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">AI 回答</p>
-                                  <div className="mt-1 prose prose-sm prose-slate max-w-none"><ReactMarkdown>{turn.response.answer}</ReactMarkdown></div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                      <label htmlFor="parent-follow-up-question" className="sr-only">继续追问输入框</label>
-                      <Textarea
-                        id="parent-follow-up-question"
-                        value={followUpQuestion}
-                        onChange={(event) => setFollowUpQuestion(event.target.value)}
-                        className="min-h-24 bg-white"
-                        placeholder={
-                          followUpTurns.length > 0
-                            ? "继续追问，例如：如果今晚还是不配合，明天园内要怎么调整？"
-                            : "例如：这条建议今天园内怎么做，今晚家庭怎么配合，多久复查看变化？"
-                        }
-                      />
-                      <div className="mt-3 flex justify-end">
-                        <Button onClick={submitFollowUp} disabled={followUpLoading || !followUpQuestion.trim()}>
-                          {followUpLoading ? "追问中..." : "发送追问"}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {latestFollowUpAnswer ? (
-                    <div className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_1fr_1fr]">
-                      <div className="rounded-2xl border border-white/80 bg-white p-4 shadow-sm">
-                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-500">详细解释</p>
-                        <div className="mt-3 prose prose-sm prose-slate max-w-none"><ReactMarkdown>{latestFollowUpAnswer.answer}</ReactMarkdown></div>
-                      </div>
-                      <div className="rounded-2xl border border-white/80 bg-white p-4 shadow-sm">
-                        <p className="text-sm font-semibold text-slate-800">观察重点</p>
-                        <div className="mt-3 space-y-3">
-                          {latestFollowUpAnswer.keyPoints.map((item, index) => (
-                            <div key={`key-point-${index}`} className="flex items-start gap-3">
-                              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
-                                {index + 1}
-                              </div>
-                              <p className="text-sm leading-6 text-slate-600">{item}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="rounded-2xl border border-white/80 bg-white p-4 shadow-sm">
-                        <p className="text-sm font-semibold text-slate-800">建议动作</p>
-                        <div className="mt-3 space-y-3">
-                          {latestFollowUpAnswer.nextSteps.map((item, index) => (
-                            <div key={`next-step-${index}`} className="flex items-start gap-3">
-                              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-700">
-                                {index + 1}
-                              </div>
-                              <p className="text-sm leading-6 text-slate-600">{item}</p>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="mt-4 text-xs leading-5 text-slate-400">{latestFollowUpAnswer.disclaimer}</p>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </CardContent>
-            ) : null}
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>今日反馈时间线</CardTitle>
-              <CardDescription>教师、家长、机构管理员可在同一时间线查看反馈闭环进度。</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {selectedFeed.feedbacks.length > 0 ? (
-                selectedFeed.feedbacks.map((feedback) => (
-                  <div key={feedback.id} className="rounded-2xl border border-slate-100 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-md">
-                    <div className="flex items-center justify-between">
-                      <Badge variant={feedback.status === "今晚反馈" ? "warning" : "info"}>{feedback.status}</Badge>
-                      <span className="text-xs text-slate-400">{feedback.createdByRole} · {feedback.createdBy}</span>
-                    </div>
-                    <p className="mt-2 text-sm text-slate-700">{feedback.content}</p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-slate-500">今日尚无家长反馈，建议先提交“已知晓”。</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <div
-            aria-hidden="true"
-            id="report-export-sheet"
-            className="pointer-events-none fixed left-[-10000px] top-0 z-[-1] w-[960px] bg-white p-8 text-slate-900"
-          >
-            <div className="space-y-6">
-              <div className="border-b border-slate-200 pb-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-500">Smart Childcare AI Report</p>
-                <h2 className="mt-3 text-3xl font-bold text-slate-900">{selectedFeed.child.name} 家园协同长图报告</h2>
-                <p className="mt-2 text-sm text-slate-500">
-                  导出时间：{new Date().toLocaleString("zh-CN")} · 班级：{selectedFeed.child.className} · 年龄：{getAgeText(selectedFeed.child.birthDate)}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <p className="text-xs text-slate-400">今日饮食记录</p>
-                  <p className="mt-2 text-2xl font-bold text-slate-800">{selectedFeed.todayMeals.length} 条</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <p className="text-xs text-slate-400">今日成长记录</p>
-                  <p className="mt-2 text-2xl font-bold text-slate-800">{selectedFeed.todayGrowth.length} 条</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <p className="text-xs text-slate-400">本周打卡</p>
-                  <p className="mt-2 text-2xl font-bold text-slate-800">{weeklyCheckInCount} 次</p>
-                </div>
-              </div>
-
-              {aiSuggestion?.summary ? (
-                <section className="rounded-3xl border border-indigo-100 bg-indigo-50 p-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-600">AI 总结</p>
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700">{aiSuggestion.summary}</p>
-                </section>
-              ) : null}
-
-              {aiSuggestion?.actionPlan || aiSuggestion?.actions?.length ? (
-                <section className="rounded-3xl border border-slate-200 p-5">
-                  <h3 className="text-lg font-semibold text-slate-900">详细个性化方案</h3>
-                  <div className="mt-4 grid grid-cols-3 gap-4">
-                    <div className="rounded-2xl bg-emerald-50 p-4">
-                      <p className="text-sm font-semibold text-emerald-700">今天园内</p>
-                      <div className="mt-3 space-y-2">
-                        {(aiSuggestion.actionPlan?.schoolActions?.length ? aiSuggestion.actionPlan.schoolActions : aiSuggestion.actions.slice(0, 2)).map((item, index) => (
-                          <p key={`school-${index}`} className="text-sm leading-6 text-slate-700">{index + 1}. {item}</p>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-amber-50 p-4">
-                      <p className="text-sm font-semibold text-amber-700">今晚家庭</p>
-                      <div className="mt-3 space-y-2">
-                        {(aiSuggestion.actionPlan?.familyActions?.length ? aiSuggestion.actionPlan.familyActions : aiSuggestion.actions.slice(2, 4)).map((item, index) => (
-                          <p key={`family-${index}`} className="text-sm leading-6 text-slate-700">{index + 1}. {item}</p>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-sky-50 p-4">
-                      <p className="text-sm font-semibold text-sky-700">48小时内复查</p>
-                      <div className="mt-3 space-y-2">
-                        {(aiSuggestion.actionPlan?.reviewActions?.length ? aiSuggestion.actionPlan.reviewActions : aiSuggestion.actions.slice(4, 5)).map((item, index) => (
-                          <p key={`review-${index}`} className="text-sm leading-6 text-slate-700">{index + 1}. {item}</p>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              ) : null}
-
-              <section className="rounded-3xl border border-slate-200 p-5">
-                <h3 className="text-lg font-semibold text-slate-900">建议卡片</h3>
-                <div className="mt-4 grid grid-cols-2 gap-4">
-                  {suggestionCards.map((insight) => (
-                    <div key={`export-${insight.id}`} className="rounded-2xl border border-slate-200 p-4">
-                      <p className="text-xs font-semibold text-slate-400">{insight.level === "warning" ? "需关注" : insight.level === "success" ? "已准备好" : "建议"}</p>
-                      <p className="mt-2 text-base font-semibold text-slate-800">{insight.title}</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{insight.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {latestFollowUpAnswer ? (
-                <section className="rounded-3xl border border-slate-200 p-5">
-                  <h3 className="text-lg font-semibold text-slate-900">AI 追问补充</h3>
-                  <div className="mt-4 space-y-4">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-500">详细解释</p>
-                      <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">{latestFollowUpAnswer.answer}</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <p className="text-sm font-semibold text-slate-800">观察重点</p>
-                        <div className="mt-3 space-y-2">
-                          {latestFollowUpAnswer.keyPoints.map((item, index) => (
-                            <p key={`export-key-${index}`} className="text-sm leading-6 text-slate-600">{index + 1}. {item}</p>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <p className="text-sm font-semibold text-slate-800">建议动作</p>
-                        <div className="mt-3 space-y-2">
-                          {latestFollowUpAnswer.nextSteps.map((item, index) => (
-                            <p key={`export-next-${index}`} className="text-sm leading-6 text-slate-600">{index + 1}. {item}</p>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-xs leading-5 text-slate-400">{latestFollowUpAnswer.disclaimer}</p>
-                  </div>
-                </section>
-              ) : null}
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-semibold text-slate-900">{feed.child.name} 的晚安小绘本</p>
+            <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-600">
+              今天的成长记录、家庭任务和最近会诊会被整理成一页更好读的故事。先看完，再决定今晚只做哪一件小事。
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge variant="info">3 屏微绘本</Badge>
+              <Badge variant="secondary">插图 / 配音预览</Badge>
+              <Badge variant={latestConsultation ? "warning" : "success"}>
+                {latestConsultation ? "复用会诊上下文" : "自动提取亮点"}
+              </Badge>
+            </div>
+            <div className="mt-5">
+              <InlineLinkButton href={storybookHref} label="打开今日微绘本" variant="premium" />
             </div>
           </div>
         </div>
-      )}
-    </div>
-  );
-}
-
-function TrendItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 p-4">
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="mt-2 text-base font-semibold text-slate-700">{value}</p>
-    </div>
-  );
-}
-
-function PlanSection({
-  title,
-  items,
-  accentClassName,
-}: {
-  title: string;
-  items: string[];
-  accentClassName: string;
-}) {
-  if (items.length === 0) return null;
-
-  return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm">
-      <div className={`mb-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${accentClassName}`}>
-        {title}
       </div>
-      <div className="space-y-3">
-        {items.map((item, index) => (
-          <div key={`${title}-${item}-${index}`} className="flex items-start gap-3">
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
-              {index + 1}
-            </div>
-            <p className="text-sm leading-6 text-slate-600">{item}</p>
+    </SectionCard>
+  );
+
+  const weeklyTrendSection = (
+    <SectionCard
+      title="最近 7 天趋势入口"
+      description="给家长一个足够轻量的趋势摘要，避免首页变成报表页。"
+      actions={<InlineLinkButton href={agentHref} label="进入趋势与追问" />}
+    >
+      <div className="grid gap-3 sm:grid-cols-3">
+        {viewModel.weeklyTrend.map((item) => (
+          <div key={item.label} className="rounded-3xl border border-slate-100 bg-white p-4">
+            <p className="text-xs text-slate-400">{item.label}</p>
+            <p className="mt-2 text-xl font-semibold text-slate-900">{item.value}</p>
           </div>
         ))}
       </div>
+    </SectionCard>
+  );
+
+  const interventionPreviewSection = (
+    <SectionCard title="最近一张 AI 干预卡预览" description="首页先露出一张真实干预卡，让家长清楚今晚怎么做。">
+      <Link
+        href={`${agentHref}#intervention`}
+        className="block rounded-3xl border border-slate-100 bg-white p-5 transition hover:bg-slate-50"
+      >
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-semibold text-slate-900">
+            {displayInterventionCard?.title ?? viewModel.interventionPreview.title}
+          </p>
+        </div>
+        <p className="mt-3 text-sm leading-7 text-slate-600">
+          {displayInterventionCard?.summary ?? viewModel.interventionPreview.description}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(displayInterventionCard?.observationPoints ?? []).slice(0, 2).map((item) => (
+            <Badge key={item} variant="secondary">
+              {item}
+            </Badge>
+          ))}
+        </div>
+      </Link>
+    </SectionCard>
+  );
+
+  const viewOrderSection = (
+    <SectionCard title="今日查看顺序" description="更适合移动端首页的操作顺序。">
+      <ol className="space-y-3 text-sm text-slate-600">
+        <li className="flex items-center gap-3">
+          <CalendarDays className="h-4 w-4 text-indigo-500" />
+          先看今日情况摘要
+        </li>
+        <li className="flex items-center gap-3">
+          <BrainCircuit className="h-4 w-4 text-indigo-500" />
+          再看 AI 干预卡预览
+        </li>
+        <li className="flex items-center gap-3">
+          <MoonStar className="h-4 w-4 text-indigo-500" />
+          今晚按家庭动作执行并反馈
+        </li>
+      </ol>
+    </SectionCard>
+  );
+
+  const moreContentToggle = (
+    <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-base font-semibold text-slate-900">更多内容</p>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            这里保留周报、透明说明、趋势入口、微绘本和完整记录。
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-11 rounded-2xl px-4 text-base"
+          onClick={() => setShowMoreContent((current) => !current)}
+        >
+          {showMoreContent ? "收起更多内容" : "展开更多内容"}
+        </Button>
+      </div>
     </div>
   );
-}
 
-type SuggestionCard = {
-  id: string;
-  title: string;
-  description: string;
-  level: "success" | "warning" | "info";
-  followUpEnabled?: boolean;
-};
+  if (careMode) {
+    return (
+      <RolePageShell
+        badge={`家长首页 · ${TODAY_TEXT}`}
+        title={`先看 ${viewModel.child.name} 今晚要做什么`}
+        description="关怀模式会把首屏压缩成一件事、一句话和最短主链路，帮助祖辈或低数字熟练度照护者更快看懂。"
+        actions={headerActions}
+      >
+        <RoleSplitLayout
+          stacked
+          main={
+            <div className="space-y-6">
+              <ParentCareFocusCard
+                badge="关怀模式"
+                title={`${feed.child.name} 今晚先看这一件事`}
+                description="先看今晚做什么，再看明天老师会继续看什么，最后再补充完整原因。"
+                items={[
+                  {
+                    label: "今晚做什么",
+                    value: displayTonightTaskDescription,
+                    tone: "sky",
+                  },
+                  {
+                    label: "明天看什么",
+                    value: displayReviewIn48h,
+                    tone: "emerald",
+                  },
+                  {
+                    label: "最近一次关键提醒",
+                    value: recentCriticalReminder,
+                    tone: "amber",
+                  },
+                ]}
+                actions={
+                  <>
+                    <ParentSpeakButton
+                      text={careFocusSpeechText}
+                      careMode
+                      variant="secondary"
+                    />
+                    <InlineLinkButton href={agentHref} label="去看今晚怎么做" variant="premium" />
+                    <InlineLinkButton href={`${agentHref}#feedback`} label="做完后去反馈" />
+                  </>
+                }
+              />
 
-type FollowUpTurn = {
-  id: string;
-  question: string;
-  response: AiFollowUpResponse;
-};
+              <SectionCard title="一句话提醒" description="先告诉你现在最重要的一件事。">
+                <div className="rounded-3xl border border-indigo-100 bg-indigo-50/70 p-5">
+                  <ParentSpeakButton
+                    text={reminderSpeechText}
+                    label="读给我听"
+                    careMode
+                    variant="secondary"
+                    className="mb-4"
+                  />
+                  <p className="text-lg font-semibold leading-9 text-slate-900">
+                    {previewResult?.title ?? viewModel.aiReminder.title}
+                  </p>
+                  <p className="mt-3 text-base leading-8 text-slate-700">
+                    {previewResult?.whyNow ?? displayWhyRecommended}
+                  </p>
+                </div>
+              </SectionCard>
 
-function buildSuggestionCards(
-  aiSuggestion: AiSuggestionResponse | null,
-  fallbackInsights: Array<{ id: string; title: string; description: string; level: "success" | "warning" | "info" }>
-) {
-  if (!aiSuggestion) {
-    return fallbackInsights.map((item) => ({ ...item, followUpEnabled: true }));
+              {moreContentToggle}
+
+              {showMoreContent ? (
+                <div className="space-y-6">
+                  <SectionCard title="孩子基本信息" description="需要时再看详细资料。">
+                    <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                      <p className="text-base font-semibold text-slate-900">{viewModel.child.name}</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {viewModel.child.className} · {getAgeText(viewModel.child.birthDate)} · 出生于{" "}
+                        {formatDisplayDate(viewModel.child.birthDate)}
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {viewModel.child.allergies.length > 0 ? (
+                          viewModel.child.allergies.map((item) => (
+                            <Badge key={item} variant="warning">
+                              过敏：{item}
+                            </Badge>
+                          ))
+                        ) : (
+                          <Badge variant="success">暂无过敏重点</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </SectionCard>
+
+                  {homeTransparencyModel ? (
+                    <ParentTransparencyPanel
+                      model={homeTransparencyModel}
+                      title="为什么会看到这条建议"
+                      description="把当前建议、周报和跟进状态的来源说明压缩成家长看得懂的一层。"
+                      careMode
+                    />
+                  ) : null}
+
+                  {interventionPreviewSection}
+
+                  <WeeklyReportPreviewCard
+                    title="本周家庭周报预览"
+                    description="只看最关键的一条家庭动作和本周变化。"
+                    role="parent"
+                    periodLabel={weeklyReportPayload?.snapshot.periodLabel ?? "近 7 天"}
+                    report={weeklyReport}
+                    loading={weeklyReportLoading}
+                    error={weeklyReportError}
+                    ctaHref={`${agentHref}#feedback`}
+                    ctaLabel="去反馈本周变化"
+                    ctaVariant="secondary"
+                    careMode
+                  />
+
+                  <SectionCard title="统一意图入口" description="需要时再说出你的问题。">
+                    <UnifiedIntentEntryCard
+                      roleHint="parent"
+                      sourcePage="/parent"
+                      title="一句话让家长助手直接给出入口"
+                      placeholder="例如：我今晚该做什么，或我想看孩子最近趋势"
+                      examples={[
+                        "我今晚该做什么",
+                        "我想看孩子最近趋势",
+                        "打开今晚的微绘本",
+                      ]}
+                      childId={feed.child.id}
+                      compact
+                    />
+                  </SectionCard>
+
+                  {storybookEntrySection}
+                  {growthAndMediaSection}
+                  {weeklyTrendSection}
+                  {viewOrderSection}
+                </div>
+              ) : null}
+            </div>
+          }
+          aside={null}
+        />
+      </RolePageShell>
+    );
   }
 
-  const cards: SuggestionCard[] = [];
+  return (
+    <RolePageShell
+      badge={`家长首页 · ${TODAY_TEXT}`}
+      title={`先看 ${viewModel.child.name} 今天的状态，再决定今晚怎么做`}
+      description="首页只保留今天最需要处理的信息：孩子状态、AI 提醒、今晚任务、AI 干预卡预览、待反馈事项和 7 天趋势入口。"
+      actions={headerActions}
+    >
+      <RoleSplitLayout
+        main={
+          <div className="space-y-6">
+            <MetricGrid
+              items={viewModel.todaySummary.map((item) => ({
+                label: item.label,
+                value: item.value,
+                tone:
+                  item.tone === "warning"
+                    ? "amber"
+                    : item.tone === "success"
+                      ? "emerald"
+                      : "sky",
+              }))}
+            />
 
-  for (const [index, item] of aiSuggestion.concerns.entries()) {
-    cards.push({
-      id: `ai-concern-${item}`,
-      title: item,
-      description: aiSuggestion.actions[index] || aiSuggestion.disclaimer,
-      level: "warning",
-      followUpEnabled: true,
-    });
-  }
+            <SectionCard title="孩子今日情况摘要" description="先把家长最关心的几件事压缩到首屏。">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                  <p className="text-sm font-semibold text-slate-900">{viewModel.child.name}</p>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {viewModel.child.className} · {getAgeText(viewModel.child.birthDate)} · 出生于{" "}
+                    {formatDisplayDate(viewModel.child.birthDate)}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {viewModel.child.allergies.length > 0 ? (
+                      viewModel.child.allergies.map((item) => (
+                        <Badge key={item} variant="warning">
+                          过敏：{item}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge variant="success">暂无过敏风险提示</Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-3xl border border-slate-100 bg-white p-4">
+                  <p className="text-sm font-semibold text-slate-900">今晚闭环重点</p>
+                  <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                    <li>先看 AI 干预卡，再决定今晚只做哪一件事。</li>
+                    <li>做完后直接在家长 Agent 页提交反馈，明天老师会继续接着看。</li>
+                    <li>如果今晚有明显变化，直接进入 AI 助手继续追问。</li>
+                  </ul>
+                </div>
+              </div>
+            </SectionCard>
 
-  for (const [index, item] of aiSuggestion.highlights.entries()) {
-    cards.push({
-      id: `ai-highlight-${item}`,
-      title: item,
-      description: aiSuggestion.actions[aiSuggestion.concerns.length + index] || aiSuggestion.disclaimer,
-      level: "info",
-      followUpEnabled: true,
-    });
-  }
+            <SectionCard
+              title="AI 今日提醒"
+              description="优先看当前最值得家长马上处理的一条提示。"
+              actions={
+                <Badge variant={viewModel.aiReminder.level === "warning" ? "warning" : "info"}>
+                  {viewModel.aiReminder.level === "warning" ? "需关注" : "今日建议"}
+                </Badge>
+              }
+            >
+              <div className="rounded-3xl border border-indigo-100 bg-indigo-50/60 p-5">
+                <ParentSpeakButton
+                  text={reminderSpeechText}
+                  label="浏览器播报"
+                  className="mb-4"
+                />
+                <p className="text-base font-semibold text-slate-900">
+                  {previewResult?.title ?? viewModel.aiReminder.title}
+                </p>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  {previewResult?.whyNow ?? viewModel.aiReminder.description}
+                </p>
+              </div>
+            </SectionCard>
 
-  if (cards.length === 0) {
-    return fallbackInsights.map((item) => ({ ...item, followUpEnabled: true }));
-  }
+            {homeTransparencyModel ? (
+              <ParentTransparencyPanel
+                model={homeTransparencyModel}
+                title="为什么会看到这条建议"
+                description="把当前建议、周报和跟进状态的来源说明压缩成家长看得懂的一层。"
+              />
+            ) : null}
 
-  cards.push({
-    id: "ai-disclaimer",
-    title: `风险等级：${aiSuggestion.riskLevel}`,
-    description: aiSuggestion.disclaimer,
-    level: "success",
-    followUpEnabled: false,
-  });
+            {storybookEntrySection}
 
-  return cards.slice(0, 6);
-}
+            <div className="grid gap-6 xl:grid-cols-2">
+              <SectionCard
+                title="今晚家庭任务"
+                description="今晚先做一件最适合当前状态的动作。"
+                actions={
+                  <Badge variant={latestConsultation ? "warning" : "info"}>
+                    {latestConsultation ? "会诊闭环任务" : viewModel.tonightTask.tag}
+                  </Badge>
+                }
+              >
+                <div className="rounded-3xl bg-sky-50 p-5">
+                  <div className="flex items-start gap-3">
+                    <MoonStar className="mt-0.5 h-5 w-5 text-sky-600" />
+                    <div>
+                      <p className="text-base font-semibold text-slate-900">{displayTonightTaskTitle}</p>
+                      <p className="mt-2 text-sm leading-7 text-slate-600">{displayTonightTaskDescription}</p>
+                      <p className="mt-3 text-sm font-medium text-sky-700">
+                        建议时长：{viewModel.tonightTask.durationText}
+                      </p>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        为什么推荐：{displayWhyRecommended}
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        48 小时内复查：{displayReviewIn48h}
+                      </p>
+                      <Link
+                        href={`${agentHref}#intervention`}
+                        className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-sky-700"
+                      >
+                        查看完整干预卡
+                        <TrendingUp className="h-4 w-4" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </SectionCard>
 
-function buildDefaultFollowUpQuestion(title: string) {
-  return `关于“${title}”，今天园内具体怎么做，今晚家庭怎么配合，48小时内重点观察什么？`;
-}
+              <SectionCard
+                title="待反馈事项"
+                description="让家长知道今晚是否还需要补一条反馈。"
+                actions={
+                  <Badge
+                    variant={
+                      viewModel.pendingFeedback.status === "pending" ? "warning" : "success"
+                    }
+                  >
+                    {viewModel.pendingFeedback.status === "pending" ? "待提交" : "已同步"}
+                  </Badge>
+                }
+              >
+                <div className="rounded-3xl bg-amber-50 p-5">
+                  <div className="flex items-start gap-3">
+                    <MessageCircleMore className="mt-0.5 h-5 w-5 text-amber-600" />
+                    <div>
+                      <p className="text-base font-semibold text-slate-900">
+                        {viewModel.pendingFeedback.title}
+                      </p>
+                      <p className="mt-2 text-sm leading-7 text-slate-600">
+                        {previewResult?.feedbackPrompt ?? viewModel.pendingFeedback.description}
+                      </p>
+                      <Link
+                        href={`${agentHref}#feedback`}
+                        className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-amber-700"
+                      >
+                        去 AI 助手提交反馈
+                        <TrendingUp className="h-4 w-4" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </SectionCard>
+            </div>
 
-function getTrendLabel(value: "up" | "stable" | "down") {
-  if (value === "up") return "风险上升";
-  if (value === "down") return "风险下降";
-  return "基本稳定";
-}
+            {growthAndMediaSection}
 
-function buildRecentDateRange(days: number) {
-  return buildRecentLocalDateRange(days);
-}
+            <WeeklyReportPreviewCard
+              title="本周家庭周报预览"
+              description="只讲本周变化、一个最重要的家庭动作和需反馈问题，不把首页改成大工作流页。"
+              role="parent"
+              periodLabel={weeklyReportPayload?.snapshot.periodLabel ?? "近 7 天"}
+              report={weeklyReport}
+              loading={weeklyReportLoading}
+              error={weeklyReportError}
+              ctaHref={`${agentHref}#feedback`}
+              ctaLabel="去反馈本周变化"
+              ctaVariant="secondary"
+            />
 
-function formatShortDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-  });
+            {weeklyTrendSection}
+          </div>
+        }
+        aside={
+          <div className="space-y-6">
+            <UnifiedIntentEntryCard
+              roleHint="parent"
+              sourcePage="/parent"
+              title="一句话让家长助手直接给出今晚入口"
+              placeholder="例如：我今晚该做什么，或我想看孩子最近趋势"
+              examples={["我今晚该做什么", "我想看孩子最近趋势", "打开今晚的微绘本"]}
+              childId={feed.child.id}
+              compact
+            />
+
+            {interventionPreviewSection}
+            {viewOrderSection}
+          </div>
+        }
+      />
+    </RolePageShell>
+  );
 }

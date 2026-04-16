@@ -1,0 +1,18 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g1" x1="90" y1="60" x2="1110" y2="740" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E0F2FE" />
+      <stop offset="0.52" stop-color="#F8FAFC" />
+      <stop offset="1" stop-color="#E2E8F0" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" rx="48" fill="url(#g1)" />
+  <circle cx="260" cy="176" r="88" fill="#FFFFFF" fill-opacity="0.88" />
+  <circle cx="928" cy="188" r="92" fill="#C4B5FD" fill-opacity="0.24" />
+  <rect x="210" y="340" width="780" height="280" rx="44" fill="#FFFFFF" fill-opacity="0.74" />
+  <path d="M356 486C412 414 486 372 600 372C714 372 788 414 844 486" stroke="#38BDF8" stroke-width="16" stroke-linecap="round" />
+  <path d="M426 520H770" stroke="#0F172A" stroke-opacity="0.12" stroke-width="16" stroke-linecap="round" />
+  <circle cx="602" cy="445" r="50" fill="#FDE68A" fill-opacity="0.92" />
+  <path d="M584 445L596 457L620 431" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M780 394L796 362L812 394L844 410L812 426L796 458L780 426L748 410L780 394Z" fill="#FDBA74" fill-opacity="0.88" />
+</svg>

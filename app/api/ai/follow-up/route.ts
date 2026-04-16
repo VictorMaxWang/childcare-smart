@@ -1,46 +1,97 @@
 import { NextResponse } from "next/server";
-import { requestDashscopeFollowUp } from "@/lib/ai/dashscope";
-import { buildFallbackFollowUp } from "@/lib/ai/fallback";
-import { buildMockAiFollowUp } from "@/lib/ai/mock";
-import type { AiFollowUpPayload, AiFollowUpResponse, ChildSuggestionSnapshot } from "@/lib/ai/types";
+import { executeFollowUp, getAiRuntimeOptions, isValidFollowUpPayload } from "@/lib/ai/server";
+import type { AiFollowUpPayload, ChildSuggestionSnapshot } from "@/lib/ai/types";
+import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
+import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
+import { selectStructuredFeedbackConsumption } from "@/lib/feedback/consumption";
+import { forwardBrainRequest } from "@/lib/server/brain-client";
+import { requireParentChildAccess } from "@/lib/server/parent-route-guard";
+import { buildMemoryContextForPrompt } from "@/lib/server/memory-context";
+import {
+  buildCurrentInterventionCardFromTask,
+  buildTasksFromFollowUpCardContext,
+  pickActiveTask,
+} from "@/lib/tasks/task-model";
+import type { CanonicalTask, FollowUpTask } from "@/lib/tasks/types";
 
-function isValidSnapshot(snapshot: unknown): snapshot is ChildSuggestionSnapshot {
-  if (!snapshot || typeof snapshot !== "object") return false;
-  const obj = snapshot as Record<string, unknown>;
-  if (!obj.child || typeof obj.child !== "object") return false;
-  if (!obj.summary || typeof obj.summary !== "object") return false;
-  if (!Array.isArray(obj.ruleFallback)) return false;
-  return true;
+function mergeTasks(...taskGroups: Array<CanonicalTask[] | undefined>) {
+  const taskMap = new Map<string, CanonicalTask>();
+  for (const group of taskGroups) {
+    for (const task of group ?? []) {
+      taskMap.set(task.taskId, task);
+    }
+  }
+  return Array.from(taskMap.values());
 }
 
-function isValidPayload(payload: unknown): payload is AiFollowUpPayload {
-  if (!payload || typeof payload !== "object") return false;
-  const obj = payload as Record<string, unknown>;
-  const history = obj.history;
-  const historyValid =
-    history === undefined ||
-    (Array.isArray(history) &&
-      history.every(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          ((item as Record<string, unknown>).role === "user" || (item as Record<string, unknown>).role === "assistant") &&
-          typeof (item as Record<string, unknown>).content === "string"
-      ));
+function isFollowUpTask(task: CanonicalTask | undefined): task is FollowUpTask {
+  return Boolean(task && task.taskType === "follow_up");
+}
 
-  return (
-    isValidSnapshot(obj.snapshot) &&
-    typeof obj.suggestionTitle === "string" &&
-    obj.suggestionTitle.trim().length > 0 &&
-    typeof obj.question === "string" &&
-    obj.question.trim().length > 0 &&
-    historyValid
-  );
+function uniqueTexts(items: Array<string | undefined>, limit = 5) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const item of items) {
+    const normalized = item?.trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+    if (result.length >= limit) break;
+  }
+
+  return result;
+}
+
+function buildTaskContext(payload: AiFollowUpPayload) {
+  if (payload.scope === "institution" || !("child" in payload.snapshot)) {
+    return {
+      activeTask: payload.activeTask,
+      tasks: payload.tasks ?? [],
+      currentInterventionCard: payload.currentInterventionCard,
+      followUpTask:
+        payload.tasks?.find(
+          (task): task is FollowUpTask => task.ownerRole === "teacher" && task.taskType === "follow_up"
+        ) ??
+        (isFollowUpTask(payload.activeTask) && payload.activeTask.ownerRole === "teacher"
+          ? payload.activeTask
+          : undefined),
+    };
+  }
+
+  const derivedTasks = payload.currentInterventionCard
+    ? buildTasksFromFollowUpCardContext({
+        childId: payload.snapshot.child.id,
+        currentInterventionCard: payload.currentInterventionCard,
+        createdAt: payload.activeTask?.createdAt,
+        updatedAt: payload.activeTask?.updatedAt,
+        legacyWeeklyTaskId: payload.activeTask?.legacyRefs?.legacyWeeklyTaskId,
+      }).tasks
+    : [];
+  const tasks = mergeTasks(payload.tasks, derivedTasks);
+  const activeTask =
+    payload.activeTask ??
+    pickActiveTask(tasks, payload.snapshot.child.id, "parent") ??
+    pickActiveTask(tasks, payload.snapshot.child.id);
+
+  return {
+    activeTask,
+    tasks,
+    currentInterventionCard:
+      payload.currentInterventionCard ??
+      (activeTask
+        ? buildCurrentInterventionCardFromTask({
+            activeTask,
+            relatedTasks: tasks,
+          })
+        : undefined),
+    followUpTask: tasks.find(
+      (task): task is FollowUpTask => task.ownerRole === "teacher" && task.taskType === "follow_up"
+    ),
+  };
 }
 
 export async function POST(request: Request) {
-  const configuredModel = process.env.AI_MODEL || "qwen-turbo";
-  const forceMock = process.env.NEXT_PUBLIC_FORCE_MOCK_MODE === "true";
   let payload: AiFollowUpPayload | null = null;
 
   try {
@@ -50,41 +101,136 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!isValidPayload(payload)) {
+  if (!isValidFollowUpPayload(payload)) {
     return NextResponse.json({ error: "Invalid follow-up payload" }, { status: 400 });
   }
 
-  if (forceMock) {
+  const childId =
+    payload.scope === "institution" || !("child" in payload.snapshot)
+      ? null
+      : payload.snapshot.child.id;
+  const access = await requireParentChildAccess(childId);
+  if (access.response) {
+    return access.response;
+  }
+
+  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/parent/follow-up");
+  if (brainForward.response) return brainForward.response;
+
+  const taskContext = buildTaskContext(payload);
+  const feedbackConsumption =
+    payload.scope === "institution" || !("child" in payload.snapshot)
+      ? {
+          feedback: undefined,
+          summary: undefined,
+          continuitySignals: [] as string[],
+          openLoops: [] as string[],
+          primaryActionSupport: undefined,
+        }
+      : selectStructuredFeedbackConsumption(
+          [payload.latestFeedback, payload.snapshot.recentDetails?.feedback],
+          {
+            childId: payload.snapshot.child.id,
+            relatedTaskId: taskContext.activeTask?.taskId,
+            relatedConsultationId:
+              taskContext.currentInterventionCard?.consultationId ??
+              payload.currentInterventionCard?.consultationId ??
+              payload.latestFeedback?.relatedConsultationId,
+            interventionCardId: taskContext.currentInterventionCard?.id ?? payload.currentInterventionCard?.id,
+          }
+        );
+
+  const sessionId =
+    feedbackConsumption.feedback?.relatedConsultationId ??
+    taskContext.currentInterventionCard?.consultationId ??
+    payload.currentInterventionCard?.consultationId;
+  const memoryContext =
+    payload.scope === "institution" || !("child" in payload.snapshot)
+      ? null
+      : await buildMemoryContextForPrompt({
+          childId: payload.snapshot.child.id,
+          workflowType: "parent-follow-up",
+          query: payload.question,
+          sessionId,
+          request,
+        });
+
+  const nextPayload =
+    payload.scope === "institution" || !("child" in payload.snapshot) || !memoryContext
+      ? payload
+      : {
+          ...payload,
+          snapshot: {
+            ...payload.snapshot,
+            memoryContext: memoryContext.promptContext,
+            continuityNotes:
+              payload.snapshot.continuityNotes ??
+              uniqueTexts([
+                `参考了${payload.snapshot.child.name}的长期与近期连续上下文。`,
+                feedbackConsumption.summary,
+                ...feedbackConsumption.continuitySignals,
+                ...feedbackConsumption.openLoops,
+              ]),
+          },
+          memoryContext: memoryContext.promptContext,
+          continuityNotes: uniqueTexts([
+            ...(payload.continuityNotes ?? []),
+            feedbackConsumption.summary,
+            ...feedbackConsumption.continuitySignals,
+            ...feedbackConsumption.openLoops,
+          ]),
+        };
+
+  const taskAwarePayload = {
+    ...nextPayload,
+    latestFeedback: feedbackConsumption.feedback,
+    activeTask: taskContext.activeTask,
+    tasks: taskContext.tasks,
+    currentInterventionCard: taskContext.currentInterventionCard ?? nextPayload.currentInterventionCard,
+  } satisfies AiFollowUpPayload;
+
+  const result = await executeFollowUp(taskAwarePayload, getAiRuntimeOptions(request));
+  const consultation =
+    payload.scope === "institution"
+      ? null
+      : await maybeRunHighRiskConsultation(
+          buildConsultationInputFromSnapshot({
+            snapshot: taskAwarePayload.snapshot as ChildSuggestionSnapshot,
+            latestFeedback: taskAwarePayload.latestFeedback,
+            currentInterventionCard: taskAwarePayload.currentInterventionCard,
+            activeTaskId: taskContext.activeTask?.taskId,
+            question: payload.question,
+            followUp: result,
+            source: "api",
+            memoryContext,
+          })
+        );
+
+  if (consultation) {
     return NextResponse.json(
       {
-        ...buildMockAiFollowUp(payload),
-        model: "mock-follow-up",
-      } satisfies AiFollowUpResponse,
+        ...result,
+        followUpTask: result.followUpTask ?? taskContext.followUpTask,
+        tasks: result.tasks ?? taskContext.tasks,
+        consultation,
+        continuityNotes: result.continuityNotes ?? consultation.continuityNotes,
+        ...(process.env.NODE_ENV !== "production" || request.headers.get("x-debug-memory") === "1"
+          ? { memoryMeta: result.memoryMeta ?? consultation.memoryMeta ?? memoryContext?.meta }
+          : {}),
+      },
       { status: 200 }
     );
   }
 
-  const fallback = {
-    ...buildFallbackFollowUp(payload),
-    model: "follow-up-rule-fallback",
-  } satisfies AiFollowUpResponse;
-
-  if (process.env.NODE_ENV !== "production" && request.headers.get("x-ai-force-fallback") === "1") {
-    return NextResponse.json(fallback, { status: 200 });
-  }
-
-  const aiResult = await requestDashscopeFollowUp(payload);
-  if (!aiResult) {
-    console.warn(`[AI] Falling back to follow-up for child ${payload.snapshot.child.id} using model ${configuredModel}.`);
-    return NextResponse.json(fallback, { status: 200 });
-  }
-
   return NextResponse.json(
     {
-      ...aiResult,
-      source: "ai",
-      model: configuredModel,
-    } satisfies AiFollowUpResponse,
+      ...result,
+      followUpTask: result.followUpTask ?? taskContext.followUpTask,
+      tasks: result.tasks ?? taskContext.tasks,
+      ...(process.env.NODE_ENV !== "production" || request.headers.get("x-debug-memory") === "1"
+        ? { memoryMeta: result.memoryMeta ?? memoryContext?.meta }
+        : {}),
+    },
     { status: 200 }
   );
 }

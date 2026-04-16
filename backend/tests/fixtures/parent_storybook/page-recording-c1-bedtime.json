@@ -1,0 +1,212 @@
+{
+  "childId": "c-1",
+  "requestSource": "parent-storybook-demo-seed:recording-c1-bedtime",
+  "generationMode": "child-personalized",
+  "pageCount": 6,
+  "stylePreset": "sunrise-watercolor",
+  "styleMode": "preset",
+  "stylePrompt": "storybook illustration, sunrise watercolor, warm gold highlights, soft paper texture",
+  "snapshot": {
+    "child": {
+      "id": "c-1",
+      "name": "Lin Xiaoyu",
+      "className": "Sunrise Class"
+    },
+    "summary": {
+      "growth": {
+        "recordCount": 7,
+        "topCategories": [
+          {
+            "category": "bedtime regulation",
+            "count": 4
+          },
+          {
+            "category": "separation transition",
+            "count": 3
+          }
+        ]
+      },
+      "feedback": {
+        "count": 3,
+        "keywords": [
+          "bedtime story",
+          "calm breathing",
+          "gentle transition"
+        ]
+      }
+    },
+    "recentDetails": [
+      {
+        "date": "2026-04-07",
+        "source": "growth-record",
+        "title": "Midday transition slowed down after a familiar book",
+        "detail": "Teacher noted that Xiaoyu initially hesitated before nap, then settled after hearing the first page of a familiar bedtime picture book."
+      },
+      {
+        "date": "2026-04-06",
+        "source": "guardian-feedback",
+        "title": "Evening separation improved with earlier wind-down",
+        "detail": "Family reported that moving bath and lights-off earlier reduced the emotional spike before bed and made the bedtime hug shorter."
+      },
+      {
+        "date": "2026-04-05",
+        "source": "consultation",
+        "title": "Shared school-home bedtime rhythm is working",
+        "detail": "The same story-opening and calm breathing sequence helped connect the school nap cue and the home bedtime cue."
+      },
+      {
+        "date": "2026-04-04",
+        "source": "task-check-in",
+        "title": "Preview of tomorrow lowered resistance",
+        "detail": "Previewing the next morning routine reduced negotiation at home and made morning handoff easier."
+      }
+    ],
+    "ruleFallback": [
+      {
+        "title": "Today growth signal",
+        "description": "A familiar ritual reduced friction and helped the child settle."
+      }
+    ]
+  },
+  "highlightCandidates": [
+    {
+      "kind": "todayGrowth",
+      "title": "Today small progress",
+      "detail": "During nap preparation, Xiaoyu was willing to sit down and listen through the first page before relaxing her shoulders.",
+      "priority": 1,
+      "source": "todayGrowth"
+    },
+    {
+      "kind": "consultationSummary",
+      "title": "What worked in both school and home",
+      "detail": "The familiar story opening plus slow breathing has already been validated in both school and home, so repeating the same rhythm tonight has the best chance to succeed.",
+      "priority": 2,
+      "source": "latestConsultation"
+    },
+    {
+      "kind": "guardianFeedback",
+      "title": "Family bright spot",
+      "detail": "After bedtime was moved slightly earlier, Xiaoyu was more willing to lean in for a short hug and accepted lights-off with less protest.",
+      "priority": 3,
+      "source": "guardianFeedback"
+    },
+    {
+      "kind": "consultationAction",
+      "title": "Only one thing tonight",
+      "detail": "After bath, read one familiar bedtime book and then do three slow breaths together without adding new requests.",
+      "priority": 4,
+      "source": "interventionCard"
+    },
+    {
+      "kind": "weeklyTrend",
+      "title": "What to watch tomorrow",
+      "detail": "Observe whether bedtime leaning-in happens earlier and whether morning handoff stabilizes faster.",
+      "priority": 5,
+      "source": "weeklyTrend"
+    }
+  ],
+  "latestInterventionCard": {
+    "id": "card-c-1-recording-c1-bedtime",
+    "title": "Bedtime regulation loop",
+    "summary": "Keep the school-home bedtime rhythm aligned and reduce new stimulation tonight.",
+    "triggerReason": "Bedtime emotion spikes still appear when the sequence changes too much.",
+    "tonightHomeAction": "After bath, read one familiar bedtime book and then do three slow breaths together without adding new requests.",
+    "homeSteps": [
+      "Turn off stimulating content right after bath and keep only the bedside lamp on.",
+      "Read the same familiar bedtime book used in recent calm evenings.",
+      "After the last page, say one short sentence about today's bright spot and then breathe together three times."
+    ],
+    "observationPoints": [
+      "Whether the body leans in earlier when the book starts",
+      "Whether lights-off protest shortens compared with the previous two nights",
+      "Whether the next morning handoff settles faster"
+    ],
+    "tomorrowObservationPoint": "Watch whether morning handoff stabilizes faster after the same bedtime rhythm.",
+    "reviewIn48h": "Compare bedtime settling and morning handoff over the next 48 hours before changing the routine again.",
+    "parentMessageDraft": "Tonight keep the routine small and familiar: one book, three breaths, no new requests.",
+    "teacherFollowupDraft": "Tomorrow morning check whether the handoff stabilizes faster and whether the same story cue still helps."
+  },
+  "latestConsultation": {
+    "consultationId": "consult-c-1-recording-seed",
+    "childId": "c-1",
+    "summary": "Xiaoyu is already showing that a familiar book and calm pacing can lower bedtime tension; the goal is to preserve that rhythm tonight instead of adding new demands.",
+    "homeAction": "After bath, read one familiar bedtime book and then do three slow breaths together without adding new requests.",
+    "followUp48h": [
+      "Observe whether bedtime leaning-in happens earlier and whether morning handoff stabilizes faster."
+    ],
+    "todayInSchoolActions": [
+      "Keep the familiar picture book and the same soft voice cue before nap."
+    ],
+    "tonightAtHomeActions": [
+      "Use one familiar bedtime book and three slow breaths."
+    ],
+    "nextCheckpoints": [
+      "Check tomorrow morning handoff speed.",
+      "Check whether the child requests the same ritual again."
+    ],
+    "reviewIn48h": "Compare bedtime settling and morning handoff over the next 48 hours before changing the routine again.",
+    "parentMessageDraft": "Tonight keep the routine small and familiar: one book, three breaths, no new requests.",
+    "agentFindings": [
+      {
+        "agentId": "health-agent",
+        "title": "Evening arousal is more manageable with predictable pacing",
+        "riskExplanation": "Unplanned stimulation still increases resistance before sleep.",
+        "signals": [
+          "Bedtime protest fell on evenings with an earlier wind-down",
+          "Nap transition improved with the familiar book cue"
+        ],
+        "actions": [
+          "Preserve the same order of bath, book, breathing, lights-out."
+        ],
+        "observationPoints": [
+          "Whether protest shortens before lights-out"
+        ],
+        "evidence": [
+          "Teacher nap note 2026-04-07",
+          "Guardian bedtime note 2026-04-06"
+        ]
+      },
+      {
+        "agentId": "coparenting-agent",
+        "title": "Parent accompaniment should stay small and steady",
+        "riskExplanation": "More instructions at bedtime increases pressure instead of support.",
+        "signals": [
+          "Short, repeated cues worked better than explanation-heavy guidance"
+        ],
+        "actions": [
+          "Use one sentence after the book, then stop adding requests."
+        ],
+        "observationPoints": [
+          "Whether the child stays physically close after the first page"
+        ],
+        "evidence": [
+          "Consultation summary 2026-04-07"
+        ]
+      }
+    ],
+    "explainability": [
+      {
+        "label": "Tonight first step",
+        "detail": "Keep the bedtime routine small and familiar."
+      },
+      {
+        "label": "Next observation",
+        "detail": "Look for earlier leaning-in and quicker morning handoff recovery."
+      }
+    ],
+    "evidenceItems": [
+      {
+        "label": "Teacher observation",
+        "detail": "The familiar story cue helped Xiaoyu settle before nap on 2026-04-07."
+      },
+      {
+        "label": "Guardian feedback",
+        "detail": "Earlier wind-down reduced bedtime protest on 2026-04-06."
+      },
+      {
+        "label": "Continuity note",
+        "detail": "School-home pacing should remain aligned for 48 hours before another adjustment."
+      }
+    ]
+  }
+}

@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Baby, Eye, EyeOff, HeartPulse, ShieldCheck, Sparkles, Workflow } from "lucide-react";
+import { Baby, Eye, EyeOff } from "lucide-react";
 import { getDefaultLandingPath, type AccountRole } from "@/lib/auth/accounts";
 import { type Gender, useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -176,22 +176,26 @@ export default function LoginPage() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(125,211,252,0.22),transparent_32%)]" />
           <div className="relative z-10 flex h-full flex-col justify-between gap-10">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur-sm">
-                <Sparkles className="h-4 w-4" />
-                智慧托育比赛 Demo
+              <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur-sm">
+                智慧托育平台
               </div>
               <h1 className="mt-8 max-w-xl text-4xl font-black leading-tight sm:text-5xl">
-                智慧普惠托育平台
+                让园所记录、教师协作与家长反馈更顺畅
               </h1>
               <p className="mt-5 max-w-xl text-sm leading-7 text-white/82 sm:text-base">
-                保留高质量示例账号用于现场演示，同时支持普通账号注册与登录，适合稳定展示晨检、饮食、成长观察和家园共育闭环。
+                支持普通账号登录与注册，也提供示例账号快速进入，方便直接体验教师、家长和管理端的核心流程。
               </p>
             </div>
 
             <div className="grid gap-4">
-              <FeatureRow icon={<Workflow className="h-5 w-5" />} title="家园共育闭环" description="从园内记录到家长反馈，再到机构复盘，示例账号可一键演示完整流程。" />
-              <FeatureRow icon={<HeartPulse className="h-5 w-5" />} title="近 7 天滚动数据" description="示例数据使用固定模板动态映射日期，每天进入都保持最近 7 天的连续展示。" />
-              <FeatureRow icon={<ShieldCheck className="h-5 w-5" />} title="普通账号独立持久化" description="普通注册账号使用独立机构空间保存自己的数据，不会污染比赛 demo 数据。" />
+              <div className="rounded-3xl border border-white/14 bg-white/10 px-5 py-4 backdrop-blur-sm">
+                <p className="text-sm font-semibold text-white">快速开始</p>
+                <p className="mt-1 text-sm leading-6 text-white/76">选择示例账号可直接体验系统，使用普通账号可注册并保存自己的数据。</p>
+              </div>
+              <div className="rounded-3xl border border-white/14 bg-white/10 px-5 py-4 backdrop-blur-sm">
+                <p className="text-sm font-semibold text-white">核心能力</p>
+                <p className="mt-1 text-sm leading-6 text-white/76">覆盖晨检、饮食记录、成长观察和家园反馈等日常托育场景。</p>
+              </div>
             </div>
           </div>
         </section>
@@ -294,10 +298,6 @@ export default function LoginPage() {
                     </button>
                   ))}
                 </div>
-              </div>
-
-              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-500">
-                演示建议：先进入教师或园长示例账号展示近 7 天完整数据，再切换家长示例账号展示家园反馈闭环。
               </div>
             </CardContent>
           </Card>
@@ -493,22 +493,6 @@ export default function LoginPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function FeatureRow({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
-  return (
-    <div className="rounded-3xl border border-white/14 bg-white/10 px-5 py-4 backdrop-blur-sm">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-white/12 text-white">
-          {icon}
-        </div>
-        <div>
-          <h3 className="text-sm font-semibold text-white">{title}</h3>
-          <p className="mt-1 text-sm leading-6 text-white/76">{description}</p>
-        </div>
-      </div>
     </div>
   );
 }

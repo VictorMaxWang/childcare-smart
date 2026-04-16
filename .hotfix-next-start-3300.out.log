@@ -1,0 +1,14 @@
+
+> childcare-smart@0.1.0 start
+> next start --hostname 127.0.0.1 --port 3300
+
+▲ Next.js 16.1.6
+- Local:         http://127.0.0.1:3300
+- Network:       http://127.0.0.1:3300
+
+✓ Starting...
+✓ Ready in 2.6s
+[BRAIN_PROXY] Remote brain proxy succeeded for /api/v1/agents/parent/storybook via 127.0.0.1:8010.
+[BRAIN_PROXY] Remote brain proxy succeeded for /api/v1/agents/parent/storybook via 127.0.0.1:8010.
+[BRAIN_PROXY] Remote brain proxy succeeded for /api/v1/agents/parent/storybook via 127.0.0.1:8010.
+[BRAIN_PROXY] Remote brain proxy succeeded for /api/v1/agents/parent/storybook/media/storybook-media-0d04284a58837607 via 127.0.0.1:8010.

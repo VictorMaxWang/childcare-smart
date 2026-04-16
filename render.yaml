@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: smartchildcare-agent-brain
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+    envVars:
+      - key: ENVIRONMENT
+        value: staging
+      - key: LOG_LEVEL
+        value: INFO
+      - key: APP_HOST
+        value: 0.0.0.0
+      - key: ENABLE_MOCK_PROVIDER
+        value: "false"
+      - key: BRAIN_PROVIDER
+        value: vivo
+      - key: BRAIN_TIMEOUT_MS
+        value: "45000"
+      - key: BRAIN_MEMORY_BACKEND
+        value: sqlite
+      - key: BRAIN_MEMORY_SQLITE_PATH
+        value: /tmp/agent-memory.db
+      - key: REQUEST_TIMEOUT_SECONDS
+        value: "45"
+      - key: STORYBOOK_IMAGE_PROVIDER
+        value: vivo
+      - key: STORYBOOK_AUDIO_PROVIDER
+        value: vivo
+      - key: ALLOW_ORIGINS
+        value: http://127.0.0.1:3000,http://localhost:3000,https://your-frontend-staging.example.com
+      - key: MYSQL_URL
+        sync: false
+      - key: VIVO_APP_ID
+        sync: false
+      - key: VIVO_APP_KEY
+        sync: false

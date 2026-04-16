@@ -1,0 +1,30 @@
+[
+  {
+    "name": "parent",
+    "url": "http://127.0.0.1:3123/parent",
+    "title": "普惠托育智慧管理平台",
+    "hasParentCopy": true,
+    "blockedByLogin": false
+  },
+  {
+    "name": "parent-care",
+    "url": "http://127.0.0.1:3123/parent?care=1",
+    "title": "普惠托育智慧管理平台",
+    "hasParentCopy": true,
+    "blockedByLogin": false
+  },
+  {
+    "name": "parent-agent",
+    "url": "http://127.0.0.1:3123/parent/agent?child=c-1",
+    "title": "普惠托育智慧管理平台",
+    "hasParentCopy": true,
+    "blockedByLogin": false
+  },
+  {
+    "name": "parent-agent-care",
+    "url": "http://127.0.0.1:3123/parent/agent?child=c-1&care=1",
+    "title": "普惠托育智慧管理平台",
+    "hasParentCopy": true,
+    "blockedByLogin": false
+  }
+]
