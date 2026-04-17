@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -211,6 +212,32 @@ function parseEditableFormValue(value: string, kind: EditableFieldKind) {
   return value.trim();
 }
 
+function getDraftCardTone(item: TeacherDraftUiItem) {
+  if (item.status === "confirmed") {
+    return {
+      surface: "glass" as const,
+      glow: "soft" as const,
+      className: "border-emerald-100/70 bg-linear-to-br from-emerald-50/50 via-white to-white",
+    };
+  }
+
+  if (item.status === "discarded") {
+    return {
+      surface: "solid" as const,
+      glow: "none" as const,
+      className: "border-slate-200/80 bg-slate-50/80 opacity-90",
+    };
+  }
+
+  return {
+    surface: item.isEdited ? "luminous" as const : "glass" as const,
+    glow: item.isEdited ? "brand" as const : "soft" as const,
+    className: item.isEdited
+      ? "border-indigo-100/80 bg-linear-to-br from-indigo-50/82 via-white to-sky-50/58"
+      : "border-white/70 bg-white/84",
+  };
+}
+
 export default function DraftRecordCard({
   item,
   isExpanded,
@@ -283,209 +310,238 @@ export default function DraftRecordCard({
 
   const primaryStatusBadge = getPrimaryStatusBadge(item);
   const metaBadges = getMetaBadges(item);
+  const cardTone = getDraftCardTone(item);
 
   return (
-    <div className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-slate-900">
-              {item.childName ?? "未识别幼儿"}
-            </p>
-            <Badge variant="info">{CATEGORY_LABELS[item.category]}</Badge>
-            <Badge variant={primaryStatusBadge.variant}>{primaryStatusBadge.label}</Badge>
-            {metaBadges.map((badge) => (
-              <Badge key={badge.label} variant={badge.variant}>
-                {badge.label}
+    <Card
+      surface={cardTone.surface}
+      glow={cardTone.glow}
+      interactive={false}
+      className={cardTone.className}
+    >
+      <CardContent className="p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-slate-900">
+                {item.childName ?? "未识别幼儿"}
+              </p>
+              <Badge variant="info">{CATEGORY_LABELS[item.category]}</Badge>
+              <Badge variant={primaryStatusBadge.variant}>{primaryStatusBadge.label}</Badge>
+              {metaBadges.map((badge) => (
+                <Badge key={badge.label} variant={badge.variant}>
+                  {badge.label}
+                </Badge>
+              ))}
+              <Badge variant="secondary">
+                置信度 {Math.round(item.confidence * 100)}%
               </Badge>
-            ))}
-            <Badge variant="secondary">
-              置信度 {Math.round(item.confidence * 100)}%
-            </Badge>
-            {item.isEdited ? <Badge variant="warning">已编辑</Badge> : null}
+              {item.isEdited ? <Badge variant="warning">已编辑</Badge> : null}
+            </div>
+            <p className="text-sm leading-6 text-slate-700">{item.summary}</p>
           </div>
-          <p className="text-sm leading-6 text-slate-700">{item.summary}</p>
+
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-10 rounded-full px-3"
+            onClick={onToggleExpand}
+          >
+            <ChevronDown
+              className={`mr-2 h-4 w-4 transition-transform ${
+                isExpanded ? "rotate-180" : ""
+              }`}
+            />
+            {isExpanded ? "收起编辑" : "展开编辑"}
+          </Button>
         </div>
 
-        <Button
-          type="button"
-          variant="ghost"
-          className="min-h-10 rounded-full px-3"
-          onClick={onToggleExpand}
-        >
-          <ChevronDown
-            className={`mr-2 h-4 w-4 transition-transform ${
-              isExpanded ? "rotate-180" : ""
-            }`}
-          />
-          {isExpanded ? "收起编辑" : "展开编辑"}
-        </Button>
-      </div>
-
-      <div className="mt-4 space-y-3">
-        {displayStructuredEntries.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {displayStructuredEntries.map(([key, value]) => (
-              <div key={key} className="rounded-2xl bg-slate-50 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
-                  {formatFieldLabel(key)}
-                </p>
-                <p className="mt-1 text-sm leading-6 text-slate-700">
-                  {formatFieldValue(value)}
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-slate-200 px-3 py-3 text-sm text-slate-500">
-            当前没有可展示的结构化字段。
-          </div>
-        )}
-
-        {item.warnings.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {item.warnings.map((warning) => (
-              <span
-                key={warning}
-                className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
-              >
-                <AlertTriangle className="h-3.5 w-3.5" />
-                {warning}
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      {isExpanded ? (
-        <div className="mt-4 space-y-4 rounded-3xl border border-indigo-100 bg-indigo-50/50 p-4">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">编辑摘要</p>
-            <Textarea
-              value={draftSummary}
-              onChange={(event) => setDraftSummary(event.target.value)}
-              className="mt-2 min-h-24 rounded-2xl bg-white"
-            />
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold text-slate-900">轻量编辑字段</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {editableFields.map((field) => (
-                <div key={field.key}>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
-                    {field.label}
-                  </p>
-                  {field.kind === "boolean" ? (
-                    <Select
-                      value={fieldValues[field.key] ?? BOOLEAN_UNSET_VALUE}
-                      onValueChange={(value) =>
-                        setFieldValues((current) => ({ ...current, [field.key]: value }))
-                      }
-                    >
-                      <SelectTrigger className="rounded-2xl bg-white">
-                        <SelectValue placeholder="未设置" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="true">是</SelectItem>
-                        <SelectItem value="false">否</SelectItem>
-                        <SelectItem value={BOOLEAN_UNSET_VALUE}>未设置</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      type={field.kind === "number" ? "number" : "text"}
-                      value={fieldValues[field.key] ?? ""}
-                      onChange={(event) =>
-                        setFieldValues((current) => ({
-                          ...current,
-                          [field.key]: event.target.value,
-                        }))
-                      }
-                      className="rounded-2xl bg-white"
-                    />
-                  )}
-                </div>
+        <div className="mt-4 space-y-3">
+          {displayStructuredEntries.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {displayStructuredEntries.map(([key, value]) => (
+                <Card
+                  key={key}
+                  surface="solid"
+                  glow="none"
+                  interactive={false}
+                  className="border-white/80 bg-white/82"
+                >
+                  <CardContent className="px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                      {formatFieldLabel(key)}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-slate-700">
+                      {formatFieldValue(value)}
+                    </p>
+                  </CardContent>
+                </Card>
               ))}
             </div>
-          </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white/54 px-3 py-3 text-sm text-slate-500">
+              当前没有可展示的结构化字段。
+            </div>
+          )}
 
-          {item.suggestedActions.length > 0 ? (
-            <div>
-              <p className="text-sm font-semibold text-slate-900">建议动作</p>
-              <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-600">
-                {item.suggestedActions.map((action) => (
-                  <li key={action}>- {action}</li>
-                ))}
-              </ul>
+          {item.warnings.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {item.warnings.map((warning) => (
+                <span
+                  key={warning}
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
+                >
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {warning}
+                </span>
+              ))}
             </div>
           ) : null}
-
-          <div className="rounded-2xl border border-white/80 bg-white/80 p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
-              Raw Excerpt
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{item.rawExcerpt}</p>
-          </div>
-
-          {item.persistMessage ? (
-            <div className="rounded-2xl border border-white/80 bg-white/80 p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
-                Persist Result
-              </p>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                {item.persistMessage}
-                {item.persistError ? ` (${item.persistError})` : ""}
-              </p>
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              className="rounded-full"
-              onClick={handleSave}
-            >
-              <PencilLine className="mr-2 h-4 w-4" />
-              保存编辑
-            </Button>
-          </div>
         </div>
-      ) : null}
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="premium"
-          className="rounded-full"
-          onClick={onConfirm}
-          disabled={item.status === "confirmed" || item.status === "discarded"}
-        >
-          <CheckCircle2 className="mr-2 h-4 w-4" />
-          确认
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="rounded-full"
-          onClick={onToggleExpand}
-          disabled={item.status === "discarded"}
-        >
-          <PencilLine className="mr-2 h-4 w-4" />
-          编辑
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="rounded-full"
-          onClick={onDiscard}
-          disabled={item.status === "discarded" || item.status === "confirmed"}
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          丢弃
-        </Button>
-      </div>
-    </div>
+        {isExpanded ? (
+          <Card
+            surface="luminous"
+            glow="soft"
+            interactive={false}
+            className="mt-4 border-indigo-100/80 bg-linear-to-br from-indigo-50/86 via-white to-sky-50/55"
+          >
+            <CardContent className="space-y-4 p-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">编辑摘要</p>
+                <Textarea
+                  value={draftSummary}
+                  onChange={(event) => setDraftSummary(event.target.value)}
+                  className="mt-2 min-h-24 rounded-2xl bg-white"
+                />
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold text-slate-900">轻量编辑字段</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {editableFields.map((field) => (
+                    <div key={field.key}>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        {field.label}
+                      </p>
+                      {field.kind === "boolean" ? (
+                        <Select
+                          value={fieldValues[field.key] ?? BOOLEAN_UNSET_VALUE}
+                          onValueChange={(value) =>
+                            setFieldValues((current) => ({ ...current, [field.key]: value }))
+                          }
+                        >
+                          <SelectTrigger className="rounded-2xl bg-white">
+                            <SelectValue placeholder="未设置" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="true">是</SelectItem>
+                            <SelectItem value="false">否</SelectItem>
+                            <SelectItem value={BOOLEAN_UNSET_VALUE}>未设置</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          type={field.kind === "number" ? "number" : "text"}
+                          value={fieldValues[field.key] ?? ""}
+                          onChange={(event) =>
+                            setFieldValues((current) => ({
+                              ...current,
+                              [field.key]: event.target.value,
+                            }))
+                          }
+                          className="rounded-2xl bg-white"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {item.suggestedActions.length > 0 ? (
+                <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/82">
+                  <CardContent className="p-4">
+                    <p className="text-sm font-semibold text-slate-900">建议动作</p>
+                    <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-600">
+                      {item.suggestedActions.map((action) => (
+                        <li key={action}>- {action}</li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/82">
+                <CardContent className="p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
+                    Raw Excerpt
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{item.rawExcerpt}</p>
+                </CardContent>
+              </Card>
+
+              {item.persistMessage ? (
+                <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/82">
+                  <CardContent className="p-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
+                      Persist Result
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      {item.persistMessage}
+                      {item.persistError ? ` (${item.persistError})` : ""}
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="rounded-full"
+                  onClick={handleSave}
+                >
+                  <PencilLine className="mr-2 h-4 w-4" />
+                  保存编辑
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="premium"
+            className="rounded-full"
+            onClick={onConfirm}
+            disabled={item.status === "confirmed" || item.status === "discarded"}
+          >
+            <CheckCircle2 className="mr-2 h-4 w-4" />
+            确认
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full"
+            onClick={onToggleExpand}
+            disabled={item.status === "discarded"}
+          >
+            <PencilLine className="mr-2 h-4 w-4" />
+            编辑
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full"
+            onClick={onDiscard}
+            disabled={item.status === "discarded" || item.status === "confirmed"}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            丢弃
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,6 +1,12 @@
 "use client";
 
 import { AlertCircle } from "lucide-react";
+import {
+  AdminBand,
+  AdminEmptyState,
+  AdminMetricTile,
+  AdminSubsection,
+} from "@/components/admin/AdminVisuals";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionCard } from "@/components/role-shell/RoleScaffold";
@@ -45,19 +51,22 @@ function MetricCard({ metric }: { metric: AdminQualityMetric }) {
   const primaryValue = formatMetricPrimaryValue(metric);
 
   return (
-    <Card className="rounded-3xl border-slate-200 bg-white shadow-sm hover:shadow-sm">
-      <CardContent className="space-y-4 p-5">
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-slate-900">{metric.label}</p>
-          <div className="flex items-end gap-2">
-            <p className="text-3xl font-semibold tracking-tight text-slate-900">{primaryValue.value}</p>
-            <p className="pb-1 text-sm font-medium text-slate-500">{primaryValue.unit}</p>
-          </div>
-        </div>
-
-        <p className="min-h-20 text-sm leading-6 text-slate-600">{metric.summary}</p>
-
-        <div className="flex flex-wrap gap-2">
+    <AdminMetricTile
+      label={metric.label}
+      value={primaryValue.value}
+      unit={primaryValue.unit}
+      summary={metric.summary}
+      tone={
+        metric.coverage.coverageRatio < 0.5
+          ? "amber"
+          : metric.confidence >= 0.8
+            ? "emerald"
+            : metric.source.mode === "derived"
+              ? "indigo"
+              : "slate"
+      }
+      badges={
+        <>
           <Badge variant={getModeBadgeVariant(metric.source.mode)}>
             {formatMetricSourceMode(metric.source.mode)}
           </Badge>
@@ -67,19 +76,15 @@ function MetricCard({ metric }: { metric: AdminQualityMetric }) {
           <Badge variant={getCoverageBadgeVariant(metric.coverage.coverageRatio)}>
             覆盖 {formatRatio(metric.coverage.coverageRatio)}
           </Badge>
-        </div>
-
-        {metric.fallback || metric.source.demoOnly || metric.warnings.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {metric.fallback ? <Badge variant="warning">本地兜底</Badge> : null}
-            {metric.source.demoOnly ? <Badge variant="outline">演示数据</Badge> : null}
-            {metric.warnings.length > 0 ? (
-              <Badge variant="outline">{metric.warnings.length} 条说明</Badge>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="space-y-1 text-xs leading-5 text-slate-500">
+          {metric.fallback ? <Badge variant="warning">本地兜底</Badge> : null}
+          {metric.source.demoOnly ? <Badge variant="outline">演示数据</Badge> : null}
+          {metric.warnings.length > 0 ? (
+            <Badge variant="outline">{metric.warnings.length} 条说明</Badge>
+          ) : null}
+        </>
+      }
+      meta={
+        <>
           <p>
             业务快照：
             <span className="ml-1 font-medium text-slate-700">
@@ -87,9 +92,9 @@ function MetricCard({ metric }: { metric: AdminQualityMetric }) {
             </span>
           </p>
           {metric.source.note ? <p>{metric.source.note}</p> : null}
-        </div>
-      </CardContent>
-    </Card>
+        </>
+      }
+    />
   );
 }
 
@@ -99,17 +104,18 @@ function MetricGroupSection({ data }: { data: AdminQualityMetricsResponse }) {
   return (
     <div className="space-y-6">
       {groups.map((group) => (
-        <div key={group.id} className="space-y-4">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">{group.title}</p>
-            <p className="mt-1 text-sm leading-6 text-slate-500">{group.description}</p>
-          </div>
+        <AdminSubsection
+          key={group.id}
+          title={group.title}
+          description={group.description}
+          tone="slate"
+        >
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {group.metrics.map((metric) => (
               <MetricCard key={metric.id} metric={metric} />
             ))}
           </div>
-        </div>
+        </AdminSubsection>
       ))}
     </div>
   );
@@ -119,35 +125,43 @@ function LoadingState() {
   return (
     <div className="space-y-6">
       {[0, 1, 2].map((sectionIndex) => (
-        <div key={sectionIndex} className="space-y-4">
-          <div className="space-y-2">
-            <div className="h-4 w-24 animate-pulse rounded-full bg-slate-200" />
-            <div className="h-4 w-64 animate-pulse rounded-full bg-slate-100" />
+        <AdminSubsection key={sectionIndex} tone="slate">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="h-4 w-24 animate-pulse rounded-full bg-slate-200" />
+              <div className="h-4 w-64 animate-pulse rounded-full bg-slate-100" />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {(sectionIndex === 1 ? [0, 1] : [0, 1, 2]).map((cardIndex) => (
+                <Card
+                  key={`${sectionIndex}-${cardIndex}`}
+                  surface="glass"
+                  glow="soft"
+                  interactive={false}
+                  className="rounded-[1.5rem] border-white/75"
+                >
+                  <CardContent className="space-y-4 p-5">
+                    <div className="space-y-3">
+                      <div className="h-4 w-36 animate-pulse rounded-full bg-slate-200" />
+                      <div className="h-8 w-28 animate-pulse rounded-full bg-slate-100" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-3 w-full animate-pulse rounded-full bg-slate-100" />
+                      <div className="h-3 w-full animate-pulse rounded-full bg-slate-100" />
+                      <div className="h-3 w-4/5 animate-pulse rounded-full bg-slate-100" />
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="h-6 w-16 animate-pulse rounded-full bg-slate-100" />
+                      <div className="h-6 w-20 animate-pulse rounded-full bg-slate-100" />
+                      <div className="h-6 w-20 animate-pulse rounded-full bg-slate-100" />
+                    </div>
+                    <div className="h-3 w-40 animate-pulse rounded-full bg-slate-100" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {(sectionIndex === 1 ? [0, 1] : [0, 1, 2]).map((cardIndex) => (
-              <Card key={`${sectionIndex}-${cardIndex}`} className="rounded-3xl border-slate-200 bg-white shadow-sm">
-                <CardContent className="space-y-4 p-5">
-                  <div className="space-y-3">
-                    <div className="h-4 w-36 animate-pulse rounded-full bg-slate-200" />
-                    <div className="h-8 w-28 animate-pulse rounded-full bg-slate-100" />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="h-3 w-full animate-pulse rounded-full bg-slate-100" />
-                    <div className="h-3 w-full animate-pulse rounded-full bg-slate-100" />
-                    <div className="h-3 w-4/5 animate-pulse rounded-full bg-slate-100" />
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="h-6 w-16 animate-pulse rounded-full bg-slate-100" />
-                    <div className="h-6 w-20 animate-pulse rounded-full bg-slate-100" />
-                    <div className="h-6 w-20 animate-pulse rounded-full bg-slate-100" />
-                  </div>
-                  <div className="h-3 w-40 animate-pulse rounded-full bg-slate-100" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
+        </AdminSubsection>
       ))}
     </div>
   );
@@ -155,7 +169,7 @@ function LoadingState() {
 
 function ErrorState({ error }: { error: string | null }) {
   return (
-    <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50/70 p-5">
+    <AdminEmptyState tone="slate">
       <div className="flex items-start gap-3">
         <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
         <div className="space-y-2 text-sm leading-6">
@@ -166,7 +180,7 @@ function ErrorState({ error }: { error: string | null }) {
           {error ? <p className="text-slate-500">原因：{error}</p> : null}
         </div>
       </div>
-    </div>
+    </AdminEmptyState>
   );
 }
 
@@ -199,6 +213,9 @@ export default function AdminQualityMetricsPanel({
           <Badge variant="warning">指标暂不可用</Badge>
         )
       }
+      surface="luminous"
+      glow="soft"
+      className="border-slate-200/70"
     >
       {status === "loading" ? (
         <LoadingState />
@@ -206,30 +223,33 @@ export default function AdminQualityMetricsPanel({
         <ErrorState error={error} />
       ) : (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
-            <p>
-              业务快照：
-              <span className="ml-1 font-medium text-slate-700">
-                {formatAdminQualitySource(businessSnapshotSource)}
-              </span>
-            </p>
-            <p>
-              时间范围：
-              <span className="ml-1 font-medium text-slate-700">
-                {data.window.startDate} 至 {data.window.endDate}
-              </span>
-            </p>
-          </div>
+          <AdminBand
+            tone="slate"
+            title="治理口径"
+            description={
+              <>
+                业务快照：
+                <span className="ml-1 font-medium text-slate-700">
+                  {formatAdminQualitySource(businessSnapshotSource)}
+                </span>
+                <span className="mx-2 text-slate-300">/</span>
+                时间范围：
+                <span className="ml-1 font-medium text-slate-700">
+                  {data.window.startDate} 至 {data.window.endDate}
+                </span>
+              </>
+            }
+            className="p-4"
+          />
 
           {data.warnings.length > 0 ? (
-            <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
-              <p className="font-semibold">数据说明</p>
-              <div className="mt-2 space-y-1.5 text-amber-800">
+            <AdminSubsection title="数据说明" tone="amber" className="p-4">
+              <div className="space-y-1.5 text-sm text-amber-900">
                 {data.warnings.slice(0, 2).map((warning) => (
                   <p key={warning}>{warning}</p>
                 ))}
               </div>
-            </div>
+            </AdminSubsection>
           ) : null}
 
           <MetricGroupSection data={data} />

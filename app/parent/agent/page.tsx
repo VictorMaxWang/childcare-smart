@@ -920,6 +920,8 @@ export default function ParentAgentPage() {
   if (careMode) {
     return (
       <RolePageShell
+        intensity="medium"
+        tone="warm"
         badge={`家长 AI 助手 · 当前孩子 ${selectedFeed.child.name}`}
         title="今晚先做一件事，做完再给老师一个最短反馈。"
         description="关怀模式把首屏收敛成大字行动摘要，先让祖辈和低数字熟练度照护者看懂今晚做什么、明天看什么、为什么现在做。"
@@ -1021,7 +1023,7 @@ export default function ParentAgentPage() {
                             {parentMessageStatus}
                           </p>
                         ) : null}
-                        <div className="rounded-[28px] border border-indigo-100 bg-indigo-50/60 p-5">
+                        <div className="content-focus-block rounded-[28px] p-5">
                           <ParentSpeakButton
                             text={currentResultSpeechText}
                             label="读给我听"
@@ -1036,7 +1038,7 @@ export default function ParentAgentPage() {
                             {currentResult.summary}
                           </p>
                           <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                            <div className="rounded-3xl border border-white/80 bg-white/90 p-4">
+                            <div className="content-reading-panel rounded-3xl p-4">
                               <p className="text-sm font-semibold text-slate-500">
                                 今晚要做
                               </p>
@@ -1044,7 +1046,7 @@ export default function ParentAgentPage() {
                                 {displayTonightTopAction}
                               </p>
                             </div>
-                            <div className="rounded-3xl border border-white/80 bg-white/90 p-4">
+                            <div className="content-reading-panel rounded-3xl p-4">
                               <p className="text-sm font-semibold text-slate-500">
                                 明天继续看
                               </p>
@@ -1417,6 +1419,8 @@ export default function ParentAgentPage() {
 
   return (
     <RolePageShell
+      intensity="medium"
+      tone="warm"
       badge={`家长 AI 助手 · 当前儿童 ${selectedFeed.child.name}`}
       title="把今晚怎么做、做完怎么反馈、明天老师继续看什么，放进同一条 AI 闭环里"
       description="这一版家长助手会把今晚怎么做、做完怎么反馈、以及明天老师继续看什么，串成一条完整主路径。"
@@ -1427,7 +1431,7 @@ export default function ParentAgentPage() {
           <div className="space-y-6">
             <SectionCard title="当前儿童信息卡" description="先确认正在查看哪个孩子，再决定今晚先做什么。">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-3xl border border-slate-100 bg-white p-4">
+                <div className="content-reading-panel rounded-3xl p-4">
                   <p className="text-lg font-semibold text-slate-900">{selectedFeed.child.name}</p>
                   <p className="mt-2 text-sm text-slate-500">
                     {selectedFeed.child.className} · {getAgeText(selectedFeed.child.birthDate)} · 出生于 {formatDisplayDate(selectedFeed.child.birthDate)}
@@ -1444,7 +1448,7 @@ export default function ParentAgentPage() {
                     )}
                   </div>
                 </div>
-                <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                <div className="content-form-panel rounded-3xl p-4">
                   <p className="text-sm font-semibold text-slate-900">今晚家庭任务</p>
                   <p className="mt-2 text-base font-semibold text-slate-900">{displayInterventionCard?.title ?? baseContext.task.title}</p>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{displayTonightTopAction}</p>
@@ -1456,16 +1460,16 @@ export default function ParentAgentPage() {
 
             <SectionCard title="最近风险摘要" description="AI 先用真实业务数据找出今晚最值得处理的信号。">
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-3xl bg-amber-50 p-4">
+                <div className="content-focus-block rounded-3xl p-4">
                   <p className="text-xs text-amber-700">近 7 天重点原因</p>
                   <p className="mt-2 text-sm font-semibold leading-6 text-slate-900">{baseContext.focusReasons[0]}</p>
                 </div>
-                <div className="rounded-3xl bg-sky-50 p-4">
+                <div className="content-reading-panel rounded-3xl p-4">
                   <p className="text-xs text-sky-700">补水状态</p>
                   <p className="mt-2 text-2xl font-semibold text-slate-900">{hydrationDisplay?.statusLabel ?? "暂无"}</p>
                   <p className="mt-1 text-xs text-sky-800/80">补水主动性：{hydrationDisplay?.initiativeLabel ?? "待观察"}</p>
                 </div>
-                <div className="rounded-3xl bg-white p-4 ring-1 ring-slate-100">
+                <div className="content-form-panel rounded-3xl p-4">
                   <p className="text-xs text-slate-500">最近家长反馈</p>
                   <p className="mt-2 text-sm font-semibold leading-6 text-slate-900">
                     {selectedFeed.latestFeedback
@@ -1560,7 +1564,7 @@ export default function ParentAgentPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="rounded-3xl border border-indigo-100 bg-indigo-50/70 p-5">
+                  <div className="content-focus-block rounded-3xl p-5">
                     {parentMessageStatus ? (
                       <p className="mt-3 text-sm leading-6 text-slate-600">
                         {parentMessageStatus}
@@ -1573,7 +1577,7 @@ export default function ParentAgentPage() {
                     />
                     <p className="mt-3 text-lg font-semibold text-slate-900">{currentResult.title}</p>
                     <p className="mt-3 text-sm leading-7 text-slate-600">{currentResult.summary}</p>
-                    <div className="mt-4 rounded-2xl bg-white/80 p-4">
+                    <div className="content-reading-panel mt-4 rounded-2xl p-4">
                       <p className="text-sm font-semibold text-slate-900">今晚最该做的一件事</p>
                       <p className="mt-2 text-sm leading-6 text-slate-700">{displayTonightTopAction}</p>
                       <p className="mt-3 text-sm font-semibold text-slate-900">为什么现在做</p>
@@ -1581,7 +1585,7 @@ export default function ParentAgentPage() {
                     </div>
                   </div>
                   <div className="grid gap-4 lg:grid-cols-2">
-                    <div className="rounded-3xl border border-slate-100 bg-white p-4">
+                    <div className="content-reading-panel rounded-3xl p-4">
                       <p className="text-sm font-semibold text-slate-900">今晚观察点</p>
                       <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
                         {displayObservationPoints.map((item) => (
@@ -1589,7 +1593,7 @@ export default function ParentAgentPage() {
                         ))}
                       </ul>
                     </div>
-                    <div className="rounded-3xl border border-slate-100 bg-white p-4">
+                    <div className="content-reading-panel rounded-3xl p-4">
                       <p className="text-sm font-semibold text-slate-900">明天老师继续看</p>
                       <p className="mt-3 text-sm leading-6 text-slate-600">{displayTeacherObservation}</p>
                       <p className="mt-3 text-sm leading-6 text-slate-600">

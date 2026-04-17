@@ -39,7 +39,7 @@ export default function ParentCareFocusCard({
   return (
     <section
       className={cn(
-        "rounded-[32px] border border-indigo-100 bg-linear-to-br from-white via-indigo-50/60 to-sky-50/70 p-5 shadow-[0_18px_50px_rgba(79,70,229,0.12)] sm:p-6",
+        "content-focus-block rounded-[32px] border border-amber-100/80 bg-linear-to-br from-white via-amber-50/70 to-rose-50/65 p-5 shadow-[0_18px_50px_rgba(245,158,11,0.1)] sm:p-6",
         className
       )}
     >
@@ -67,7 +67,7 @@ export default function ParentCareFocusCard({
             <div
               key={`${item.label}-${item.value}`}
               className={cn(
-                "rounded-[24px] border p-4",
+                "rounded-[24px] border bg-white/74 p-4 backdrop-blur-xl",
                 toneClassMap[item.tone ?? "slate"]
               )}
             >

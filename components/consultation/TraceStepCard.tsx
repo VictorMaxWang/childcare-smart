@@ -71,13 +71,15 @@ export default function TraceStepCard({
 
   return (
     <Card
+      surface={stage.status === "active" ? "luminous" : "glass"}
+      glow={stage.status === "active" ? "brand" : stage.status === "completed" ? "soft" : "none"}
       className={cn(
-        "overflow-hidden border-slate-100 shadow-sm transition-all",
+        "overflow-hidden shadow-sm transition-all",
         stage.status === "active"
-          ? "border-sky-200 bg-linear-to-br from-sky-50/80 via-white to-white"
+          ? "border-sky-200 bg-linear-to-br from-sky-50/82 via-white to-white"
           : stage.status === "completed"
-            ? "bg-linear-to-br from-emerald-50/70 via-white to-white"
-            : "bg-white",
+            ? "border-emerald-100/80 bg-linear-to-br from-emerald-50/72 via-white to-white"
+            : "border-white/70 bg-white/82",
         className
       )}
     >
@@ -113,14 +115,14 @@ export default function TraceStepCard({
       {open ? (
         <CardContent className="space-y-4">
           {stage.callout ? (
-            <div className={cn("rounded-2xl border p-4 text-sm leading-6", getCalloutClasses(stage.callout.tone))}>
+            <div className={cn("rounded-2xl border p-4 text-sm leading-6 shadow-[var(--shadow-card)]", getCalloutClasses(stage.callout.tone))}>
               <p className="font-semibold">{stage.callout.title}</p>
               <p className="mt-1">{stage.callout.description}</p>
             </div>
           ) : null}
 
           {stage.items.length ? (
-            <div className="rounded-2xl border border-white/70 bg-white/85 p-4">
+            <div className="rounded-2xl border border-white/70 bg-white/88 p-4 shadow-[var(--shadow-card)]">
               <p className="text-sm font-semibold text-slate-900">阶段要点</p>
               <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
                 {stage.items.map((item, index) => (
@@ -131,14 +133,14 @@ export default function TraceStepCard({
           ) : null}
 
           {stage.evidence.length || stage.evidenceItems.length ? (
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+            <div className="rounded-2xl border border-white/70 bg-white/76 p-4 shadow-[var(--shadow-card)]">
               <p className="text-sm font-semibold text-slate-900">关键信号</p>
               {evidencePreviewModel.mode === "structured" ? (
                 <div className="mt-3 space-y-3">
                   {evidencePreviewModel.leadItems.map((evidence) => (
                     <div
                       key={evidence.item.id}
-                      className="rounded-2xl border border-slate-100 bg-white/90 p-3"
+                      className="rounded-2xl border border-white/80 bg-white/90 p-3 shadow-[var(--shadow-card)]"
                     >
                       <div className="flex flex-wrap gap-2">
                         <Badge variant="info">{evidence.item.sourceLabel}</Badge>

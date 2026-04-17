@@ -6,6 +6,12 @@ import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import AmbientBackground from "@/components/visuals/AmbientBackground";
+import GlassSurface from "@/components/visuals/GlassSurface";
+import MagneticCTA from "@/components/visuals/MagneticCTA";
+import MotionHero from "@/components/visuals/MotionHero";
+import RevealSection from "@/components/visuals/RevealSection";
+import type { AmbientTone, PageIntensity, SurfaceVariant } from "@/components/visuals/types";
 import { cn } from "@/lib/utils";
 
 export function RolePageShell({
@@ -13,30 +19,74 @@ export function RolePageShell({
   title,
   description,
   actions,
+  heroAside,
+  intensity = "light",
+  tone = "brand",
+  surface = "glass",
+  interactive = intensity === "strong" || intensity === "medium",
   children,
 }: {
   badge: string;
   title: string;
   description: string;
   actions?: ReactNode;
+  heroAside?: ReactNode;
+  intensity?: PageIntensity;
+  tone?: AmbientTone;
+  surface?: SurfaceVariant;
+  interactive?: boolean;
   children: ReactNode;
 }) {
+  const leadContent = (
+    <div className="immersive-hero__lead">
+      <div className="hero-sequence hero-sequence-0">
+        <Badge variant="info" className="immersive-hero__badge">
+          {badge}
+        </Badge>
+      </div>
+      <div className="hero-sequence hero-sequence-1">
+        <h1 className="immersive-hero__title">{title}</h1>
+        <p className="immersive-hero__description">{description}</p>
+      </div>
+      {actions ? (
+        <div className="hero-sequence hero-sequence-2">
+          <div className="immersive-hero__actions">{actions}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 page-enter">
-      <div className="rounded-[28px] border border-white/60 bg-white/75 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur-sm sm:p-7">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <Badge variant="info" className="px-3 py-1 text-xs">
-              {badge}
-            </Badge>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">{title}</h1>
-            <p className="mt-3 text-sm leading-7 text-slate-500 sm:text-base">{description}</p>
-          </div>
-          {actions ? <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">{actions}</div> : null}
+    <AmbientBackground intensity={intensity} tone={tone} interactive={interactive} className="pb-6 pt-4 sm:pb-8 sm:pt-6">
+      <div className="role-page-shell page-enter" data-role-tone={tone}>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <GlassSurface
+            tone={tone}
+            surface={surface}
+            className={cn(
+              "immersive-hero rounded-[2rem] border border-white/72 p-5 shadow-[var(--shadow-hero)] sm:p-7",
+              tone === "warm" ? "role-page-shell__hero-warm" : null
+            )}
+          >
+            <div className="immersive-hero__veil" />
+            {heroAside ? (
+              <MotionHero
+                className="immersive-hero__grid"
+                lead={leadContent}
+                support={<div className="immersive-hero__aside">{heroAside}</div>}
+              />
+            ) : (
+              <RevealSection>
+                <div className="immersive-hero__grid immersive-hero__grid-single">{leadContent}</div>
+              </RevealSection>
+            )}
+          </GlassSurface>
+          <RevealSection delay={180} className="role-page-shell__body mt-6 sm:mt-7">
+            {children}
+          </RevealSection>
         </div>
       </div>
-      <div className="mt-6">{children}</div>
-    </div>
+    </AmbientBackground>
   );
 }
 
@@ -52,7 +102,7 @@ export function RoleSplitLayout({
   return (
     <div
       className={cn(
-        "grid gap-6",
+        "grid items-start gap-6",
         stacked ? "grid-cols-1" : "lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]"
       )}
     >
@@ -64,16 +114,26 @@ export function RoleSplitLayout({
 
 export function MetricGrid({
   items,
+  className,
 }: {
   items: Array<{ label: string; value: string; tone?: "indigo" | "emerald" | "amber" | "sky" }>;
+  className?: string;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-4", className)}>
       {items.map((item) => (
-        <Card key={item.label} className={cn("overflow-hidden border-l-4 bg-white", toneClassMap[item.tone ?? "indigo"])}>
-          <CardContent className="py-4">
-            <p className="text-xs text-slate-500">{item.label}</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">{item.value}</p>
+        <Card
+          key={item.label}
+          surface="luminous"
+          glow={item.tone === "indigo" ? "brand" : "soft"}
+          className={cn(
+            "kpi-accent overflow-hidden border border-white/72 border-l-4 bg-white/86",
+            toneClassMap[item.tone ?? "indigo"]
+          )}
+        >
+          <CardContent className="py-4 sm:py-5">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500/90">{item.label}</p>
+            <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 sm:text-[1.9rem]">{item.value}</p>
           </CardContent>
         </Card>
       ))}
@@ -87,19 +147,25 @@ export function SectionCard({
   actions,
   children,
   className,
+  tone = "brand",
+  surface = "solid",
+  glow = "soft",
 }: {
   title: string;
   description?: string;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
+  tone?: AmbientTone;
+  surface?: SurfaceVariant;
+  glow?: "none" | "soft" | "brand" | "warm";
 }) {
   return (
-    <Card className={cn("border-slate-100 shadow-sm", className)}>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <Card tone={tone} surface={surface} glow={glow} className={cn("border-white/72", className)}>
+      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <CardTitle className="text-lg text-slate-900">{title}</CardTitle>
-          {description ? <CardDescription className="mt-2">{description}</CardDescription> : null}
+          <CardTitle className="text-lg text-slate-950 sm:text-[1.15rem]">{title}</CardTitle>
+          {description ? <CardDescription className="mt-2 max-w-3xl leading-6">{description}</CardDescription> : null}
         </div>
         {actions}
       </CardHeader>
@@ -125,11 +191,15 @@ export function AssistantEntryCard({
     <SectionCard
       title={title}
       description={description}
-      className="border-indigo-100 bg-linear-to-br from-indigo-50 via-white to-sky-50"
+      surface="luminous"
+      glow="brand"
+      className="border-indigo-100/80"
       actions={
-        <Button asChild variant="premium" className="min-h-11 rounded-xl px-4">
-          <Link href={href}>{buttonLabel}</Link>
-        </Button>
+        <MagneticCTA>
+          <Button asChild variant="premium" className="min-h-11 rounded-xl px-4">
+            <Link href={href}>{buttonLabel}</Link>
+          </Button>
+        </MagneticCTA>
       }
     >
       {children}
@@ -146,7 +216,7 @@ export function InlineLinkButton({
   label: string;
   variant?: "outline" | "premium" | "secondary";
 }) {
-  return (
+  const button = (
     <Button asChild variant={variant} className="min-h-11 rounded-xl">
       <Link href={href} className="gap-2">
         {label}
@@ -154,12 +224,18 @@ export function InlineLinkButton({
       </Link>
     </Button>
   );
+
+  if (variant === "premium") {
+    return <MagneticCTA>{button}</MagneticCTA>;
+  }
+
+  return button;
 }
 
 export function AgentWorkspaceCard({
   title,
   description,
-  badgeLabel = "Agent 入口",
+  badgeLabel = "Agent Workspace",
   promptButtons,
   children,
 }: {
@@ -173,6 +249,7 @@ export function AgentWorkspaceCard({
     <SectionCard
       title={title}
       description={description}
+      surface="glass"
       actions={
         <Badge variant="secondary" className="gap-1 px-3 py-1">
           <Sparkles className="h-3.5 w-3.5" />

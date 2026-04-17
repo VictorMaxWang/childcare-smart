@@ -11,6 +11,7 @@ import ConsultationTracePanel from "../../../components/consultation/Consultatio
 import { RolePageShell, RoleSplitLayout, SectionCard, InlineLinkButton } from "@/components/role-shell/RoleScaffold";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -118,9 +119,10 @@ function ConsultationInputCard({
   return (
     <SectionCard title="2. 录入教师补充" description="会诊流程会直接结合这些补充信息与已有儿童资料一起判断。">
       <div className="space-y-4">
-        <Textarea value={teacherNote} onChange={(event) => setTeacherNote(event.target.value)} placeholder="例如：午睡前反复抓耳，离园前情绪仍不稳定，希望生成园内动作、今夜家庭任务和 48 小时复查点。" className="min-h-28 rounded-3xl bg-white" />
+        <Textarea value={teacherNote} onChange={(event) => setTeacherNote(event.target.value)} placeholder="例如：午睡前反复抓耳，离园前情绪仍不稳定，希望生成园内动作、今夜家庭任务和 48 小时复查点。" className="min-h-28 rounded-3xl bg-white/90 shadow-[var(--shadow-card)]" />
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-3xl border border-slate-100 bg-white p-5">
+          <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/84">
+            <CardContent className="p-5">
             <div className="flex items-center gap-2">
               <Camera className="h-4 w-4 text-sky-500" />
               <p className="text-sm font-semibold text-slate-900">图片占位</p>
@@ -129,8 +131,10 @@ function ConsultationInputCard({
               <Input value={imageAttachmentName} onChange={(event) => setImageAttachmentName(event.target.value)} placeholder="附件名，例如 morning-check-photo.jpg" />
               <Textarea value={imageNote} onChange={(event) => setImageNote(event.target.value)} placeholder="先写一段图片中的关键信息。" className="min-h-24 bg-white" />
             </div>
-          </div>
-          <div className="rounded-3xl border border-slate-100 bg-white p-5">
+            </CardContent>
+          </Card>
+          <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/84">
+            <CardContent className="p-5">
             <div className="flex items-center gap-2">
               <Mic className="h-4 w-4 text-indigo-500" />
               <p className="text-sm font-semibold text-slate-900">语音速记占位</p>
@@ -139,9 +143,16 @@ function ConsultationInputCard({
               <Input value={voiceAttachmentName} onChange={(event) => setVoiceAttachmentName(event.target.value)} placeholder="附件名，例如 teacher-voice-note.m4a" />
               <Textarea value={voiceNote} onChange={(event) => setVoiceNote(event.target.value)} placeholder="先写一段语音速记内容。" className="min-h-24 bg-white" />
             </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-indigo-100 bg-indigo-50/60 p-4">
+        <Card
+          surface="luminous"
+          glow="brand"
+          interactive={false}
+          className="border-indigo-100/80 bg-linear-to-br from-indigo-50/88 via-white to-sky-50/55"
+        >
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
           <div className="text-sm text-slate-600">点击后会按“长期画像 → 最近会诊 → 当前建议”流式展示，并在结束后保留最终会诊卡。</div>
           <Button
             className="gap-2 rounded-xl"
@@ -157,7 +168,8 @@ function ConsultationInputCard({
             <Sparkles className="h-4 w-4" />
             一键生成会诊
           </Button>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </SectionCard>
   );
@@ -302,12 +314,6 @@ export default function TeacherHighRiskConsultationPage() {
 
   useEffect(() => () => stop(), [stop]);
 
-  useEffect(() => {
-    if (result) {
-      setShowSetupSections(false);
-    }
-  }, [result]);
-
   async function runConsultation(form: {
     teacherNote: string;
     imageInput?: { attachmentName?: string; content?: string };
@@ -450,6 +456,7 @@ export default function TeacherHighRiskConsultationPage() {
           }
 
           setResult(rawResult);
+          setShowSetupSections(false);
           upsertConsultation(rawResult);
           upsertInterventionCard(rawResult.interventionCard);
           buildReminderItems({
@@ -532,6 +539,7 @@ export default function TeacherHighRiskConsultationPage() {
 
   return (
     <RolePageShell
+      intensity="strong"
       badge={`高风险儿童会诊 · ${classContext.className}`}
       title="高风险儿童一键会诊"
       description="按长期画像、最近会诊、当前建议分阶段流式展示，适合移动端录屏。"
@@ -601,7 +609,13 @@ export default function TeacherHighRiskConsultationPage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="rounded-3xl border border-rose-100 bg-linear-to-br from-rose-50 via-white to-amber-50 p-5">
+                      <Card
+                        surface="luminous"
+                        glow="brand"
+                        interactive={false}
+                        className="border-rose-100/80 bg-linear-to-br from-rose-50/90 via-white to-amber-50/70"
+                      >
+                        <CardContent className="p-5">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="warning">高风险主路径</Badge>
                           <Badge variant="secondary">{selectedChild.className}</Badge>
@@ -617,9 +631,11 @@ export default function TeacherHighRiskConsultationPage() {
                             </Badge>
                           ))}
                         </div>
-                      </div>
+                        </CardContent>
+                      </Card>
                     </div>
-                    <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                    <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/84">
+                      <CardContent className="p-5">
                       <p className="text-sm font-semibold text-slate-900">本次自动带入</p>
                       <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
                         <li>晨检异常：{autoContext.morningCheckAlerts.length} 条</li>
@@ -628,7 +644,8 @@ export default function TeacherHighRiskConsultationPage() {
                         <li>家长反馈：{autoContext.parentFeedbackNotes.length} 条</li>
                         <li>班级信号：{autoContext.classSignals.length} 条</li>
                       </ul>
-                    </div>
+                      </CardContent>
+                    </Card>
                   </div>
                 </SectionCard>
 
@@ -669,31 +686,42 @@ export default function TeacherHighRiskConsultationPage() {
               <div id="consultation-result" className="space-y-6">
                 <SectionCard title="4. 最终会诊结论" description="汇总本次会诊结论，方便老师直接确认并继续跟进。">
                   <div className="space-y-4">
-                    <div className="rounded-3xl border border-rose-100 bg-linear-to-br from-rose-50 via-white to-amber-50 p-5">
+                    <Card
+                      surface="luminous"
+                      glow="brand"
+                      interactive={false}
+                      className="border-rose-100/80 bg-linear-to-br from-rose-50/90 via-white to-amber-50/70"
+                    >
+                      <CardContent className="p-5">
                       <div className="flex flex-wrap gap-2">
                         <Badge variant="warning">会诊结论</Badge>
                         <Badge variant="secondary">{buildConsultationResultBadge(result)}</Badge>
                       </div>
                       <p className="mt-3 text-lg font-semibold text-slate-900">{result.summary}</p>
                       <p className="mt-3 text-sm leading-7 text-slate-600">{result.coordinatorSummary.finalConclusion}</p>
-                    </div>
+                      </CardContent>
+                    </Card>
                     <div className="grid gap-4 lg:grid-cols-2">
-                      <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                      <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/84">
+                        <CardContent className="p-5">
                         <p className="text-sm font-semibold text-slate-900">触发原因</p>
                         <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
                           {result.triggerReasons.map((item) => (
                             <li key={item}>- {item}</li>
                           ))}
                         </ul>
-                      </div>
-                      <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                        </CardContent>
+                      </Card>
+                      <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/84">
+                        <CardContent className="p-5">
                         <p className="text-sm font-semibold text-slate-900">关键发现</p>
                         <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
                           {result.keyFindings.map((item) => (
                             <li key={item}>- {item}</li>
                           ))}
                         </ul>
-                      </div>
+                        </CardContent>
+                      </Card>
                     </div>
                   </div>
                 </SectionCard>
@@ -704,18 +732,22 @@ export default function TeacherHighRiskConsultationPage() {
                       title="今晚家庭干预卡"
                       footer={
                         <div className="grid gap-4 lg:grid-cols-2">
-                          <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
+                          <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/84">
+                            <CardContent className="p-4">
                             <p className="text-sm font-semibold text-slate-900">家长沟通话术</p>
                             <p className="mt-2 text-sm leading-6 text-slate-600">{result.parentMessageDraft}</p>
-                          </div>
-                          <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
+                            </CardContent>
+                          </Card>
+                          <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/84">
+                            <CardContent className="p-4">
                             <p className="text-sm font-semibold text-slate-900">下一检查点</p>
                             <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-600">
                               {result.nextCheckpoints.map((item) => (
                                 <li key={item}>- {item}</li>
                               ))}
                             </ul>
-                          </div>
+                            </CardContent>
+                          </Card>
                         </div>
                       }
                     />
@@ -747,21 +779,27 @@ export default function TeacherHighRiskConsultationPage() {
               </ol>
             </SectionCard>
             <SectionCard title="本页说明" description="优先展示老师看得懂、讲得清的会诊过程。">
-              <div className="space-y-3 text-sm text-slate-600">
-                <div className="rounded-2xl border border-slate-100 bg-white p-4">会诊过程会持续展示长期画像、近期情况和当前建议三段内容。</div>
-                <div className="rounded-2xl border border-slate-100 bg-white p-4">如当前数据暂不完整，页面会优先保留已经整理出的阶段内容。</div>
-                <div className="rounded-2xl border border-slate-100 bg-white p-4">会诊结束后，会自动生成园内动作、家庭任务和 48 小时复查卡。</div>
-              </div>
-            </SectionCard>
+                <div className="space-y-3 text-sm text-slate-600">
+                  <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82"><CardContent className="p-4">会诊过程会持续展示长期画像、近期情况和当前建议三段内容。</CardContent></Card>
+                  <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82"><CardContent className="p-4">如当前数据暂不完整，页面会优先保留已经整理出的阶段内容。</CardContent></Card>
+                  <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82"><CardContent className="p-4">会诊结束后，会自动生成园内动作、家庭任务和 48 小时复查卡。</CardContent></Card>
+                </div>
+              </SectionCard>
             <SectionCard title="展示视角" description="页面支持常规展示与详细查看两种视角。">
               <div className="space-y-3 text-sm text-slate-600">
-                <div className="rounded-2xl border border-slate-100 bg-white p-4">常规展示会优先保留三阶段故事线、同步去向和必要异常提示，适合评委录屏与教师讲解。</div>
-                <div className="rounded-2xl border border-slate-100 bg-white p-4">详细查看会额外展开更细的过程信息，便于需要时核对发生在哪个阶段。</div>
+                <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82"><CardContent className="p-4">常规展示会优先保留三阶段故事线、同步去向和必要异常提示，适合评委录屏与教师讲解。</CardContent></Card>
+                <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82"><CardContent className="p-4">详细查看会额外展开更细的过程信息，便于需要时核对发生在哪个阶段。</CardContent></Card>
               </div>
             </SectionCard>
             {result ? (
               <SectionCard title="园长决策卡预览" description="会诊结果会同步进入园长端优先级区。">
-                <div className="rounded-3xl border border-amber-100 bg-amber-50/70 p-5">
+                <Card
+                  surface="luminous"
+                  glow="soft"
+                  interactive={false}
+                  className="border-amber-100/80 bg-linear-to-br from-amber-50/88 via-white to-rose-50/50"
+                >
+                  <CardContent className="p-5">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="warning">{result.riskLevel === "high" ? "P1" : result.riskLevel === "medium" ? "P2" : "P3"}</Badge>
                     <Badge variant="secondary">
@@ -771,7 +809,8 @@ export default function TeacherHighRiskConsultationPage() {
                   <p className="mt-3 text-base font-semibold text-slate-900">{result.directorDecisionCard.reason}</p>
                   <p className="mt-3 text-sm leading-6 text-slate-600">建议负责人：{result.directorDecisionCard.recommendedOwnerName}</p>
                   <p className="mt-1 text-sm leading-6 text-slate-600">建议处理时间：{result.directorDecisionCard.recommendedAt}</p>
-                </div>
+                  </CardContent>
+                </Card>
               </SectionCard>
             ) : null}
           </div>

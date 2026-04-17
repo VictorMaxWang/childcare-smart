@@ -187,7 +187,7 @@ export default function ParentVoiceNoteInput({
   }
 
   return (
-    <div className="rounded-3xl border border-white/80 bg-white p-4">
+    <div className="content-form-panel rounded-3xl p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
           <div className="flex flex-wrap gap-2">
