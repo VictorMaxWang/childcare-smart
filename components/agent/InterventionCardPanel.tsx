@@ -27,7 +27,12 @@ export default function InterventionCardPanel({
   const summaryTitle = audience === "parent" ? "协同说明" : "会诊摘要";
 
   return (
-    <Card className="border-indigo-100 bg-linear-to-br from-indigo-50/80 via-white to-sky-50/80 shadow-sm">
+    <Card
+      surface="luminous"
+      glow="brand"
+      interactive={false}
+      className="border-indigo-100/80 bg-linear-to-br from-indigo-50/82 via-white to-sky-50/78 shadow-sm"
+    >
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={card.riskLevel === "high" ? "warning" : card.riskLevel === "medium" ? "info" : "success"}>
@@ -57,14 +62,14 @@ export default function InterventionCardPanel({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
+        <div className="rounded-2xl border border-white/70 bg-white/84 p-4 shadow-[var(--shadow-card)]">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
             <BrainCircuit className="h-4 w-4 text-indigo-500" />
             触发原因
           </div>
           <p className="mt-2 text-sm leading-6 text-slate-600">{card.triggerReason}</p>
           {card.consultationSummary ? (
-            <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+            <div className="mt-4 rounded-2xl border border-amber-100/80 bg-amber-50/72 p-4 shadow-[var(--shadow-card)]">
               <p className="text-sm font-semibold text-slate-900">{summaryTitle}</p>
               <p className="mt-2 text-sm leading-6 text-slate-600">{card.consultationSummary}</p>
               {showParticipants && card.participants?.length ? (
@@ -81,14 +86,14 @@ export default function InterventionCardPanel({
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
+          <div className="rounded-2xl border border-white/70 bg-white/84 p-4 shadow-[var(--shadow-card)]">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
               <School className="h-4 w-4 text-sky-500" />
               今日园内动作
             </div>
             <p className="mt-2 text-sm leading-6 text-slate-600">{card.todayInSchoolAction}</p>
           </div>
-          <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
+          <div className="rounded-2xl border border-white/70 bg-white/84 p-4 shadow-[var(--shadow-card)]">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
               <Home className="h-4 w-4 text-amber-500" />
               今晚家庭动作
@@ -98,7 +103,7 @@ export default function InterventionCardPanel({
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
+          <div className="rounded-2xl border border-white/70 bg-white/84 p-4 shadow-[var(--shadow-card)]">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
               <Target className="h-4 w-4 text-indigo-500" />
               家庭步骤
@@ -109,7 +114,7 @@ export default function InterventionCardPanel({
               ))}
             </ol>
           </div>
-          <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
+          <div className="rounded-2xl border border-white/70 bg-white/84 p-4 shadow-[var(--shadow-card)]">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
               <Clock3 className="h-4 w-4 text-emerald-500" />
               观察与复查

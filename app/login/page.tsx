@@ -7,6 +7,8 @@ import { getDefaultLandingPath, type AccountRole } from "@/lib/auth/accounts";
 import { type Gender, useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import AmbientBackground from "@/components/visuals/AmbientBackground";
+import MotionHero from "@/components/visuals/MotionHero";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +20,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const ENTRY_NOTES = [
+  {
+    title: "连续记录",
+    body: "晨检、饮食、成长观察与家园反馈在同一条业务链路中衔接，进入即延续当天上下文。",
+  },
+  {
+    title: "可信协同",
+    body: "普通账号用于持续使用，示例账号可即刻体验教师、家长与管理端的核心工作台。",
+  },
+];
 
 export default function LoginPage() {
   const router = useRouter();
@@ -164,144 +177,185 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-[calc(100vh-64px)] overflow-hidden px-6 py-10 page-enter spotlight-bg">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="float-soft absolute left-[6%] top-[14%] h-24 w-24 rounded-[28px] bg-white/20 blur-sm" />
-        <div className="float-soft absolute right-[10%] top-[20%] h-40 w-40 rounded-full bg-cyan-300/20 blur-2xl" style={{ animationDelay: "1s" }} />
-        <div className="float-soft absolute bottom-[8%] left-[35%] h-28 w-28 rounded-full bg-violet-300/20 blur-2xl" style={{ animationDelay: "2s" }} />
+    <AmbientBackground
+      intensity="strong"
+      className="login-premium-page min-h-[calc(100vh-64px)] px-4 py-6 sm:px-6 sm:py-10 lg:px-8"
+    >
+      <div aria-hidden="true" className="login-premium-atmosphere">
+        <div className="login-premium-veil" />
+        <div className="login-premium-toplight" />
+        <div className="login-premium-band" />
+        <div className="login-premium-orb login-premium-orb-a" />
+        <div className="login-premium-orb login-premium-orb-b" />
+        <div className="login-premium-orb login-premium-orb-c" />
       </div>
 
-      <div className="relative mx-auto grid min-h-[calc(100vh-144px)] max-w-7xl overflow-hidden rounded-4xl border border-white/60 bg-white/40 shadow-[0_24px_80px_rgba(15,23,42,0.16)] backdrop-blur-sm lg:grid-cols-[1.08fr_0.92fr]">
-        <section className="relative overflow-hidden bg-linear-to-br from-indigo-600 via-violet-600 to-sky-600 px-8 py-10 text-white sm:px-10 lg:px-12 lg:py-12">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(125,211,252,0.22),transparent_32%)]" />
-          <div className="relative z-10 flex h-full flex-col justify-between gap-10">
-            <div>
-              <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur-sm">
-                智慧托育平台
+      <div className="login-premium-shell mx-auto max-w-7xl">
+        <MotionHero
+          className="login-premium-hero min-h-[calc(100vh-132px)] items-center gap-12"
+          lead={
+            <section className="login-premium-story relative z-10 flex h-full flex-col justify-center py-8 sm:py-10 lg:py-12">
+              <div className="max-w-2xl">
+                <div className="login-premium-badge">托育智能协同平台</div>
+                <h1 className="mt-8 max-w-[11ch] text-4xl font-black leading-[1.04] text-white sm:text-5xl lg:text-6xl">
+                  让每一次托育协同，都从可信入口开始
+                </h1>
+                <p className="mt-5 max-w-xl text-sm leading-7 text-white/78 sm:text-base">
+                  连接园内记录、教师协作与家长反馈，用连续的数据视角进入每日托育闭环。
+                </p>
               </div>
-              <h1 className="mt-8 max-w-xl text-4xl font-black leading-tight sm:text-5xl">
-                让园所记录、教师协作与家长反馈更顺畅
-              </h1>
-              <p className="mt-5 max-w-xl text-sm leading-7 text-white/82 sm:text-base">
-                支持普通账号登录与注册，也提供示例账号快速进入，方便直接体验教师、家长和管理端的核心流程。
-              </p>
-            </div>
 
-            <div className="grid gap-4">
-              <div className="rounded-3xl border border-white/14 bg-white/10 px-5 py-4 backdrop-blur-sm">
-                <p className="text-sm font-semibold text-white">快速开始</p>
-                <p className="mt-1 text-sm leading-6 text-white/76">选择示例账号可直接体验系统，使用普通账号可注册并保存自己的数据。</p>
-              </div>
-              <div className="rounded-3xl border border-white/14 bg-white/10 px-5 py-4 backdrop-blur-sm">
-                <p className="text-sm font-semibold text-white">核心能力</p>
-                <p className="mt-1 text-sm leading-6 text-white/76">覆盖晨检、饮食记录、成长观察和家园反馈等日常托育场景。</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="flex items-center justify-center px-5 py-8 sm:px-8 lg:px-10">
-          <Card className="glass w-full max-w-xl rounded-[28px] border-white/60 bg-white/75 shadow-[0_18px_60px_rgba(15,23,42,0.14)]">
-            <CardHeader className="space-y-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-100 to-sky-100 shadow-sm">
-                  <Baby className="h-6 w-6 text-indigo-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-2xl text-slate-800">登录与演示入口</CardTitle>
-                  <CardDescription className="mt-1">普通账号可注册登录，示例账号可免密码直接进入。</CardDescription>
-                </div>
-              </div>
-              <div className="section-divider" />
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="username">普通账号</Label>
-                  <Input
-                    id="username"
-                    value={username}
-                    onChange={(event) => setUsername(event.target.value)}
-                    placeholder="请输入账号"
-                    autoComplete="username"
-                    className="h-11 rounded-xl bg-white/90"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="password">密码</Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder="请输入密码"
-                      autoComplete="current-password"
-                      required
-                      className="h-11 rounded-xl bg-white/90 pr-11"
-                    />
-                    <button
-                      type="button"
-                      aria-label={showPassword ? "隐藏密码" : "显示密码"}
-                      onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600"
-                    >
-                      {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                    </button>
+              <div className="login-premium-notes mt-10 grid gap-4 sm:grid-cols-2">
+                {ENTRY_NOTES.map((item) => (
+                  <div key={item.title} className="login-premium-note">
+                    <p className="text-sm font-semibold text-white">{item.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-white/70">{item.body}</p>
                   </div>
-                </div>
-
-                {message ? <p className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-600">{message}</p> : null}
-
-                <div className="flex gap-3">
-                  <Button type="submit" variant="premium" className="h-11 flex-1 rounded-xl" disabled={loading}>
-                    {loading ? "登录中..." : "普通账号登录"}
-                  </Button>
-                  <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={() => setRegisterOpen(true)}>
-                    注册账号
-                  </Button>
-                </div>
-              </form>
-
-              <div className="section-divider" />
-
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">示例账号快速进入</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">无需输入密码，点击即可进入对应角色页面。</p>
-                </div>
-
-                <div className="grid gap-3">
-                  {demoAccounts.map((account) => (
-                    <button
-                      key={account.id}
-                      type="button"
-                      onClick={() => handleDemoLogin(account.id, account.role)}
-                      disabled={demoLoadingId === account.id}
-                      className="rounded-2xl border border-slate-200 bg-white/90 p-4 text-left transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                            <span className="text-lg">{account.avatar}</span>
-                            <span>{account.name}</span>
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">{account.role}</span>
-                          </div>
-                          {"description" in account ? (
-                            <p className="mt-2 text-xs leading-5 text-slate-500">{account.description}</p>
-                          ) : null}
-                        </div>
-                        <span className="text-xs text-indigo-600">{demoLoadingId === account.id ? "进入中..." : "直接进入"}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                ))}
               </div>
-            </CardContent>
-          </Card>
-        </section>
+            </section>
+          }
+          support={
+            <section className="relative z-10 flex h-full items-center justify-center lg:justify-end">
+              <Card
+                surface="glass"
+                glow="brand"
+                interactive={false}
+                className="login-premium-card w-full max-w-[31rem] border-white/60"
+              >
+                <div className="login-premium-card__beam" aria-hidden="true" />
+                <CardHeader className="relative z-10 space-y-5 pb-5">
+                  <div className="flex items-start gap-4">
+                    <div className="surface-luminous flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.35rem] border border-white/80 shadow-[0_18px_36px_rgba(79,70,229,0.14)]">
+                      <Baby className="h-7 w-7 text-indigo-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="login-premium-card__eyebrow">Unified Access</p>
+                      <CardTitle className="mt-2 text-[1.9rem] leading-none text-slate-900">进入平台</CardTitle>
+                      <CardDescription className="mt-3 max-w-md leading-6 text-slate-600">
+                        普通账号用于持续记录；示例账号可直接进入教师、家长与管理工作台。
+                      </CardDescription>
+                    </div>
+                  </div>
+
+                  <div className="login-premium-card__meta">
+                    <span>连续记录</span>
+                    <span>多角色协同</span>
+                    <span>可信入口</span>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="relative z-10 space-y-6">
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="username" className="text-slate-700">普通账号</Label>
+                      <Input
+                        id="username"
+                        value={username}
+                        onChange={(event) => setUsername(event.target.value)}
+                        placeholder="请输入账号"
+                        autoComplete="username"
+                        className="login-premium-input h-11 rounded-2xl"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="password" className="text-slate-700">密码</Label>
+                      <div className="relative">
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(event) => setPassword(event.target.value)}
+                          placeholder="请输入密码"
+                          autoComplete="current-password"
+                          required
+                          className="login-premium-input h-11 rounded-2xl pr-11"
+                        />
+                        <button
+                          type="button"
+                          aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600"
+                        >
+                          {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {message ? (
+                      <p role="alert" className="login-premium-alert rounded-2xl px-3 py-2 text-sm text-rose-600">
+                        {message}
+                      </p>
+                    ) : null}
+
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <Button type="submit" variant="premium" className="h-11 flex-1 rounded-2xl" disabled={loading}>
+                        {loading ? "登录中..." : "普通账号登录"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="glass"
+                        className="h-11 rounded-2xl px-5"
+                        onClick={() => setRegisterOpen(true)}
+                      >
+                        注册账号
+                      </Button>
+                    </div>
+                  </form>
+
+                  <div className="section-divider" />
+
+                  <div className="space-y-3">
+                    <div className="flex items-end justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">示例账号</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          免密进入教师、家长与管理端，快速预览关键链路。
+                        </p>
+                      </div>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Demo
+                      </span>
+                    </div>
+
+                    <div className="grid gap-3">
+                      {demoAccounts.map((account, index) => (
+                        <button
+                          key={account.id}
+                          type="button"
+                          onClick={() => handleDemoLogin(account.id, account.role)}
+                          disabled={demoLoadingId === account.id}
+                          className="login-demo-entry page-enter rounded-[1.35rem] p-4 text-left disabled:cursor-not-allowed disabled:opacity-60"
+                          style={{ animationDelay: `${200 + index * 70}ms` }}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start gap-3">
+                                <span className="login-demo-entry__avatar text-lg">{account.avatar}</span>
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
+                                    <span className="truncate">{account.name}</span>
+                                    <span className="login-demo-entry__role">{account.role}</span>
+                                  </div>
+                                  <p className="mt-2 text-xs leading-5 text-slate-500">{account.description}</p>
+                                </div>
+                              </div>
+                            </div>
+                            <span className="login-demo-entry__action">
+                              {demoLoadingId === account.id ? "进入中..." : "直接进入"}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+          }
+        />
       </div>
 
       <Dialog
@@ -311,14 +365,16 @@ export default function LoginPage() {
           if (!open) resetRegisterForm();
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="login-register-dialog max-w-2xl">
           <form onSubmit={handleRegisterSubmit}>
-            <DialogHeader>
-              <DialogTitle>注册普通账号</DialogTitle>
-              <DialogDescription>普通账号走独立数据流，注册后按角色进入系统并保存自己的数据。</DialogDescription>
+            <DialogHeader className="space-y-2">
+              <DialogTitle className="text-xl text-slate-900">注册普通账号</DialogTitle>
+              <DialogDescription className="leading-6">
+                注册后将进入独立数据流，用于创建并保存自己的托育记录。
+              </DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-4 py-4 md:grid-cols-2">
+            <div className="grid gap-4 py-5 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="register-username">账号</Label>
                 <Input
@@ -327,13 +383,14 @@ export default function LoginPage() {
                   onChange={(event) => setRegisterUsername(event.target.value)}
                   placeholder="请输入用户名 / 账号"
                   autoComplete="username"
+                  className="rounded-2xl"
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="register-role">用户类型</Label>
                 <Select value={registerRole} onValueChange={(value) => setRegisterRole(value as AccountRole)}>
-                  <SelectTrigger id="register-role">
+                  <SelectTrigger id="register-role" className="rounded-2xl">
                     <SelectValue placeholder="请选择角色" />
                   </SelectTrigger>
                   <SelectContent>
@@ -354,7 +411,7 @@ export default function LoginPage() {
                     onChange={(event) => setRegisterPassword(event.target.value)}
                     autoComplete="new-password"
                     placeholder="请输入密码"
-                    className="pr-11"
+                    className="rounded-2xl pr-11"
                   />
                   <button
                     type="button"
@@ -377,7 +434,7 @@ export default function LoginPage() {
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     autoComplete="new-password"
                     placeholder="请再次输入密码"
-                    className="pr-11"
+                    className="rounded-2xl pr-11"
                   />
                   <button
                     type="button"
@@ -398,6 +455,7 @@ export default function LoginPage() {
                     value={teacherClassName}
                     onChange={(event) => setTeacherClassName(event.target.value)}
                     placeholder="请输入教师所属班级"
+                    className="rounded-2xl"
                   />
                 </div>
               ) : null}
@@ -411,6 +469,7 @@ export default function LoginPage() {
                       value={childName}
                       onChange={(event) => setChildName(event.target.value)}
                       placeholder="请输入孩子姓名"
+                      className="rounded-2xl"
                     />
                   </div>
 
@@ -421,13 +480,14 @@ export default function LoginPage() {
                       type="date"
                       value={childBirthDate}
                       onChange={(event) => setChildBirthDate(event.target.value)}
+                      className="rounded-2xl"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="child-gender">性别</Label>
                     <Select value={childGender} onValueChange={(value) => setChildGender(value as Gender)}>
-                      <SelectTrigger id="child-gender">
+                      <SelectTrigger id="child-gender" className="rounded-2xl">
                         <SelectValue placeholder="请选择性别" />
                       </SelectTrigger>
                       <SelectContent>
@@ -444,6 +504,7 @@ export default function LoginPage() {
                       value={guardianPhone}
                       onChange={(event) => setGuardianPhone(event.target.value)}
                       placeholder="可选"
+                      className="rounded-2xl"
                     />
                   </div>
 
@@ -456,6 +517,7 @@ export default function LoginPage() {
                       value={childHeightCm}
                       onChange={(event) => setChildHeightCm(event.target.value)}
                       placeholder="可选"
+                      className="rounded-2xl"
                     />
                   </div>
 
@@ -469,6 +531,7 @@ export default function LoginPage() {
                       value={childWeightKg}
                       onChange={(event) => setChildWeightKg(event.target.value)}
                       placeholder="可选"
+                      className="rounded-2xl"
                     />
                   </div>
                 </>
@@ -476,23 +539,30 @@ export default function LoginPage() {
             </div>
 
             {registerMessage ? (
-              <p className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-600">{registerMessage}</p>
+              <p role="alert" className="login-premium-alert rounded-2xl px-3 py-2 text-sm text-rose-600">
+                {registerMessage}
+              </p>
             ) : null}
 
-            <DialogFooter className="mt-4">
-              <Button type="button" variant="outline" onClick={() => {
-                setRegisterOpen(false);
-                resetRegisterForm();
-              }}>
+            <DialogFooter className="mt-6 gap-3">
+              <Button
+                type="button"
+                variant="glass"
+                className="rounded-2xl"
+                onClick={() => {
+                  setRegisterOpen(false);
+                  resetRegisterForm();
+                }}
+              >
                 取消
               </Button>
-              <Button type="submit" variant="premium" disabled={registerLoading}>
+              <Button type="submit" variant="premium" className="rounded-2xl" disabled={registerLoading}>
                 {registerLoading ? "注册中..." : "注册并进入系统"}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </AmbientBackground>
   );
 }

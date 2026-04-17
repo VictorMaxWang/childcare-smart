@@ -229,7 +229,7 @@ export default function ParentStructuredFeedbackComposer({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-3xl border border-slate-100 bg-white p-4">
+      <div className="content-form-panel rounded-3xl p-4">
         {!careMode ? (
           <div className="flex flex-wrap gap-2">
             {activeTask ? <Badge variant="info">已关联今晚任务</Badge> : null}
@@ -268,7 +268,7 @@ export default function ParentStructuredFeedbackComposer({
       </div>
 
       <div className={cn("grid gap-4", careMode ? "grid-cols-1" : "lg:grid-cols-3")}>
-        <div className="rounded-3xl border border-slate-100 bg-white p-4">
+        <div className="content-form-panel rounded-3xl p-4">
           <p className={careMode ? "text-base font-semibold text-slate-900" : "text-sm font-semibold text-slate-900"}>
             今晚做了没有
           </p>
@@ -312,7 +312,7 @@ export default function ParentStructuredFeedbackComposer({
           ) : null}
         </div>
 
-        <div className="rounded-3xl border border-slate-100 bg-white p-4">
+        <div className="content-form-panel rounded-3xl p-4">
           <p className={careMode ? "text-base font-semibold text-slate-900" : "text-sm font-semibold text-slate-900"}>
             孩子反应怎样
           </p>
@@ -331,7 +331,7 @@ export default function ParentStructuredFeedbackComposer({
           </div>
         </div>
 
-        <div className="rounded-3xl border border-slate-100 bg-white p-4">
+        <div className="content-form-panel rounded-3xl p-4">
           <p className={careMode ? "text-base font-semibold text-slate-900" : "text-sm font-semibold text-slate-900"}>
             有没有更好一点
           </p>
@@ -351,7 +351,7 @@ export default function ParentStructuredFeedbackComposer({
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
+      <div className="content-reading-panel rounded-3xl p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className={careMode ? "text-base font-semibold text-slate-900" : "text-sm font-semibold text-slate-900"}>
@@ -384,7 +384,7 @@ export default function ParentStructuredFeedbackComposer({
 
         {showDetails ? (
           <div className="mt-4 space-y-4">
-            <div className="rounded-3xl border border-white/80 bg-white p-4">
+            <div className="content-form-panel rounded-3xl p-4">
               <p className={careMode ? "text-base font-semibold text-slate-900" : "text-sm font-semibold text-slate-900"}>
                 谁来执行
               </p>
@@ -403,7 +403,7 @@ export default function ParentStructuredFeedbackComposer({
               </div>
             </div>
 
-            <div className="rounded-3xl border border-white/80 bg-white p-4">
+            <div className="content-form-panel rounded-3xl p-4">
               <p className={careMode ? "text-base font-semibold text-slate-900" : "text-sm font-semibold text-slate-900"}>
                 遇到哪些阻碍
               </p>
@@ -422,7 +422,7 @@ export default function ParentStructuredFeedbackComposer({
               </div>
             </div>
 
-            <div className="rounded-3xl border border-white/80 bg-white p-4">
+            <div className="content-form-panel rounded-3xl p-4">
               <p className={careMode ? "text-base font-semibold text-slate-900" : "text-sm font-semibold text-slate-900"}>
                 补充说明
               </p>
@@ -434,7 +434,7 @@ export default function ParentStructuredFeedbackComposer({
               />
             </div>
 
-            <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-4">
+            <div className="content-reading-panel rounded-3xl border border-dashed border-slate-200 p-4">
               <p className={careMode ? "text-base font-semibold text-slate-900" : "text-sm font-semibold text-slate-900"}>
                 附件补充
               </p>

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import DraftRecordCard from "@/components/teacher/DraftRecordCard";
 import type { TeacherDraftUiItem } from "@/lib/mobile/teacher-draft-records";
 
@@ -53,25 +54,34 @@ export default function DraftRecordList({
 
   if (items.length === 0) {
     return (
-      <div className="rounded-3xl border border-dashed border-slate-200 px-4 py-5 text-sm text-slate-500">
-        当前没有可处理的草稿。
-        {discardedCount > 0
-          ? ` 已软隐藏 ${discardedCount} 条已丢弃记录，source draft 仍然保留。`
-          : ""}
-      </div>
+      <Card
+        surface="glass"
+        glow="soft"
+        interactive={false}
+        className="border-dashed border-slate-200 bg-white/72"
+      >
+        <CardContent className="p-5 text-sm text-slate-500">
+          当前没有可处理的草稿。
+          {discardedCount > 0
+            ? ` 已软隐藏 ${discardedCount} 条已丢弃记录，source draft 仍然保留。`
+            : ""}
+        </CardContent>
+      </Card>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">共 {counts.total} 条</Badge>
-        <Badge variant="warning">待确认 {counts.pending}</Badge>
-        <Badge variant="success">已确认 {counts.confirmed}</Badge>
-        {discardedCount > 0 ? (
-          <Badge variant="outline">已软隐藏 {discardedCount} 条已丢弃</Badge>
-        ) : null}
-      </div>
+      <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/78">
+        <CardContent className="flex flex-wrap items-center gap-2 p-4">
+          <Badge variant="secondary">共 {counts.total} 条</Badge>
+          <Badge variant="warning">待确认 {counts.pending}</Badge>
+          <Badge variant="success">已确认 {counts.confirmed}</Badge>
+          {discardedCount > 0 ? (
+            <Badge variant="outline">已软隐藏 {discardedCount} 条已丢弃</Badge>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <div className="space-y-3">
         {items.map((item) => (

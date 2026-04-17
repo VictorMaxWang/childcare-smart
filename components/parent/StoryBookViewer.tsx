@@ -29,6 +29,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import AmbientBackground from "@/components/visuals/AmbientBackground";
 import { PARENT_STORYBOOK_PRESETS, splitStoryBookCaptionSegments } from "@/lib/agent/parent-storybook-presets";
 import type {
   ParentStoryBookGenerationMode,
@@ -259,8 +260,8 @@ export function getCaptionIndexForCharIndex(timeline: CaptionTimeline, charIndex
 function getTheme(preset: ParentStoryBookStylePreset) {
   if (preset === "moonlit-cutout") {
     return {
-      page: "bg-[radial-gradient(circle_at_top,_rgba(219,234,254,0.95),_rgba(191,219,254,0.82)_30%,_rgba(224,231,255,0.76)_62%,_rgba(248,250,252,1)_100%)]",
-      panel: "bg-white/82 border-white/70",
+      page: "bg-[radial-gradient(circle_at_top,_rgba(219,234,254,0.98),_rgba(191,219,254,0.8)_28%,_rgba(224,231,255,0.56)_54%,_rgba(245,248,255,0.98)_100%),linear-gradient(180deg,rgba(8,17,33,0.04),transparent_18%)]",
+      panel: "surface-luminous border-white/70",
       accent: "bg-sky-600 text-white hover:bg-sky-600/90",
       quiet: "border-sky-200/80 bg-white/80 text-sky-900 hover:bg-sky-50",
       dot: "bg-sky-600",
@@ -271,8 +272,8 @@ function getTheme(preset: ParentStoryBookStylePreset) {
   }
   if (preset === "forest-crayon") {
     return {
-      page: "bg-[radial-gradient(circle_at_top_right,_rgba(220,252,231,0.92),_rgba(187,247,208,0.78)_30%,_rgba(254,249,195,0.66)_58%,_rgba(248,250,252,1)_100%)]",
-      panel: "bg-white/82 border-white/70",
+      page: "bg-[radial-gradient(circle_at_top_right,_rgba(220,252,231,0.94),_rgba(187,247,208,0.72)_28%,_rgba(254,249,195,0.54)_54%,_rgba(248,250,252,1)_100%),linear-gradient(180deg,rgba(8,17,33,0.04),transparent_20%)]",
+      panel: "surface-luminous border-white/70",
       accent: "bg-emerald-600 text-white hover:bg-emerald-600/90",
       quiet: "border-emerald-200/80 bg-white/80 text-emerald-900 hover:bg-emerald-50",
       dot: "bg-emerald-600",
@@ -282,8 +283,8 @@ function getTheme(preset: ParentStoryBookStylePreset) {
     };
   }
   return {
-    page: "bg-[radial-gradient(circle_at_top_left,_rgba(255,245,220,0.95),_rgba(254,226,226,0.75)_32%,_rgba(224,242,254,0.9)_68%,_rgba(248,250,252,1)_100%)]",
-    panel: "bg-white/82 border-white/70",
+    page: "bg-[radial-gradient(circle_at_top_left,_rgba(255,245,220,0.96),_rgba(254,226,226,0.7)_32%,_rgba(224,242,254,0.74)_64%,_rgba(248,250,252,1)_100%),linear-gradient(180deg,rgba(8,17,33,0.04),transparent_18%)]",
+    panel: "surface-luminous border-white/70",
     accent: "bg-amber-500 text-white hover:bg-amber-500/90",
     quiet: "border-amber-200/80 bg-white/80 text-amber-900 hover:bg-amber-50",
     dot: "bg-amber-500",
@@ -1171,8 +1172,16 @@ export default function StoryBookViewer({
   );
 
   return (
-    <div className={cn("min-h-[100svh] px-4 py-4 sm:px-6 sm:py-6", theme.page)}>
-      <div className="mx-auto max-w-3xl space-y-4">
+    <AmbientBackground
+      intensity="medium"
+      tone="warm"
+      className="min-h-[100svh] px-4 py-4 sm:px-6 sm:py-6"
+      contentClassName="min-h-[100svh]"
+    >
+      <div
+        className={cn("content-atmosphere-shell mx-auto max-w-3xl space-y-4", theme.page)}
+        data-content-tone="warm"
+      >
         <div className="flex items-center justify-between gap-3">
           <Button
             asChild
@@ -1537,7 +1546,7 @@ export default function StoryBookViewer({
           </CardContent>
         </Card>
       </div>
-    </div>
+    </AmbientBackground>
   );
 }
 
@@ -1968,7 +1977,7 @@ function StoryBookSceneStream({
 
   useEffect(() => {
     startAudioRef.current = startAudio;
-  }, [startAudio]);
+  });
 
   useEffect(() => {
     const handoffSceneIndex = resolveLocalSpeechHandoffSceneIndexHotfix(
@@ -2019,7 +2028,7 @@ function StoryBookSceneStream({
 
   useEffect(() => {
     startScenePlaybackRef.current = startScenePlayback;
-  }, [startScenePlayback]);
+  });
 
   function handlePlayScene(scene: ParentStoryBookScene, index: number) {
     if (playbackSceneIndex === index) {

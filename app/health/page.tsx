@@ -33,6 +33,7 @@ import { getAgeText } from "@/lib/store";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import ScrollReveal from "@/components/ScrollReveal";
 import EmptyState from "@/components/EmptyState";
+import ContentPageShell from "@/components/visuals/ContentPageShell";
 
 const TEMPLATE_REMARKS = {
   NORMAL: "体温正常，情绪稳定",
@@ -215,18 +216,11 @@ export default function HealthPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
-            <Thermometer className="h-8 w-8 text-sky-500" />
-            晨检与健康
-          </h1>
-          <p className="text-muted-foreground mt-1">记录并追踪班级幼儿每日健康体征，及时预警异常情况。</p>
-          <div className="section-divider mt-5" />
-        </div>
-      </div>
-
+    <ContentPageShell
+      title="晨检与健康"
+      description="记录并追踪班级幼儿每日健康体征，及时预警异常情况。"
+      icon={<Thermometer className="h-6 w-6 text-sky-500" />}
+    >
       <ScrollReveal>
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="kpi-accent card-hover border-l-4 border-l-blue-300 shadow-sm border-blue-100 bg-blue-50/30 relative overflow-hidden">
@@ -633,7 +627,7 @@ export default function HealthPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </ContentPageShell>
   );
 }
 

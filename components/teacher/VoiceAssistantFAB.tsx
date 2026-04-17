@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -134,7 +135,7 @@ function renderFabIcon(status: VoiceAssistantFabStatus) {
   if (status === "recording" || status === "stopping") {
     return <AudioLines className="h-6 w-6" />;
   }
-  return <Mic className="h-6 w-6" />;
+      return <Mic className="h-6 w-6" />;
 }
 
 export default function VoiceAssistantFAB({
@@ -170,34 +171,36 @@ export default function VoiceAssistantFAB({
   return (
     <>
       <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-50 flex max-w-[min(16rem,calc(100vw-2rem))] flex-col items-end gap-3 sm:right-6">
-        <div className="pointer-events-auto max-w-full rounded-[26px] border border-white/70 bg-white/88 px-4 py-3 shadow-[0_16px_48px_rgba(15,23,42,0.14)] backdrop-blur-xl">
-          <div className="flex items-center gap-2">
-            <Badge
-              variant={
-                degradedHint && status !== "error"
-                  ? "warning"
-                  : status === "error"
-                  ? "warning"
-                  : status === "success"
-                    ? "success"
-                    : status === "unsupported"
-                      ? "secondary"
-                      : "info"
-              }
-              className="gap-1"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              AI 语音
-            </Badge>
-            <p className="truncate text-sm font-semibold text-slate-900">{statusLabel}</p>
-          </div>
-          <p className="mt-2 text-xs leading-5 text-slate-500">{statusHint}</p>
-          {degradedHint ? (
-            <div className="mt-2">
-              <Badge variant="warning">演示兜底结果</Badge>
+        <Card surface="glass" glow="soft" interactive={false} className="pointer-events-auto max-w-full border-white/70 bg-white/88">
+          <CardContent className="px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Badge
+                variant={
+                  degradedHint && status !== "error"
+                    ? "warning"
+                    : status === "error"
+                    ? "warning"
+                    : status === "success"
+                      ? "success"
+                      : status === "unsupported"
+                        ? "secondary"
+                        : "info"
+                }
+                className="gap-1"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                AI 语音
+              </Badge>
+              <p className="truncate text-sm font-semibold text-slate-900">{statusLabel}</p>
             </div>
-          ) : null}
-        </div>
+            <p className="mt-2 text-xs leading-5 text-slate-500">{statusHint}</p>
+            {degradedHint ? (
+              <div className="mt-2">
+                <Badge variant="warning">演示兜底结果</Badge>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
 
         {status === "error" ? (
           <Button
@@ -301,44 +304,53 @@ export default function VoiceAssistantFAB({
                   ) : null}
                 </div>
 
-                <div className="rounded-[24px] border border-slate-100 bg-slate-50/70 p-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                        文件
-                      </p>
-                      <p className="mt-2 text-sm font-semibold text-slate-900">
-                        {result.recordingMeta.fileName}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {result.recordingMeta.mimeType}
-                      </p>
+                <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/78">
+                  <CardContent className="p-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                          文件
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-slate-900">
+                          {result.recordingMeta.fileName}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {result.recordingMeta.mimeType}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                          录音信息
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-slate-900">
+                          {formatDuration(result.recordingMeta.durationMs)}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {formatFileSize(result.recordingMeta.size)}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                        录音信息
-                      </p>
-                      <p className="mt-2 text-sm font-semibold text-slate-900">
-                        {formatDuration(result.recordingMeta.durationMs)}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {formatFileSize(result.recordingMeta.size)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
 
                 {result.upload.source === "mock" || understanding?.trace.fallback ? (
-                  <div className="rounded-[24px] border border-amber-200 bg-amber-50/80 p-4">
-                    <p className="text-sm font-semibold text-amber-900">结果说明</p>
-                    <p className="mt-2 text-sm leading-6 text-amber-800">
-                      {result.upload.source === "mock" && understanding?.trace.fallback
-                        ? "当前上传与理解均采用演示兜底结果，更适合录屏演示与草稿整理，请以正式数据为准。"
-                        : result.upload.source === "mock"
-                          ? "当前上传采用本地演示结果，适合录屏演示与草稿整理。"
-                          : "当前理解结果采用本地兜底整理，适合录屏演示与草稿整理。"}
-                    </p>
-                  </div>
+                  <Card
+                    surface="luminous"
+                    glow="soft"
+                    interactive={false}
+                    className="border-amber-200/80 bg-linear-to-br from-amber-50/84 via-white to-rose-50/40"
+                  >
+                    <CardContent className="p-4">
+                      <p className="text-sm font-semibold text-amber-900">结果说明</p>
+                      <p className="mt-2 text-sm leading-6 text-amber-800">
+                        {result.upload.source === "mock" && understanding?.trace.fallback
+                          ? "当前上传与理解均采用演示兜底结果，更适合录屏演示与草稿整理，请以正式数据为准。"
+                          : result.upload.source === "mock"
+                            ? "当前上传采用本地演示结果，适合录屏演示与草稿整理。"
+                            : "当前理解结果采用本地兜底整理，适合录屏演示与草稿整理。"}
+                      </p>
+                    </CardContent>
+                  </Card>
                 ) : null}
 
                 <div className="space-y-2">
@@ -359,16 +371,24 @@ export default function VoiceAssistantFAB({
 
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-slate-900">转写 / 草稿预览</p>
-                  <div className="rounded-[24px] border border-indigo-100 bg-indigo-50/70 p-4">
-                    <p className="text-sm leading-7 text-slate-700">
-                      {understanding?.transcript.text ??
-                        result.upload.transcript ??
-                        result.upload.draftContent}
-                    </p>
-                  </div>
+                  <Card
+                    surface="luminous"
+                    glow="brand"
+                    interactive={false}
+                    className="border-indigo-100/80 bg-linear-to-br from-indigo-50/86 via-white to-sky-50/55"
+                  >
+                    <CardContent className="p-4">
+                      <p className="text-sm leading-7 text-slate-700">
+                        {understanding?.transcript.text ??
+                          result.upload.transcript ??
+                          result.upload.draftContent}
+                      </p>
+                    </CardContent>
+                  </Card>
                 </div>
 
-                <div className="rounded-[24px] border border-white/70 bg-white p-4 shadow-sm">
+                <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82">
+                  <CardContent className="p-4">
                   <p className="text-sm font-semibold text-slate-900">结构化理解预览</p>
                   {understanding ? (
                     <div className="mt-3 space-y-3">
@@ -383,15 +403,20 @@ export default function VoiceAssistantFAB({
                       {previewItems.length > 0 ? (
                         <div className="space-y-2">
                           {previewItems.map((item) => (
-                            <div
+                            <Card
                               key={`${item.category}-${item.raw_excerpt}`}
-                              className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3"
+                              surface="solid"
+                              glow="none"
+                              interactive={false}
+                              className="border-white/80 bg-white/84"
                             >
-                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
-                                {item.category}
-                              </p>
-                              <p className="mt-1 text-sm leading-6 text-slate-700">{item.summary}</p>
-                            </div>
+                              <CardContent className="p-3">
+                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
+                                  {item.category}
+                                </p>
+                                <p className="mt-1 text-sm leading-6 text-slate-700">{item.summary}</p>
+                              </CardContent>
+                            </Card>
                           ))}
                         </div>
                       ) : (
@@ -419,7 +444,8 @@ export default function VoiceAssistantFAB({
                       ) : null}
                     </div>
                   )}
-                </div>
+                  </CardContent>
+                </Card>
 
                 <div className="flex flex-col gap-3 pb-1">
                   <Button type="button" variant="premium" className="min-h-12 rounded-2xl" onClick={onSaveDraft}>

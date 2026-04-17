@@ -90,8 +90,8 @@ export default function MobileNav({ onLogout }: { onLogout: () => void }) {
       <button
         ref={triggerRef}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
-        aria-label={open ? "关闭导航菜单" : "打开导航菜单"}
+        className="glass-surface surface-solid flex h-10 w-10 items-center justify-center rounded-2xl text-slate-600 transition hover:bg-white/85"
+        aria-label={open ? "鍏抽棴瀵艰埅鑿滃崟" : "鎵撳紑瀵艰埅鑿滃崟"}
         aria-expanded={open}
         aria-controls="mobile-nav-panel"
       >
@@ -100,7 +100,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void }) {
 
       <div
         className={cn(
-          "fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-300",
+          "fixed inset-0 z-40 bg-slate-950/26 backdrop-blur-md transition-opacity duration-300",
           open ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={close}
@@ -110,23 +110,23 @@ export default function MobileNav({ onLogout }: { onLogout: () => void }) {
       <nav
         ref={panelRef}
         id="mobile-nav-panel"
-        aria-label="移动端主导航"
+        aria-label="绉诲姩绔富瀵艰埅"
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-full w-72 flex-col bg-white shadow-xl transition-transform duration-300 ease-out",
+          "surface-luminous fixed left-0 top-0 z-50 flex h-full w-72 flex-col border-r border-white/70 shadow-[var(--shadow-card-strong)] backdrop-blur-2xl transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-white/70 px-5 py-4">
           <Link href="/" className="flex items-center gap-2 font-bold text-indigo-600" onClick={close}>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100">
+            <div className="glass-surface surface-solid flex h-8 w-8 items-center justify-center rounded-xl">
               <Baby className="h-5 w-5 text-indigo-600" />
             </div>
-            <span className="text-sm">普惠托育智慧平台</span>
+            <span className="text-sm">鏅儬鎵樿偛鏅烘収骞冲彴</span>
           </Link>
           <button
             onClick={close}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-            aria-label="关闭菜单"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/70 hover:text-slate-600"
+            aria-label="鍏抽棴鑿滃崟"
           >
             <X className="h-5 w-5" />
           </button>
@@ -145,10 +145,10 @@ export default function MobileNav({ onLogout }: { onLogout: () => void }) {
                   href={href}
                   onClick={close}
                   className={cn(
-                    "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors",
+                    "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-colors",
                     active
-                      ? "bg-indigo-50 text-indigo-600"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                      ? "bg-white/78 text-indigo-600 shadow-[var(--shadow-card)]"
+                      : "text-slate-600 hover:bg-white/60 hover:text-slate-900"
                   )}
                 >
                   <Icon className="h-5 w-5" />
@@ -159,11 +159,11 @@ export default function MobileNav({ onLogout }: { onLogout: () => void }) {
           </div>
         </div>
 
-        <div className="border-t border-slate-100 px-5 py-4">
+        <div className="border-t border-white/70 px-5 py-4">
           <div className="mb-3 text-sm">
-            <p className="text-xs text-slate-400">当前身份</p>
+            <p className="text-xs text-slate-400">褰撳墠韬唤</p>
             <p className="font-semibold text-slate-700">
-              {currentUser.avatar} {currentUser.name} · {currentUser.role}
+              {currentUser.avatar} {currentUser.name} 路 {currentUser.role}
             </p>
           </div>
           <button
@@ -171,10 +171,10 @@ export default function MobileNav({ onLogout }: { onLogout: () => void }) {
               close();
               onLogout();
             }}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+            className="glass-surface surface-solid flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-white/85"
           >
             <LogOut className="h-4 w-4" />
-            退出登录
+            閫€鍑虹櫥褰?
           </button>
         </div>
       </nav>

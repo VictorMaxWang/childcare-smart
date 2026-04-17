@@ -35,6 +35,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { buildRecentLocalDateRange, normalizeLocalDate } from "@/lib/date";
 import { OBSERVATION_INDICATOR_MAP, type ObservationIndicatorOption } from "@/lib/mock/observation";
 import { toast } from "sonner";
+import ContentPageShell from "@/components/visuals/ContentPageShell";
 
 export default function GrowthPage() {
   const { currentUser, visibleChildren, growthRecords, addGrowthRecord } = useApp();
@@ -173,19 +174,11 @@ export default function GrowthPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
-      <div className="mb-8">
-        <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
-          <BookHeart className="h-8 w-8 text-rose-500" />
-          成长与行为记录
-        </h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-          支持记录握笔、独立进食、语言表达、社交互动、情绪表现、精细动作、大动作、睡眠情况、如厕情况。
-          每条记录都包含时间、记录人角色、观察标签、描述和是否需要关注。
-        </p>
-        <div className="section-divider mt-5" />
-      </div>
-
+    <ContentPageShell
+      title="成长与行为记录"
+      description="支持记录握笔、独立进食、语言表达、社交互动、情绪表现、精细动作、大动作、睡眠情况、如厕情况。每条记录都包含时间、记录人角色、观察标签、描述和是否需要关注。"
+      icon={<BookHeart className="h-6 w-6 text-rose-500" />}
+    >
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_1fr]">
         <div className="space-y-3 xl:sticky xl:top-24 xl:h-fit">
           <Button
@@ -572,7 +565,7 @@ export default function GrowthPage() {
           </Card>
         </div>
       </div>
-    </div>
+    </ContentPageShell>
   );
 }
 

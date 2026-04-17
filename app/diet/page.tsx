@@ -31,6 +31,7 @@ import { getHydrationDisplayState } from "@/lib/hydration-display";
 import { cn } from "@/lib/utils";
 import EmptyState from "@/components/EmptyState";
 import { toast } from "sonner";
+import ContentPageShell from "@/components/visuals/ContentPageShell";
 
 const TODAY = getLocalToday();
 
@@ -406,18 +407,11 @@ export default function DietPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
-      <div className="mb-8">
-        <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
-          <Salad className="h-8 w-8 text-emerald-500" />
-          饮食记录
-        </h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-          流程已升级为：先批量录入出勤幼儿，再做例外排除与过敏拦截，最后对个别幼儿进行单独调整。
-        </p>
-        <div className="section-divider mt-5" />
-      </div>
-
+    <ContentPageShell
+      title="饮食记录"
+      description="流程已升级为：先批量录入出勤幼儿，再做例外排除与过敏拦截，最后对个别幼儿进行单独调整。"
+      icon={<Salad className="h-6 w-6 text-emerald-500" />}
+    >
       <Card className="mb-6 border-emerald-100 bg-linear-to-r from-emerald-50 to-white">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -783,7 +777,7 @@ export default function DietPage() {
           )}
         </section>
       </div>
-    </div>
+    </ContentPageShell>
   );
 }
 

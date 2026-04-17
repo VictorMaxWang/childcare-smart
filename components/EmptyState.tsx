@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import PremiumCard from "@/components/visuals/PremiumCard";
 
 export default function EmptyState({
   icon,
@@ -15,7 +16,11 @@ export default function EmptyState({
   onAction?: () => void;
 }) {
   return (
-    <div className="rounded-3xl border border-dashed border-slate-200 bg-white/80 px-6 py-12 text-center shadow-sm">
+    <PremiumCard
+      surface="glass"
+      className="rounded-[2rem] border-dashed border-slate-200/90 px-6 py-12 text-center"
+      interactive={false}
+    >
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
         {icon}
       </div>
@@ -26,6 +31,6 @@ export default function EmptyState({
           <Button variant="outline" onClick={onAction}>{actionLabel}</Button>
         </div>
       ) : null}
-    </div>
+    </PremiumCard>
   );
 }

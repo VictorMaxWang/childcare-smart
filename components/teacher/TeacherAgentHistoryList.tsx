@@ -2,6 +2,7 @@
 
 import { Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { buildTeacherAgentTimeLabel, type TeacherAgentResult } from "@/lib/agent/teacher-agent";
 
 export interface TeacherAgentHistoryListItem {
@@ -25,21 +26,29 @@ export default function TeacherAgentHistoryList({ items }: { items: TeacherAgent
   return (
     <div className="space-y-3">
       {items.map((item) => (
-        <div key={item.id} className="rounded-3xl border border-slate-100 bg-white p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Sparkles className="h-4 w-4 text-indigo-500" />
-            <p className="text-sm font-semibold text-slate-900">动作类型：{item.actionLabel}</p>
-            <Badge variant={item.result.mode === "class" ? "info" : "warning"}>
-              {item.result.mode === "class" ? "班级" : "单个儿童"}
-            </Badge>
-            <Badge variant="secondary">对象：{item.targetLabel}</Badge>
-            <Badge variant={item.result.source === "ai" ? "success" : item.result.source === "mock" ? "info" : "secondary"}>
-              {getTeacherHistorySourceLabel(item.result.source)}
-            </Badge>
-          </div>
-          <p className="mt-2 text-xs text-slate-500">时间：{buildTeacherAgentTimeLabel(item.result.generatedAt)}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-600">结果摘要：{item.result.summary}</p>
-        </div>
+        <Card
+          key={item.id}
+          surface="glass"
+          glow="soft"
+          interactive={false}
+          className="border-white/70 bg-white/82"
+        >
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Sparkles className="h-4 w-4 text-indigo-500" />
+              <p className="text-sm font-semibold text-slate-900">动作类型：{item.actionLabel}</p>
+              <Badge variant={item.result.mode === "class" ? "info" : "warning"}>
+                {item.result.mode === "class" ? "班级" : "单个儿童"}
+              </Badge>
+              <Badge variant="secondary">对象：{item.targetLabel}</Badge>
+              <Badge variant={item.result.source === "ai" ? "success" : item.result.source === "mock" ? "info" : "secondary"}>
+                {getTeacherHistorySourceLabel(item.result.source)}
+              </Badge>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">时间：{buildTeacherAgentTimeLabel(item.result.generatedAt)}</p>
+            <p className="mt-3 text-sm leading-6 text-slate-600">结果摘要：{item.result.summary}</p>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );

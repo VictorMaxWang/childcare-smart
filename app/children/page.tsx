@@ -151,7 +151,7 @@ export default function ChildrenPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
+    <div className="page-frame-dense mx-auto max-w-7xl px-6 py-8 page-enter">
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">

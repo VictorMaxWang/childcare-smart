@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AppProvider } from "../lib/store";
 import Navbar from "@/components/Navbar";
+import GlobalVisualShell from "@/components/visuals/GlobalVisualShell";
+import MotionProvider from "@/components/visuals/MotionProvider";
 import { Analytics } from "@vercel/analytics/react";
 import { Toaster } from "sonner";
 
@@ -17,14 +19,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body className="antialiased">
-        <AppProvider>
-          <Navbar />
-          <main className="min-h-[calc(100vh-64px)] bg-(--background)">
-            {children}
-          </main>
-          <Toaster position="top-right" richColors closeButton />
-        </AppProvider>
+      <body className="site-shell antialiased">
+        <MotionProvider>
+          <AppProvider>
+            <Navbar />
+            <main className="site-main">
+              <GlobalVisualShell>{children}</GlobalVisualShell>
+            </main>
+            <Toaster position="top-right" richColors closeButton />
+          </AppProvider>
+        </MotionProvider>
         <Analytics />
       </body>
     </html>
