@@ -85,18 +85,18 @@ function SectionHeading({
 function FilledList({
   items,
   emptyText,
-  toneClassName = "bg-slate-50/85",
+  toneClassName = "border border-white/8 bg-white/6",
 }: {
   items: string[];
   emptyText: string;
   toneClassName?: string;
 }) {
   if (items.length === 0) {
-    return <p className="text-sm leading-6 text-slate-500">{emptyText}</p>;
+    return <p className="text-sm leading-6 text-white/50">{emptyText}</p>;
   }
 
   return (
-    <div className="space-y-2 text-sm leading-6 text-slate-600">
+    <div className="space-y-2 text-sm leading-6 text-white/68">
       {items.map((item) => (
         <p key={item} className={cn("rounded-xl px-3 py-2 whitespace-normal break-words", toneClassName)}>
           {item}
@@ -137,7 +137,7 @@ function ExplainabilityList({
   emptyText: string;
 }) {
   if (items.length === 0) {
-    return <p className="text-sm leading-6 text-slate-500">{emptyText}</p>;
+    return <p className="text-sm leading-6 text-white/50">{emptyText}</p>;
   }
 
   return (
@@ -183,11 +183,11 @@ function EvidenceCard({
               {getConsultationEvidenceHumanReviewLabel(evidence.item.requiresHumanReview)}
             </Badge>
           </div>
-          <p className="mt-3 whitespace-normal break-words text-sm leading-6 text-slate-700">
+          <p className="mt-3 whitespace-normal break-words text-sm leading-6 text-white/74">
             {evidence.item.summary}
           </p>
           {excerpt ? (
-            <p className="mt-2 whitespace-normal break-words text-xs leading-5 text-slate-500">{excerpt}</p>
+            <p className="mt-2 whitespace-normal break-words text-xs leading-5 text-white/46">{excerpt}</p>
           ) : null}
           {evidence.supportLabels.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-2">
@@ -213,14 +213,14 @@ function FallbackEvidenceList({
   emptyText: string;
 }) {
   if (model.mode === "empty") {
-    return <p className="text-sm leading-6 text-slate-500">{emptyText}</p>;
+    return <p className="text-sm leading-6 text-white/50">{emptyText}</p>;
   }
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline">兼容摘要</Badge>
-        <p className="text-xs text-slate-500">当前结果暂以兼容摘要方式展示旧字段内容。</p>
+        <p className="text-xs text-white/46">当前结果暂以兼容摘要方式展示旧字段内容。</p>
       </div>
       <div className="space-y-2">
         {model.fallbackItems.map((item) => (
@@ -258,16 +258,16 @@ function StructuredEvidenceSection({
       </div>
 
       {remainderCount > 0 ? (
-        <details className="rounded-2xl border border-dashed border-slate-200/80 bg-white/70 p-4">
-          <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">
+        <details className="rounded-2xl border border-dashed border-white/10 bg-white/5 p-4">
+          <summary className="cursor-pointer list-none text-sm font-semibold text-white/88">
             查看其余 {remainderCount} 条证据
           </summary>
-          <div className="mt-4 space-y-4 border-t border-slate-200 pt-4">
+          <div className="mt-4 space-y-4 border-t border-white/8 pt-4">
             {model.groupedRemainder.map((group) => (
               <div key={group.category} className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Badge variant={getEvidenceCategoryBadgeVariant(group.category)}>{group.label}</Badge>
-                  <p className="text-xs text-slate-500">{group.items.length} 条</p>
+                  <p className="text-xs text-white/46">{group.items.length} 条</p>
                 </div>
                 <div className="space-y-3">
                   {group.items.map((evidence) => (
@@ -307,7 +307,7 @@ export default function ConsultationTraceCard({
     <Card
       surface="solid"
       glow="soft"
-      className={cn("min-w-0 overflow-hidden rounded-[2rem] border-slate-200/80", className)}
+      className={cn("min-w-0 overflow-hidden rounded-[2rem] border-white/10", className)}
     >
       <CardHeader className="gap-5 pb-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -316,11 +316,11 @@ export default function ConsultationTraceCard({
         </div>
 
         <div className="min-w-0">
-          <CardTitle className="flex items-center gap-2 text-lg text-slate-950">
+          <CardTitle className="flex items-center gap-2 text-lg text-white">
             <BrainCircuit className="h-5 w-5 text-indigo-500" />
             会诊决策依据
           </CardTitle>
-          <p className="mt-2 whitespace-normal break-words text-sm leading-6 text-slate-600">
+          <p className="mt-2 whitespace-normal break-words text-sm leading-6 text-white/66">
             这里只保留可用于决策和答辩的依据摘要、证据链与协作状态，不展示调试日志。
           </p>
         </div>
@@ -334,11 +334,11 @@ export default function ConsultationTraceCard({
           className="p-5"
         >
           {summaryPreview !== trace.collaborationSummary ? (
-            <details className="mt-4 rounded-2xl border border-white/80 bg-white/78 p-4">
-              <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">
+            <details className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+              <summary className="cursor-pointer list-none text-sm font-semibold text-white/88">
                 查看完整协作摘要
               </summary>
-              <p className="mt-3 whitespace-normal break-words text-sm leading-7 text-slate-600">
+              <p className="mt-3 whitespace-normal break-words text-sm leading-7 text-white/66">
                 {trace.collaborationSummary}
               </p>
             </details>
@@ -352,8 +352,8 @@ export default function ConsultationTraceCard({
           >
             <FilledList items={visibleKeyFindings} emptyText="当前没有额外关键发现。" />
             {extraKeyFindings.length > 0 ? (
-              <details className="mt-4 rounded-2xl border border-dashed border-slate-200/80 bg-white/70 p-4">
-                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">
+              <details className="mt-4 rounded-2xl border border-dashed border-white/10 bg-white/5 p-4">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-white/88">
                   查看其余 {extraKeyFindings.length} 条关键发现
                 </summary>
                 <div className="mt-3">
@@ -366,7 +366,7 @@ export default function ConsultationTraceCard({
           <AdminSubsection
             title={
               <SectionHeading
-                icon={<GitBranchPlus className="h-4 w-4 text-sky-500" />}
+                icon={<GitBranchPlus className="h-4 w-4 text-indigo-500" />}
                 title="判断依据"
               />
             }
@@ -374,8 +374,8 @@ export default function ConsultationTraceCard({
           >
             <ExplainabilityList items={visibleExplainability} emptyText="当前没有额外判断依据。" />
             {extraExplainability.length > 0 ? (
-              <details className="mt-4 rounded-2xl border border-dashed border-slate-200/80 bg-white/70 p-4">
-                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">
+              <details className="mt-4 rounded-2xl border border-dashed border-white/10 bg-white/5 p-4">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-white/88">
                   查看其余 {extraExplainability.length} 条判断依据
                 </summary>
                 <div className="mt-3">
@@ -388,7 +388,7 @@ export default function ConsultationTraceCard({
           <AdminSubsection
             title={
               <SectionHeading
-                icon={<SearchCheck className="h-4 w-4 text-amber-500" />}
+                icon={<SearchCheck className="h-4 w-4 text-indigo-500" />}
                 title="关键证据链"
               />
             }
@@ -413,17 +413,17 @@ export default function ConsultationTraceCard({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm leading-6 text-slate-500">当前没有参与者信息。</p>
+                  <p className="text-sm leading-6 text-white/50">当前没有参与者信息。</p>
                 )
               }
             />
             <MetaCard
-              icon={<Network className="h-4 w-4 text-sky-500" />}
+              icon={<Network className="h-4 w-4 text-indigo-500" />}
               title="生成方式"
               detail={trace.providerStateLabel}
             />
             <MetaCard
-              icon={<Database className="h-4 w-4 text-emerald-500" />}
+              icon={<Database className="h-4 w-4 text-indigo-500" />}
               title="参考范围"
               detail={trace.memoryDetail ?? trace.memoryStateLabel}
             />
@@ -439,7 +439,7 @@ export default function ConsultationTraceCard({
                 ))}
               </div>
             ) : (
-              <p className="text-sm leading-6 text-emerald-700">当前没有同步目标。</p>
+              <p className="text-sm leading-6 text-white/58">当前没有同步目标。</p>
             )}
           </AdminSubsection>
         </AdminSubsection>

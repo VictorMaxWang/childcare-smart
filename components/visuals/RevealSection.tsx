@@ -2,13 +2,14 @@
 
 import { useRef, type ReactNode } from "react";
 import { m, useInView, useReducedMotion } from "framer-motion";
+import { getRevealTransition } from "@/components/visuals/motion-tokens";
 import { cn } from "@/lib/utils";
 
 export default function RevealSection({
   children,
   className,
   delay = 0,
-  distance = 26,
+  distance = 18,
   once = true,
 }: {
   children: ReactNode;
@@ -32,20 +33,18 @@ export default function RevealSection({
   return (
     <m.div
       ref={ref}
-      initial={{ opacity: 0, y: distance, filter: "blur(18px)" }}
+      initial={{ opacity: 0, y: distance, filter: "blur(12px)" }}
       animate={
         isInView
           ? { opacity: 1, y: 0, filter: "blur(0px)" }
           : undefined
       }
-      transition={{
-        duration: 0.7,
-        delay: delay / 1000,
-        ease: [0.2, 0.8, 0.2, 1],
-      }}
+      transition={getRevealTransition(delay)}
       className={cn("will-change-transform", className)}
     >
       {children}
     </m.div>
   );
 }
+
+export { RevealSection as SectionReveal };

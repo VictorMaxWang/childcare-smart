@@ -20,14 +20,14 @@ const ROUTE_VISUAL_PRESETS = {
     intensity: "light",
     tone: "brand",
     interactive: false,
-    transition: "cinematic",
+    transition: "subtle",
   },
-  globalDense: {
+  globalLight: {
     mode: "global",
-    intensity: "dense",
+    intensity: "light",
     tone: "brand",
     interactive: false,
-    transition: "cinematic",
+    transition: "subtle",
   },
   utilityLight: {
     mode: "utility",
@@ -38,19 +38,16 @@ const ROUTE_VISUAL_PRESETS = {
   },
 } satisfies Record<string, RouteVisualProfile>;
 
-const EXACT_GLOBAL_DENSE_ROUTES = new Set(["/", "/children", "/diet", "/growth", "/health"]);
-const EXACT_SCOPED_LIGHT_ROUTES = new Set(["/admin", "/parent", "/teacher", "/teacher/home"]);
-const EXACT_SCOPED_STRONG_ROUTES = new Set([
-  "/login",
-  "/auth/login",
-  "/parent/storybook",
-  "/teacher/high-risk-consultation",
-]);
+const EXACT_SCOPED_STRONG_ROUTES = new Set(["/", "/login", "/auth/login"]);
+const EXACT_SCOPED_MEDIUM_ROUTES = new Set(["/children", "/diet", "/growth", "/health"]);
+const EXACT_SCOPED_LIGHT_ROUTES = new Set(["/admin", "/teacher", "/teacher/home"]);
 const PREFIX_SCOPED_MEDIUM_ROUTES = [
+  "/parent",
   "/admin/agent",
   "/parent/agent",
   "/teacher/agent",
   "/teacher/health-file-bridge",
+  "/teacher/high-risk-consultation",
 ];
 
 function normalizePathname(pathname?: string | null) {
@@ -76,16 +73,16 @@ export function getRouteVisualProfile(pathname?: string | null): RouteVisualProf
     return ROUTE_VISUAL_PRESETS.scopedStrong;
   }
 
+  if (EXACT_SCOPED_MEDIUM_ROUTES.has(normalizedPathname)) {
+    return ROUTE_VISUAL_PRESETS.scopedMedium;
+  }
+
   if (PREFIX_SCOPED_MEDIUM_ROUTES.some((prefix) => matchesPathPrefix(normalizedPathname, prefix))) {
     return ROUTE_VISUAL_PRESETS.scopedMedium;
   }
 
   if (EXACT_SCOPED_LIGHT_ROUTES.has(normalizedPathname)) {
     return ROUTE_VISUAL_PRESETS.scopedLight;
-  }
-
-  if (EXACT_GLOBAL_DENSE_ROUTES.has(normalizedPathname)) {
-    return ROUTE_VISUAL_PRESETS.globalDense;
   }
 
   return ROUTE_VISUAL_PRESETS.utilityLight;

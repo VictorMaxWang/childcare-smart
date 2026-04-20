@@ -41,9 +41,9 @@ function ParentTransparencyPanelContent({
     <SectionCard
       title={title}
       description={description}
-      tone="warm"
+      tone="brand"
       surface="glass"
-      glow="warm"
+      glow="brand"
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={model.warnings.length > 0 ? "warning" : "info"} className="px-3 py-1">

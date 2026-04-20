@@ -8,7 +8,10 @@ import ProviderTraceBadge from "./ProviderTraceBadge";
 import TraceStepCard from "./TraceStepCard";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { ConsultationTraceCallout, ConsultationTraceViewModel } from "@/lib/consultation/trace-types";
+import type {
+  ConsultationTraceCallout,
+  ConsultationTraceViewModel,
+} from "@/lib/consultation/trace-types";
 import { cn } from "@/lib/utils";
 
 function getStatusVariant(status: ConsultationTraceViewModel["overallStatus"]) {
@@ -19,10 +22,16 @@ function getStatusVariant(status: ConsultationTraceViewModel["overallStatus"]) {
 }
 
 function getCalloutClasses(callout: ConsultationTraceCallout) {
-  if (callout.tone === "error") return "border-rose-200 bg-rose-50 text-rose-700";
-  if (callout.tone === "warning") return "border-amber-200 bg-amber-50 text-amber-800";
-  if (callout.tone === "success") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  return "border-sky-200 bg-sky-50 text-sky-700";
+  if (callout.tone === "error") {
+    return "border-rose-300/20 bg-rose-400/10 text-rose-100";
+  }
+  if (callout.tone === "warning") {
+    return "border-fuchsia-300/20 bg-fuchsia-400/10 text-fuchsia-100";
+  }
+  if (callout.tone === "success") {
+    return "border-violet-300/20 bg-violet-400/10 text-violet-100";
+  }
+  return "border-indigo-300/18 bg-indigo-400/10 text-indigo-100";
 }
 
 export default function ConsultationTracePanel({
@@ -35,43 +44,62 @@ export default function ConsultationTracePanel({
   headerActions?: ReactNode;
 }) {
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className={cn("consultation-trace-panel space-y-4", className)}>
       <Card
         surface="luminous"
         glow="brand"
         interactive={false}
-        className="border-white/70 bg-linear-to-br from-white/95 via-white/92 to-sky-50/55 shadow-sm"
+        className="relative overflow-hidden border-white/14 bg-[linear-gradient(180deg,rgba(22,24,58,0.96),rgba(9,11,28,0.94))]"
       >
-        <CardHeader className="gap-4">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(139,92,246,0.24),transparent_34%),radial-gradient(circle_at_82%_18%,rgba(112,104,255,0.16),transparent_28%),radial-gradient(circle_at_50%_100%,rgba(129,140,248,0.14),transparent_40%)]"
+        />
+        <CardHeader className="relative gap-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={viewModel.mode === "debug" ? "warning" : "info"}>
-                  {viewModel.mode === "debug" ? "详细查看" : "常规展示"}
+                  {viewModel.mode === "debug" ? "璇︾粏鏌ョ湅" : "甯歌灞曠ず"}
                 </Badge>
-                <Badge variant={getStatusVariant(viewModel.overallStatus)}>{viewModel.overallStatusLabel}</Badge>
-                {viewModel.mode === "debug" && viewModel.traceId ? <Badge variant="outline">{viewModel.traceId}</Badge> : null}
+                <Badge variant={getStatusVariant(viewModel.overallStatus)}>
+                  {viewModel.overallStatusLabel}
+                </Badge>
+                {viewModel.mode === "debug" && viewModel.traceId ? (
+                  <Badge variant="outline">{viewModel.traceId}</Badge>
+                ) : null}
               </div>
               <div className="space-y-2">
-                <CardTitle className="flex items-center gap-2 text-xl text-slate-900">
-                  <BrainCircuit className="h-5 w-5 text-indigo-500" />
-                  高风险会诊过程
+                <CardTitle className="flex items-center gap-2 text-xl text-white">
+                  <BrainCircuit className="h-5 w-5 text-violet-100" />
+                  楂橀闄╀細璇婅繃绋?
                 </CardTitle>
-                <p className="text-sm leading-7 text-slate-600">{viewModel.streamMessage}</p>
+                <p className="max-w-3xl text-sm leading-7 text-white/70">
+                  {viewModel.streamMessage}
+                </p>
               </div>
-              {viewModel.providerTrace ? <ProviderTraceBadge trace={viewModel.providerTrace} compact={viewModel.mode !== "debug"} /> : null}
+              {viewModel.providerTrace ? (
+                <ProviderTraceBadge
+                  trace={viewModel.providerTrace}
+                  compact={viewModel.mode !== "debug"}
+                />
+              ) : null}
             </div>
 
-            {headerActions ? <div className="flex shrink-0 flex-wrap items-center justify-start gap-2 md:justify-end">{headerActions}</div> : null}
+            {headerActions ? (
+              <div className="flex shrink-0 flex-wrap items-center justify-start gap-2 md:justify-end">
+                {headerActions}
+              </div>
+            ) : null}
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="relative space-y-3">
           {viewModel.syncTargets.length ? (
-            <div className="rounded-2xl border border-emerald-100/80 bg-emerald-50/80 p-4 shadow-[var(--shadow-card)]">
-              <p className="text-sm font-semibold text-emerald-900">结果同步去向</p>
+            <div className="rounded-[1.6rem] border border-white/12 bg-white/6 p-4 shadow-[var(--shadow-card)]">
+              <p className="text-sm font-semibold text-white">缁撴灉鍚屾鍘诲悜</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {viewModel.syncTargets.map((item) => (
-                  <Badge key={item} variant="success">
+                  <Badge key={item} variant="secondary">
                     {item}
                   </Badge>
                 ))}
@@ -80,8 +108,8 @@ export default function ConsultationTracePanel({
           ) : null}
 
           {!viewModel.hasContent && viewModel.overallStatus === "idle" ? (
-            <div className="rounded-2xl border border-dashed border-white/70 bg-white/74 p-4 text-sm leading-6 text-slate-600 shadow-[var(--shadow-card)]">
-              启动会诊后，这里会按“长期画像 {"->"} 最近会诊 / 快照 {"->"} 当前建议”依次展开，便于老师讲解与查看重点。
+            <div className="rounded-[1.6rem] border border-dashed border-white/14 bg-white/5 p-4 text-sm leading-6 text-white/60 shadow-[var(--shadow-card)]">
+              鍚姩浼氳瘖鍚庯紝杩欓噷浼氭寜鈥滈暱鏈熺敾鍍?{"->"} 鏈€杩戜細璇?/ 蹇収 {"->"} 褰撳墠寤鸿鈥濅緷娆″睍寮€锛屼究浜庤€佸笀璁茶В涓庢煡鐪嬮噸鐐广€?
             </div>
           ) : null}
         </CardContent>
@@ -90,7 +118,13 @@ export default function ConsultationTracePanel({
       {viewModel.callouts.length ? (
         <div className="space-y-3">
           {viewModel.callouts.map((callout, index) => (
-            <div key={`${callout.title}-${index}`} className={cn("rounded-2xl border p-4 shadow-[var(--shadow-card)]", getCalloutClasses(callout))}>
+            <div
+              key={`${callout.title}-${index}`}
+              className={cn(
+                "rounded-[1.4rem] border p-4 shadow-[var(--shadow-card)]",
+                getCalloutClasses(callout)
+              )}
+            >
               <p className="text-sm font-semibold">{callout.title}</p>
               <p className="mt-1 text-sm leading-6">{callout.description}</p>
             </div>

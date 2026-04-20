@@ -78,11 +78,11 @@ function buildConsultationSeed(input: {
   /*
   const explainability = [
     {
-      label: "浠婃櫄鍏堝仛涓€浠跺皬浜?,
+      label: "今晚先做一件小事",
       detail: input.homeAction,
     },
     {
-      label: "鏄庢棭缁х画鐪嬩粈涔?,
+      label: "明早继续看什么",
       detail: input.reviewIn48h,
     },
   ];

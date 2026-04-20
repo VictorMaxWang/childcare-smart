@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import AmbientBackground from "@/components/visuals/AmbientBackground";
-import GlassSurface from "@/components/visuals/GlassSurface";
+import PremiumGlassPanel from "@/components/visuals/PremiumGlassPanel";
 import RevealSection from "@/components/visuals/RevealSection";
 import type { AmbientTone, PageIntensity } from "@/components/visuals/types";
 
@@ -11,7 +11,7 @@ export default function ContentPageShell({
   icon,
   actions,
   children,
-  tone = "warm",
+  tone = "brand",
   intensity = "medium",
   className,
   heroClassName,
@@ -32,19 +32,20 @@ export default function ContentPageShell({
     <AmbientBackground
       intensity={intensity}
       tone={tone}
+      backdropMode={intensity === "strong" ? "hero" : "content"}
       className="px-4 pb-8 pt-5 sm:px-6 sm:pt-6"
       contentClassName="min-h-[calc(100vh-64px)]"
     >
       <div
-        className={cn("content-atmosphere-shell mx-auto max-w-7xl page-enter", className)}
+        className={cn("content-atmosphere-shell content-page-scope mx-auto max-w-7xl page-enter", className)}
         data-content-tone={tone}
       >
         <RevealSection>
-          <GlassSurface
+          <PremiumGlassPanel
             tone={tone}
-            surface="glass"
+            surface="luminous"
             className={cn(
-              "content-atmosphere-shell__hero relative overflow-hidden rounded-[2rem] p-5 shadow-[var(--shadow-card-strong)] sm:p-7",
+              "content-atmosphere-shell__hero relative overflow-hidden rounded-[2rem] border border-white/14 p-5 shadow-[var(--shadow-card-strong)] sm:p-7",
               heroClassName
             )}
           >
@@ -56,18 +57,18 @@ export default function ContentPageShell({
                     {icon}
                   </div>
                 ) : null}
-                <h1 className={cn("mt-4 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl", icon ? "" : "mt-0")}>
+                <h1 className={cn("mt-4 text-3xl font-bold tracking-tight text-white sm:text-4xl", icon ? "" : "mt-0")}>
                   {title}
                 </h1>
                 {description ? (
-                  <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600 sm:text-base">
+                  <p className="mt-3 max-w-3xl text-sm leading-7 text-white/72 sm:text-base">
                     {description}
                   </p>
                 ) : null}
               </div>
               {actions ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
             </div>
-          </GlassSurface>
+          </PremiumGlassPanel>
         </RevealSection>
 
         <RevealSection delay={120} className={cn("mt-6", contentClassName)}>

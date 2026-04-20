@@ -2,25 +2,18 @@ import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 import type { AmbientTone, PageIntensity } from "@/components/visuals/types";
 
+const CANONICAL_TONE = {
+  "--aurora-a": "rgba(118, 108, 255, 0.3)",
+  "--aurora-b": "rgba(90, 112, 255, 0.22)",
+  "--aurora-c": "rgba(176, 132, 255, 0.2)",
+  "--aurora-d": "rgba(230, 236, 255, 0.1)",
+  "--aurora-mist": "rgba(132, 122, 255, 0.12)",
+} as CSSProperties;
+
 const tonePalette: Record<AmbientTone, CSSProperties> = {
-  brand: {
-    "--aurora-a": "rgba(99, 102, 241, 0.24)",
-    "--aurora-b": "rgba(14, 165, 233, 0.18)",
-    "--aurora-c": "rgba(124, 58, 237, 0.15)",
-    "--aurora-d": "rgba(251, 191, 36, 0.12)",
-  } as CSSProperties,
-  warm: {
-    "--aurora-a": "rgba(245, 158, 11, 0.22)",
-    "--aurora-b": "rgba(251, 146, 60, 0.18)",
-    "--aurora-c": "rgba(236, 72, 153, 0.15)",
-    "--aurora-d": "rgba(56, 189, 248, 0.12)",
-  } as CSSProperties,
-  calm: {
-    "--aurora-a": "rgba(56, 189, 248, 0.18)",
-    "--aurora-b": "rgba(45, 212, 191, 0.16)",
-    "--aurora-c": "rgba(129, 140, 248, 0.12)",
-    "--aurora-d": "rgba(148, 163, 184, 0.1)",
-  } as CSSProperties,
+  brand: CANONICAL_TONE,
+  warm: CANONICAL_TONE,
+  calm: CANONICAL_TONE,
 };
 
 const intensityClassMap: Record<PageIntensity, string> = {
@@ -33,10 +26,12 @@ const intensityClassMap: Record<PageIntensity, string> = {
 export default function AuroraSmokeLayer({
   intensity = "light",
   tone = "brand",
+  backdropMode = "stage",
   className,
 }: {
   intensity?: PageIntensity;
   tone?: AmbientTone;
+  backdropMode?: "stage" | "hero" | "workspace" | "content";
   className?: string;
 }) {
   return (
@@ -44,11 +39,13 @@ export default function AuroraSmokeLayer({
       aria-hidden="true"
       className={cn("aurora-smoke-layer", intensityClassMap[intensity], className)}
       style={tonePalette[tone]}
+      data-backdrop-mode={backdropMode}
     >
-      <span className="aurora-smoke aurora-smoke-a" />
-      <span className="aurora-smoke aurora-smoke-b" />
-      <span className="aurora-smoke aurora-smoke-c" />
-      <span className="aurora-smoke aurora-smoke-d" />
+      <span className="aurora-smoke aurora-smoke-band aurora-smoke-band-a" />
+      <span className="aurora-smoke aurora-smoke-band aurora-smoke-band-b" />
+      <span className="aurora-smoke aurora-smoke-orb aurora-smoke-orb-a" />
+      <span className="aurora-smoke aurora-smoke-orb aurora-smoke-orb-b" />
+      <span className="aurora-smoke aurora-smoke-orb aurora-smoke-orb-c" />
     </div>
   );
 }

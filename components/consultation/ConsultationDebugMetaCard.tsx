@@ -17,7 +17,9 @@ import { cn } from "@/lib/utils";
 
 function renderValue(value: unknown) {
   if (value === null || value === undefined || value === "") return "n/a";
-  if (Array.isArray(value)) return value.length ? value.map((item) => String(item)).join(" / ") : "n/a";
+  if (Array.isArray(value)) {
+    return value.length ? value.map((item) => String(item)).join(" / ") : "n/a";
+  }
   if (typeof value === "object") {
     try {
       return JSON.stringify(value);
@@ -51,7 +53,8 @@ export default function ConsultationDebugMetaCard({
     () =>
       CONSULTATION_STAGE_ORDER.flatMap((stage) => {
         const status = rawStageInfo?.statuses[stage];
-        const notes = rawStageInfo?.notes.filter((item) => item.stage === stage) ?? [];
+        const notes =
+          rawStageInfo?.notes.filter((item) => item.stage === stage) ?? [];
         const ui = rawStageInfo?.ui[stage];
         const uiCards = [
           ui?.summaryCard ? "summaryCard" : null,
@@ -62,14 +65,7 @@ export default function ConsultationDebugMetaCard({
           return [];
         }
 
-        return [
-          {
-            stage,
-            status,
-            notes,
-            uiCards,
-          },
-        ];
+        return [{ stage, status, notes, uiCards }];
       }),
     [rawStageInfo]
   );
@@ -79,29 +75,49 @@ export default function ConsultationDebugMetaCard({
   }
 
   return (
-    <Card className={cn("border-dashed border-slate-200 bg-slate-50/80 shadow-sm", className)}>
+    <Card
+      surface="glass"
+      glow="soft"
+      interactive={false}
+      className={cn(
+        "border-dashed border-white/14 bg-[linear-gradient(180deg,rgba(17,20,44,0.92),rgba(10,11,28,0.84))]",
+        className
+      )}
+    >
       <CardHeader className="gap-3 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="warning">调试态</Badge>
+            <Badge variant="info">Debug</Badge>
             {traceId ? <Badge variant="outline">{traceId}</Badge> : null}
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-            {open ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
-            {open ? "收起详情" : "展开详情"}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+          >
+            {open ? (
+              <ChevronUp className="mr-2 h-4 w-4" />
+            ) : (
+              <ChevronDown className="mr-2 h-4 w-4" />
+            )}
+            {open ? "鏀惰捣璇︽儏" : "灞曞紑璇︽儏"}
           </Button>
         </div>
-        <CardTitle className="flex items-center gap-2 text-base text-slate-900">
-          <Bug className="h-4 w-4 text-amber-500" />
+        <CardTitle className="flex items-center gap-2 text-base text-white">
+          <Bug className="h-4 w-4 text-violet-100" />
           Provider / memory / raw stage info
         </CardTitle>
       </CardHeader>
 
       {open ? (
-        <CardContent className="space-y-4 text-sm text-slate-600">
+        <CardContent className="space-y-4 text-sm text-white/68">
           {providerTrace ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">providerTrace</p>
+            <div className="rounded-[1.4rem] border border-white/12 bg-white/6 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/42">
+                providerTrace
+              </p>
               <div className="mt-3 space-y-3">
                 <ProviderTraceBadge trace={providerTrace} showRequestId />
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -116,51 +132,79 @@ export default function ConsultationDebugMetaCard({
             </div>
           ) : null}
 
-          {memoryMeta ? <MemoryContextCard memoryMeta={memoryMeta} mode="debug" title="memoryMeta" compact={false} /> : null}
+          {memoryMeta ? (
+            <MemoryContextCard
+              memoryMeta={memoryMeta}
+              mode="debug"
+              title="memoryMeta"
+              compact={false}
+            />
+          ) : null}
 
           {traceMemoryMeta ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            <div className="rounded-[1.4rem] border border-white/12 bg-white/6 p-4">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/42">
                 <FileJson className="h-3.5 w-3.5" />
                 traceMeta.memory
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <div>backend: {renderValue(traceMemoryMeta.backend)}</div>
                 <div>usedSources: {renderValue(traceMemoryMeta.usedSources)}</div>
-                <div>matchedSnapshotIds: {renderValue(traceMemoryMeta.matchedSnapshotIds)}</div>
+                <div>
+                  matchedSnapshotIds: {renderValue(traceMemoryMeta.matchedSnapshotIds)}
+                </div>
                 <div>matchedTraceIds: {renderValue(traceMemoryMeta.matchedTraceIds)}</div>
-                <div>memory_context_used: {renderValue(traceMemoryMeta.memory_context_used)}</div>
-                <div>memory_context_backend: {renderValue(traceMemoryMeta.memory_context_backend)}</div>
+                <div>
+                  memory_context_used: {renderValue(traceMemoryMeta.memory_context_used)}
+                </div>
+                <div>
+                  memory_context_backend:{" "}
+                  {renderValue(traceMemoryMeta.memory_context_backend)}
+                </div>
               </div>
             </div>
           ) : null}
 
           {stageRows.length ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">raw stage info</p>
+            <div className="rounded-[1.4rem] border border-white/12 bg-white/6 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/42">
+                raw stage info
+              </p>
               <div className="mt-3 space-y-3">
                 {stageRows.map((row) => (
-                  <div key={row.stage} className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+                  <div
+                    key={row.stage}
+                    className="rounded-[1.3rem] border border-white/10 bg-white/5 p-4"
+                  >
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="secondary">{getConsultationStageLabel(row.stage)}</Badge>
-                      {row.status?.traceId ? <Badge variant="outline">{row.status.traceId}</Badge> : null}
+                      <Badge variant="secondary">
+                        {getConsultationStageLabel(row.stage)}
+                      </Badge>
+                      {row.status?.traceId ? (
+                        <Badge variant="outline">{row.status.traceId}</Badge>
+                      ) : null}
                       {row.uiCards.map((cardType) => (
                         <Badge key={cardType} variant="outline">
                           {cardType}
                         </Badge>
                       ))}
-                      {row.notes.length ? <Badge variant="outline">{row.notes.length} 条 text</Badge> : null}
+                      {row.notes.length ? (
+                        <Badge variant="outline">{row.notes.length} 鏉?text</Badge>
+                      ) : null}
                     </div>
-                    <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       <div>title: {renderValue(row.status?.title)}</div>
                       <div>message: {renderValue(row.status?.message)}</div>
                       <div>providerTrace: {renderValue(row.status?.providerTrace)}</div>
                       <div>memory: {renderValue(row.status?.memory)}</div>
                     </div>
                     {row.notes.length ? (
-                      <div className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                      <div className="mt-3 space-y-2 text-sm leading-6 text-white/68">
                         {row.notes.slice(0, 2).map((note, index) => (
-                          <div key={`${row.stage}-${index}`} className="rounded-xl border border-slate-100 bg-white px-3 py-2">
+                          <div
+                            key={`${row.stage}-${index}`}
+                            className="rounded-xl border border-white/10 bg-white/6 px-3 py-2"
+                          >
                             {note.text}
                           </div>
                         ))}

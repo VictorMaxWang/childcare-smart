@@ -58,7 +58,7 @@ export default function DraftRecordList({
         surface="glass"
         glow="soft"
         interactive={false}
-        className="border-dashed border-slate-200 bg-white/72"
+        className="border-dashed border-[rgba(164,168,255,0.16)] bg-[linear-gradient(180deg,rgba(13,17,39,0.82),rgba(9,12,27,0.72))]"
       >
         <CardContent className="p-5 text-sm text-slate-500">
           当前没有可处理的草稿。
@@ -72,11 +72,16 @@ export default function DraftRecordList({
 
   return (
     <div className="space-y-4">
-      <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/78">
+      <Card
+        surface="glass"
+        glow="soft"
+        interactive={false}
+        className="border-[rgba(164,168,255,0.16)] bg-[linear-gradient(180deg,rgba(16,19,44,0.88),rgba(9,11,28,0.8))]"
+      >
         <CardContent className="flex flex-wrap items-center gap-2 p-4">
           <Badge variant="secondary">共 {counts.total} 条</Badge>
-          <Badge variant="warning">待确认 {counts.pending}</Badge>
-          <Badge variant="success">已确认 {counts.confirmed}</Badge>
+              <Badge variant="info">待确认 {counts.pending}</Badge>
+              <Badge variant="secondary">已确认 {counts.confirmed}</Badge>
           {discardedCount > 0 ? (
             <Badge variant="outline">已软隐藏 {discardedCount} 条已丢弃</Badge>
           ) : null}

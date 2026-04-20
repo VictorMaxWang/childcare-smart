@@ -330,7 +330,7 @@ export function buildMockWeeklyReport(
         snapshot.overview.healthAbnormalCount > 0 || snapshot.overview.pendingReviewCount > 2
           ? "up"
           : "stable",
-      disclaimer: "鏈缓璁敱鏈湴瑙勫垯鐢熸垚锛屼粎鐢ㄤ簬鎵樿偛瑙傚療涓庡鍥矡閫氬弬鑰冿紝涓嶆瀯鎴愬尰鐤楄瘖鏂€?",
+      disclaimer: "本建议由本地规则生成，仅用于托育观察与家园沟通参考，不构成医疗诊断。",
       source: "mock",
     });
   }

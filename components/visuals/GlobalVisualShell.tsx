@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import AmbientBackground from "@/components/visuals/AmbientBackground";
+import { getRouteTransitionMotion } from "@/components/visuals/motion-tokens";
 import { getRouteVisualProfile } from "@/components/visuals/route-visuals";
-import type { RouteTransitionStyle, RouteVisualProfile } from "@/components/visuals/types";
+import type { RouteVisualProfile } from "@/components/visuals/types";
 import { cn } from "@/lib/utils";
 
 function useConstrainedMotion() {
@@ -39,48 +40,6 @@ function useConstrainedMotion() {
   return constrained;
 }
 
-function getTransitionMotion(input: {
-  prefersReducedMotion: boolean;
-  constrained: boolean;
-  transitionStyle: RouteTransitionStyle;
-}) {
-  if (input.prefersReducedMotion) {
-    return {
-      initial: { opacity: 0 },
-      animate: { opacity: 1 },
-      exit: { opacity: 0 },
-      transition: { duration: 0.16, ease: [0.33, 0, 0.67, 1] as const },
-    };
-  }
-
-  const subtle = input.transitionStyle === "subtle" || input.constrained;
-
-  return {
-    initial: {
-      opacity: 0,
-      y: subtle ? 6 : 12,
-      filter: subtle ? "blur(8px)" : "blur(16px)",
-      scale: subtle ? 1 : 0.996,
-    },
-    animate: {
-      opacity: 1,
-      y: 0,
-      filter: "blur(0px)",
-      scale: 1,
-    },
-    exit: {
-      opacity: 0,
-      y: subtle ? -4 : -10,
-      filter: subtle ? "blur(6px)" : "blur(12px)",
-      scale: subtle ? 1 : 1.002,
-    },
-    transition: {
-      duration: subtle ? 0.28 : 0.42,
-      ease: [0.22, 1, 0.36, 1] as const,
-    },
-  };
-}
-
 function RouteTransitionViewport({
   children,
   pathname,
@@ -94,7 +53,7 @@ function RouteTransitionViewport({
   const constrainedMotion = useConstrainedMotion();
   const motion = useMemo(
     () =>
-      getTransitionMotion({
+      getRouteTransitionMotion({
         prefersReducedMotion,
         constrained: constrainedMotion,
         transitionStyle: profile.transition,

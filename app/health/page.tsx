@@ -219,7 +219,7 @@ export default function HealthPage() {
     <ContentPageShell
       title="晨检与健康"
       description="记录并追踪班级幼儿每日健康体征，及时预警异常情况。"
-      icon={<Thermometer className="h-6 w-6 text-sky-500" />}
+      icon={<Thermometer className="h-6 w-6 text-indigo-200" />}
     >
       <ScrollReveal>
       <div className="grid gap-4 md:grid-cols-4">
@@ -687,7 +687,7 @@ function renderMoodPieLabel({
   const textAnchor = labelX > cx ? "start" : "end";
 
   return (
-    <text x={labelX} y={labelY} fill="#475569" textAnchor={textAnchor} dominantBaseline="central" fontSize={12} fontWeight={600}>
+              <text x={labelX} y={labelY} fill="rgba(228,233,255,0.72)" textAnchor={textAnchor} dominantBaseline="central" fontSize={12} fontWeight={600}>
       {`${name} ${value}`}
     </text>
   );

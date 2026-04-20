@@ -31,7 +31,7 @@ export default function InterventionCardPanel({
       surface="luminous"
       glow="brand"
       interactive={false}
-      className="border-indigo-100/80 bg-linear-to-br from-indigo-50/82 via-white to-sky-50/78 shadow-sm"
+      className="border-[rgba(164,168,255,0.18)] bg-[linear-gradient(160deg,rgba(26,20,59,0.96),rgba(15,13,39,0.92),rgba(15,19,46,0.88))] shadow-sm"
     >
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -56,20 +56,20 @@ export default function InterventionCardPanel({
           ) : null}
         </div>
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-indigo-500">{displayTitle}</p>
+          <p className="text-xs font-medium uppercase tracking-[0.2em] text-violet-200">{displayTitle}</p>
           <CardTitle className="mt-2 text-xl text-slate-900">{card.title}</CardTitle>
           <p className="mt-3 text-sm leading-7 text-slate-600">{card.summary}</p>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="rounded-2xl border border-white/70 bg-white/84 p-4 shadow-[var(--shadow-card)]">
+        <div className="rounded-2xl border border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))] p-4 shadow-[var(--shadow-card)]">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <BrainCircuit className="h-4 w-4 text-indigo-500" />
+            <BrainCircuit className="h-4 w-4 text-violet-200" />
             触发原因
           </div>
           <p className="mt-2 text-sm leading-6 text-slate-600">{card.triggerReason}</p>
           {card.consultationSummary ? (
-            <div className="mt-4 rounded-2xl border border-amber-100/80 bg-amber-50/72 p-4 shadow-[var(--shadow-card)]">
+            <div className="mt-4 rounded-2xl border border-[rgba(164,168,255,0.14)] bg-[rgba(255,255,255,0.04)] p-4 shadow-[var(--shadow-card)]">
               <p className="text-sm font-semibold text-slate-900">{summaryTitle}</p>
               <p className="mt-2 text-sm leading-6 text-slate-600">{card.consultationSummary}</p>
               {showParticipants && card.participants?.length ? (
@@ -86,16 +86,16 @@ export default function InterventionCardPanel({
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-white/70 bg-white/84 p-4 shadow-[var(--shadow-card)]">
+          <div className="rounded-2xl border border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))] p-4 shadow-[var(--shadow-card)]">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <School className="h-4 w-4 text-sky-500" />
+              <School className="h-4 w-4 text-indigo-200" />
               今日园内动作
             </div>
             <p className="mt-2 text-sm leading-6 text-slate-600">{card.todayInSchoolAction}</p>
           </div>
-          <div className="rounded-2xl border border-white/70 bg-white/84 p-4 shadow-[var(--shadow-card)]">
+          <div className="rounded-2xl border border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))] p-4 shadow-[var(--shadow-card)]">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Home className="h-4 w-4 text-amber-500" />
+              <Home className="h-4 w-4 text-violet-200" />
               今晚家庭动作
             </div>
             <p className="mt-2 text-sm leading-6 text-slate-600">{card.tonightHomeAction}</p>
@@ -103,9 +103,9 @@ export default function InterventionCardPanel({
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-white/70 bg-white/84 p-4 shadow-[var(--shadow-card)]">
+          <div className="rounded-2xl border border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))] p-4 shadow-[var(--shadow-card)]">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Target className="h-4 w-4 text-indigo-500" />
+              <Target className="h-4 w-4 text-violet-200" />
               家庭步骤
             </div>
             <ol className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
@@ -114,9 +114,9 @@ export default function InterventionCardPanel({
               ))}
             </ol>
           </div>
-          <div className="rounded-2xl border border-white/70 bg-white/84 p-4 shadow-[var(--shadow-card)]">
+          <div className="rounded-2xl border border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))] p-4 shadow-[var(--shadow-card)]">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Clock3 className="h-4 w-4 text-emerald-500" />
+              <Clock3 className="h-4 w-4 text-indigo-200" />
               观察与复查
             </div>
             <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">

@@ -10,15 +10,15 @@ type WeeklyReportBadgeVariant = "info" | "warning" | "secondary";
 
 const WEEKLY_REPORT_SOURCE_META = {
   ai: {
-    label: "智能生成",
+    label: "AI",
     variant: "info",
   },
   fallback: {
-    label: "本地兜底",
+    label: "Fallback",
     variant: "warning",
   },
   mock: {
-    label: "演示结果",
+    label: "Demo",
     variant: "secondary",
   },
 } as const satisfies Record<
@@ -28,13 +28,13 @@ const WEEKLY_REPORT_SOURCE_META = {
 
 const WEEKLY_REPORT_ROLE_META = {
   teacher: {
-    label: "教师周报",
+    label: "Teacher Report",
   },
   admin: {
-    label: "园长周报",
+    label: "Admin Report",
   },
   parent: {
-    label: "家长周报",
+    label: "Parent Report",
   },
 } as const satisfies Record<WeeklyReportRole, { label: string }>;
 
@@ -115,12 +115,12 @@ export async function fetchWeeklyReport(
   });
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response, "周报预览暂时不可用"));
+    throw new Error(await readErrorMessage(response, "Weekly report preview is temporarily unavailable."));
   }
 
   const data = (await response.json()) as unknown;
   if (!isWeeklyReportResponse(data)) {
-    throw new Error("周报接口返回结构异常");
+    throw new Error("Weekly report response shape is invalid.");
   }
 
   return data;

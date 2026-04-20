@@ -217,7 +217,8 @@ function getDraftCardTone(item: TeacherDraftUiItem) {
     return {
       surface: "glass" as const,
       glow: "soft" as const,
-      className: "border-emerald-100/70 bg-linear-to-br from-emerald-50/50 via-white to-white",
+      className:
+        "border-violet-300/18 bg-[linear-gradient(180deg,rgba(18,22,49,0.94),rgba(10,13,31,0.86))]",
     };
   }
 
@@ -225,7 +226,8 @@ function getDraftCardTone(item: TeacherDraftUiItem) {
     return {
       surface: "solid" as const,
       glow: "none" as const,
-      className: "border-slate-200/80 bg-slate-50/80 opacity-90",
+      className:
+        "border-white/10 bg-[linear-gradient(180deg,rgba(17,18,33,0.84),rgba(11,12,23,0.8))] opacity-80",
     };
   }
 
@@ -233,8 +235,8 @@ function getDraftCardTone(item: TeacherDraftUiItem) {
     surface: item.isEdited ? "luminous" as const : "glass" as const,
     glow: item.isEdited ? "brand" as const : "soft" as const,
     className: item.isEdited
-      ? "border-indigo-100/80 bg-linear-to-br from-indigo-50/82 via-white to-sky-50/58"
-      : "border-white/70 bg-white/84",
+      ? "border-indigo-300/20 bg-[linear-gradient(160deg,rgba(27,21,62,0.94),rgba(13,12,35,0.88),rgba(15,21,43,0.84))]"
+      : "border-white/14 bg-[linear-gradient(180deg,rgba(15,18,42,0.9),rgba(9,12,28,0.82))]",
   };
 }
 
@@ -336,7 +338,7 @@ export default function DraftRecordCard({
               <Badge variant="secondary">
                 置信度 {Math.round(item.confidence * 100)}%
               </Badge>
-              {item.isEdited ? <Badge variant="warning">已编辑</Badge> : null}
+              {item.isEdited ? <Badge variant="info">已编辑</Badge> : null}
             </div>
             <p className="text-sm leading-6 text-slate-700">{item.summary}</p>
           </div>
@@ -365,7 +367,7 @@ export default function DraftRecordCard({
                   surface="solid"
                   glow="none"
                   interactive={false}
-                  className="border-white/80 bg-white/82"
+                  className="border-white/12 bg-white/6"
                 >
                   <CardContent className="px-3 py-3">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
@@ -379,7 +381,7 @@ export default function DraftRecordCard({
               ))}
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white/54 px-3 py-3 text-sm text-slate-500">
+            <div className="rounded-2xl border border-dashed border-white/14 bg-white/5 px-3 py-3 text-sm text-white/56">
               当前没有可展示的结构化字段。
             </div>
           )}
@@ -389,7 +391,7 @@ export default function DraftRecordCard({
               {item.warnings.map((warning) => (
                 <span
                   key={warning}
-                  className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
+                  className="inline-flex items-center gap-1 rounded-full border border-violet-300/18 bg-violet-400/10 px-2.5 py-1 text-xs font-medium text-violet-100"
                 >
                   <AlertTriangle className="h-3.5 w-3.5" />
                   {warning}
@@ -404,7 +406,7 @@ export default function DraftRecordCard({
             surface="luminous"
             glow="soft"
             interactive={false}
-            className="mt-4 border-indigo-100/80 bg-linear-to-br from-indigo-50/86 via-white to-sky-50/55"
+            className="mt-4 border-white/14 bg-[linear-gradient(180deg,rgba(21,24,55,0.94),rgba(11,13,31,0.9))]"
           >
             <CardContent className="space-y-4 p-4">
               <div>
@@ -412,7 +414,7 @@ export default function DraftRecordCard({
                 <Textarea
                   value={draftSummary}
                   onChange={(event) => setDraftSummary(event.target.value)}
-                  className="mt-2 min-h-24 rounded-2xl bg-white"
+                  className="mt-2 min-h-24 rounded-2xl border-white/14 bg-white/8 text-white"
                 />
               </div>
 
@@ -431,7 +433,7 @@ export default function DraftRecordCard({
                             setFieldValues((current) => ({ ...current, [field.key]: value }))
                           }
                         >
-                          <SelectTrigger className="rounded-2xl bg-white">
+                          <SelectTrigger className="rounded-2xl border-white/14 bg-white/8 text-white">
                             <SelectValue placeholder="未设置" />
                           </SelectTrigger>
                           <SelectContent>
@@ -450,7 +452,7 @@ export default function DraftRecordCard({
                               [field.key]: event.target.value,
                             }))
                           }
-                          className="rounded-2xl bg-white"
+                          className="rounded-2xl border-white/14 bg-white/8 text-white"
                         />
                       )}
                     </div>
@@ -459,7 +461,7 @@ export default function DraftRecordCard({
               </div>
 
               {item.suggestedActions.length > 0 ? (
-                <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/82">
+                <Card surface="solid" glow="none" interactive={false} className="border-white/12 bg-white/6">
                   <CardContent className="p-4">
                     <p className="text-sm font-semibold text-slate-900">建议动作</p>
                     <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-600">
@@ -471,7 +473,7 @@ export default function DraftRecordCard({
                 </Card>
               ) : null}
 
-              <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/82">
+              <Card surface="solid" glow="none" interactive={false} className="border-white/12 bg-white/6">
                 <CardContent className="p-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                     Raw Excerpt
@@ -481,7 +483,7 @@ export default function DraftRecordCard({
               </Card>
 
               {item.persistMessage ? (
-                <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/82">
+                <Card surface="solid" glow="none" interactive={false} className="border-white/12 bg-white/6">
                   <CardContent className="p-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                       Persist Result

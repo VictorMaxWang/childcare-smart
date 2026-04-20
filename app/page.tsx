@@ -121,7 +121,7 @@ function DashboardQuickLink({
         <p className="dashboard-quicklink__title">{title}</p>
         <p className="dashboard-quicklink__description">{description}</p>
       </div>
-      <div className="flex items-center justify-between text-sm font-medium text-slate-700">
+      <div className="flex items-center justify-between text-sm font-medium text-white/70">
         <span>打开入口</span>
         <ArrowRight className="dashboard-quicklink__icon h-4 w-4" />
       </div>
@@ -142,14 +142,14 @@ function BoardList({
 }) {
   return (
     <div className="content-reading-panel rounded-3xl p-4 shadow-[var(--shadow-card)]">
-      <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
+      <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-white/84">
         {icon}
         {title}
       </p>
       {items.length === 0 ? (
-        <p className="text-sm leading-6 text-slate-500">{emptyText}</p>
+        <p className="text-sm leading-6 text-white/56">{emptyText}</p>
       ) : (
-        <div className="space-y-2 text-sm leading-6 text-slate-600">
+        <div className="space-y-2 text-sm leading-6 text-white/62">
           {items.map((text) => (
             <p key={text}>{text}</p>
           ))}
@@ -429,10 +429,10 @@ export default function RootOverviewPage() {
           </Badge>
           <Badge variant="secondary">{currentUser.role}</Badge>
         </div>
-        <p className="mt-4 text-base font-semibold text-slate-950">
+        <p className="mt-4 text-base font-semibold text-white">
           首屏集中承载今日身份、KPI、主操作与闭环状态，下层按周报、风险、建议逐级收束。
         </p>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
+        <p className="mt-2 text-sm leading-6 text-white/64">
           维持现有品牌色，只增强明暗层次、柔和发光和空间深度，保证评委录屏时第一屏就能读懂今天该看什么。
         </p>
       </div>
@@ -465,7 +465,7 @@ export default function RootOverviewPage() {
       <div className="flex min-h-[calc(100vh-64px)] items-center justify-center px-6">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
-          <p className="text-sm text-slate-500">正在加载平台首页…</p>
+          <p className="text-sm text-white/56">正在加载平台首页…</p>
         </div>
       </div>
     );
@@ -486,9 +486,9 @@ export default function RootOverviewPage() {
   return (
     <RolePageShell
       intensity="strong"
-      badge={`全局总览 · ${INSTITUTION_NAME}`}
-      title="高信息密度运营看板，收束成一个更适合路演和评审观看的沉浸式首页。"
-      description="首屏只保留最重要的日期、身份、主叙事、主行动和 KPI。周报、风险图表与规则建议下沉到后两层，保持内容密度但不再是割裂的卡片墙。"
+      badge={`运营总览 · ${INSTITUTION_NAME}`}
+      title="今天的托育运营，只看最重要的闭环。"
+      description="把日期、身份、关键 KPI 与主行动压进同一块舞台。周报、风险图表和规则建议继续保留，但不再让首屏沦为零散卡片墙。"
       actions={
         <>
           <InlineLinkButton href={roleHomeHref} label={derivedRole === "admin" ? "进入机构首页" : "进入教师首页"} variant="premium" />
@@ -538,16 +538,16 @@ export default function RootOverviewPage() {
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="content-focus-block rounded-3xl p-4 shadow-[var(--shadow-card)]">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">本周出勤率</p>
-                  <p className="mt-2 text-3xl font-semibold text-slate-950">{weeklyReportSnapshot.overview.attendanceRate}%</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                  <p className="text-xs uppercase tracking-[0.16em] text-violet-200/70">本周出勤率</p>
+                  <p className="mt-2 text-3xl font-semibold text-white">{weeklyReportSnapshot.overview.attendanceRate}%</p>
+                  <p className="mt-2 text-sm leading-6 text-white/64">
                     可见儿童 {weeklyReportSnapshot.overview.visibleChildren} 人，家园反馈 {weeklyReportSnapshot.overview.feedbackCount} 条。
                   </p>
                 </div>
                 <div className="content-reading-panel rounded-3xl p-4 shadow-[var(--shadow-card)]">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">风险收束</p>
-                  <p className="mt-2 text-3xl font-semibold text-slate-950">{adminChartData.length}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                  <p className="text-xs uppercase tracking-[0.16em] text-violet-200/70">风险收束</p>
+                  <p className="mt-2 text-3xl font-semibold text-white">{adminChartData.length}</p>
+                  <p className="mt-2 text-sm leading-6 text-white/64">
                     今日优先关注儿童 {uniqueAdminBoard.highAttentionChildren.length} 名，待复查事项 {pendingReviews.length} 条。
                   </p>
                 </div>
@@ -567,8 +567,8 @@ export default function RootOverviewPage() {
                         </Badge>
                       ))}
                     </div>
-                    <p className="mt-3 text-sm font-semibold text-slate-900">{insight.title}</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{insight.description}</p>
+                    <p className="mt-3 text-sm font-semibold text-white">{insight.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-white/64">{insight.description}</p>
                   </div>
                 ))}
               </div>
@@ -587,13 +587,13 @@ export default function RootOverviewPage() {
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={adminChartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                    <CartesianGrid stroke="#dbe5f4" strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="childName" tick={{ fill: "#64748b", fontSize: 12 }} />
-                    <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                    <CartesianGrid stroke="rgba(164, 175, 255, 0.18)" strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="childName" tick={{ fill: "rgba(238, 242, 255, 0.62)", fontSize: 12 }} />
+                    <YAxis tick={{ fill: "rgba(222, 228, 255, 0.5)", fontSize: 12 }} />
                     <Tooltip />
-                    <Bar dataKey="attentionRisk" name="关注频次" fill="#fb7185" radius={[8, 8, 0, 0]} />
-                    <Bar dataKey="hydrationRisk" name="饮水缺口" fill="#38bdf8" radius={[8, 8, 0, 0]} />
-                    <Bar dataKey="vegetableRisk" name="蔬果缺口" fill="#34d399" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="attentionRisk" name="关注频次" fill="#8b7cff" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="hydrationRisk" name="饮水缺口" fill="#6674ff" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="vegetableRisk" name="蔬果缺口" fill="#c38eff" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -601,19 +601,19 @@ export default function RootOverviewPage() {
               <div className="grid gap-3 md:grid-cols-3">
                 <BoardList
                   title="高频关注儿童"
-                  icon={<Sparkles className="h-4 w-4 text-rose-500" />}
+                  icon={<Sparkles className="h-4 w-4 text-violet-200" />}
                   items={uniqueAdminBoard.highAttentionChildren.map((item) => `${item.childName} · ${item.count} 次`)}
                   emptyText="暂无高频关注儿童。"
                 />
                 <BoardList
                   title="饮水偏低提醒"
-                  icon={<BookHeart className="h-4 w-4 text-sky-500" />}
+                  icon={<BookHeart className="h-4 w-4 text-indigo-200" />}
                   items={uniqueAdminBoard.lowHydrationChildren.map((item) => `${item.childName} · ${item.hydrationAvg} ml`)}
                   emptyText="暂无饮水偏低提醒。"
                 />
                 <BoardList
                   title="蔬果摄入不足"
-                  icon={<TriangleAlert className="h-4 w-4 text-emerald-500" />}
+                  icon={<TriangleAlert className="h-4 w-4 text-violet-200" />}
                   items={uniqueAdminBoard.lowVegTrendChildren.map((item) => `${item.childName} · ${item.vegetableDays} 天`)}
                   emptyText="暂无蔬果不足趋势。"
                 />
@@ -645,8 +645,8 @@ export default function RootOverviewPage() {
                       ))}
                     </div>
                   </div>
-                  <p className="mt-3 text-sm font-semibold text-slate-900">{insight.title}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{insight.description}</p>
+                  <p className="mt-3 text-sm font-semibold text-white">{insight.title}</p>
+                  <p className="mt-2 text-sm leading-6 text-white/64">{insight.description}</p>
                 </div>
               ))}
             </div>
@@ -662,9 +662,9 @@ export default function RootOverviewPage() {
           >
             <div className="space-y-4">
               <div className="content-focus-block rounded-3xl p-4 shadow-[var(--shadow-card)]">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">待复查总量</p>
-                <p className="mt-2 text-3xl font-semibold text-slate-950">{pendingReviews.length}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
+                <p className="text-xs uppercase tracking-[0.16em] text-violet-200/70">待复查总量</p>
+                <p className="mt-2 text-3xl font-semibold text-white">{pendingReviews.length}</p>
+                <p className="mt-2 text-sm leading-6 text-white/64">
                   重点跟进成长记录与连续异常的闭环状态。
                 </p>
               </div>
@@ -676,13 +676,13 @@ export default function RootOverviewPage() {
                       key={record.id}
                       className="content-reading-panel rounded-3xl border border-white/75 p-4 shadow-[var(--shadow-card)]"
                     >
-                      <p className="text-sm font-semibold text-slate-900">{child?.name ?? "幼儿"}</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{record.followUpAction ?? record.description}</p>
+                      <p className="text-sm font-semibold text-white">{child?.name ?? "幼儿"}</p>
+                      <p className="mt-2 text-sm leading-6 text-white/64">{record.followUpAction ?? record.description}</p>
                     </div>
                   );
                 })}
                 {pendingReviews.length === 0 ? (
-                  <p className="text-sm leading-6 text-slate-500">当前没有待复查事项。</p>
+                  <p className="text-sm leading-6 text-white/56">当前没有待复查事项。</p>
                 ) : null}
               </div>
             </div>
@@ -702,8 +702,8 @@ export default function RootOverviewPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">{template.title}</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{template.description}</p>
+                      <p className="text-sm font-semibold text-white">{template.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-white/64">{template.description}</p>
                     </div>
                     <Link href="/diet">
                       <Button size="sm" variant="outline" className="rounded-xl">
@@ -735,9 +735,9 @@ export default function RootOverviewPage() {
                   key={item.id}
                   className="content-timeline-item rounded-3xl border border-white/75 p-4 shadow-[var(--shadow-card)]"
                 >
-                  <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{item.detail}</p>
-                  <p className="mt-2 text-xs text-slate-400">{item.dateTime}</p>
+                  <p className="text-sm font-semibold text-white">{item.title}</p>
+                  <p className="mt-2 text-sm leading-6 text-white/64">{item.detail}</p>
+                  <p className="mt-2 text-xs text-white/40">{item.dateTime}</p>
                 </div>
               ))}
               {recentTimeline.length === 0 ? (

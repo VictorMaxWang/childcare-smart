@@ -29,6 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import ContentPageShell from "@/components/visuals/ContentPageShell";
 import { toast } from "sonner";
 
 export default function ChildrenPage() {
@@ -151,7 +152,18 @@ export default function ChildrenPage() {
   }
 
   return (
-    <div className="page-frame-dense mx-auto max-w-7xl px-6 py-8 page-enter">
+    <ContentPageShell
+      title="儿童档案"
+      description="统一查看儿童基础信息、监护人、过敏、特殊关注项与今日出勤，纳入内容页同一套中氛围蓝紫壳层。"
+      icon={<Users className="h-6 w-6 text-violet-200" />}
+      actions={
+        <Button onClick={() => canManage && setOpen(true)} disabled={!canManage} className="gap-2">
+          <UserPlus className="h-4 w-4" />
+          {canManage ? "新增儿童档案" : "家长端仅可查看"}
+        </Button>
+      }
+      contentClassName="children-page-scope"
+    >
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
@@ -363,7 +375,7 @@ export default function ChildrenPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </ContentPageShell>
   );
 }
 
