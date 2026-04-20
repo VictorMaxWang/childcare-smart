@@ -38,7 +38,7 @@ function hasScriptContent(payload: TeacherCopilotPayload["parentCommunicationScr
 
 function ToggleIcon({ open }: { open: boolean }) {
   return (
-    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/74 text-slate-500 shadow-[var(--shadow-card)]">
+    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/12 bg-[linear-gradient(180deg,rgba(24,20,52,0.78),rgba(11,12,30,0.72))] text-white/58 shadow-[var(--shadow-card)]">
       <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
     </span>
   );
@@ -80,7 +80,7 @@ export default function TeacherCopilotPanel({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="teacher-copilot-panel space-y-3">
       {sections.map((sectionId) => {
         const isOpen = openSectionId === sectionId;
 
@@ -91,7 +91,7 @@ export default function TeacherCopilotPanel({
               surface="luminous"
               glow="soft"
               interactive={false}
-              className="border-amber-100/80 bg-linear-to-br from-amber-50/90 via-white to-rose-50/55"
+              className="border-[rgba(164,168,255,0.18)] bg-[linear-gradient(160deg,rgba(25,18,54,0.95),rgba(14,12,37,0.92),rgba(15,18,43,0.88))]"
             >
               <CardContent className="p-4">
                 <button
@@ -104,9 +104,9 @@ export default function TeacherCopilotPanel({
                   className="flex w-full items-center justify-between gap-3 text-left"
                 >
                   <div className="flex items-center gap-2">
-                    <ClipboardList className="h-4 w-4 text-amber-600" />
+                    <ClipboardList className="h-4 w-4 text-violet-200" />
                     <p className="text-sm font-semibold text-slate-900">记录补全提示</p>
-                    <Badge variant="warning">{payload.recordCompletionHints.length} 条</Badge>
+              <Badge variant="info">{payload.recordCompletionHints.length} 条</Badge>
                   </div>
                   <ToggleIcon open={isOpen} />
                 </button>
@@ -116,16 +116,16 @@ export default function TeacherCopilotPanel({
                     {payload.recordCompletionHints.map((hint) => (
                       <Card
                         key={hint.id ?? hint.title}
-                        surface="solid"
-                        glow="none"
+                        surface="glass"
+                        glow="soft"
                         interactive={false}
-                        className="border-white/80 bg-white/82"
+                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(16,19,44,0.84),rgba(9,11,27,0.74))]"
                       >
                         <CardContent className="p-4">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-semibold text-slate-900">{hint.title}</p>
                             {hint.tone === "warning" ? (
-                              <Badge variant="warning">优先补齐</Badge>
+            <Badge variant="info">优先补齐</Badge>
                             ) : (
                               <Badge variant="info">辅助提示</Badge>
                             )}
@@ -155,7 +155,7 @@ export default function TeacherCopilotPanel({
               surface="glass"
               glow="soft"
               interactive={false}
-              className="border-sky-100/80 bg-linear-to-br from-sky-50/80 via-white to-white"
+              className="border-[rgba(164,168,255,0.16)] bg-[linear-gradient(180deg,rgba(16,21,50,0.88),rgba(10,12,31,0.8))]"
             >
               <CardContent className="p-4">
                 <button
@@ -168,7 +168,7 @@ export default function TeacherCopilotPanel({
                   className="flex w-full items-center justify-between gap-3 text-left"
                 >
                   <div className="flex items-center gap-2">
-                    <GraduationCap className="h-4 w-4 text-sky-600" />
+                    <GraduationCap className="h-4 w-4 text-indigo-200" />
                     <p className="text-sm font-semibold text-slate-900">
                       {payload.microTrainingSOP.title}
                     </p>
@@ -188,10 +188,10 @@ export default function TeacherCopilotPanel({
                     {payload.microTrainingSOP.steps.map((step, index) => (
                       <Card
                         key={`${step.title}-${index}`}
-                        surface="solid"
-                        glow="none"
+                        surface="glass"
+                        glow="soft"
                         interactive={false}
-                        className="border-white/80 bg-white/84"
+                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
                       >
                         <CardContent className="p-4">
                           <p className="text-sm font-semibold text-slate-900">
@@ -217,7 +217,7 @@ export default function TeacherCopilotPanel({
               surface="luminous"
               glow="brand"
               interactive={false}
-              className="border-indigo-100/80 bg-linear-to-br from-indigo-50/88 via-white to-sky-50/55"
+              className="border-[rgba(164,168,255,0.18)] bg-[linear-gradient(160deg,rgba(26,20,59,0.96),rgba(15,13,39,0.92),rgba(15,19,46,0.88))]"
             >
               <CardContent className="p-4">
                 <button
@@ -230,7 +230,7 @@ export default function TeacherCopilotPanel({
                   className="flex w-full items-center justify-between gap-3 text-left"
                 >
                   <div className="flex items-center gap-2">
-                    <MessageSquareQuote className="h-4 w-4 text-indigo-600" />
+                    <MessageSquareQuote className="h-4 w-4 text-violet-200" />
                     <p className="text-sm font-semibold text-slate-900">
                       {payload.parentCommunicationScript.title}
                     </p>
@@ -241,7 +241,12 @@ export default function TeacherCopilotPanel({
                 {isOpen ? (
                   <div className="mt-4 space-y-3">
                     {payload.parentCommunicationScript.opening ? (
-                      <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/84">
+                      <Card
+                        surface="glass"
+                        glow="soft"
+                        interactive={false}
+                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
+                      >
                         <CardContent className="p-4">
                           <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                             开场
@@ -253,7 +258,12 @@ export default function TeacherCopilotPanel({
                       </Card>
                     ) : null}
                     {payload.parentCommunicationScript.situation ? (
-                      <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/84">
+                      <Card
+                        surface="glass"
+                        glow="soft"
+                        interactive={false}
+                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
+                      >
                         <CardContent className="p-4">
                           <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                             现状
@@ -265,7 +275,12 @@ export default function TeacherCopilotPanel({
                       </Card>
                     ) : null}
                     {payload.parentCommunicationScript.ask ? (
-                      <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/84">
+                      <Card
+                        surface="glass"
+                        glow="soft"
+                        interactive={false}
+                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
+                      >
                         <CardContent className="p-4">
                           <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                             请家长配合
@@ -277,7 +292,12 @@ export default function TeacherCopilotPanel({
                       </Card>
                     ) : null}
                     {payload.parentCommunicationScript.closing ? (
-                      <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/84">
+                      <Card
+                        surface="glass"
+                        glow="soft"
+                        interactive={false}
+                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
+                      >
                         <CardContent className="p-4">
                           <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                             收口
@@ -289,7 +309,12 @@ export default function TeacherCopilotPanel({
                       </Card>
                     ) : null}
                     {payload.parentCommunicationScript.bullets?.length ? (
-                      <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/84">
+                      <Card
+                        surface="glass"
+                        glow="soft"
+                        interactive={false}
+                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
+                      >
                         <CardContent className="p-4">
                           <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                             话术要点

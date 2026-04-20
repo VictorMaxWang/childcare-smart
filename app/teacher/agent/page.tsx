@@ -818,7 +818,7 @@ export default function TeacherAgentPage() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/84">
+                  <Card surface="glass" glow="soft" interactive={false} className="border-white/12 bg-white/6">
                     <CardContent className="p-4">
                       <p className="text-sm font-semibold text-slate-900">当前班级</p>
                       <p className="mt-2 text-2xl font-semibold text-slate-900">{classContext.className}</p>
@@ -828,7 +828,7 @@ export default function TeacherAgentPage() {
                     surface="luminous"
                     glow="soft"
                     interactive={false}
-                    className="border-indigo-100/80 bg-linear-to-br from-indigo-50/82 via-white to-sky-50/55"
+                    className="border-white/14 bg-[linear-gradient(180deg,rgba(21,24,55,0.94),rgba(11,13,31,0.9))]"
                   >
                     <CardContent className="p-4">
                       <p className="text-sm font-semibold text-slate-900">当前服务对象</p>
@@ -874,7 +874,7 @@ export default function TeacherAgentPage() {
                           surface="luminous"
                           glow="soft"
                           interactive={false}
-                          className="border-rose-100/80 bg-linear-to-br from-rose-50/85 via-white to-amber-50/55"
+                          className="border-violet-300/18 bg-[linear-gradient(180deg,rgba(28,20,58,0.94),rgba(13,11,34,0.86))]"
                         >
                           <CardContent className="p-4 text-sm text-slate-700">
                             {record.date} · {activeChildContext.child.name} · 体温 {record.temperature}℃ · {record.mood} · {record.handMouthEye}
@@ -883,7 +883,7 @@ export default function TeacherAgentPage() {
                         </Card>
                       ))
                     ) : (
-                      <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82">
+                      <Card surface="glass" glow="soft" interactive={false} className="border-white/12 bg-white/6">
                         <CardContent className="p-4 text-sm text-slate-600">
                           {activeChildContext.child.name} 今日暂无晨检异常，适合继续围绕待复查记录和家长反馈生成建议。
                         </CardContent>
@@ -896,7 +896,7 @@ export default function TeacherAgentPage() {
                         surface="luminous"
                         glow="soft"
                         interactive={false}
-                        className="border-amber-100/80 bg-linear-to-br from-amber-50/82 via-white to-rose-50/45"
+                        className="border-indigo-300/18 bg-[linear-gradient(180deg,rgba(19,24,55,0.94),rgba(12,13,32,0.86))]"
                       >
                         <CardContent className="p-4 text-sm text-slate-700">
                           待复查 · {record.category} · {record.followUpAction ?? record.description}
@@ -911,7 +911,7 @@ export default function TeacherAgentPage() {
                       surface="luminous"
                       glow="soft"
                       interactive={false}
-                      className="border-rose-100/80 bg-linear-to-br from-rose-50/85 via-white to-amber-50/55"
+                      className="border-violet-300/18 bg-[linear-gradient(180deg,rgba(28,20,58,0.94),rgba(13,11,34,0.86))]"
                     >
                       <CardContent className="p-4 text-sm text-slate-700">
                         {item.child.name} · 体温 {item.record.temperature}℃ · {item.record.mood} · {item.record.handMouthEye}
@@ -945,7 +945,7 @@ export default function TeacherAgentPage() {
                           surface="glass"
                           glow="soft"
                           interactive={false}
-                          className="border-white/70 bg-white/82"
+                          className="border-white/12 bg-white/6"
                         >
                           <CardContent className="p-4">
                           <div className="flex items-center justify-between gap-3">
@@ -961,15 +961,15 @@ export default function TeacherAgentPage() {
                           return (
                             <div className="mt-3 space-y-2">
                               <div className="flex flex-wrap gap-2">
-                                <span className="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-700">
+                                <span className="inline-flex items-center rounded-full border border-violet-300/18 bg-violet-400/10 px-2.5 py-0.5 text-xs font-semibold text-violet-100">
                                   已结构化
                                 </span>
                                 {voicePayload.understanding?.router_result.primary_category ? (
-                                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                                  <span className="inline-flex items-center rounded-full border border-white/12 bg-white/8 px-2.5 py-0.5 text-xs font-semibold text-white/72">
                                     {voicePayload.understanding.router_result.primary_category}
                                   </span>
                                 ) : null}
-                                <span className="inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
+                                <span className="inline-flex items-center rounded-full border border-indigo-300/20 bg-indigo-400/10 px-2.5 py-0.5 text-xs font-semibold text-indigo-100">
                                   草稿项 {voicePayload.t5Seed.draft_items.length}
                                 </span>
                               </div>
@@ -979,7 +979,7 @@ export default function TeacherAgentPage() {
                                 </p>
                               ) : null}
                               {voicePayload.t5Seed.warnings.length > 0 ? (
-                                <p className="text-xs leading-5 text-amber-600">
+                                <p className="text-xs leading-5 text-violet-200">
                                   Warnings: {voicePayload.t5Seed.warnings.join(" / ")}
                                 </p>
                               ) : null}
@@ -995,7 +995,7 @@ export default function TeacherAgentPage() {
                       surface="glass"
                       glow="soft"
                       interactive={false}
-                      className="border-dashed border-slate-200 bg-white/72"
+                      className="border-dashed border-white/14 bg-white/5"
                     >
                       <CardContent className="p-4 text-sm text-slate-500">
                         当前还没有教师端本地草稿。
@@ -1014,7 +1014,7 @@ export default function TeacherAgentPage() {
                 <div className="mb-4 space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">草稿源 {teacherVoiceSourceDrafts.length} 条</Badge>
-                    <Badge variant="warning">
+                    <Badge variant="info">
                       待处理{" "}
                       {teacherVoiceSourceDrafts.reduce(
                         (total, item) => total + item.pendingCount,
@@ -1035,8 +1035,8 @@ export default function TeacherAgentPage() {
                           onClick={() => handleSelectSourceDraft(item.draft)}
                           className={`premium-card rounded-[1.6rem] border p-4 text-left transition-all duration-200 ${
                             isSelected
-                              ? "surface-luminous surface-glow-brand border-indigo-200 bg-linear-to-br from-indigo-50/86 via-white to-sky-50/55"
-                              : "surface-glass surface-glow-soft border-white/70 bg-white/82 hover:border-slate-200"
+                              ? "surface-luminous surface-glow-brand border-white/16 bg-[linear-gradient(160deg,rgba(27,21,62,0.96),rgba(13,12,35,0.9),rgba(15,21,43,0.88))]"
+                              : "surface-glass surface-glow-soft border-white/12 bg-white/6 hover:border-white/20"
                           }`}
                         >
                           <div className="flex flex-wrap items-center gap-2">
@@ -1044,8 +1044,8 @@ export default function TeacherAgentPage() {
                               {isSelected ? "当前草稿源" : "可切换草稿源"}
                             </Badge>
                             <Badge variant="outline">{item.childName}</Badge>
-                            <Badge variant="warning">待确认 {item.pendingCount}</Badge>
-                            <Badge variant="success">已确认 {item.confirmedCount}</Badge>
+                            <Badge variant="info">待确认 {item.pendingCount}</Badge>
+                            <Badge variant="secondary">已确认 {item.confirmedCount}</Badge>
                             {item.discardedCount > 0 ? (
                               <Badge variant="secondary">
                                 已丢弃 {item.discardedCount}
@@ -1109,10 +1109,10 @@ export default function TeacherAgentPage() {
                 className="border-indigo-100/80 bg-linear-to-br from-indigo-50/86 via-white to-sky-50/60"
               >
                 <CardContent className="p-5">
-                  {error ? <p className="mb-4 text-sm text-rose-600">{error}</p> : null}
+                  {error ? <p className="mb-4 text-sm text-rose-200">{error}</p> : null}
                   {intentEntryHint ? (
-                    <Card surface="solid" glow="none" interactive={false} className="mb-4 border-sky-100/80 bg-white/84">
-                      <CardContent className="p-4 text-sm leading-6 text-slate-600">
+                    <Card surface="solid" glow="none" interactive={false} className="mb-4 border-white/12 bg-white/6">
+                      <CardContent className="p-4 text-sm leading-6 text-white/68">
                         {intentEntryHint}
                       </CardContent>
                     </Card>
@@ -1168,7 +1168,7 @@ export default function TeacherAgentPage() {
                         surface="glass"
                         glow="soft"
                         interactive={false}
-                        className="border-white/70 bg-white/82"
+                        className="border-white/12 bg-white/6"
                       >
                         <CardContent className="p-4 text-sm text-slate-600">
                           <p className="font-semibold text-slate-900">{item.childName}</p>
@@ -1185,11 +1185,11 @@ export default function TeacherAgentPage() {
             <SectionCard title="推荐展示顺序" description="录屏时可以直接沿这条顺序展示。">
               <ol className="space-y-3 text-sm text-slate-600">
                 <li className="flex items-center gap-3">
-                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  <Sparkles className="h-4 w-4 text-violet-200" />
                   先选一个异常或待复查儿童，生成家长沟通建议
                 </li>
                 <li className="flex items-center gap-3">
-                  <Sparkles className="h-4 w-4 text-sky-500" />
+                  <Sparkles className="h-4 w-4 text-indigo-200" />
                   再切到今日跟进行动，展示结构化行动列表
                 </li>
                 <li className="flex items-center gap-3">
@@ -1205,7 +1205,7 @@ export default function TeacherAgentPage() {
                   surface="glass"
                   glow="soft"
                   interactive={false}
-                  className="border-white/70 bg-white/82"
+                  className="border-white/12 bg-white/6"
                 >
                   <CardContent className="p-4 text-sm leading-6 text-slate-600">
                     {buildTeacherAgentResultSummary(currentResult)}
@@ -1225,7 +1225,7 @@ export default function TeacherAgentPage() {
                         surface="glass"
                         glow="soft"
                         interactive={false}
-                        className="border-white/70 bg-white/82"
+                        className="border-white/12 bg-white/6"
                       >
                         <CardContent className="p-4">
                         <div className="flex items-center justify-between gap-3">

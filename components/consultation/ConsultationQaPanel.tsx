@@ -63,25 +63,30 @@ export default function ConsultationQaPanel({
   const isRealWalkthrough = activeCase === null;
 
   return (
-    <Card className={cn("border-dashed border-slate-200 bg-slate-50/80 shadow-sm", className)}>
+    <Card
+      className={cn(
+        "consultation-qa-panel border-dashed border-white/12 bg-[linear-gradient(180deg,rgba(20,22,52,0.94),rgba(10,12,30,0.88))] shadow-[var(--shadow-card)]",
+        className
+      )}
+    >
       <CardHeader className="gap-3 pb-4">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="warning">过程核对</Badge>
-          <Badge variant={isRealWalkthrough ? "success" : "secondary"}>
+          <Badge variant="info">过程核对</Badge>
+          <Badge variant={isRealWalkthrough ? "secondary" : "outline"}>
             {isRealWalkthrough ? "真实链路" : "前端演练"}
           </Badge>
           <Badge variant="outline">{viewModel.overallStatusLabel}</Badge>
         </div>
         <CardTitle className="flex items-center gap-2 text-base text-slate-900">
-          <ListChecks className="h-4 w-4 text-sky-500" />
+          <ListChecks className="h-4 w-4 text-indigo-200" />
           联调 / 答辩前检查入口
         </CardTitle>
       </CardHeader>
 
       <CardContent className="space-y-5">
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4">
+        <div className="rounded-2xl border border-violet-300/18 bg-[linear-gradient(180deg,rgba(30,23,64,0.9),rgba(13,14,37,0.84))] p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="success">真实会诊主链路</Badge>
+            <Badge variant="secondary">真实会诊主链路</Badge>
             <Badge variant="outline">/teacher/high-risk-consultation?trace=debug</Badge>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -97,7 +102,7 @@ export default function ConsultationQaPanel({
               </Link>
             </Button>
           </div>
-          <ol className="mt-4 space-y-2 text-sm leading-6 text-slate-700">
+          <ol className="mt-4 space-y-2 text-sm leading-6 text-white/70">
             <li>1. 保持当前输入区不变，选择儿童并点击“一键生成会诊”。</li>
             <li>2. 确认过程依次经过“准备中 / 进行中 / 已完成”。</li>
             <li>3. 重点看长期画像、最近会诊 / 快照、当前建议、生成方式、参考资料和最终落点。</li>
@@ -112,16 +117,16 @@ export default function ConsultationQaPanel({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
+        <div className="rounded-2xl border border-fuchsia-300/18 bg-[linear-gradient(180deg,rgba(35,23,64,0.9),rgba(15,13,39,0.84))] p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="warning">固定 5 个演练场景</Badge>
-            <span className="text-sm text-amber-900">这些是前端演练，不会发起真实故障注入。</span>
+            <Badge variant="info">固定 5 个演练场景</Badge>
+            <span className="text-sm text-white/76">这些是前端演练，不会发起真实故障注入。</span>
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {DEBUG_CASES.map((item) => {
               const active = item.value === activeCase;
               return (
-                <div key={item.value} className="rounded-2xl border border-white/80 bg-white/85 p-4">
+                <div key={item.value} className="rounded-2xl border border-white/12 bg-white/6 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={active ? "warning" : "secondary"}>{item.label}</Badge>
@@ -139,8 +144,8 @@ export default function ConsultationQaPanel({
                       </Link>
                     </Button>
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-700">{item.description}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{item.expected}</p>
+                  <p className="mt-3 text-sm leading-6 text-white/70">{item.description}</p>
+                  <p className="mt-2 text-sm leading-6 text-white/58">{item.expected}</p>
                 </div>
               );
             })}
@@ -148,23 +153,23 @@ export default function ConsultationQaPanel({
         </div>
 
         <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4">
+          <div className="rounded-2xl border border-white/12 bg-white/6 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Activity className="h-4 w-4 text-indigo-500" />
+              <Activity className="h-4 w-4 text-indigo-200" />
               当前检查对象
             </div>
-            <p className="mt-3 text-sm leading-6 text-slate-700">
+            <p className="mt-3 text-sm leading-6 text-white/70">
               {currentCase
                 ? `${currentCase.label}：${currentCase.expected}`
                 : "真实会诊主链路。这里应以真实过程、生成方式、参考资料和最终结果落点为准。"}
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4">
+          <div className="rounded-2xl border border-white/12 bg-white/6 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              <CheckCircle2 className="h-4 w-4 text-violet-200" />
               固定断言
             </div>
-            <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-white/70">
               <li>partial 时保留已收到的阶段内容。</li>
               <li>无历史资料时有明确提示。</li>
               <li>本地兜底可见但不淹没主内容。</li>

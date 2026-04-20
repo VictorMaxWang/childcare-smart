@@ -410,7 +410,7 @@ export default function DietPage() {
     <ContentPageShell
       title="饮食记录"
       description="流程已升级为：先批量录入出勤幼儿，再做例外排除与过敏拦截，最后对个别幼儿进行单独调整。"
-      icon={<Salad className="h-6 w-6 text-emerald-500" />}
+      icon={<Salad className="h-6 w-6 text-violet-200" />}
     >
       <Card className="mb-6 border-emerald-100 bg-linear-to-r from-emerald-50 to-white">
         <CardHeader>
@@ -708,7 +708,7 @@ export default function DietPage() {
                     <Progress
                       value={overallScore}
                       className="mt-3 h-2"
-                      indicatorClassName={overallScore >= 85 ? "bg-emerald-400" : overallScore >= 70 ? "bg-amber-400" : "bg-rose-400"}
+                      indicatorClassName={overallScore >= 85 ? "bg-violet-400" : overallScore >= 70 ? "bg-indigo-400" : "bg-violet-300"}
                     />
                   </div>
                 </CardContent>

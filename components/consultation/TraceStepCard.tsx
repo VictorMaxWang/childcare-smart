@@ -24,15 +24,23 @@ import { cn } from "@/lib/utils";
 
 function getSourceLabel(source?: string) {
   if (!source) return "";
-  if (source === "memory") return "记忆上下文";
+  if (source === "memory") return "璁板繂涓婁笅鏂?";
   return source;
 }
 
-function getCalloutClasses(tone: NonNullable<ConsultationStageView["callout"]>["tone"]) {
-  if (tone === "error") return "border-rose-200 bg-rose-50 text-rose-700";
-  if (tone === "warning") return "border-amber-200 bg-amber-50 text-amber-800";
-  if (tone === "success") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  return "border-sky-200 bg-sky-50 text-sky-700";
+function getCalloutClasses(
+  tone: NonNullable<ConsultationStageView["callout"]>["tone"]
+) {
+  if (tone === "error") {
+    return "border-rose-300/20 bg-rose-400/10 text-rose-100";
+  }
+  if (tone === "warning") {
+    return "border-violet-300/20 bg-violet-400/10 text-violet-100";
+  }
+  if (tone === "success") {
+    return "border-indigo-300/20 bg-indigo-400/10 text-indigo-100";
+  }
+  return "border-indigo-300/18 bg-indigo-400/10 text-indigo-100";
 }
 
 function getEvidenceConfidenceBadgeVariant(
@@ -56,7 +64,9 @@ export default function TraceStepCard({
   const open = userOpen ?? stage.expandedByDefault;
 
   const sourceLabel = getSourceLabel(stage.source);
-  const shouldShowMemory = (stage.key === "long_term_profile" || stage.key === "recent_context") && Boolean(stage.memoryMeta);
+  const shouldShowMemory =
+    (stage.key === "long_term_profile" || stage.key === "recent_context") &&
+    Boolean(stage.memoryMeta);
   const evidencePreviewModel = buildConsultationEvidencePanelModel({
     evidenceItems: stage.evidenceItems,
     leadLimit: 2,
@@ -72,14 +82,20 @@ export default function TraceStepCard({
   return (
     <Card
       surface={stage.status === "active" ? "luminous" : "glass"}
-      glow={stage.status === "active" ? "brand" : stage.status === "completed" ? "soft" : "none"}
-      className={cn(
-        "overflow-hidden shadow-sm transition-all",
+      glow={
         stage.status === "active"
-          ? "border-sky-200 bg-linear-to-br from-sky-50/82 via-white to-white"
+          ? "brand"
           : stage.status === "completed"
-            ? "border-emerald-100/80 bg-linear-to-br from-emerald-50/72 via-white to-white"
-            : "border-white/70 bg-white/82",
+            ? "soft"
+            : "none"
+      }
+      className={cn(
+        "overflow-hidden transition-all",
+        stage.status === "active"
+          ? "border-white/16 bg-[linear-gradient(180deg,rgba(29,23,71,0.96),rgba(12,14,36,0.88))]"
+          : stage.status === "completed"
+            ? "border-indigo-300/18 bg-[linear-gradient(180deg,rgba(19,23,55,0.92),rgba(10,12,31,0.84))]"
+            : "border-white/12 bg-[linear-gradient(180deg,rgba(15,18,42,0.88),rgba(9,12,28,0.82))]",
         className
       )}
     >
@@ -87,44 +103,69 @@ export default function TraceStepCard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={stage.status === "completed" ? "success" : stage.status === "active" ? "warning" : "outline"}>{stage.shortLabel}</Badge>
-              <Badge variant="secondary">{getConsultationStageStatusLabel(stage.status)}</Badge>
+              <Badge
+                variant={
+                  stage.status === "completed"
+                    ? "success"
+                    : stage.status === "active"
+                      ? "warning"
+                      : "secondary"
+                }
+              >
+                {stage.shortLabel}
+              </Badge>
+              <Badge variant="outline">
+                {getConsultationStageStatusLabel(stage.status)}
+              </Badge>
               {sourceLabel ? <Badge variant="outline">{sourceLabel}</Badge> : null}
             </div>
             <div className="space-y-2">
-              <CardTitle className="text-lg text-slate-900">{stage.title}</CardTitle>
-              <p className="text-sm leading-7 text-slate-600">{stage.summary}</p>
+              <CardTitle className="text-lg text-white">{stage.title}</CardTitle>
+              <p className="text-sm leading-7 text-white/70">{stage.summary}</p>
             </div>
           </div>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="rounded-xl text-slate-600"
-            onClick={() => setUserOpen((current) => !(current ?? stage.expandedByDefault))}
+            className="rounded-xl text-white/68"
+            onClick={() =>
+              setUserOpen((current) => !(current ?? stage.expandedByDefault))
+            }
             aria-expanded={open}
           >
-            {open ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
-            {open ? "收起" : "展开"}
+            {open ? (
+              <ChevronUp className="mr-2 h-4 w-4" />
+            ) : (
+              <ChevronDown className="mr-2 h-4 w-4" />
+            )}
+            {open ? "鏀惰捣" : "灞曞紑"}
           </Button>
         </div>
 
-        {stage.providerTrace ? <ProviderTraceBadge trace={stage.providerTrace} compact={mode !== "debug"} /> : null}
+        {stage.providerTrace ? (
+          <ProviderTraceBadge trace={stage.providerTrace} compact={mode !== "debug"} />
+        ) : null}
       </CardHeader>
 
       {open ? (
         <CardContent className="space-y-4">
           {stage.callout ? (
-            <div className={cn("rounded-2xl border p-4 text-sm leading-6 shadow-[var(--shadow-card)]", getCalloutClasses(stage.callout.tone))}>
+            <div
+              className={cn(
+                "rounded-[1.4rem] border p-4 text-sm leading-6 shadow-[var(--shadow-card)]",
+                getCalloutClasses(stage.callout.tone)
+              )}
+            >
               <p className="font-semibold">{stage.callout.title}</p>
               <p className="mt-1">{stage.callout.description}</p>
             </div>
           ) : null}
 
           {stage.items.length ? (
-            <div className="rounded-2xl border border-white/70 bg-white/88 p-4 shadow-[var(--shadow-card)]">
-              <p className="text-sm font-semibold text-slate-900">阶段要点</p>
-              <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+            <div className="rounded-[1.4rem] border border-white/12 bg-white/6 p-4">
+              <p className="text-sm font-semibold text-white">闃舵瑕佺偣</p>
+              <ul className="mt-3 space-y-2 text-sm leading-6 text-white/68">
                 {stage.items.map((item, index) => (
                   <li key={`${stage.key}-${index}`}>- {item}</li>
                 ))}
@@ -133,21 +174,31 @@ export default function TraceStepCard({
           ) : null}
 
           {stage.evidence.length || stage.evidenceItems.length ? (
-            <div className="rounded-2xl border border-white/70 bg-white/76 p-4 shadow-[var(--shadow-card)]">
-              <p className="text-sm font-semibold text-slate-900">关键信号</p>
+            <div className="rounded-[1.4rem] border border-white/12 bg-white/6 p-4">
+              <p className="text-sm font-semibold text-white">鍏抽敭淇″彿</p>
               {evidencePreviewModel.mode === "structured" ? (
                 <div className="mt-3 space-y-3">
                   {evidencePreviewModel.leadItems.map((evidence) => (
                     <div
                       key={evidence.item.id}
-                      className="rounded-2xl border border-white/80 bg-white/90 p-3 shadow-[var(--shadow-card)]"
+                      className="rounded-[1.3rem] border border-white/10 bg-white/6 p-3"
                     >
                       <div className="flex flex-wrap gap-2">
                         <Badge variant="info">{evidence.item.sourceLabel}</Badge>
-                        <Badge variant={getEvidenceConfidenceBadgeVariant(evidence.item.confidence)}>
-                          {getConsultationEvidenceConfidenceLabel(evidence.item.confidence)}
+                        <Badge
+                          variant={getEvidenceConfidenceBadgeVariant(
+                            evidence.item.confidence
+                          )}
+                        >
+                          {getConsultationEvidenceConfidenceLabel(
+                            evidence.item.confidence
+                          )}
                         </Badge>
-                        <Badge variant={evidence.item.requiresHumanReview ? "warning" : "success"}>
+                        <Badge
+                          variant={
+                            evidence.item.requiresHumanReview ? "outline" : "success"
+                          }
+                        >
                           {getConsultationEvidenceHumanReviewLabel(
                             evidence.item.requiresHumanReview
                           )}
@@ -156,7 +207,9 @@ export default function TraceStepCard({
                           <Badge variant="outline">{evidence.supportLabels[0]}</Badge>
                         ) : null}
                       </div>
-                      <p className="mt-3 text-sm leading-6 text-slate-700">{evidence.item.summary}</p>
+                      <p className="mt-3 text-sm leading-6 text-white/72">
+                        {evidence.item.summary}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -177,7 +230,11 @@ export default function TraceStepCard({
               memoryMeta={stage.memoryMeta as Record<string, unknown>}
               mode={mode}
               compact={mode !== "debug"}
-              title={stage.key === "long_term_profile" ? "长期画像记忆上下文" : "最近会诊 / 快照记忆上下文"}
+              title={
+                stage.key === "long_term_profile"
+                  ? "闀挎湡鐢诲儚璁板繂涓婁笅鏂?"
+                  : "鏈€杩戜細璇?/ 蹇収璁板繂涓婁笅鏂?"
+              }
             />
           ) : null}
 
@@ -185,7 +242,7 @@ export default function TraceStepCard({
           {stage.followUpCard ? <FollowUp48hCard data={stage.followUpCard} /> : null}
 
           {!hasStructuredContent ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-600">
+            <div className="rounded-[1.4rem] border border-dashed border-white/14 bg-white/5 p-4 text-sm leading-6 text-white/58">
               {stage.emptyState}
             </div>
           ) : null}

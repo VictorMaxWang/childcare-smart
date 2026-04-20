@@ -62,26 +62,26 @@ export default function WeeklyReportPreviewCard({
     sections: [
       { label: periodLabel, text: report?.summary ?? "" },
       {
-        label: careSection?.title ?? report?.primaryAction?.title ?? "今晚重点",
+        label: careSection?.title ?? report?.primaryAction?.title ?? "Care focus",
         text: careSection?.summary ?? report?.primaryAction?.detail ?? "",
       },
     ],
-    outro: "仅当前浏览器朗读，用于本机预览。",
+    outro: "This audio is available only in the current browser for preview purposes.",
   });
 
   return (
     <SectionCard
       title={title}
       description={description}
-      tone="warm"
-      surface={careMode ? "solid" : "glass"}
-      glow={careMode ? "warm" : "warm"}
-      className={cn("border-indigo-100/75", className)}
+      tone="brand"
+      surface={careMode ? "luminous" : "glass"}
+      glow={careMode ? "brand" : "soft"}
+      className={cn("border-white/14", className)}
       actions={
         report ? (
           <ParentSpeakButton
             text={speechText}
-            label="播报摘要"
+            label="Play audio"
             careMode={careMode}
             className={careMode ? "min-w-[220px]" : ""}
           />
@@ -90,20 +90,23 @@ export default function WeeklyReportPreviewCard({
     >
       <div className="space-y-4">
         <div className="flex flex-wrap gap-2">
-          <Badge variant="info">{roleMeta.label}</Badge>
+          <Badge variant="secondary">{roleMeta.label}</Badge>
           <Badge variant="outline">{periodLabel}</Badge>
           {!careMode && sourceMeta ? <Badge variant={sourceMeta.variant}>{sourceMeta.label}</Badge> : null}
           {!careMode && showRuntimeMeta && report?.memoryMeta?.degraded ? (
-            <Badge variant="warning">本地兜底</Badge>
+            <Badge variant="warning">Fallback memory</Badge>
           ) : null}
-          {loading && report ? <Badge variant="secondary">刷新中</Badge> : null}
+          {loading && report ? <Badge variant="secondary">Refreshing</Badge> : null}
         </div>
 
         {report?.continuityNotes?.[0] ? (
           <div className="content-reading-panel rounded-3xl px-4 py-3 shadow-[var(--shadow-card)]">
-            <div className="flex items-start gap-3 text-sm text-slate-600">
-              <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-              <p>延续提醒：{report.continuityNotes[0]}</p>
+            <div className="flex items-start gap-3 text-sm text-white/68">
+              <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-violet-200/72" />
+              <p>
+                <span className="font-medium text-white/84">Continuity note:</span>{" "}
+                {report.continuityNotes[0]}
+              </p>
             </div>
           </div>
         ) : null}
@@ -117,12 +120,12 @@ export default function WeeklyReportPreviewCard({
               </div>
             ) : null}
 
-            <div className="content-focus-block rounded-[1.75rem] border border-amber-100/80 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.54),transparent_34%),linear-gradient(135deg,rgba(251,191,36,0.14),rgba(255,255,255,0.92)_40%,rgba(251,207,232,0.22)_100%)] p-5 shadow-[var(--shadow-card)]">
+            <div className="content-focus-block rounded-[1.75rem] border border-white/14 p-5 shadow-[var(--shadow-card)]">
               <p
                 className={
                   careMode
-                    ? "text-lg font-semibold leading-9 text-slate-900"
-                    : "text-base font-semibold leading-8 text-slate-900 sm:text-[1.05rem]"
+                    ? "text-lg font-semibold leading-9 text-white"
+                    : "text-base font-semibold leading-8 text-white sm:text-[1.05rem]"
                 }
               >
                 {report.summary}
@@ -132,13 +135,13 @@ export default function WeeklyReportPreviewCard({
             {careMode ? (
               careSection ? (
                 <div className="content-reading-panel rounded-3xl p-4 shadow-[var(--shadow-card)]">
-                  <p className="text-base font-semibold text-slate-900">{careSection.title}</p>
-                  <p className="mt-3 text-base leading-8 text-slate-700">{careSection.summary}</p>
+                  <p className="text-base font-semibold text-white">{careSection.title}</p>
+                  <p className="mt-3 text-base leading-8 text-white/74">{careSection.summary}</p>
                   {careSection.items.length > 0 ? (
-                    <ul className="mt-4 space-y-3 text-base leading-7 text-slate-600">
+                    <ul className="mt-4 space-y-3 text-base leading-7 text-white/68">
                       {careSection.items.slice(0, 2).map((item) => (
                         <li key={`${careSection.id}-${item.label}`}>
-                          <span className="font-medium text-slate-800">{item.label}:</span>{" "}
+                          <span className="font-medium text-white/84">{item.label}:</span>{" "}
                           {item.detail}
                         </li>
                       ))}
@@ -156,13 +159,13 @@ export default function WeeklyReportPreviewCard({
                       report.sections.length === 3 && section.id === "topHomeAction" ? "md:col-span-2" : ""
                     )}
                   >
-                    <p className="text-sm font-semibold text-slate-900">{section.title}</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{section.summary}</p>
+                    <p className="text-sm font-semibold text-white">{section.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-white/68">{section.summary}</p>
                     {section.items.length > 0 ? (
-                      <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                      <ul className="mt-3 space-y-2 text-sm leading-6 text-white/66">
                         {section.items.slice(0, 2).map((item) => (
                           <li key={`${section.id}-${item.label}`}>
-                            <span className="font-medium text-slate-800">{item.label}:</span>{" "}
+                            <span className="font-medium text-white/84">{item.label}:</span>{" "}
                             {item.detail}
                           </li>
                         ))}
@@ -174,11 +177,11 @@ export default function WeeklyReportPreviewCard({
             )}
           </>
         ) : (
-          <div className="content-form-panel rounded-3xl border border-dashed border-slate-200 p-5">
+          <div className="content-form-panel rounded-3xl border border-dashed border-white/16 p-5">
             {loading ? (
-              <div className="flex items-center gap-3 text-sm text-slate-600">
-                <RefreshCw className="h-4 w-4 animate-spin text-indigo-500" />
-                正在生成本周周报预览
+              <div className="flex items-center gap-3 text-sm text-white/68">
+                <RefreshCw className="h-4 w-4 animate-spin text-violet-200" />
+                Building this week&apos;s report preview...
               </div>
             ) : error ? (
               <div className="flex items-start gap-3 text-sm text-amber-800">
@@ -186,25 +189,26 @@ export default function WeeklyReportPreviewCard({
                 <p>{error}</p>
               </div>
             ) : (
-              <p className="text-sm text-slate-500">本周周报预览暂时不可用。</p>
+              <p className="text-sm text-white/56">This week&apos;s report preview is not available yet.</p>
             )}
           </div>
         )}
 
-        <div className="content-form-panel rounded-[1.75rem] border border-white/75 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.42),transparent_38%),linear-gradient(180deg,rgba(255,252,247,0.94),rgba(255,246,239,0.84))] p-5 shadow-[var(--shadow-card)]">
+        <div className="content-form-panel rounded-[1.75rem] border border-white/14 p-5 shadow-[var(--shadow-card)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-2">
               <Badge variant="secondary">
-                {report?.primaryAction ? report.primaryAction.title : "继续今晚家庭建议"}
+                {report?.primaryAction ? report.primaryAction.title : "Continue tonight\u2019s home action"}
               </Badge>
-              <p className={careMode ? "text-base leading-8 text-slate-700" : "text-sm leading-6 text-slate-700"}>
+              <p className={careMode ? "text-base leading-8 text-white/72" : "text-sm leading-6 text-white/72"}>
                 {report?.primaryAction?.detail ??
-                  "请先完成当前家庭建议，再补充执行反馈，方便系统继续跟进。"}
+                  "Complete the current home action first, then add feedback so the system can keep following through."}
               </p>
               {!careMode && report?.primaryAction ? (
-                <p className="text-xs text-slate-500">
-                  建议负责人：{getWeeklyReportRoleMeta(report.primaryAction.ownerRole).label} · 建议时限：
-                  {report.primaryAction.dueWindow}
+                <p className="text-xs text-white/52">
+                  Owner: {getWeeklyReportRoleMeta(report.primaryAction.ownerRole).label}{" "}
+                  <span className="mx-1">·</span>
+                  Window: {report.primaryAction.dueWindow}
                 </p>
               ) : null}
             </div>
@@ -219,7 +223,7 @@ export default function WeeklyReportPreviewCard({
         </div>
 
         {!careMode && showRuntimeMeta && report?.disclaimer ? (
-          <div className="content-reading-panel rounded-2xl px-4 py-3 text-xs leading-6 text-slate-500">
+          <div className="content-reading-panel rounded-2xl px-4 py-3 text-xs leading-6 text-white/50">
             {report.disclaimer}
           </div>
         ) : null}

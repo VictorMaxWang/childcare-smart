@@ -201,18 +201,18 @@ export default function AdminHomePage() {
   }
 
   const adminHeroAside = (
-    <div className="space-y-3">
+    <div className="admin-workbench-shell space-y-3">
       <div className="hero-note-card">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={feedBadge.variant}>{feedBadge.label}</Badge>
           <Badge variant={dispatchAvailable ? "success" : "outline"}>{dispatchStatusMessage}</Badge>
         </div>
-        <p className="mt-4 text-base font-semibold text-slate-950">
-          先看机构级重点会诊与高风险决策，再下钻质量指标、班级问题和待派单执行。
+        <p className="mt-4 text-base font-semibold text-white">
+          首屏只保留今日最该判断的机构级优先事项，先定顺序，再定责任人和闭环窗口。
         </p>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          首屏只保留今天必须被园长读懂的优先级。重点会诊 {consultationPriorityItems.length} 条，待处理派单{" "}
-          {displayHome.pendingDispatches.length} 条，最新通知 {notificationEvents.length} 条。
+        <p className="mt-2 text-sm leading-6 text-white/64">
+          重点会诊 {consultationPriorityItems.length} 条，待承接派单 {displayHome.pendingDispatches.length} 条，
+          最新通知 {notificationEvents.length} 条。
         </p>
       </div>
       <MetricGrid
@@ -228,10 +228,10 @@ export default function AdminHomePage() {
 
   return (
     <RolePageShell
-      intensity="strong"
-      badge={`园长首页 · ${INSTITUTION_NAME} · ${TODAY_TEXT}`}
-      title="先看机构优先级，再决定今天最该推动的治理动作。"
-      description="首页首屏只承载今日重点会诊、核心 KPI 和机构级主行动；周报预览与质量指标进入第二层，风险儿童、班级问题与待派单执行放到第三层。"
+      intensity="light"
+      badge={`园长工作台 · ${INSTITUTION_NAME} · ${TODAY_TEXT}`}
+      title="先判断今日机构优先级，再决定谁负责推进与何时闭环。"
+      description="首页保持轻氛围和强可读性：首屏只放今日决策区、核心指标与机构级主行动，其余内容按治理深度顺序下沉。"
       actions={
         <>
           <InlineLinkButton href="/admin/agent" label="进入园长 AI 助手" variant="premium" />
@@ -240,17 +240,18 @@ export default function AdminHomePage() {
       }
       heroAside={adminHeroAside}
     >
-      <RoleSplitLayout
-        main={
-          <div className="space-y-6">
+      <div className="admin-workbench-shell">
+        <RoleSplitLayout
+          main={
+            <div className="space-y-6">
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.16fr)_minmax(0,0.84fr)]">
               <SectionCard
                 title="今日重点会诊 / 高风险决策"
-                description="把教师端升级到机构级的重点会诊直接抬成首页主叙事区，优先服务今天的决策和派单。"
+                description="教师端升级到机构级的重点会诊直接进入首页主决策区，优先服务今天的判断、承接和派单。"
                 actions={<Badge variant={dispatchAvailable ? "success" : "outline"}>{dispatchStatusMessage}</Badge>}
                 surface="luminous"
                 glow="brand"
-                className="border-slate-200/70"
+                className="border-white/10"
               >
                 <RiskPriorityBoard
                   items={consultationPriorityItems}
@@ -276,11 +277,11 @@ export default function AdminHomePage() {
               </SectionCard>
 
               <SectionCard
-                title="今日机构优先级 TOP 3"
-                description="优先显示今天最该推进的三件事，让首屏从汇总型看板升级成真正的治理入口。"
-                surface="solid"
+                title="今日机构优先级"
+                description="只保留今天最该推进的三件事，减少首页噪音，让园长先完成排序再进入细项。"
+                surface="glass"
                 glow="soft"
-                actions={<Badge variant="warning">机构级排序</Badge>}
+                actions={<Badge variant="outline">前三项</Badge>}
               >
                 <div className="space-y-3">
                   {displayHome.priorityTopItems.map((item) => (
@@ -324,8 +325,8 @@ export default function AdminHomePage() {
             <div className="grid gap-6 xl:grid-cols-2">
               <SectionCard
                 title="高风险儿童"
-                description="以儿童为单位看当前最需要园长过目的对象。"
-                surface="solid"
+                description="按儿童维度查看当前最需要行政越级关注的对象。"
+                surface="glass"
                 glow="soft"
               >
                 <div className="space-y-3">
@@ -346,9 +347,9 @@ export default function AdminHomePage() {
               </SectionCard>
 
               <SectionCard
-                title="问题最集中的班级"
-                description="按班级维度看治理压力和整改单点，作为第三层的下钻入口。"
-                surface="solid"
+                title="高压力班级"
+                description="按班级维度看治理承压点和整改单点，作为第三层下钻入口。"
+                surface="glass"
                 glow="soft"
               >
                 <div className="space-y-3">
@@ -372,9 +373,9 @@ export default function AdminHomePage() {
 
             <SectionCard
               title="待派单与执行顺序"
-              description="把整改建议与执行状态收口到第三层，保证首页仍然是决策页而不是长列表。"
+              description="把整改建议与执行状态收口到第三层，保证首页仍然是治理决策页，而不是长列表。"
               actions={<Badge variant={dispatchAvailable ? "success" : "outline"}>{dispatchStatusMessage}</Badge>}
-              surface="solid"
+              surface="glass"
               glow="soft"
             >
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -404,29 +405,29 @@ export default function AdminHomePage() {
                 </div>
               </div>
             </SectionCard>
-          </div>
-        }
-        aside={
-          <div className="space-y-6 xl:sticky xl:top-5">
+            </div>
+          }
+          aside={
+            <div className="space-y-6 xl:sticky xl:top-5">
             <UnifiedIntentEntryCard
               roleHint="admin"
               sourcePage="/admin"
-              title="一句话直达园长 AI 助手"
+              title="一句话进入园长 AI 助手"
               placeholder="例如：今天机构最该优先处理什么，或生成本周园长周报"
               examples={["今天机构最该优先处理什么", "生成本周园长周报", "开始一次重点会诊"]}
               institutionId={currentUser.institutionId}
               compact
               initiallyCollapsed
-              collapsedSummary="需要时再展开：优先级判断、周报生成与派单动作都在这里进入。"
+              collapsedSummary="需要时再展开：优先级判断、周报生成与派单动作都从这里进入。"
             />
 
             <AssistantEntryCard
               title="进入园长 AI 助手"
-              description="把机构上下文、优先级排序、快速追问和派单动作合并到一个持续工作的入口。"
+              description="把机构上下文、优先级排序、快速追问和派单动作合并到一个持续工作入口。"
               href="/admin/agent"
               buttonLabel="进入机构运营 AI 助手"
             >
-              <ul className="space-y-3 text-sm leading-6 text-slate-600">
+              <ul className="space-y-3 text-sm leading-6 text-white/62">
                 <li>{displayHome.actionEntrySummary}</li>
                 <li>当前服务对象：{INSTITUTION_NAME}</li>
                 <li>推荐路径：先看重点会诊，再看质量指标，最后进入 AI 助手生成动作。</li>
@@ -435,22 +436,22 @@ export default function AdminHomePage() {
 
             <SectionCard
               title="园长今日顺序"
-              description="更像成熟工作台的阅读路径，不做炫技式信息堆叠。"
+              description="保持成熟工作台的阅读路径：先判断，再复核，再进入动作。"
               surface="glass"
               glow="soft"
             >
               <div className="space-y-3">
                 <AdminDataItem
                   tone="amber"
-                  title="先看重点会诊与 TOP 3"
+                  title="先看重点会诊与前三项"
                   description="先确认今天必须推进的治理事项，再决定是否立刻派单。"
-                  badge={<ShieldAlert className="h-4 w-4 text-amber-500" />}
+                  badge={<ShieldAlert className="h-4 w-4 text-indigo-500" />}
                 />
                 <AdminDataItem
                   tone="emerald"
                   title="再看周报预览与质量指标"
                   description="用第二层视角确认本周趋势、闭环薄弱点与治理信号。"
-                  badge={<ClipboardCheck className="h-4 w-4 text-emerald-500" />}
+                  badge={<ClipboardCheck className="h-4 w-4 text-indigo-500" />}
                 />
                 <AdminDataItem
                   tone="indigo"
@@ -460,9 +461,10 @@ export default function AdminHomePage() {
                 />
               </div>
             </SectionCard>
-          </div>
-        }
-      />
+            </div>
+          }
+        />
+      </div>
     </RolePageShell>
   );
 }

@@ -156,8 +156,8 @@ function getPageMode(action: string | null): PageMode {
 
 function RequestErrorBanner({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-3 rounded-[1.25rem] border border-rose-200/80 bg-rose-50/90 px-4 py-3 text-sm text-rose-700">
-      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+    <div className="flex items-start gap-3 rounded-[1.25rem] border border-white/10 bg-[linear-gradient(180deg,rgba(18,16,40,0.94),rgba(12,11,30,0.88))] px-4 py-3 text-sm text-white/78 shadow-[var(--shadow-card)]">
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" />
       <p>{message}</p>
     </div>
   );
@@ -219,7 +219,7 @@ function ActionItemCard({
         </div>
       }
     >
-      <p className="text-sm leading-6 text-slate-700">{item.action}</p>
+      <p className="text-sm leading-6 text-white/68">{item.action}</p>
     </AdminDataItem>
   );
 }
@@ -291,9 +291,9 @@ export default function AdminAgentPage() {
     : {
         workflow: "daily-priority" as const,
         label: "今日机构优先事项",
-        title: "从识别问题，到生成动作，再到派单闭环",
+        title: "先判断今日优先级，再把动作沉淀成可追踪闭环",
         description:
-          "园长 AI 助手会基于全园近 7 天数据判断优先级、给出责任人与时限，并把动作沉淀成可持续追踪的通知事件。",
+          "园长 AI 助手基于全园近 7 天数据判断优先级，给出责任人与时限，并把动作沉淀成可持续追踪的通知事件。",
       };
   const {
     currentUser,
@@ -652,23 +652,27 @@ export default function AdminAgentPage() {
     <div className="space-y-3">
       <button
         type="button"
-        className="flex w-full items-center gap-3 rounded-[1.25rem] border border-slate-200/80 bg-white/88 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+        className="admin-entry-link text-left text-sm"
         onClick={() => router.push("/admin")}
       >
-        <ClipboardList className="h-4 w-4 text-slate-500" />
+        <span className="admin-entry-link__icon">
+          <ClipboardList className="h-4 w-4" />
+        </span>
         返回园长首页
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-3 rounded-[1.25rem] border border-slate-200/80 bg-white/88 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+        className="admin-entry-link text-left text-sm"
         onClick={() => switchMode(isWeeklyMode ? "daily" : "weekly")}
       >
-        <FileText className="h-4 w-4 text-indigo-500" />
+        <span className="admin-entry-link__icon">
+          <FileText className="h-4 w-4" />
+        </span>
         {isWeeklyMode ? "切回日常优先级模式" : "打开本周运营周报"}
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-3 rounded-[1.25rem] border border-slate-200/80 bg-white/88 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+        className="admin-entry-link text-left text-sm"
         onClick={() =>
           void runWorkflow("question-follow-up", {
             question: "今天最该优先处理的 3 件事是什么？",
@@ -677,8 +681,10 @@ export default function AdminAgentPage() {
         }
         disabled={loading}
       >
-        <Sparkles className="h-4 w-4 text-amber-500" />
-        查看机构优先级 TOP 3
+        <span className="admin-entry-link__icon">
+          <Sparkles className="h-4 w-4" />
+        </span>
+        查看机构优先级前三项
       </button>
     </div>
   );
@@ -695,7 +701,7 @@ export default function AdminAgentPage() {
           </>
         }
         title="先确认今日最重要的问题，再决定谁来推进、何时闭环。"
-        description="页面级只保留轻氛围，主要层次通过主结果、优先级分组、追问解释和动作 dock 来建立。"
+        description="页面级只保留轻氛围，主要层次通过主结果、优先级分组、追问解释和动作区来建立。"
         actions={
           <>
             <Button type="button" variant="outline" onClick={rerunCurrentMode} disabled={loading}>
@@ -729,11 +735,11 @@ export default function AdminAgentPage() {
 
       <SectionCard
         title="核心结果 / 优先级区"
-        description="把今日核心判断、机构优先级 TOP 3 和治理重点收进同一工作区，不再让零散白卡分散决策注意力。"
+        description="把今日核心判断、机构优先级前三项和治理重点收进同一工作区，不再让零散卡片分散决策注意力。"
         actions={<Badge variant="info">主结果脊柱</Badge>}
         surface="luminous"
         glow="soft"
-        className="border-slate-200/70"
+        className="border-white/10"
       >
         {loading && !displayResult ? (
           <LoadingState label="正在生成今日机构优先事项…" />
@@ -745,12 +751,12 @@ export default function AdminAgentPage() {
               description="先读结论，再进入优先级和动作建议。"
               actions={<Badge variant="info">{displayResult.title}</Badge>}
             >
-              <p className="text-sm leading-7 text-slate-800">{displayResult.assistantAnswer}</p>
+              <p className="text-sm leading-7 text-white/72">{displayResult.assistantAnswer}</p>
             </AdminSubsection>
 
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.04fr)_minmax(320px,0.96fr)]">
               <AdminSubsection
-                title="机构优先级 TOP 3"
+                title="机构优先级前三项"
                 description="维持园长的第一决策视角。"
                 tone="amber"
               >
@@ -835,11 +841,11 @@ export default function AdminAgentPage() {
 
       <SectionCard
         title="今日重点会诊 / 高风险优先事项"
-        description="RiskPriorityBoard 保持第一决策视角不变，只统一板头、空态和配对式双面板材质。"
+        description="重点会诊区保持第一决策视角不变，只统一板头、空态和配对式双面板材质。"
         actions={<Badge variant={dispatchAvailable ? "success" : "outline"}>{safeDispatchStatusMessage}</Badge>}
         surface="luminous"
         glow="soft"
-        className="border-slate-200/70"
+        className="border-white/10"
       >
         <RiskPriorityBoard
           items={consultationPriorityItems}
@@ -871,7 +877,7 @@ export default function AdminAgentPage() {
       <AgentWorkspaceCard
         title="追问与动作区"
         description="继续追问当前结果，但不再给高密度卡片逐个加重动效。"
-        badgeLabel="Admin Follow-up"
+        badgeLabel="日常追问"
         promptButtons={promptButtons}
       >
         {loading && !displayResult ? (
@@ -883,7 +889,7 @@ export default function AdminAgentPage() {
               title="当前解释"
               description="保留一块连续阅读区，减少多张同级白卡打断。"
             >
-              <p className="text-sm leading-7 text-slate-800">{displayResult.assistantAnswer}</p>
+              <p className="text-sm leading-7 text-white/72">{displayResult.assistantAnswer}</p>
             </AdminSubsection>
 
             <AdminActionDock
@@ -892,7 +898,7 @@ export default function AdminAgentPage() {
               description="把当前结果和下一步路径收在同一层级。"
               actions={<Badge variant="outline">{displayResult.actionItems.length} 条动作建议</Badge>}
             >
-              <div className="flex flex-wrap gap-3 text-xs leading-5 text-slate-500">
+              <div className="flex flex-wrap gap-3 text-xs leading-5 text-white/46">
                 <span>优先事项 {displayResult.priorityTopItems.length} 条</span>
                 <span>会诊升级 {consultationPriorityItems.length} 条</span>
                 <span>通知事件 {notificationEvents.length} 条</span>
@@ -918,7 +924,7 @@ export default function AdminAgentPage() {
               description="每条动作保留责任人、时限和派单入口；派单不可用时退化为只读摘要。"
               actions={<Badge variant="warning">{displayResult.actionItems.length} 条待处理</Badge>}
             >
-              <div className="flex flex-wrap gap-3 text-xs leading-5 text-slate-500">
+              <div className="flex flex-wrap gap-3 text-xs leading-5 text-white/46">
                 <span>日常闭环优先级</span>
                 <span>派单状态同步到通知侧栏</span>
               </div>
@@ -1002,7 +1008,7 @@ export default function AdminAgentPage() {
             <Badge variant={dispatchAvailable ? "success" : "outline"}>{safeDispatchStatusMessage}</Badge>
           </>
         }
-        title="主报告面板承接本周结论，次级解释面板负责追问，行动 dock 负责落地。"
+        title="主报告面板承接本周结论，次级解释面板负责追问，行动区负责落地。"
         description="周报模式下不再混入日常优先级的整页噪音，只保留最关键的总结、解释和动作承接。"
         actions={
           <>
@@ -1041,7 +1047,7 @@ export default function AdminAgentPage() {
         actions={<Badge variant="info">主报告面板</Badge>}
         surface="luminous"
         glow="soft"
-        className="border-slate-200/70"
+        className="border-white/10"
       >
         {loading && !displayResult ? (
           <LoadingState label="正在生成本周运营周报…" />
@@ -1053,7 +1059,7 @@ export default function AdminAgentPage() {
               description="先收口本周总结，再展开重点结论和风险承接。"
               actions={<Badge variant="outline">{getResultSourceLabel(displayResult.source)}</Badge>}
             >
-              <p className="text-sm leading-7 text-slate-800">{displayResult.summary}</p>
+              <p className="text-sm leading-7 text-white/72">{displayResult.summary}</p>
             </AdminSubsection>
 
             <div className="grid gap-4 lg:grid-cols-2">
@@ -1123,7 +1129,7 @@ export default function AdminAgentPage() {
       <AgentWorkspaceCard
         title="追问 / 模式切换"
         description="周报工作区只保留围绕本周总结的追问，以及回到日常优先级的稳定入口。"
-        badgeLabel="Weekly Follow-up"
+        badgeLabel="周报追问"
         promptButtons={promptButtons}
       >
         {loading && !displayResult ? (
@@ -1131,7 +1137,7 @@ export default function AdminAgentPage() {
         ) : displayResult ? (
           <div className="space-y-4">
             <AdminSubsection tone="sky" title="次级解释面板" description="追问结果保持单一阅读区，不再拆成多列白卡。">
-              <p className="text-sm leading-7 text-slate-800">{displayResult.assistantAnswer}</p>
+              <p className="text-sm leading-7 text-white/72">{displayResult.assistantAnswer}</p>
             </AdminSubsection>
 
             <AdminActionDock
@@ -1140,7 +1146,7 @@ export default function AdminAgentPage() {
               description="追问前后始终能看到同一份周报摘要。"
               actions={<Badge variant="outline">{displayResult.highlights.length} 条重点</Badge>}
             >
-              <p className="text-sm leading-6 text-slate-700">{displayResult.summary}</p>
+              <p className="text-sm leading-6 text-white/68">{displayResult.summary}</p>
             </AdminActionDock>
           </div>
         ) : (
@@ -1162,7 +1168,7 @@ export default function AdminAgentPage() {
               description="主报告之后立刻进入行动承接，避免周报结论停留在展示层。"
               actions={<Badge variant="warning">{displayResult.actionItems.length} 条下周动作</Badge>}
             >
-              <div className="flex flex-wrap gap-3 text-xs leading-5 text-slate-500">
+              <div className="flex flex-wrap gap-3 text-xs leading-5 text-white/46">
                 <span>当前通知事件 {notificationEvents.length} 条</span>
                 <span>{dispatchAvailable ? "支持继续派单" : "当前仅保留只读态"}</span>
               </div>
@@ -1261,7 +1267,7 @@ export default function AdminAgentPage() {
   return (
     <RolePageShell
       intensity="light"
-      badge={`园长 AI 助手 · ${INSTITUTION_NAME}`}
+      badge={`园长治理工作区 · ${INSTITUTION_NAME}`}
       title={modeConfig.title}
       description={modeConfig.description}
       actions={
@@ -1279,11 +1285,13 @@ export default function AdminAgentPage() {
         </>
       }
     >
-      <RoleSplitLayout
-        stacked={isWeeklyMode}
-        main={isWeeklyMode ? weeklyMain : dailyMain}
-        aside={isWeeklyMode ? weeklyAside : dailyAside}
-      />
+      <div className="admin-workbench-shell">
+        <RoleSplitLayout
+          stacked={isWeeklyMode}
+          main={isWeeklyMode ? weeklyMain : dailyMain}
+          aside={isWeeklyMode ? weeklyAside : dailyAside}
+        />
+      </div>
     </RolePageShell>
   );
 }

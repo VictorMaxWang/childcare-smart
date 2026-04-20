@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import AmbientBackground from "@/components/visuals/AmbientBackground";
-import GlassSurface from "@/components/visuals/GlassSurface";
+import PremiumGlassPanel from "@/components/visuals/PremiumGlassPanel";
 import MagneticCTA from "@/components/visuals/MagneticCTA";
 import MotionHero from "@/components/visuals/MotionHero";
 import RevealSection from "@/components/visuals/RevealSection";
@@ -40,7 +40,7 @@ export function RolePageShell({
   const leadContent = (
     <div className="immersive-hero__lead">
       <div className="hero-sequence hero-sequence-0">
-        <Badge variant="info" className="immersive-hero__badge">
+        <Badge variant="outline" className="immersive-hero__badge">
           {badge}
         </Badge>
       </div>
@@ -57,30 +57,43 @@ export function RolePageShell({
   );
 
   return (
-    <AmbientBackground intensity={intensity} tone={tone} interactive={interactive} className="pb-6 pt-4 sm:pb-8 sm:pt-6">
+    <AmbientBackground
+      intensity={intensity}
+      tone={tone}
+      interactive={interactive}
+      className="pb-6 pt-4 sm:pb-8 sm:pt-6"
+      backdropMode={intensity === "strong" ? "hero" : intensity === "medium" ? "stage" : "workspace"}
+    >
       <div className="role-page-shell page-enter" data-role-tone={tone}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <GlassSurface
+          <PremiumGlassPanel
             tone={tone}
-            surface={surface}
-            className={cn(
-              "immersive-hero rounded-[2rem] border border-white/72 p-5 shadow-[var(--shadow-hero)] sm:p-7",
-              tone === "warm" ? "role-page-shell__hero-warm" : null
-            )}
+            surface="glass"
+            className="immersive-hero rounded-[2.2rem] border border-white/10 p-5 shadow-[var(--shadow-hero)] sm:p-7"
           >
             <div className="immersive-hero__veil" />
             {heroAside ? (
               <MotionHero
                 className="immersive-hero__grid"
                 lead={leadContent}
-                support={<div className="immersive-hero__aside">{heroAside}</div>}
+                support={
+                  <div className="immersive-hero__aside">
+                    <PremiumGlassPanel
+                      tone={tone}
+                      surface={surface}
+                      className="immersive-hero__aside-panel rounded-[1.9rem] border border-white/14 p-4 sm:p-5"
+                    >
+                      {heroAside}
+                    </PremiumGlassPanel>
+                  </div>
+                }
               />
             ) : (
               <RevealSection>
                 <div className="immersive-hero__grid immersive-hero__grid-single">{leadContent}</div>
               </RevealSection>
             )}
-          </GlassSurface>
+          </PremiumGlassPanel>
           <RevealSection delay={180} className="role-page-shell__body mt-6 sm:mt-7">
             {children}
           </RevealSection>
@@ -116,7 +129,19 @@ export function MetricGrid({
   items,
   className,
 }: {
-  items: Array<{ label: string; value: string; tone?: "indigo" | "emerald" | "amber" | "sky" }>;
+  items: Array<{
+    label: string;
+    value: string;
+    tone?:
+      | "indigo"
+      | "emerald"
+      | "amber"
+      | "sky"
+      | "violet"
+      | "cobalt"
+      | "aurora"
+      | "lavender";
+  }>;
   className?: string;
 }) {
   return (
@@ -127,13 +152,13 @@ export function MetricGrid({
           surface="luminous"
           glow={item.tone === "indigo" ? "brand" : "soft"}
           className={cn(
-            "kpi-accent overflow-hidden border border-white/72 border-l-4 bg-white/86",
+            "kpi-accent overflow-hidden border border-white/12 border-l-4 bg-white/6",
             toneClassMap[item.tone ?? "indigo"]
           )}
         >
           <CardContent className="py-4 sm:py-5">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500/90">{item.label}</p>
-            <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 sm:text-[1.9rem]">{item.value}</p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/46">{item.label}</p>
+            <p className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-[1.9rem]">{item.value}</p>
           </CardContent>
         </Card>
       ))}
@@ -158,14 +183,14 @@ export function SectionCard({
   className?: string;
   tone?: AmbientTone;
   surface?: SurfaceVariant;
-  glow?: "none" | "soft" | "brand" | "warm";
+  glow?: "none" | "soft" | "brand";
 }) {
   return (
-    <Card tone={tone} surface={surface} glow={glow} className={cn("border-white/72", className)}>
+    <Card tone={tone} surface={surface} glow={glow} className={cn("border-white/14", className)}>
       <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <CardTitle className="text-lg text-slate-950 sm:text-[1.15rem]">{title}</CardTitle>
-          {description ? <CardDescription className="mt-2 max-w-3xl leading-6">{description}</CardDescription> : null}
+          <CardTitle className="text-lg text-white sm:text-[1.15rem]">{title}</CardTitle>
+          {description ? <CardDescription className="mt-2 max-w-3xl leading-6 text-white/62">{description}</CardDescription> : null}
         </div>
         {actions}
       </CardHeader>
@@ -193,7 +218,7 @@ export function AssistantEntryCard({
       description={description}
       surface="luminous"
       glow="brand"
-      className="border-indigo-100/80"
+      className="border-white/14"
       actions={
         <MagneticCTA>
           <Button asChild variant="premium" className="min-h-11 rounded-xl px-4">
@@ -265,7 +290,11 @@ export function AgentWorkspaceCard({
 
 const toneClassMap = {
   indigo: "border-l-indigo-300",
-  emerald: "border-l-emerald-300",
-  amber: "border-l-amber-300",
-  sky: "border-l-sky-300",
+  emerald: "border-l-violet-300",
+  amber: "border-l-violet-300",
+  sky: "border-l-indigo-200",
+  violet: "border-l-violet-300",
+  cobalt: "border-l-indigo-300",
+  aurora: "border-l-indigo-200",
+  lavender: "border-l-violet-200",
 };

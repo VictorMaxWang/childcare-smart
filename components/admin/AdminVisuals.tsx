@@ -1,49 +1,59 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import GlassSurface from "@/components/visuals/GlassSurface";
 import { cn } from "@/lib/utils";
 
 export type AdminTone = "slate" | "indigo" | "sky" | "amber" | "emerald" | "rose";
 
-const bandToneClassMap: Record<AdminTone, string> = {
-  slate:
-    "border-slate-200/80 bg-linear-to-r from-white via-slate-50/80 to-white",
-  indigo:
-    "border-indigo-100/80 bg-linear-to-r from-indigo-50/90 via-white to-sky-50/70",
-  sky: "border-sky-100/80 bg-linear-to-r from-sky-50/90 via-white to-indigo-50/60",
-  amber:
-    "border-amber-100/80 bg-linear-to-r from-amber-50/90 via-white to-rose-50/60",
-  emerald:
-    "border-emerald-100/80 bg-linear-to-r from-emerald-50/90 via-white to-teal-50/60",
-  rose: "border-rose-100/80 bg-linear-to-r from-rose-50/90 via-white to-amber-50/55",
+type AdminToneStyle = CSSProperties & {
+  "--admin-accent-rgb": string;
+  "--admin-secondary-rgb": string;
+  "--admin-border": string;
+  "--admin-border-strong": string;
 };
 
-const subsectionToneClassMap: Record<AdminTone, string> = {
-  slate: "border-slate-200/80 bg-white/90",
-  indigo: "border-indigo-100/85 bg-indigo-50/40",
-  sky: "border-sky-100/85 bg-sky-50/45",
-  amber: "border-amber-100/85 bg-amber-50/55",
-  emerald: "border-emerald-100/85 bg-emerald-50/45",
-  rose: "border-rose-100/85 bg-rose-50/50",
+const toneStyleMap: Record<AdminTone, AdminToneStyle> = {
+  slate: {
+    "--admin-accent-rgb": "132,122,255",
+    "--admin-secondary-rgb": "96,108,255",
+    "--admin-border": "rgba(162, 170, 255, 0.16)",
+    "--admin-border-strong": "rgba(182, 190, 255, 0.24)",
+  },
+  indigo: {
+    "--admin-accent-rgb": "148,126,255",
+    "--admin-secondary-rgb": "108,112,255",
+    "--admin-border": "rgba(176, 156, 255, 0.18)",
+    "--admin-border-strong": "rgba(194, 182, 255, 0.28)",
+  },
+  sky: {
+    "--admin-accent-rgb": "114,128,255",
+    "--admin-secondary-rgb": "162,138,255",
+    "--admin-border": "rgba(158, 170, 255, 0.18)",
+    "--admin-border-strong": "rgba(184, 196, 255, 0.26)",
+  },
+  amber: {
+    "--admin-accent-rgb": "170,132,255",
+    "--admin-secondary-rgb": "120,108,255",
+    "--admin-border": "rgba(188, 162, 255, 0.2)",
+    "--admin-border-strong": "rgba(208, 184, 255, 0.28)",
+  },
+  emerald: {
+    "--admin-accent-rgb": "126,140,255",
+    "--admin-secondary-rgb": "172,142,255",
+    "--admin-border": "rgba(164, 176, 255, 0.18)",
+    "--admin-border-strong": "rgba(194, 202, 255, 0.26)",
+  },
+  rose: {
+    "--admin-accent-rgb": "180,132,255",
+    "--admin-secondary-rgb": "132,116,255",
+    "--admin-border": "rgba(192, 164, 255, 0.18)",
+    "--admin-border-strong": "rgba(214, 190, 255, 0.28)",
+  },
 };
 
-const itemToneClassMap: Record<AdminTone, string> = {
-  slate: "border-slate-200/80 bg-white/86",
-  indigo: "border-indigo-100/75 bg-indigo-50/45",
-  sky: "border-sky-100/75 bg-sky-50/50",
-  amber: "border-amber-100/75 bg-amber-50/60",
-  emerald: "border-emerald-100/75 bg-emerald-50/50",
-  rose: "border-rose-100/75 bg-rose-50/55",
-};
-
-const accentToneClassMap: Record<AdminTone, string> = {
-  slate: "bg-slate-400/75",
-  indigo: "bg-indigo-400/80",
-  sky: "bg-sky-400/80",
-  amber: "bg-amber-400/85",
-  emerald: "bg-emerald-400/80",
-  rose: "bg-rose-400/80",
-};
+function getToneStyle(tone: AdminTone) {
+  return toneStyleMap[tone];
+}
 
 export function AdminBand({
   eyebrow,
@@ -65,26 +75,22 @@ export function AdminBand({
   return (
     <GlassSurface
       surface="luminous"
-      className={cn(
-        "relative overflow-hidden rounded-[1.9rem] border p-5 shadow-[var(--shadow-card)]",
-        bandToneClassMap[tone],
-        className
-      )}
+      className={cn("admin-governance-band", className)}
+      style={getToneStyle(tone)}
     >
-      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-linear-to-r from-white/0 via-white/90 to-white/0" />
-      <div className="relative z-10 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+      <div className="admin-governance-band__header">
         <div className="min-w-0 space-y-3">
           {eyebrow ? <div className="flex flex-wrap items-center gap-2">{eyebrow}</div> : null}
           {title ? (
-            <p className="text-lg font-semibold tracking-tight text-slate-950">{title}</p>
+            <p className="text-lg font-semibold tracking-tight text-white sm:text-[1.18rem]">{title}</p>
           ) : null}
           {description ? (
-            <p className="max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
+            <p className="max-w-3xl text-sm leading-6 text-white/66">{description}</p>
           ) : null}
-          {children}
         </div>
         {actions ? <div className="flex flex-wrap gap-2 xl:max-w-sm xl:justify-end">{actions}</div> : null}
       </div>
+      {children ? <div className="admin-governance-band__content">{children}</div> : null}
     </GlassSurface>
   );
 }
@@ -106,17 +112,14 @@ export function AdminSubsection({
 }) {
   return (
     <div
-      className={cn(
-        "rounded-[1.5rem] border p-5",
-        subsectionToneClassMap[tone],
-        className
-      )}
+      className={cn("admin-governance-subsection", className)}
+      style={getToneStyle(tone)}
     >
       {title || description || actions ? (
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            {title ? <p className="text-sm font-semibold text-slate-950">{title}</p> : null}
-            {description ? <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p> : null}
+            {title ? <p className="text-sm font-semibold text-white/92">{title}</p> : null}
+            {description ? <p className="mt-1 text-sm leading-6 text-white/62">{description}</p> : null}
           </div>
           {actions}
         </div>
@@ -147,25 +150,25 @@ export function AdminDataItem({
 }) {
   return (
     <div
-      className={cn(
-        "rounded-[1.25rem] border px-4 py-4",
-        itemToneClassMap[tone],
-        className
-      )}
+      className={cn("admin-governance-item", className)}
+      style={getToneStyle(tone)}
     >
-      {title || badge ? (
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            {title ? <p className="text-sm font-semibold text-slate-950">{title}</p> : null}
-            {description ? <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p> : null}
+      <span aria-hidden="true" className="admin-governance-item__accent" />
+      <div className="admin-governance-item__body">
+        {title || badge ? (
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              {title ? <p className="text-sm font-semibold text-white/92">{title}</p> : null}
+              {description ? <div className="mt-2 text-sm leading-6 text-white/66">{description}</div> : null}
+            </div>
+            {badge ? <div className="shrink-0">{badge}</div> : null}
           </div>
-          {badge ? <div className="shrink-0">{badge}</div> : null}
-        </div>
-      ) : null}
-      {!title && description ? <p className="text-sm leading-6 text-slate-600">{description}</p> : null}
-      {meta ? <div className="mt-3 text-xs leading-5 text-slate-500">{meta}</div> : null}
-      {children ? <div className={cn(title || description || meta ? "mt-3" : null)}>{children}</div> : null}
-      {footer ? <div className="mt-3 border-t border-white/65 pt-3">{footer}</div> : null}
+        ) : null}
+        {!title && description ? <div className="text-sm leading-6 text-white/66">{description}</div> : null}
+        {meta ? <div className="mt-3 text-xs leading-5 text-white/48">{meta}</div> : null}
+        {children ? <div className={cn(title || description || meta ? "mt-3" : null)}>{children}</div> : null}
+        {footer ? <div className="mt-3 border-t border-white/8 pt-3">{footer}</div> : null}
+      </div>
     </div>
   );
 }
@@ -192,24 +195,25 @@ export function AdminMetricTile({
   return (
     <Card
       surface="glass"
-      glow={tone === "indigo" ? "brand" : "soft"}
+      glow={tone === "indigo" || tone === "amber" ? "brand" : "soft"}
       interactive={false}
-      className={cn("rounded-[1.5rem] border-white/75", className)}
+      className={cn("admin-governance-metric", className)}
+      style={getToneStyle(tone)}
     >
       <CardContent className="space-y-4 p-5">
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <span className={cn("h-2.5 w-2.5 rounded-full", accentToneClassMap[tone])} />
-            <p className="text-sm font-semibold text-slate-900">{label}</p>
+            <span className="admin-governance-metric__dot" />
+            <p className="text-sm font-semibold text-white/84">{label}</p>
           </div>
           <div className="flex items-end gap-2">
-            <p className="text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
-            {unit ? <p className="pb-1 text-sm font-medium text-slate-500">{unit}</p> : null}
+            <p className="text-3xl font-semibold tracking-tight text-white">{value}</p>
+            {unit ? <p className="pb-1 text-sm font-medium text-white/52">{unit}</p> : null}
           </div>
         </div>
-        {summary ? <p className="text-sm leading-6 text-slate-600">{summary}</p> : null}
+        {summary ? <div className="text-sm leading-6 text-white/62">{summary}</div> : null}
         {badges ? <div className="flex flex-wrap gap-2">{badges}</div> : null}
-        {meta ? <div className="space-y-1 text-xs leading-5 text-slate-500">{meta}</div> : null}
+        {meta ? <div className="space-y-1 text-xs leading-5 text-white/46">{meta}</div> : null}
       </CardContent>
     </Card>
   );
@@ -233,16 +237,13 @@ export function AdminActionDock({
   return (
     <GlassSurface
       surface="glass"
-      className={cn(
-        "rounded-[1.5rem] border p-4 shadow-[var(--shadow-card)]",
-        bandToneClassMap[tone],
-        className
-      )}
+      className={cn("admin-governance-dock", className)}
+      style={getToneStyle(tone)}
     >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          {title ? <p className="text-sm font-semibold text-slate-950">{title}</p> : null}
-          {description ? <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p> : null}
+          {title ? <p className="text-sm font-semibold text-white/92">{title}</p> : null}
+          {description ? <p className="mt-1 text-sm leading-6 text-white/62">{description}</p> : null}
           {children ? <div className="mt-3">{children}</div> : null}
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
@@ -261,11 +262,8 @@ export function AdminEmptyState({
 }) {
   return (
     <div
-      className={cn(
-        "rounded-[1.5rem] border border-dashed p-5 text-sm leading-6 text-slate-600",
-        subsectionToneClassMap[tone],
-        className
-      )}
+      className={cn("admin-governance-empty", className)}
+      style={getToneStyle(tone)}
       {...props}
     >
       {children}

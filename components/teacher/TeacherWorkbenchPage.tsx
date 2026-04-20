@@ -45,9 +45,9 @@ function WorkbenchSignalCard({
   className?: string;
 }) {
   const toneMap = {
-    neutral: "border-white/70 bg-white/82",
-    alert: "border-rose-100/80 bg-linear-to-br from-rose-50/85 via-white to-amber-50/55",
-    focus: "border-indigo-100/80 bg-linear-to-br from-indigo-50/85 via-white to-sky-50/60",
+    neutral: "border-white/14 bg-[linear-gradient(180deg,rgba(13,17,39,0.9),rgba(9,12,27,0.82))]",
+    alert: "border-violet-300/18 bg-[linear-gradient(180deg,rgba(26,18,56,0.94),rgba(14,11,35,0.86))]",
+    focus: "border-indigo-300/18 bg-[linear-gradient(180deg,rgba(18,20,52,0.94),rgba(10,11,30,0.84))]",
   } as const;
 
   return (
@@ -81,17 +81,19 @@ function QuickEntryTile({
         surface={primary ? "luminous" : "glass"}
         glow={primary ? "brand" : "soft"}
         className={cn(
-          "h-full border-white/70",
-          primary ? "bg-linear-to-br from-rose-50/90 via-white to-amber-50/70" : "bg-white/82"
+          "h-full border-white/14",
+          primary
+            ? "bg-[linear-gradient(160deg,rgba(25,18,54,0.94),rgba(13,12,34,0.9),rgba(15,18,42,0.88))]"
+            : "bg-[linear-gradient(180deg,rgba(13,17,39,0.88),rgba(9,12,27,0.8))]"
         )}
       >
         <CardContent className="flex h-full flex-col justify-between gap-6 p-4">
-          <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/70 bg-white/74 shadow-[var(--shadow-card)]">
+          <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/12 bg-white/8 shadow-[var(--shadow-card)]">
             <Icon className={cn("h-5 w-5", iconClassName)} />
           </div>
           <div>
-            <p className="text-sm font-semibold text-slate-900">{label}</p>
-            <p className="mt-2 text-xs leading-5 text-slate-500">{primary ? "优先主路径" : "快捷进入录入"}</p>
+            <p className="text-sm font-semibold text-white">{label}</p>
+            <p className="mt-2 text-xs leading-5 text-white/52">{primary ? "优先主路径" : "快捷进入录入"}</p>
           </div>
         </CardContent>
       </Card>
@@ -145,7 +147,14 @@ export default function TeacherWorkbenchPage() {
       <MetricGrid
         items={viewModel.heroStats.map((item, index) => ({
           ...item,
-          tone: index === 0 ? "amber" : index === 1 ? "sky" : index === 2 ? "indigo" : "emerald",
+          tone:
+            index === 0
+              ? "violet"
+              : index === 1
+                ? "aurora"
+                : index === 2
+                  ? "cobalt"
+                  : "lavender",
         }))}
         className="sm:grid-cols-2"
       />
@@ -154,10 +163,10 @@ export default function TeacherWorkbenchPage() {
 
   return (
     <RolePageShell
-      intensity="strong"
+      intensity="light"
       badge={`教师工作台 · ${currentUser.className ?? "当前班级"} · ${TODAY_TEXT}`}
       title="先处理今天最紧急的儿童，再把晨检、复查与家长沟通走顺。"
-      description="教师首页首屏聚焦今日异常、核心 KPI 和主操作入口；下面两层再承载待晨检、待复查、待沟通与快捷录入，保持任务执行优先。"
+      description="教师工作台优先保证任务扫描效率。首屏只聚焦今日异常、核心 KPI 与主操作入口，后两层再承载待晨检、待复查与家长沟通。"
       actions={
         <>
           <InlineLinkButton href="/teacher/high-risk-consultation" label="发起高风险会诊" variant="premium" />
@@ -183,7 +192,7 @@ export default function TeacherWorkbenchPage() {
                       <WorkbenchSignalCard key={item.record.id} tone="alert">
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-semibold text-slate-900">{item.child.name}</p>
-                          <Badge variant="warning">需优先处理</Badge>
+                          <Badge variant="info">需优先处理</Badge>
                         </div>
                         <p className="mt-2 text-sm text-slate-600">
                           体温 {item.record.temperature}°C · {item.record.mood} · {item.record.handMouthEye}
@@ -207,17 +216,17 @@ export default function TeacherWorkbenchPage() {
                     href="/teacher/high-risk-consultation"
                     icon={ShieldAlert}
                     label="发起高风险会诊"
-                    iconClassName="text-rose-500"
+                    iconClassName="text-violet-100"
                     primary
                   />
-                  <QuickEntryTile href="/health" icon={ShieldCheck} label="去晨检录入" iconClassName="text-sky-500" />
-                  <QuickEntryTile href="/growth" icon={BookOpenCheck} label="去成长观察" iconClassName="text-indigo-500" />
-                  <QuickEntryTile href="/diet" icon={PencilLine} label="去饮食录入" iconClassName="text-emerald-500" />
+                  <QuickEntryTile href="/health" icon={ShieldCheck} label="去晨检录入" iconClassName="text-indigo-200" />
+                  <QuickEntryTile href="/growth" icon={BookOpenCheck} label="去成长观察" iconClassName="text-violet-200" />
+                  <QuickEntryTile href="/diet" icon={PencilLine} label="去饮食录入" iconClassName="text-violet-200" />
                   <QuickEntryTile
                     href="/teacher/health-file-bridge"
                     icon={FileText}
                     label="外部健康文件桥接"
-                    iconClassName="text-violet-500"
+                    iconClassName="text-indigo-100"
                   />
                 </div>
               </SectionCard>
@@ -342,19 +351,19 @@ export default function TeacherWorkbenchPage() {
               <div className="space-y-3">
                 <WorkbenchSignalCard>
                   <div className="flex items-center gap-3 text-sm text-slate-600">
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    <AlertTriangle className="h-4 w-4 text-violet-200" />
                     先看异常儿童
                   </div>
                 </WorkbenchSignalCard>
                 <WorkbenchSignalCard>
                   <div className="flex items-center gap-3 text-sm text-slate-600">
-                    <ShieldCheck className="h-4 w-4 text-sky-500" />
+                    <ShieldCheck className="h-4 w-4 text-indigo-200" />
                     补齐待晨检与待复查
                   </div>
                 </WorkbenchSignalCard>
                 <WorkbenchSignalCard>
                   <div className="flex items-center gap-3 text-sm text-slate-600">
-                    <BrainCircuit className="h-4 w-4 text-indigo-500" />
+                    <BrainCircuit className="h-4 w-4 text-violet-200" />
                     再同步家长与生成建议
                   </div>
                 </WorkbenchSignalCard>

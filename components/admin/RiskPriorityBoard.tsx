@@ -59,18 +59,18 @@ export default function RiskPriorityBoard({
       >
         <div className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-3">
-            <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+            <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-indigo-500" />
             <div className="space-y-2">
-              <p className="font-semibold text-slate-950">
+              <p className="font-semibold text-white/92">
                 {isLoading ? "正在读取重点会诊" : emptyTitle ?? "当前还没有需要优先处理的会诊"}
               </p>
-              <p className="leading-6 text-slate-600">
+              <p className="leading-6 text-white/64">
                 {isLoading
                   ? "系统正在同步重点会诊；如果机构数据暂不可用，这里会先展示本地已有结论。"
                   : emptyDescription ?? "当教师端产生新的重点会诊后，这里会自动更新。"}
               </p>
               {!effectiveDispatchAvailable ? (
-                <p className="text-sm leading-6 text-slate-500">
+                <p className="text-sm leading-6 text-white/48">
                   {effectiveDispatchStatusMessage}，当前先展示只读建议。
                 </p>
               ) : null}
@@ -93,7 +93,7 @@ export default function RiskPriorityBoard({
   return (
     <div className={cn("space-y-4", className)}>
       <AdminBand
-        tone="amber"
+        tone="indigo"
         eyebrow={
           <>
             <Badge variant="warning">重点会诊决策区</Badge>
@@ -116,7 +116,7 @@ export default function RiskPriorityBoard({
           <div
             key={item.consultationId}
             className={cn(
-              "min-w-0 gap-4 rounded-[1.75rem] border border-slate-200/75 bg-white/60 p-3 shadow-[var(--shadow-card)]",
+              "min-w-0 gap-4 rounded-[1.75rem] border border-white/10 bg-white/5 p-3 shadow-[var(--shadow-card)]",
               layoutVariant === "stacked"
                 ? "flex flex-col"
                 : "grid xl:grid-cols-[minmax(0,1.04fr)_minmax(380px,0.96fr)] xl:items-start"

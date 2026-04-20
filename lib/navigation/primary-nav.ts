@@ -16,26 +16,26 @@ export interface PrimaryNavItem {
   icon: PrimaryNavIconKey;
 }
 
-const OVERVIEW_ITEM: PrimaryNavItem = { href: "/", label: "数据总览", icon: "overview" };
-const CHILDREN_ITEM: PrimaryNavItem = { href: "/children", label: "幼儿档案", icon: "children" };
-const HEALTH_ITEM: PrimaryNavItem = { href: "/health", label: "晨检与健康", icon: "health" };
-const GROWTH_ITEM: PrimaryNavItem = { href: "/growth", label: "成长行为", icon: "growth" };
-const DIET_ITEM: PrimaryNavItem = { href: "/diet", label: "饮食记录", icon: "diet" };
-const PARENT_ITEM: PrimaryNavItem = { href: "/parent", label: "家长端", icon: "parent" };
+const OVERVIEW_ITEM: PrimaryNavItem = { href: "/", label: "Overview", icon: "overview" };
+const CHILDREN_ITEM: PrimaryNavItem = { href: "/children", label: "Children", icon: "children" };
+const HEALTH_ITEM: PrimaryNavItem = { href: "/health", label: "Health", icon: "health" };
+const GROWTH_ITEM: PrimaryNavItem = { href: "/growth", label: "Growth", icon: "growth" };
+const DIET_ITEM: PrimaryNavItem = { href: "/diet", label: "Diet", icon: "diet" };
+const PARENT_ITEM: PrimaryNavItem = { href: "/parent", label: "Parents", icon: "parent" };
 const INSTITUTION_SCREEN_ITEM: PrimaryNavItem = {
   href: "/teacher",
-  label: "机构大屏",
+  label: "Institution Screen",
   icon: "screen",
 };
-const ADMIN_HOME_ITEM: PrimaryNavItem = { href: "/admin", label: "园所首页", icon: "role-home" };
+const ADMIN_HOME_ITEM: PrimaryNavItem = { href: "/admin", label: "Admin Home", icon: "role-home" };
 const TEACHER_HOME_ITEM: PrimaryNavItem = {
   href: "/teacher",
-  label: "教师工作台",
+  label: "Teacher Workspace",
   icon: "role-home",
 };
 const PARENT_HOME_ITEM: PrimaryNavItem = {
   href: "/parent",
-  label: "家长首页",
+  label: "Parent Home",
   icon: "parent",
 };
 

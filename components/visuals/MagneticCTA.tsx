@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, type HTMLAttributes } from "react";
+import { useEffect, useRef, useState, type HTMLAttributes } from "react";
 import { useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 export default function MagneticCTA({
   className,
   children,
-  strength = 12,
+  strength = 8,
   disabled = false,
   ...props
 }: HTMLAttributes<HTMLDivElement> & {
@@ -16,6 +16,7 @@ export default function MagneticCTA({
 }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const prefersReducedMotion = useReducedMotion();
+  const [supportsFinePointer, setSupportsFinePointer] = useState(false);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -25,7 +26,20 @@ export default function MagneticCTA({
     wrapper.style.setProperty("--magnetic-y", "0px");
   }, []);
 
-  const enableMagnetic = !disabled && !prefersReducedMotion;
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const sync = () => setSupportsFinePointer(mediaQuery.matches);
+
+    sync();
+    mediaQuery.addEventListener("change", sync);
+
+    return () => mediaQuery.removeEventListener("change", sync);
+  }, []);
+
+  const enableMagnetic =
+    !disabled &&
+    !prefersReducedMotion &&
+    supportsFinePointer;
 
   return (
     <div

@@ -8,6 +8,7 @@ import { type Gender, useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import AmbientBackground from "@/components/visuals/AmbientBackground";
+import MagneticCTA from "@/components/visuals/MagneticCTA";
 import MotionHero from "@/components/visuals/MotionHero";
 import {
   Dialog,
@@ -24,13 +25,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const ENTRY_NOTES = [
   {
     title: "连续记录",
-    body: "晨检、饮食、成长观察与家园反馈在同一条业务链路中衔接，进入即延续当天上下文。",
+    body: "从晨检到离园反馈，关键数据在同一链路持续沉淀，不在角色切换中断开。",
   },
   {
-    title: "可信协同",
-    body: "普通账号用于持续使用，示例账号可即刻体验教师、家长与管理端的核心工作台。",
+    title: "多角色协同",
+    body: "教师、家长与管理端共享同一工作节奏，在统一入口完成日常协作。",
   },
 ];
+
+const LOGIN_META = ["连续记录", "多角色协同", "可信入口"] as const;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -179,38 +182,44 @@ export default function LoginPage() {
   return (
     <AmbientBackground
       intensity="strong"
-      className="login-premium-page min-h-[calc(100vh-64px)] px-4 py-6 sm:px-6 sm:py-10 lg:px-8"
+      tone="brand"
+      className="login-premium-page px-4 py-4 sm:px-6 sm:py-6 lg:px-8"
+      contentClassName="min-h-screen min-h-[100svh]"
     >
       <div aria-hidden="true" className="login-premium-atmosphere">
+        <div className="login-premium-stage" />
         <div className="login-premium-veil" />
-        <div className="login-premium-toplight" />
-        <div className="login-premium-band" />
-        <div className="login-premium-orb login-premium-orb-a" />
-        <div className="login-premium-orb login-premium-orb-b" />
-        <div className="login-premium-orb login-premium-orb-c" />
+        <div className="login-premium-band login-premium-band-a" />
+        <div className="login-premium-band login-premium-band-b" />
+        <div className="login-premium-bloom login-premium-bloom-a" />
+        <div className="login-premium-bloom login-premium-bloom-b" />
+        <div className="login-premium-bloom login-premium-bloom-c" />
       </div>
 
-      <div className="login-premium-shell mx-auto max-w-7xl">
+      <div className="login-premium-shell mx-auto flex w-full max-w-7xl items-center">
         <MotionHero
-          className="login-premium-hero min-h-[calc(100vh-132px)] items-center gap-12"
+          className="login-premium-hero w-full items-center gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:gap-14 xl:gap-20"
+          leadClassName="order-2 lg:order-1"
+          supportClassName="order-1 lg:order-2"
           lead={
-            <section className="login-premium-story relative z-10 flex h-full flex-col justify-center py-8 sm:py-10 lg:py-12">
-              <div className="max-w-2xl">
-                <div className="login-premium-badge">托育智能协同平台</div>
-                <h1 className="mt-8 max-w-[11ch] text-4xl font-black leading-[1.04] text-white sm:text-5xl lg:text-6xl">
-                  让每一次托育协同，都从可信入口开始
+            <section className="login-premium-story relative z-10 flex h-full flex-col justify-center py-6 sm:py-8 lg:py-12">
+              <div className="login-premium-story__halo" aria-hidden="true" />
+              <div className="relative z-10 max-w-[34rem]">
+                <div className="login-premium-badge">Childcare Smart · 园所协同入口</div>
+                <h1 className="login-premium-title mt-8 text-4xl font-black leading-[1.02] text-white sm:text-5xl lg:text-[4.2rem]">
+                  让园所记录、教师协作与家园反馈，在同一入口持续流动
                 </h1>
-                <p className="mt-5 max-w-xl text-sm leading-7 text-white/78 sm:text-base">
-                  连接园内记录、教师协作与家长反馈，用连续的数据视角进入每日托育闭环。
+                <p className="login-premium-description mt-6 max-w-xl text-sm leading-7 text-white/74 sm:text-base">
+                  进入统一工作台，连续处理健康、饮食、成长与家园沟通，保留可信、可追踪、可协作的每日记录。
                 </p>
               </div>
 
-              <div className="login-premium-notes mt-10 grid gap-4 sm:grid-cols-2">
+              <div className="login-premium-notes mt-8 grid gap-4 sm:grid-cols-2 lg:mt-12">
                 {ENTRY_NOTES.map((item) => (
-                  <div key={item.title} className="login-premium-note">
-                    <p className="text-sm font-semibold text-white">{item.title}</p>
-                    <p className="mt-2 text-sm leading-6 text-white/70">{item.body}</p>
-                  </div>
+                  <article key={item.title} className="login-premium-note">
+                    <p className="login-premium-note__title">{item.title}</p>
+                    <p className="login-premium-note__body">{item.body}</p>
+                  </article>
                 ))}
               </div>
             </section>
@@ -221,63 +230,63 @@ export default function LoginPage() {
                 surface="glass"
                 glow="brand"
                 interactive={false}
-                className="login-premium-card w-full max-w-[31rem] border-white/60"
+                className="login-premium-card w-full max-w-[32rem] border-white/14"
               >
                 <div className="login-premium-card__beam" aria-hidden="true" />
                 <CardHeader className="relative z-10 space-y-5 pb-5">
                   <div className="flex items-start gap-4">
-                    <div className="surface-luminous flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.35rem] border border-white/80 shadow-[0_18px_36px_rgba(79,70,229,0.14)]">
-                      <Baby className="h-7 w-7 text-indigo-600" />
+                    <div className="login-premium-card__icon">
+                      <Baby className="h-7 w-7 text-indigo-100" />
                     </div>
                     <div className="min-w-0">
-                      <p className="login-premium-card__eyebrow">Unified Access</p>
-                      <CardTitle className="mt-2 text-[1.9rem] leading-none text-slate-900">进入平台</CardTitle>
-                      <CardDescription className="mt-3 max-w-md leading-6 text-slate-600">
-                        普通账号用于持续记录；示例账号可直接进入教师、家长与管理工作台。
+                      <p className="login-premium-card__eyebrow">Product Access</p>
+                      <CardTitle className="mt-2 text-[1.95rem] leading-none text-white">进入工作台</CardTitle>
+                      <CardDescription className="mt-3 max-w-md leading-6 text-white/68">
+                        使用正式账号继续日常工作；也可通过示例账号快速体验教师、家长与管理端工作流。
                       </CardDescription>
                     </div>
                   </div>
 
                   <div className="login-premium-card__meta">
-                    <span>连续记录</span>
-                    <span>多角色协同</span>
-                    <span>可信入口</span>
+                    {LOGIN_META.map((item) => (
+                      <span key={item}>{item}</span>
+                    ))}
                   </div>
                 </CardHeader>
 
                 <CardContent className="relative z-10 space-y-6">
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="username" className="text-slate-700">普通账号</Label>
+                      <Label htmlFor="username" className="text-white/64">账号</Label>
                       <Input
                         id="username"
                         value={username}
                         onChange={(event) => setUsername(event.target.value)}
-                        placeholder="请输入账号"
+                        placeholder="输入账号"
                         autoComplete="username"
-                        className="login-premium-input h-11 rounded-2xl"
+                        className="login-premium-input h-12 rounded-2xl"
                         required
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="password" className="text-slate-700">密码</Label>
+                      <Label htmlFor="password" className="text-white/64">密码</Label>
                       <div className="relative">
                         <Input
                           id="password"
                           type={showPassword ? "text" : "password"}
                           value={password}
                           onChange={(event) => setPassword(event.target.value)}
-                          placeholder="请输入密码"
+                          placeholder="输入密码"
                           autoComplete="current-password"
                           required
-                          className="login-premium-input h-11 rounded-2xl pr-11"
+                          className="login-premium-input h-12 rounded-2xl pr-11"
                         />
                         <button
                           type="button"
                           aria-label={showPassword ? "隐藏密码" : "显示密码"}
                           onClick={() => setShowPassword((prev) => !prev)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 transition hover:text-white/72"
                         >
                           {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                         </button>
@@ -285,22 +294,29 @@ export default function LoginPage() {
                     </div>
 
                     {message ? (
-                      <p role="alert" className="login-premium-alert rounded-2xl px-3 py-2 text-sm text-rose-600">
+                      <p role="alert" className="login-premium-alert rounded-2xl px-3 py-2 text-sm text-rose-200">
                         {message}
                       </p>
                     ) : null}
 
-                    <div className="flex flex-col gap-3 sm:flex-row">
-                      <Button type="submit" variant="premium" className="h-11 flex-1 rounded-2xl" disabled={loading}>
-                        {loading ? "登录中..." : "普通账号登录"}
-                      </Button>
+                    <div className="login-premium-actions flex flex-col gap-3 sm:flex-row">
+                      <MagneticCTA className="flex-1" disabled={loading}>
+                        <Button
+                          type="submit"
+                          variant="premium"
+                          className="login-premium-cta h-12 w-full rounded-2xl"
+                          disabled={loading}
+                        >
+                          {loading ? "登录中..." : "登录并进入工作台"}
+                        </Button>
+                      </MagneticCTA>
                       <Button
                         type="button"
                         variant="glass"
-                        className="h-11 rounded-2xl px-5"
+                        className="login-premium-secondary-cta h-12 rounded-2xl px-5 text-white"
                         onClick={() => setRegisterOpen(true)}
                       >
-                        注册账号
+                        注册正式账号
                       </Button>
                     </div>
                   </form>
@@ -310,14 +326,12 @@ export default function LoginPage() {
                   <div className="space-y-3">
                     <div className="flex items-end justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">示例账号</p>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                          免密进入教师、家长与管理端，快速预览关键链路。
+                        <p className="text-sm font-semibold text-white">示例角色体验</p>
+                        <p className="mt-1 text-xs leading-5 text-white/50">
+                          免密码快速进入不同角色视角，预览核心工作流。
                         </p>
                       </div>
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                        Demo
-                      </span>
+                      <span className="login-premium-demo-label">Demo</span>
                     </div>
 
                     <div className="grid gap-3">
@@ -335,16 +349,16 @@ export default function LoginPage() {
                               <div className="flex items-start gap-3">
                                 <span className="login-demo-entry__avatar text-lg">{account.avatar}</span>
                                 <div className="min-w-0">
-                                  <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
+                                  <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-white">
                                     <span className="truncate">{account.name}</span>
                                     <span className="login-demo-entry__role">{account.role}</span>
                                   </div>
-                                  <p className="mt-2 text-xs leading-5 text-slate-500">{account.description}</p>
+                                  <p className="mt-2 text-xs leading-5 text-white/54">{account.description}</p>
                                 </div>
                               </div>
                             </div>
                             <span className="login-demo-entry__action">
-                              {demoLoadingId === account.id ? "进入中..." : "直接进入"}
+                              {demoLoadingId === account.id ? "进入中..." : "立即进入"}
                             </span>
                           </div>
                         </button>
@@ -368,29 +382,29 @@ export default function LoginPage() {
         <DialogContent className="login-register-dialog max-w-2xl">
           <form onSubmit={handleRegisterSubmit}>
             <DialogHeader className="space-y-2">
-              <DialogTitle className="text-xl text-slate-900">注册普通账号</DialogTitle>
-              <DialogDescription className="leading-6">
-                注册后将进入独立数据流，用于创建并保存自己的托育记录。
+              <DialogTitle className="text-xl text-white">创建正式账号</DialogTitle>
+              <DialogDescription className="leading-6 text-white/66">
+                注册后将进入独立数据空间，用于创建并保存自己的托育记录。
               </DialogDescription>
             </DialogHeader>
 
             <div className="grid gap-4 py-5 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="register-username">账号</Label>
+                <Label htmlFor="register-username" className="text-white/68">账号</Label>
                 <Input
                   id="register-username"
                   value={registerUsername}
                   onChange={(event) => setRegisterUsername(event.target.value)}
                   placeholder="请输入用户名 / 账号"
                   autoComplete="username"
-                  className="rounded-2xl"
+                  className="login-register-field rounded-2xl"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="register-role">用户类型</Label>
+                <Label htmlFor="register-role" className="text-white/68">用户类型</Label>
                 <Select value={registerRole} onValueChange={(value) => setRegisterRole(value as AccountRole)}>
-                  <SelectTrigger id="register-role" className="rounded-2xl">
+                  <SelectTrigger id="register-role" className="login-register-field rounded-2xl">
                     <SelectValue placeholder="请选择角色" />
                   </SelectTrigger>
                   <SelectContent>
@@ -402,7 +416,7 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="register-password">密码</Label>
+                <Label htmlFor="register-password" className="text-white/68">密码</Label>
                 <div className="relative">
                   <Input
                     id="register-password"
@@ -411,13 +425,13 @@ export default function LoginPage() {
                     onChange={(event) => setRegisterPassword(event.target.value)}
                     autoComplete="new-password"
                     placeholder="请输入密码"
-                    className="rounded-2xl pr-11"
+                    className="login-register-field rounded-2xl pr-11"
                   />
                   <button
                     type="button"
                     aria-label={showRegisterPassword ? "隐藏密码" : "显示密码"}
                     onClick={() => setShowRegisterPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 transition hover:text-white/72"
                   >
                     {showRegisterPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                   </button>
@@ -425,7 +439,7 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="register-confirm-password">确认密码</Label>
+                <Label htmlFor="register-confirm-password" className="text-white/68">确认密码</Label>
                 <div className="relative">
                   <Input
                     id="register-confirm-password"
@@ -434,13 +448,13 @@ export default function LoginPage() {
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     autoComplete="new-password"
                     placeholder="请再次输入密码"
-                    className="rounded-2xl pr-11"
+                    className="login-register-field rounded-2xl pr-11"
                   />
                   <button
                     type="button"
                     aria-label={showConfirmPassword ? "隐藏密码" : "显示密码"}
                     onClick={() => setShowConfirmPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 transition hover:text-white/72"
                   >
                     {showConfirmPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                   </button>
@@ -449,13 +463,13 @@ export default function LoginPage() {
 
               {registerRole === "教师" ? (
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="teacher-class-name">班级名称</Label>
+                  <Label htmlFor="teacher-class-name" className="text-white/68">班级名称</Label>
                   <Input
                     id="teacher-class-name"
                     value={teacherClassName}
                     onChange={(event) => setTeacherClassName(event.target.value)}
                     placeholder="请输入教师所属班级"
-                    className="rounded-2xl"
+                    className="login-register-field rounded-2xl"
                   />
                 </div>
               ) : null}
@@ -463,31 +477,31 @@ export default function LoginPage() {
               {registerRole === "家长" ? (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="child-name">孩子姓名</Label>
+                    <Label htmlFor="child-name" className="text-white/68">孩子姓名</Label>
                     <Input
                       id="child-name"
                       value={childName}
                       onChange={(event) => setChildName(event.target.value)}
                       placeholder="请输入孩子姓名"
-                      className="rounded-2xl"
+                      className="login-register-field rounded-2xl"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="child-birth-date">出生日期</Label>
+                    <Label htmlFor="child-birth-date" className="text-white/68">出生日期</Label>
                     <Input
                       id="child-birth-date"
                       type="date"
                       value={childBirthDate}
                       onChange={(event) => setChildBirthDate(event.target.value)}
-                      className="rounded-2xl"
+                      className="login-register-field rounded-2xl"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="child-gender">性别</Label>
+                    <Label htmlFor="child-gender" className="text-white/68">性别</Label>
                     <Select value={childGender} onValueChange={(value) => setChildGender(value as Gender)}>
-                      <SelectTrigger id="child-gender" className="rounded-2xl">
+                      <SelectTrigger id="child-gender" className="login-register-field rounded-2xl">
                         <SelectValue placeholder="请选择性别" />
                       </SelectTrigger>
                       <SelectContent>
@@ -498,18 +512,18 @@ export default function LoginPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="guardian-phone">监护人电话</Label>
+                    <Label htmlFor="guardian-phone" className="text-white/68">监护人电话</Label>
                     <Input
                       id="guardian-phone"
                       value={guardianPhone}
                       onChange={(event) => setGuardianPhone(event.target.value)}
                       placeholder="可选"
-                      className="rounded-2xl"
+                      className="login-register-field rounded-2xl"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="child-height">身高（cm）</Label>
+                    <Label htmlFor="child-height" className="text-white/68">身高（cm）</Label>
                     <Input
                       id="child-height"
                       type="number"
@@ -517,12 +531,12 @@ export default function LoginPage() {
                       value={childHeightCm}
                       onChange={(event) => setChildHeightCm(event.target.value)}
                       placeholder="可选"
-                      className="rounded-2xl"
+                      className="login-register-field rounded-2xl"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="child-weight">体重（kg）</Label>
+                    <Label htmlFor="child-weight" className="text-white/68">体重（kg）</Label>
                     <Input
                       id="child-weight"
                       type="number"
@@ -531,7 +545,7 @@ export default function LoginPage() {
                       value={childWeightKg}
                       onChange={(event) => setChildWeightKg(event.target.value)}
                       placeholder="可选"
-                      className="rounded-2xl"
+                      className="login-register-field rounded-2xl"
                     />
                   </div>
                 </>
@@ -539,7 +553,7 @@ export default function LoginPage() {
             </div>
 
             {registerMessage ? (
-              <p role="alert" className="login-premium-alert rounded-2xl px-3 py-2 text-sm text-rose-600">
+              <p role="alert" className="login-premium-alert rounded-2xl px-3 py-2 text-sm text-rose-200">
                 {registerMessage}
               </p>
             ) : null}
@@ -548,7 +562,7 @@ export default function LoginPage() {
               <Button
                 type="button"
                 variant="glass"
-                className="rounded-2xl"
+                className="login-premium-secondary-cta rounded-2xl text-white"
                 onClick={() => {
                   setRegisterOpen(false);
                   resetRegisterForm();
@@ -556,7 +570,7 @@ export default function LoginPage() {
               >
                 取消
               </Button>
-              <Button type="submit" variant="premium" className="rounded-2xl" disabled={registerLoading}>
+              <Button type="submit" variant="premium" className="login-premium-cta rounded-2xl" disabled={registerLoading}>
                 {registerLoading ? "注册中..." : "注册并进入系统"}
               </Button>
             </DialogFooter>

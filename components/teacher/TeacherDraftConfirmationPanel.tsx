@@ -197,11 +197,11 @@ export default function TeacherDraftConfirmationPanel({
           surface="glass"
           glow="soft"
           interactive={false}
-          className="border-dashed border-slate-200 bg-white/76"
+          className="border-dashed border-[rgba(164,168,255,0.16)] bg-[linear-gradient(180deg,rgba(13,17,39,0.84),rgba(9,12,27,0.74))]"
         >
           <CardContent className="p-5">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="warning">演示理解结果</Badge>
+                  <Badge variant="outline">演示理解结果</Badge>
               {childName ? <Badge variant="secondary">{childName}</Badge> : null}
             </div>
             <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -217,7 +217,7 @@ export default function TeacherDraftConfirmationPanel({
                 key={preset.id}
                 type="button"
                 onClick={() => void onCreateMockDraft?.(preset.transcript)}
-                className="premium-card surface-glass surface-glow-soft rounded-[1.6rem] border border-white/70 p-4 text-left transition-all duration-200 hover:-translate-y-[2px] hover:border-indigo-200/80"
+                className="premium-card surface-glass surface-glow-soft rounded-[1.6rem] border border-[rgba(164,168,255,0.16)] bg-[linear-gradient(180deg,rgba(16,19,44,0.86),rgba(9,11,28,0.78))] p-4 text-left transition-all duration-200 hover:-translate-y-[2px] hover:border-[rgba(164,168,255,0.26)]"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <WandSparkles className="h-4 w-4 text-indigo-500" />
@@ -243,7 +243,7 @@ export default function TeacherDraftConfirmationPanel({
         surface="glass"
         glow="soft"
         interactive={false}
-        className="border-white/70 bg-linear-to-br from-white via-white to-sky-50/40"
+        className="border-[rgba(164,168,255,0.16)] bg-[linear-gradient(180deg,rgba(16,19,44,0.9),rgba(9,11,28,0.8))]"
       >
         <CardContent className="p-5">
           <div className="flex flex-wrap items-center gap-2">
@@ -252,7 +252,7 @@ export default function TeacherDraftConfirmationPanel({
             {sourceSyncStatusLabel ? (
               <Badge variant="outline">{sourceSyncStatusLabel}</Badge>
             ) : null}
-            <Badge variant="warning">草稿项 {seed.draft_items.length}</Badge>
+                  <Badge variant="info">草稿项 {seed.draft_items.length}</Badge>
             {seed.router_result?.primary_category ? (
               <Badge variant="secondary">
                 {seed.router_result.primary_category}
@@ -261,7 +261,12 @@ export default function TeacherDraftConfirmationPanel({
           </div>
 
           <div className="mt-4 grid gap-3 lg:grid-cols-[1.6fr_1fr]">
-            <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/84">
+            <Card
+              surface="glass"
+              glow="soft"
+              interactive={false}
+              className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
+            >
               <CardContent className="px-4 py-3">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                   <FileText className="h-4 w-4" />
@@ -273,7 +278,12 @@ export default function TeacherDraftConfirmationPanel({
               </CardContent>
             </Card>
 
-            <Card surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/84">
+            <Card
+              surface="glass"
+              glow="soft"
+              interactive={false}
+              className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
+            >
               <CardContent className="px-4 py-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">保存方式</p>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -288,7 +298,7 @@ export default function TeacherDraftConfirmationPanel({
               {seed.warnings.map((warning) => (
                 <span
                   key={warning}
-                  className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
+                  className="inline-flex items-center gap-1 rounded-full border border-fuchsia-300/18 bg-fuchsia-400/10 px-2.5 py-1 text-xs font-medium text-fuchsia-100"
                 >
                   <AlertTriangle className="h-3.5 w-3.5" />
                   {warning}
@@ -310,14 +320,19 @@ export default function TeacherDraftConfirmationPanel({
           surface="solid"
           glow="none"
           interactive={false}
-          className="border-rose-100 bg-rose-50/70 text-rose-700"
+          className="border-[rgba(214,118,255,0.18)] bg-[linear-gradient(180deg,rgba(47,18,65,0.92),rgba(24,10,33,0.86))] text-white/80"
         >
           <CardContent className="px-4 py-3 text-sm">{error}</CardContent>
         </Card>
       ) : null}
 
       {isLoading ? (
-        <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/80">
+        <Card
+          surface="glass"
+          glow="soft"
+          interactive={false}
+          className="border-[rgba(164,168,255,0.16)] bg-[linear-gradient(180deg,rgba(16,19,44,0.86),rgba(9,11,28,0.76))]"
+        >
           <CardContent className="px-4 py-4 text-sm text-slate-500">
             草稿确认流正在加载记录...
           </CardContent>

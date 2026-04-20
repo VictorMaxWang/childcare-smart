@@ -7,8 +7,7 @@ const glowClassMap = {
   none: "",
   soft: "surface-glow-soft",
   brand: "surface-glow-brand",
-  warm: "surface-glow-warm",
-};
+} satisfies Record<"none" | "soft" | "brand", string>;
 
 export default function PremiumCard({
   surface = "glass",

@@ -48,5 +48,5 @@ export function resolveAdminWhyHighPriorityText(
     if (sanitized) return sanitized;
   }
 
-  return "寰呰ˉ鍏呰鏄?";
+  return "待补充说明";
 }

@@ -326,7 +326,7 @@ export default function ParentHomePage() {
   );
 
   const parentHeroAside = (
-    <div className="space-y-3">
+    <div className="parent-content-scope space-y-3">
       <div className="hero-note-card">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={previewResult ? "warning" : "info"}>
@@ -552,7 +552,7 @@ export default function ParentHomePage() {
     return (
       <RolePageShell
         intensity="light"
-        tone="warm"
+        tone="brand"
         surface="solid"
         interactive={false}
         badge={`家长首页 · ${TODAY_TEXT}`}
@@ -563,7 +563,7 @@ export default function ParentHomePage() {
         <RoleSplitLayout
           stacked
           main={
-            <div className="space-y-6">
+            <div className="parent-content-scope space-y-6">
               <ParentCareFocusCard
                 badge="关怀模式"
                 title={`${feed.child.name} 今晚先看这一件事`}
@@ -699,16 +699,16 @@ export default function ParentHomePage() {
   return (
     <RolePageShell
       intensity="medium"
-      tone="warm"
+      tone="brand"
       badge={`家长首页 · ${TODAY_TEXT}`}
       title={`先看 ${viewModel.child.name} 今天的状态，再决定今晚怎么做`}
-      description="首页只保留今天最需要处理的信息：孩子状态、AI 提醒、今晚任务、AI 干预卡预览、待反馈事项和 7 天趋势入口。"
+      description="首页只保留家长今天真正需要处理的信息：孩子状态、AI 提醒、今晚任务、待反馈事项和一条足够轻量的 7 天趋势入口。"
       actions={headerActions}
       heroAside={parentHeroAside}
     >
       <RoleSplitLayout
         main={
-          <div className="space-y-6">
+          <div className="parent-content-scope space-y-6">
             <SectionCard title="孩子今日情况摘要" description="先把家长最关心的几件事压缩到首屏。">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="content-reading-panel rounded-3xl p-4">

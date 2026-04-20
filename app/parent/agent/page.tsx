@@ -921,7 +921,7 @@ export default function ParentAgentPage() {
     return (
       <RolePageShell
         intensity="medium"
-        tone="warm"
+        tone="brand"
         badge={`家长 AI 助手 · 当前孩子 ${selectedFeed.child.name}`}
         title="今晚先做一件事，做完再给老师一个最短反馈。"
         description="关怀模式把首屏收敛成大字行动摘要，先让祖辈和低数字熟练度照护者看懂今晚做什么、明天看什么、为什么现在做。"
@@ -931,7 +931,7 @@ export default function ParentAgentPage() {
           stacked
           aside={null}
           main={
-            <div className="space-y-6">
+            <div className="parent-content-scope space-y-6">
               <ParentCareFocusCard
                 badge="关怀模式"
                 title={`今晚先陪 ${selectedFeed.child.name} 做这一件事`}
@@ -1420,7 +1420,7 @@ export default function ParentAgentPage() {
   return (
     <RolePageShell
       intensity="medium"
-      tone="warm"
+      tone="brand"
       badge={`家长 AI 助手 · 当前儿童 ${selectedFeed.child.name}`}
       title="把今晚怎么做、做完怎么反馈、明天老师继续看什么，放进同一条 AI 闭环里"
       description="这一版家长助手会把今晚怎么做、做完怎么反馈、以及明天老师继续看什么，串成一条完整主路径。"
@@ -1428,7 +1428,7 @@ export default function ParentAgentPage() {
     >
       <RoleSplitLayout
         main={
-          <div className="space-y-6">
+          <div className="parent-content-scope space-y-6">
             <SectionCard title="当前儿童信息卡" description="先确认正在查看哪个孩子，再决定今晚先做什么。">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="content-reading-panel rounded-3xl p-4">
@@ -1760,7 +1760,7 @@ export default function ParentAgentPage() {
           </div>
         }
         aside={
-          <div className="space-y-6">
+          <div className="parent-content-scope space-y-6">
             <SectionCard title="当前孩子摘要" description="这里固定显示当前孩子和今晚任务，避免问串对象。">
               <ul className="space-y-3 text-sm text-slate-600">
                 <li>当前儿童：{selectedFeed.child.name}</li>
