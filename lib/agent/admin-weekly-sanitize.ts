@@ -8,24 +8,11 @@ import type {
   InstitutionPriorityItem,
   InstitutionScopeSummary,
 } from "./admin-types";
-
-const RAW_INTERNAL_TOKENS = [
-  "teacher-agent",
-  "workflow",
-  "objectscope",
-  "targetchildid",
-  "actionitems",
-  "node_name",
-  "action_type",
-  "input_summary",
-  "output_summary",
-  "recent context",
-  "recent consultation",
-  "trace_id",
-  "prompt_context",
-  "snapshot_json",
-  "metadata_json",
-] as const;
+import {
+  localizeAdminRelativeText,
+  sanitizeAdminVisibleText,
+  sanitizeAdminVisibleTexts,
+} from "./admin-display-text.ts";
 
 function takeUnique(items: Array<string | null | undefined>, limit = 6) {
   const seen = new Set<string>();
@@ -42,51 +29,16 @@ function takeUnique(items: Array<string | null | undefined>, limit = 6) {
   return result;
 }
 
-function normalizeInlineWhitespace(value: string) {
-  return value.replace(/\s+/g, " ").trim();
-}
-
 function stripLeadingLabel(value: string) {
   return value.replace(/^[\u4e00-\u9fa5A-Za-z0-9_-]{1,12}[：:]\s*/, "").trim();
 }
 
-function looksLikeStructuredPayload(text: string) {
-  const compact = normalizeInlineWhitespace(text);
-  if (!compact) return false;
-
-  const lower = compact.toLowerCase();
-  if (RAW_INTERNAL_TOKENS.some((token) => lower.includes(token))) {
-    return true;
-  }
-
-  if (/[A-Za-z0-9_-]+\s*:\s*[\[{]/.test(compact)) {
-    return true;
-  }
-
-  if (
-    (/^[\[{]/.test(compact)) &&
-    (compact.match(/"[^"]+"\s*:/g)?.length ?? 0) >= 2
-  ) {
-    return true;
-  }
-
-  const keyValueCount =
-    (compact.match(/"[^"]+"\s*:/g)?.length ?? 0) +
-    (compact.match(/\b[A-Za-z_][A-Za-z0-9_]*\s*:/g)?.length ?? 0);
-  const punctuationDensity =
-    (compact.match(/[{}[\]":,]/g)?.length ?? 0) / Math.max(compact.length, 1);
-
-  return keyValueCount >= 3 && compact.length >= 80 && punctuationDensity > 0.1;
-}
-
 export function sanitizeAdminWeeklyText(value: string | null | undefined) {
-  const normalized = value?.trim();
-  if (!normalized) return null;
-  return looksLikeStructuredPayload(normalized) ? null : normalizeInlineWhitespace(normalized);
+  return sanitizeAdminVisibleText(value);
 }
 
 export function sanitizeAdminWeeklyTexts(values: string[] | null | undefined, limit = 6) {
-  return takeUnique((values ?? []).map((item) => sanitizeAdminWeeklyText(item)), limit);
+  return takeUnique(sanitizeAdminVisibleTexts(values, limit), limit);
 }
 
 function buildPriorityRiskText(item?: InstitutionPriorityItem) {
@@ -111,13 +63,14 @@ function buildFeedbackRiskText(item?: AdminFeedbackRiskSummary) {
 
 function buildActionSummaryText(item?: AdminAgentActionItem) {
   if (!item) return null;
+  const deadline = localizeAdminRelativeText(item.deadline);
 
   const action =
     sanitizeAdminWeeklyText(item.action) ??
     sanitizeAdminWeeklyText(item.summary) ??
     `围绕${item.targetName}先完成本周承接动作`;
 
-  return sanitizeAdminWeeklyText(`${item.ownerLabel}在${item.deadline}前推进：${action}`) ?? action;
+  return sanitizeAdminWeeklyText(`${item.ownerLabel}在${deadline}前推进：${action}`) ?? action;
 }
 
 function formatContinuityNote(label: string, detail: string | null | undefined) {
@@ -242,22 +195,36 @@ function buildHighlightsFallback(
 
 function sanitizeActionItems(actionItems: AdminAgentActionItem[]) {
   return actionItems.map((item) => {
+    const safeDeadline = localizeAdminRelativeText(item.deadline);
     const safeAction =
       sanitizeAdminWeeklyText(item.action) ??
       sanitizeAdminWeeklyText(item.summary) ??
       `围绕${item.targetName}先完成本周承接动作`;
     const safeSummary =
       sanitizeAdminWeeklyText(item.summary) ??
-      `${item.ownerLabel}在${item.deadline}前推进：${safeAction}`;
+      `${item.ownerLabel}在${safeDeadline}前推进：${safeAction}`;
     const safeTitle =
       sanitizeAdminWeeklyText(item.title) ??
       `${item.targetName}本周承接动作`;
 
     return {
       ...item,
+      deadline: safeDeadline,
       title: safeTitle,
       action: safeAction,
       summary: safeSummary,
+      dispatchPayload: {
+        ...item.dispatchPayload,
+        recommendedAction:
+          sanitizeAdminWeeklyText(item.dispatchPayload.recommendedAction) ??
+          item.dispatchPayload.recommendedAction,
+        recommendedDeadline: localizeAdminRelativeText(
+          item.dispatchPayload.recommendedDeadline
+        ),
+        reasonText:
+          sanitizeAdminWeeklyText(item.dispatchPayload.reasonText) ??
+          item.dispatchPayload.reasonText,
+      },
     };
   });
 }
@@ -270,8 +237,10 @@ export function sanitizeAdminWeeklyReportResponseForAdmin(report: WeeklyReportRe
     risks: sanitizeAdminWeeklyTexts(report.risks, 6),
     nextWeekActions: sanitizeAdminWeeklyTexts(report.nextWeekActions, 6),
     continuityNotes: sanitizeAdminWeeklyTexts(report.continuityNotes, 4),
+    trendPrediction: report.trendPrediction,
     sections: report.sections.map((section) => ({
       ...section,
+      title: sanitizeAdminWeeklyText(section.title) ?? section.title,
       summary: sanitizeAdminWeeklyText(section.summary) ?? section.title,
       items: section.items
         .map((item) => ({
@@ -286,19 +255,54 @@ export function sanitizeAdminWeeklyReportResponseForAdmin(report: WeeklyReportRe
           ...report.primaryAction,
           title: sanitizeAdminWeeklyText(report.primaryAction.title) ?? report.primaryAction.title,
           detail: sanitizeAdminWeeklyText(report.primaryAction.detail) ?? "",
+          dueWindow: localizeAdminRelativeText(report.primaryAction.dueWindow),
         }
       : report.primaryAction,
+    disclaimer: sanitizeAdminWeeklyText(report.disclaimer) ?? report.disclaimer,
   };
 }
 
 export function sanitizeAdminWeeklyResult(result: AdminAgentResult): AdminAgentResult {
   const actionItems = sanitizeActionItems(result.actionItems);
+  const priorityTopItems = result.priorityTopItems.map((item) => ({
+    ...item,
+    reason: sanitizeAdminWeeklyText(item.reason) ?? item.reason,
+    recommendedAction:
+      sanitizeAdminWeeklyText(item.recommendedAction) ?? item.recommendedAction,
+    recommendedDeadline: localizeAdminRelativeText(item.recommendedDeadline),
+    dispatchPayload: {
+      ...item.dispatchPayload,
+      recommendedAction:
+        sanitizeAdminWeeklyText(item.dispatchPayload.recommendedAction) ??
+        item.dispatchPayload.recommendedAction,
+      recommendedDeadline: localizeAdminRelativeText(
+        item.dispatchPayload.recommendedDeadline
+      ),
+      reasonText:
+        sanitizeAdminWeeklyText(item.dispatchPayload.reasonText) ??
+        item.dispatchPayload.reasonText,
+    },
+  }));
+  const riskChildren = result.riskChildren.map((item) => ({
+    ...item,
+    reason: sanitizeAdminWeeklyText(item.reason) ?? item.reason,
+    deadline: localizeAdminRelativeText(item.deadline),
+  }));
+  const riskClasses = result.riskClasses.map((item) => ({
+    ...item,
+    reason: sanitizeAdminWeeklyText(item.reason) ?? item.reason,
+    deadline: localizeAdminRelativeText(item.deadline),
+  }));
+  const feedbackRiskItems = result.feedbackRiskItems.map((item) => ({
+    ...item,
+    reason: sanitizeAdminWeeklyText(item.reason) ?? item.reason,
+  }));
   const sanitizedBase: WeeklyFallbackSource = {
     institutionScope: result.institutionScope,
-    priorityTopItems: result.priorityTopItems,
-    riskChildren: result.riskChildren,
-    riskClasses: result.riskClasses,
-    feedbackRiskItems: result.feedbackRiskItems,
+    priorityTopItems,
+    riskChildren,
+    riskClasses,
+    feedbackRiskItems,
     actionItems,
   };
   const continuityNotes = buildContinuityFallback(sanitizedBase, result.continuityNotes);
@@ -318,6 +322,10 @@ export function sanitizeAdminWeeklyResult(result: AdminAgentResult): AdminAgentR
     title,
     summary,
     assistantAnswer,
+    priorityTopItems,
+    riskChildren,
+    riskClasses,
+    feedbackRiskItems,
     highlights,
     continuityNotes,
     actionItems,

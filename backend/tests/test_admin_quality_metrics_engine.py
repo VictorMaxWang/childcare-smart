@@ -492,7 +492,7 @@ def test_admin_quality_metrics_engine_marks_demo_and_fallback_honestly(tmp_path,
     assert body["source"] == "demo_snapshot"
     assert body["consultationClosureRate"]["source"]["mode"] == "demo_only"
     assert body["teacherLowConfidenceRate"]["source"]["mode"] in {"fallback", "demo_only"}
-    assert any("demo" in warning.lower() or "fallback" in warning.lower() for warning in body["warnings"])
+    assert any("演示" in warning or "兜底" in warning for warning in body["warnings"])
 
 
 def test_admin_quality_metrics_endpoint_returns_structured_payload(tmp_path, monkeypatch):

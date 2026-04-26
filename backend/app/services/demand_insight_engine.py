@@ -1221,19 +1221,19 @@ async def build_demand_insight_engine(
 
     warnings: list[str] = []
     if current_repository.fallback:
-        warnings.append("当前 childcare snapshot 来自 demo/fallback，分群、反馈与执行难点结果不能夸大为真实机构运营洞察。")
+        warnings.append("当前业务快照来自演示或兜底数据，分群、反馈与执行难点结果仅供演示参考，不代表机构真实运营洞察。")
     if consultation_fallback_used:
-        warnings.append("当前 consultationTriggerHeat 使用 demo consultation feed 补位，仅适合演示聚合 shape。")
+        warnings.append("当前会诊触发热度使用演示会诊推送补位，仅适合展示聚合结果形态。")
     if repositories.degraded:
         warnings.append(
-            f"memory backend 已降级到 {repositories.backend}，最近 trace/snapshot 覆盖可能不完整。"
+            f"记忆后端已降级为 {repositories.backend}，近期链路记录与快照覆盖可能不完整。"
         )
     if current_repository.errors:
-        warnings.extend(f"childcare snapshot fallback: {error}" for error in current_repository.errors)
+        warnings.extend(f"业务快照兜底异常：{error}" for error in current_repository.errors)
     if weekly_report_records:
-        warnings.append("weekly report snapshots 当前仅作为辅助聚合信号，不能视为真实运营周报洞察。")
+        warnings.append("周报快照当前仅作为辅助聚合信号，不能视为真实运营周报洞察。")
     if parent_follow_up_snapshot_count:
-        warnings.append("parent follow-up snapshots 当前仅纳入来源统计，未直接参与核心评分，且仍可能包含 mock/contract 依赖。")
+        warnings.append("家长跟进快照当前仅纳入来源统计，未直接参与核心评分，且仍可能包含演示或契约兜底依赖。")
 
     context = DemandInsightContext(
         repositories=repositories,

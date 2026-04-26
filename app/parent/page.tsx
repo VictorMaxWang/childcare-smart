@@ -325,38 +325,6 @@ export default function ParentHomePage() {
     </>
   );
 
-  const parentHeroAside = (
-    <div className="parent-content-scope space-y-3">
-      <div className="hero-note-card">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={previewResult ? "warning" : "info"}>
-            {previewResult ? "AI 已生成提醒" : "家长常规模式"}
-          </Badge>
-          <Badge variant={feed.hasFeedbackToday ? "success" : "warning"}>
-            {feed.hasFeedbackToday ? "今日已反馈" : "今晚待反馈"}
-          </Badge>
-        </div>
-        <p className="mt-4 text-base font-semibold text-slate-950">
-          {previewResult?.title ?? viewModel.aiReminder.title}
-        </p>
-        <p className="mt-2 text-sm leading-6 text-slate-600">{displayTonightTaskDescription}</p>
-      </div>
-      <MetricGrid
-        items={viewModel.todaySummary.map((item) => ({
-          label: item.label,
-          value: item.value,
-          tone:
-            item.tone === "warning"
-              ? "amber"
-              : item.tone === "success"
-                ? "emerald"
-                : "sky",
-        }))}
-        className="sm:grid-cols-2"
-      />
-    </div>
-  );
-
   const growthAndMediaSection = (
     <SectionCard
       title="成长行为与影像记录"
@@ -551,10 +519,6 @@ export default function ParentHomePage() {
   if (careMode) {
     return (
       <RolePageShell
-        intensity="light"
-        tone="brand"
-        surface="solid"
-        interactive={false}
         badge={`家长首页 · ${TODAY_TEXT}`}
         title={`先看 ${viewModel.child.name} 今晚要做什么`}
         description="关怀模式会把首屏压缩成一件事、一句话和最短主链路，帮助祖辈或低数字熟练度照护者更快看懂。"
@@ -563,7 +527,7 @@ export default function ParentHomePage() {
         <RoleSplitLayout
           stacked
           main={
-            <div className="parent-content-scope space-y-6">
+            <div className="space-y-6">
               <ParentCareFocusCard
                 badge="关怀模式"
                 title={`${feed.child.name} 今晚先看这一件事`}
@@ -599,7 +563,7 @@ export default function ParentHomePage() {
               />
 
               <SectionCard title="一句话提醒" description="先告诉你现在最重要的一件事。">
-                <div className="content-focus-block rounded-3xl p-5">
+                <div className="rounded-3xl border border-indigo-100 bg-indigo-50/70 p-5">
                   <ParentSpeakButton
                     text={reminderSpeechText}
                     label="读给我听"
@@ -621,7 +585,7 @@ export default function ParentHomePage() {
               {showMoreContent ? (
                 <div className="space-y-6">
                   <SectionCard title="孩子基本信息" description="需要时再看详细资料。">
-                    <div className="content-reading-panel rounded-3xl p-4">
+                    <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
                       <p className="text-base font-semibold text-slate-900">{viewModel.child.name}</p>
                       <p className="mt-2 text-sm leading-6 text-slate-600">
                         {viewModel.child.className} · {getAgeText(viewModel.child.birthDate)} · 出生于{" "}
@@ -698,20 +662,30 @@ export default function ParentHomePage() {
 
   return (
     <RolePageShell
-      intensity="medium"
-      tone="brand"
       badge={`家长首页 · ${TODAY_TEXT}`}
       title={`先看 ${viewModel.child.name} 今天的状态，再决定今晚怎么做`}
-      description="首页只保留家长今天真正需要处理的信息：孩子状态、AI 提醒、今晚任务、待反馈事项和一条足够轻量的 7 天趋势入口。"
+      description="首页只保留今天最需要处理的信息：孩子状态、AI 提醒、今晚任务、AI 干预卡预览、待反馈事项和 7 天趋势入口。"
       actions={headerActions}
-      heroAside={parentHeroAside}
     >
       <RoleSplitLayout
         main={
-          <div className="parent-content-scope space-y-6">
+          <div className="space-y-6">
+            <MetricGrid
+              items={viewModel.todaySummary.map((item) => ({
+                label: item.label,
+                value: item.value,
+                tone:
+                  item.tone === "warning"
+                    ? "amber"
+                    : item.tone === "success"
+                      ? "emerald"
+                      : "sky",
+              }))}
+            />
+
             <SectionCard title="孩子今日情况摘要" description="先把家长最关心的几件事压缩到首屏。">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="content-reading-panel rounded-3xl p-4">
+                <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
                   <p className="text-sm font-semibold text-slate-900">{viewModel.child.name}</p>
                   <p className="mt-2 text-sm text-slate-500">
                     {viewModel.child.className} · {getAgeText(viewModel.child.birthDate)} · 出生于{" "}
@@ -729,7 +703,7 @@ export default function ParentHomePage() {
                     )}
                   </div>
                 </div>
-                <div className="content-form-panel rounded-3xl p-4">
+                <div className="rounded-3xl border border-slate-100 bg-white p-4">
                   <p className="text-sm font-semibold text-slate-900">今晚闭环重点</p>
                   <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
                     <li>先看 AI 干预卡，再决定今晚只做哪一件事。</li>
@@ -749,7 +723,7 @@ export default function ParentHomePage() {
                 </Badge>
               }
             >
-              <div className="content-focus-block rounded-3xl p-5">
+              <div className="rounded-3xl border border-indigo-100 bg-indigo-50/60 p-5">
                 <ParentSpeakButton
                   text={reminderSpeechText}
                   label="浏览器播报"

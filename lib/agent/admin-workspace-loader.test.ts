@@ -38,7 +38,7 @@ test("getAdminConsultationFeedBadge distinguishes backend, local fallback and un
       localConsultationCount: 2,
     }),
     {
-      label: "backend feed",
+      label: "后端推送",
       variant: "success",
     }
   );
@@ -49,7 +49,7 @@ test("getAdminConsultationFeedBadge distinguishes backend, local fallback and un
       localConsultationCount: 1,
     }),
     {
-      label: "local fallback",
+      label: "本地兜底",
       variant: "outline",
     }
   );
@@ -60,7 +60,7 @@ test("getAdminConsultationFeedBadge distinguishes backend, local fallback and un
       localConsultationCount: 0,
     }),
     {
-      label: "feed unavailable",
+      label: "推送暂不可用",
       variant: "warning",
     }
   );
@@ -162,7 +162,7 @@ test("buildAdminConsultationWorkspaceView keeps board-ready fallback state stabl
   });
 
   assert.equal(view.feedStatus, "unavailable");
-  assert.equal(view.feedBadge.label, "local fallback");
+  assert.equal(view.feedBadge.label, "本地兜底");
   assert.equal(view.priorityItems.length, 1);
   assert.equal(view.priorityItems[0]?.notificationPayload?.priorityItemId, "consult-1");
 });

@@ -1,42 +1,26 @@
 "use client";
 
-import {
-  CheckCircle2,
-  CircleDashed,
-  LoaderCircle,
-  TriangleAlert,
-} from "lucide-react";
+import { CheckCircle2, CircleDashed, LoaderCircle, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import type {
-  ConsultationStageView,
-  ConsultationTraceViewModel,
-} from "@/lib/consultation/trace-types";
+import type { ConsultationStageView, ConsultationTraceViewModel } from "@/lib/consultation/trace-types";
 import { cn } from "@/lib/utils";
 
-function StageIcon({
-  stage,
-  overallStatus,
-}: {
-  stage: ConsultationStageView;
-  overallStatus: ConsultationTraceViewModel["overallStatus"];
-}) {
+function StageIcon({ stage, overallStatus }: { stage: ConsultationStageView; overallStatus: ConsultationTraceViewModel["overallStatus"] }) {
   if ((overallStatus === "error" || overallStatus === "partial") && stage.status === "active") {
-    return <TriangleAlert className="h-4 w-4 text-violet-200" />;
+    return <TriangleAlert className="h-4 w-4 text-amber-500" />;
   }
   if (stage.status === "completed") {
-    return <CheckCircle2 className="h-4 w-4 text-violet-100" />;
+    return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
   }
   if (stage.status === "active") {
-    return <LoaderCircle className="h-4 w-4 animate-spin text-indigo-100" />;
+    return <LoaderCircle className="h-4 w-4 animate-spin text-sky-500" />;
   }
-  return <CircleDashed className="h-4 w-4 text-white/38" />;
+  return <CircleDashed className="h-4 w-4 text-slate-400" />;
 }
 
-function getOverallStatusVariant(
-  status: ConsultationTraceViewModel["overallStatus"]
-) {
+function getOverallStatusVariant(status: ConsultationTraceViewModel["overallStatus"]) {
   if (status === "error") return "destructive" as const;
   if (status === "streaming" || status === "partial") return "warning" as const;
   if (status === "done") return "success" as const;
@@ -57,34 +41,16 @@ export default function ConsultationStageTimeline({
   className?: string;
 }) {
   return (
-    <Card
-      surface="glass"
-      glow="brand"
-      interactive={false}
-      className={cn(
-        "overflow-hidden border-white/14 bg-[linear-gradient(180deg,rgba(19,24,57,0.94),rgba(9,12,31,0.88))]",
-        className
-      )}
-    >
+    <Card className={cn("border-slate-100 bg-linear-to-br from-white via-slate-50 to-white shadow-sm", className)}>
       <CardHeader className="gap-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-white/42">
-              Trace Timeline
-            </p>
-            <CardTitle className="mt-2 text-lg text-white">
-              涓夐樁娈典細璇婃椂闂寸嚎
-            </CardTitle>
+            <p className="text-xs font-medium uppercase tracking-[0.22em] text-slate-500">Trace timeline</p>
+            <CardTitle className="mt-2 text-lg text-slate-900">三阶段会诊时间线</CardTitle>
           </div>
-          <Badge variant={getOverallStatusVariant(overallStatus)}>
-            {overallStatusLabel}
-          </Badge>
+          <Badge variant={getOverallStatusVariant(overallStatus)}>{overallStatusLabel}</Badge>
         </div>
-        <Progress
-          value={progressValue}
-          className="h-2 bg-white/6"
-          indicatorClassName="bg-linear-to-r from-indigo-500 via-violet-500 to-fuchsia-400"
-        />
+        <Progress value={progressValue} className="h-2" indicatorClassName="bg-linear-to-r from-sky-500 via-amber-500 to-emerald-500" />
       </CardHeader>
       <CardContent>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -92,32 +58,20 @@ export default function ConsultationStageTimeline({
             <div
               key={stage.key}
               className={cn(
-                "rounded-[1.5rem] border p-4 transition-all",
+                "rounded-3xl border p-4 transition-all",
                 stage.status === "active"
-                  ? "border-violet-300/24 bg-[linear-gradient(180deg,rgba(31,24,71,0.9),rgba(15,16,42,0.82))] shadow-[var(--shadow-brand)]"
+                  ? "border-sky-200 bg-sky-50/80 shadow-sm"
                   : stage.status === "completed"
-                    ? "border-indigo-300/20 bg-[linear-gradient(180deg,rgba(18,23,54,0.9),rgba(10,12,31,0.82))]"
-                    : "border-white/10 bg-white/5"
+                    ? "border-emerald-100 bg-emerald-50/70"
+                    : "border-slate-100 bg-white"
               )}
             >
               <div className="flex items-center justify-between gap-2">
-                <Badge
-                  variant={
-                    stage.status === "completed"
-                      ? "success"
-                      : stage.status === "active"
-                        ? "warning"
-                        : "outline"
-                  }
-                >
-                  {index + 1}
-                </Badge>
+                <Badge variant={stage.status === "completed" ? "success" : stage.status === "active" ? "warning" : "outline"}>{index + 1}</Badge>
                 <StageIcon stage={stage} overallStatus={overallStatus} />
               </div>
-              <p className="mt-3 text-sm font-semibold text-white">{stage.label}</p>
-              <p className="mt-2 text-xs leading-5 text-white/56">
-                {stage.summary || stage.description}
-              </p>
+              <p className="mt-3 text-sm font-semibold text-slate-900">{stage.label}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">{stage.summary || stage.description}</p>
             </div>
           ))}
         </div>

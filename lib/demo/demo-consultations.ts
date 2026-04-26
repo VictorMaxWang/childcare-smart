@@ -248,11 +248,11 @@ function buildRelativeFutureIso(daysFromNow: number, hour: number, minute: numbe
 
 function buildParticipants(): ConsultationParticipant[] {
   return [
-    { id: "health-agent", label: "Health Agent" },
-    { id: "diet-agent", label: "Diet Agent" },
-    { id: "coparenting-agent", label: "Parent Agent" },
-    { id: "execution-agent", label: "Execution Agent" },
-    { id: "coordinator", label: "Coordinator" },
+    { id: "health-agent", label: "健康观察" },
+    { id: "diet-agent", label: "饮食行为" },
+    { id: "coparenting-agent", label: "家园沟通" },
+    { id: "execution-agent", label: "园内执行" },
+    { id: "coordinator", label: "协调中枢" },
   ];
 }
 
@@ -401,7 +401,7 @@ function buildConsultationResult(seed: DemoConsultationSeed): ConsultationResult
     keyFindings: seed.keyFindings,
     healthAgentView: buildAgentView(
       "HealthObservationAgent",
-      "Health Agent",
+      "健康观察",
       seed.healthSignal,
       seed.healthSignal,
       seed.schoolActions[0],
@@ -409,7 +409,7 @@ function buildConsultationResult(seed: DemoConsultationSeed): ConsultationResult
     ),
     dietBehaviorAgentView: buildAgentView(
       "DietBehaviorAgent",
-      "Diet Agent",
+      "饮食行为",
       seed.mealSignal,
       seed.mealSignal,
       seed.schoolActions[1] ?? seed.schoolActions[0],
@@ -417,7 +417,7 @@ function buildConsultationResult(seed: DemoConsultationSeed): ConsultationResult
     ),
     parentCommunicationAgentView: buildAgentView(
       "ParentCommunicationAgent",
-      "Parent Agent",
+      "家园沟通",
       seed.familySignal,
       seed.familySignal,
       seed.homeActions[0],
@@ -425,7 +425,7 @@ function buildConsultationResult(seed: DemoConsultationSeed): ConsultationResult
     ),
     inSchoolActionAgentView: buildAgentView(
       "InSchoolActionAgent",
-      "Execution Agent",
+      "园内执行",
       seed.schoolSignal,
       seed.schoolSignal,
       seed.schoolActions[0],
@@ -502,7 +502,7 @@ function buildConsultationResult(seed: DemoConsultationSeed): ConsultationResult
     observationPoints: seed.observationPoints,
     reviewIn48h: seed.followUp48h[0],
     shouldEscalateToAdmin: seed.shouldEscalateToAdmin,
-    continuityNotes: [`Demo recovery hotfix seed for ${seed.childName}.`],
+    continuityNotes: [`演示样例：补齐 ${seed.childName} 的连续跟进链路。`],
     memoryMeta: {
       backend: "demo_snapshot",
       degraded: false,

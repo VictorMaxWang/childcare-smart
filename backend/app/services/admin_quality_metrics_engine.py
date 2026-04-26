@@ -540,19 +540,19 @@ def _consultation_closure_metric(context: AdminQualityMetricsContext, window: di
     if not eligible and not context.consultation_fallback_used:
         mode = "fallback" if context.repository.fallback else "aggregated"
     summary = (
-        f"{closed_total} of {len(eligible)} high-risk consultations are closed within the last {context.window_days} days."
+        f"近 {context.window_days} 天共有 {len(eligible)} 条高风险会诊进入统计，其中 {closed_total} 条已形成闭环。"
         if eligible
-        else f"No eligible high-risk consultations were observed in the last {context.window_days} days."
+        else f"近 {context.window_days} 天未发现纳入统计的高风险会诊。"
     )
     warnings: list[str] = []
     if closed_derived:
-        warnings.append("Some closures are inferred from downstream task or feedback signals, not a dedicated closure event table.")
+        warnings.append("部分闭环是根据后续任务完成或家长反馈回流推导得出，并非直接来自专门的闭环事件。")
     if context.consultation_fallback_used:
-        warnings.append("Consultation closure uses demo consultation feed fallback because recent consultation snapshots were unavailable.")
+        warnings.append("会诊闭环率当前使用演示会诊兜底，因为近期会诊快照暂不可用。")
 
     return _build_metric(
         metric_id="consultationClosureRate",
-        label="Consultation Closure",
+        label="会诊闭环率",
         value=(closed_total / len(eligible) * 100.0) if eligible else 0.0,
         unit="%",
         summary=summary,
@@ -567,7 +567,7 @@ def _consultation_closure_metric(context: AdminQualityMetricsContext, window: di
             "derivedClosedCount": closed_derived,
             "sparse": len(eligible) < 2,
         },
-        note="High-risk consultation snapshots are the primary source; task and feedback signals only provide conservative closure support.",
+        note="优先以高风险会诊快照为主数据；任务与反馈信号仅作为保守的闭环补充依据。",
         window=window,
     )
 
@@ -585,10 +585,10 @@ def _follow_up_48h_metric(context: AdminQualityMetricsContext, window: dict[str,
         in_progress_count = sum(1 for task in canonical_tasks if _coerce_text(task.get("status")).lower() == "in_progress")
         return _build_metric(
             metric_id="followUp48hCompletionRate",
-            label="48h Follow-up Completion",
+            label="48小时复查完成率",
             value=(completed_count / len(canonical_tasks) * 100.0) if canonical_tasks else 0.0,
             unit="%",
-            summary=f"{completed_count} of {len(canonical_tasks)} teacher 48h follow-up tasks are completed.",
+            summary=f"已完成 {completed_count}/{len(canonical_tasks)} 条教师 48 小时复查任务。",
             mode="aggregated" if not context.repository.fallback else "demo_only",
             channels=["tasks"],
             business_snapshot_source=context.current_source,
@@ -600,7 +600,7 @@ def _follow_up_48h_metric(context: AdminQualityMetricsContext, window: dict[str,
                 "sparse": len(canonical_tasks) < 2,
                 "usedCanonicalTasks": True,
             },
-            note="Computed from canonical tasks when snapshot.tasks is available.",
+            note="当标准任务快照可用时，优先按标准任务数据计算。",
             window=window,
         )
 
@@ -630,25 +630,25 @@ def _follow_up_48h_metric(context: AdminQualityMetricsContext, window: dict[str,
     completed_count = sum(1 for _, completed in legacy_items if completed)
     return _build_metric(
         metric_id="followUp48hCompletionRate",
-        label="48h Follow-up Completion",
+        label="48小时复查完成率",
         value=(completed_count / len(legacy_items) * 100.0) if legacy_items else 0.0,
         unit="%",
         summary=(
-            f"{completed_count} of {len(legacy_items)} 48h follow-up items are completed via legacy reminder/growth signals."
+            f"通过提醒、成长记录和打卡信号，已完成 {completed_count}/{len(legacy_items)} 条 48 小时复查事项。"
             if legacy_items
-            else f"No canonical 48h follow-up tasks or legacy review items were observed in the last {context.window_days} days."
+            else f"近 {context.window_days} 天未发现标准 48 小时复查任务，也未发现可用于兜底统计的历史复查事项。"
         ),
         mode="fallback" if context.repository.fallback else "derived",
         channels=["reminders", "growth", "task_check_ins"],
         business_snapshot_source=context.current_source,
         coverage=_coverage(len(legacy_items), len(legacy_items)),
-        warnings=["This metric falls back to reminder/growth/task-check-in projection because snapshot.tasks was unavailable."],
+        warnings=["当前因标准任务快照不可用，48 小时复查完成率改用提醒、成长记录和打卡信号推导。"],
         data_quality={
             "itemCount": len(legacy_items),
             "usedCanonicalTasks": False,
             "sparse": len(legacy_items) < 2,
         },
-        note="Legacy projection is a conservative substitute for canonical follow-up tasks.",
+        note="历史投影仅用于兜底估算，口径相对保守。",
         window=window,
     )
 
@@ -697,17 +697,17 @@ def _guardian_feedback_metric(context: AdminQualityMetricsContext, window: dict[
 
     warnings: list[str] = []
     if eligibility_mode == "feedback_inferred":
-        warnings.append("Feedback eligibility is inferred from returned feedback only because parent tasks/intervention cards were unavailable.")
+        warnings.append("当前因家长任务或干预卡缺失，反馈分母只能根据已回传的家长反馈反推。")
 
     return _build_metric(
         metric_id="guardianFeedbackRate",
-        label="Guardian Feedback",
+        label="家长反馈提交率",
         value=(len(observed_children) / len(eligible_children) * 100.0) if eligible_children else 0.0,
         unit="%",
         summary=(
-            f"{len(observed_children)} of {len(eligible_children)} children with an expected home loop submitted guardian feedback."
+            f"预期需要家庭闭环的儿童中，已有 {len(observed_children)}/{len(eligible_children)} 名提交家长反馈。"
             if eligible_children
-            else f"No feedback-eligible children were identified in the last {context.window_days} days."
+            else f"近 {context.window_days} 天未识别出需要统计家长反馈的儿童。"
         ),
         mode=mode,
         channels=[
@@ -725,7 +725,7 @@ def _guardian_feedback_metric(context: AdminQualityMetricsContext, window: dict[
             "eligibilityMode": eligibility_mode,
             "sparse": len(eligible_children) < 2,
         },
-        note="Denominator is limited to children with an expected home loop, not all visible children.",
+        note="分母仅统计预期存在家庭闭环的儿童，不代表全部在园儿童。",
         window=window,
     )
 
@@ -742,10 +742,10 @@ def _home_task_execution_metric(context: AdminQualityMetricsContext, window: dic
         in_progress_count = sum(1 for task in parent_tasks if _coerce_text(task.get("status")).lower() == "in_progress")
         return _build_metric(
             metric_id="homeTaskExecutionRate",
-            label="Home Task Execution",
+            label="家庭任务执行率",
             value=(completed_count / len(parent_tasks) * 100.0) if parent_tasks else 0.0,
             unit="%",
-            summary=f"{completed_count} of {len(parent_tasks)} parent-owned home intervention tasks are completed.",
+            summary=f"已完成 {completed_count}/{len(parent_tasks)} 条家庭任务。",
             mode="aggregated" if not context.repository.fallback else "demo_only",
             channels=["tasks"],
             business_snapshot_source=context.current_source,
@@ -757,7 +757,7 @@ def _home_task_execution_metric(context: AdminQualityMetricsContext, window: dic
                 "usedCanonicalTasks": True,
                 "sparse": len(parent_tasks) < 2,
             },
-            note="Computed from canonical parent intervention tasks when available.",
+            note="当标准家长任务可用时，优先按任务执行结果计算。",
             window=window,
         )
 
@@ -791,26 +791,26 @@ def _home_task_execution_metric(context: AdminQualityMetricsContext, window: dic
 
     return _build_metric(
         metric_id="homeTaskExecutionRate",
-        label="Home Task Execution",
+        label="家庭任务执行率",
         value=(len(completed_card_ids) / len(eligible_card_ids) * 100.0) if eligible_card_ids else 0.0,
         unit="%",
         summary=(
-            f"{len(completed_card_ids)} of {len(eligible_card_ids)} home intervention items are completed from feedback/check-in evidence."
+            f"根据反馈回传与打卡证据，已完成 {len(completed_card_ids)}/{len(eligible_card_ids)} 条家庭任务。"
             if eligible_card_ids
-            else f"No parent home intervention items were identified in the last {context.window_days} days."
+            else f"近 {context.window_days} 天未识别出可统计的家庭任务。"
         ),
         mode="fallback" if context.repository.fallback else "derived",
         channels=["intervention_cards", "guardian_feedback", "task_check_ins"],
         business_snapshot_source=context.current_source,
         coverage=_coverage(len(eligible_card_ids), len(observed_card_ids)),
-        warnings=["Home task execution falls back to intervention-card and feedback evidence because snapshot.tasks was unavailable."],
+        warnings=["当前因标准任务快照不可用，家庭任务执行率改用干预卡与反馈证据推导。"],
         data_quality={
             "itemCount": len(eligible_card_ids),
             "completedItemCount": len(completed_card_ids),
             "usedCanonicalTasks": False,
             "sparse": len(eligible_card_ids) < 2,
         },
-        note="Legacy home-task execution is derived from intervention-card linked evidence, not a standalone task lifecycle store.",
+        note="该兜底口径基于干预卡关联证据，不等同于完整的任务生命周期记录。",
         window=window,
     )
 
@@ -842,10 +842,10 @@ def _teacher_low_confidence_metric(context: AdminQualityMetricsContext, window: 
     if draft_item_count:
         return _build_metric(
             metric_id="teacherLowConfidenceRate",
-            label="Teacher Low Confidence",
+            label="教师记录待复核率",
             value=(low_confidence_count / draft_item_count * 100.0) if draft_item_count else 0.0,
             unit="%",
-            summary=f"{low_confidence_count} of {draft_item_count} teacher draft items fall below the low-confidence threshold ({LOW_CONFIDENCE_THRESHOLD:.2f}).",
+            summary=f"共有 {draft_item_count} 条教师记录纳入统计，其中 {low_confidence_count} 条低于待复核阈值（{LOW_CONFIDENCE_THRESHOLD:.2f}）。",
             mode="derived" if not context.repository.fallback else "demo_only",
             channels=["mobile_drafts", "teacher_voice"],
             business_snapshot_source=context.current_source,
@@ -857,7 +857,7 @@ def _teacher_low_confidence_metric(context: AdminQualityMetricsContext, window: 
                 "asrLowCount": asr_low_count,
                 "sparse": draft_item_count < 3,
             },
-            note="Only durable mobile draft payloads are counted; teacher-voice API responses are not a stable backend telemetry source yet.",
+            note="目前仅统计可持久化的移动端草稿数据，教师语音接口返回还不是稳定的后台埋点来源。",
             window=window,
         )
 
@@ -875,16 +875,16 @@ def _teacher_low_confidence_metric(context: AdminQualityMetricsContext, window: 
         for item in evidence_items
         if _coerce_text(item.get("confidence")).lower() == "low" or bool(item.get("requiresHumanReview"))
     )
-    warnings = ["Teacher low-confidence rate falls back to consultation evidence because mobile teacher draft telemetry is unavailable."]
+    warnings = ["当前因教师移动草稿埋点缺失，教师记录待复核率改用会诊证据项兜底。"]
     return _build_metric(
         metric_id="teacherLowConfidenceRate",
-        label="Teacher Low Confidence",
+        label="教师记录待复核率",
         value=(low_count / len(evidence_items) * 100.0) if evidence_items else 0.0,
         unit="%",
         summary=(
-            f"{low_count} of {len(evidence_items)} teacher evidence items require manual review."
+            f"共有 {len(evidence_items)} 条教师证据项纳入统计，其中 {low_count} 条需要人工复核。"
             if evidence_items
-            else "No durable teacher draft payloads or consultation evidence were observed in the current window."
+            else "当前时间窗内未发现可持久化的教师草稿或可兜底的会诊证据。"
         ),
         mode="demo_only" if context.repository.fallback and context.consultation_fallback_used else "fallback",
         channels=["consultation_result"],
@@ -897,7 +897,7 @@ def _teacher_low_confidence_metric(context: AdminQualityMetricsContext, window: 
             "sparse": len(evidence_items) < 3,
         },
         proxy=True,
-        note="This proxy uses consultation evidence items and should not be interpreted as a complete institution-wide teacher recording telemetry rate.",
+        note="该指标为兜底代理，只反映会诊证据中的待复核信号，不能代表全机构教师记录质量。",
         window=window,
     )
 
@@ -972,21 +972,21 @@ def _morning_check_response_latency_metric(context: AdminQualityMetricsContext, 
     coverage = _coverage(len(abnormal_records), len(latencies))
     mode = "demo_only" if context.repository.fallback else "derived" if latencies else "fallback"
     warnings = [
-        "Morning-check response latency is a proxy metric derived from the first downstream signal after an abnormal health record.",
-        "Health records are often date-granular, so the latency is coarse and not a true response-event SLA.",
+        "晨检异常响应时长是根据异常健康记录之后的首个下游信号推导得出的代理指标。",
+        "健康记录通常只有日期粒度，因此该时长只能反映粗略响应节奏，不代表严格的响应时效承诺。",
     ]
     summary = (
-        f"{len(latencies)} of {len(abnormal_records)} abnormal morning checks have a downstream response signal; average first-response latency is {_round_value(mean(latencies), 1)} hours."
+        f"在 {len(abnormal_records)} 条晨检异常中，已有 {len(latencies)} 条出现后续响应信号，平均首次响应时长为 {_round_value(mean(latencies), 1)} 小时。"
         if latencies
         else (
-            f"{len(abnormal_records)} abnormal morning checks were observed, but no downstream response timestamp could be derived."
+            f"近 {context.window_days} 天记录了 {len(abnormal_records)} 条晨检异常，但暂未推导出后续响应时间。"
             if abnormal_records
-            else f"No abnormal morning checks were observed in the last {context.window_days} days."
+            else f"近 {context.window_days} 天未发现晨检异常。"
         )
     )
     return _build_metric(
         metric_id="morningCheckResponseLatency",
-        label="Morning Check Response Latency",
+        label="晨检异常响应时长",
         value=_round_value(mean(latencies), 1) if latencies else 0.0,
         unit="hours",
         summary=summary,
@@ -1003,7 +1003,7 @@ def _morning_check_response_latency_metric(context: AdminQualityMetricsContext, 
             "sparse": len(abnormal_records) < 2,
         },
         proxy=True,
-        note="This latency uses inferred response events, not a dedicated morning-check response timeline.",
+        note="该时长基于后续响应事件推导，并非专门的晨检响应时间线。",
         window=window,
     )
 
@@ -1024,10 +1024,10 @@ def _recurring_issue_heat_metric(context: AdminQualityMetricsContext, window: di
             mode = "derived"
         return _build_metric(
             metric_id="recurringIssueHeat",
-            label="Recurring Issue Heat",
+            label="重复问题热度",
             value=peak_value,
             unit="score",
-            summary=f"Top recurring issue heat is concentrated around {', '.join(top_labels)}." if top_labels else "Recurring issue heat was detected.",
+            summary=f"当前重复问题热度主要集中在 {', '.join(top_labels)}。" if top_labels else "已识别到重复问题热度信号。",
             mode=mode,
             channels=[_coerce_text(item) for item in safe_list(cluster_source.get("channels")) if _coerce_text(item)],
             business_snapshot_source=context.current_source,
@@ -1042,23 +1042,23 @@ def _recurring_issue_heat_metric(context: AdminQualityMetricsContext, window: di
                 "peakScore": peak_value,
                 "sparse": len(clusters) < 2,
             },
-            note="Recurring issue heat reuses the demand-insight recurring cluster aggregation and remains aggregation-first.",
+            note="重复问题热度沿用需求洞察聚类结果，仍以聚合口径为主。",
             window=window,
         )
 
     return _build_metric(
         metric_id="recurringIssueHeat",
-        label="Recurring Issue Heat",
+        label="重复问题热度",
         value=0.0,
         unit="score",
-        summary=f"No recurring issue cluster crossed the aggregation threshold in the last {context.window_days} days.",
+        summary=f"近 {context.window_days} 天暂无重复问题簇超过当前聚合阈值。",
         mode="fallback" if context.repository.fallback else "derived",
         channels=["growth", "health", "guardian_feedback", "consultation_result"],
         business_snapshot_source=context.current_source,
         coverage=_coverage(total_children, 0),
         warnings=[warning for warning in safe_list(context.demand_insight_result.get("warnings")) if _coerce_text(warning)],
         data_quality={"clusterCount": 0, "sparse": True},
-        note="No recurring cluster reached the current aggregation threshold.",
+        note="当前没有重复问题簇达到聚合阈值。",
         window=window,
     )
 
@@ -1084,19 +1084,19 @@ def _suggestion_effectiveness_metric(context: AdminQualityMetricsContext, window
     improved_count = sum(1 for record in candidate_status_by_id.values() if record["improved"])
     return _build_metric(
         metric_id="suggestionEffectiveness",
-        label="Suggestion Effectiveness",
+        label="干预建议有效率",
         value=(improved_count / eligible_count * 100.0) if eligible_count else 0.0,
         unit="%",
         summary=(
-            f"{improved_count} of {eligible_count} intervention-linked feedback loops report improvement."
+            f"在 {eligible_count} 条已回传反馈的建议中，有 {improved_count} 条呈现改善信号。"
             if eligible_count
-            else "No suggestion-linked feedback loop returned enough evidence to estimate effectiveness in the current window."
+            else "当前时间窗内暂无足够的建议反馈回流，无法估算建议有效率。"
         ),
         mode="demo_only" if context.repository.fallback else "fallback",
         channels=["guardian_feedback", "intervention_cards"],
         business_snapshot_source=context.current_source,
         coverage=_coverage(eligible_count, eligible_count),
-        warnings=["Suggestion effectiveness is a conservative proxy based on intervention-linked feedback and should not be read as causal effectiveness."],
+        warnings=["建议有效率只是基于关联反馈的保守代理指标，不能直接视为因果效果。"],
         data_quality={
             "eligibleSuggestionCount": eligible_count,
             "improvedSuggestionCount": improved_count,
@@ -1104,7 +1104,7 @@ def _suggestion_effectiveness_metric(context: AdminQualityMetricsContext, window
             "sparse": eligible_count < 2,
         },
         proxy=True,
-        note="This metric only covers suggestions with returned feedback and cannot establish causality.",
+        note="该指标只统计已回传反馈的建议，不能据此直接判断干预因果。",
         window=window,
     )
 
@@ -1137,13 +1137,13 @@ async def build_admin_quality_metrics_engine(
     if resolved_class_ids:
         current_snapshot = _filter_snapshot_by_class(current_snapshot, resolved_class_ids)
         warnings.append(
-            f"Metrics were filtered to class ids: {', '.join(sorted(resolved_class_ids))}."
+            f"指标已按班级范围过滤：{', '.join(sorted(resolved_class_ids))}。"
         )
 
     if base_repository.fallback and not include_demo_fallback:
         current_snapshot = _empty_snapshot(updated_at=datetime.now(timezone.utc).isoformat())
         current_source = "demo_suppressed"
-        warnings.append("Demo business snapshot fallback was explicitly suppressed for this request.")
+        warnings.append("当前请求已显式关闭演示业务快照兜底。")
 
     current_repository = ChildcareRepository(
         snapshot=current_snapshot,
@@ -1176,7 +1176,7 @@ async def build_admin_quality_metrics_engine(
     if current_source == "demo_suppressed":
         demand_insight_result = {
             "recurringIssueClusters": [],
-            "warnings": ["Recurring issue heat demo fallback was suppressed for this request."],
+            "warnings": ["重复问题热度的演示兜底已在当前请求中关闭。"],
             "sourceSummary": {},
         }
     else:
@@ -1193,16 +1193,16 @@ async def build_admin_quality_metrics_engine(
         )
 
     if current_repository.fallback:
-        warnings.append("Business snapshot data is using demo or fallback content; governance metrics are shape-stable but not institution-factual.")
+        warnings.append("业务快照当前使用演示或兜底内容；治理指标的结构稳定，但不代表机构真实经营数据。")
     if consultation_fallback_used:
-        warnings.append("Consultation-derived metrics use demo consultation feed fallback because recent consultation snapshots were unavailable.")
+        warnings.append("会诊相关指标当前使用演示会诊兜底，因为近期会诊快照暂不可用。")
     if not safe_list(current_snapshot.get("tasks")):
-        warnings.append("Canonical task data is missing from the snapshot, so follow-up and home-task metrics may rely on legacy projection.")
+        warnings.append("当前快照缺少标准任务数据，因此复查与家庭任务指标可能改用历史投影。")
     if not safe_list(current_snapshot.get("mobileDrafts")):
-        warnings.append("Teacher low-confidence is likely to fall back to consultation evidence because mobile teacher draft telemetry is absent.")
+        warnings.append("当前缺少教师移动草稿埋点，因此教师记录待复核率可能回退到会诊证据口径。")
     warnings.extend([warning for warning in safe_list(demand_insight_result.get("warnings")) if _coerce_text(warning)])
     if repositories.degraded:
-        warnings.append(f"Memory backend is degraded to {repositories.backend}; recent traces and snapshots may be incomplete.")
+        warnings.append(f"记忆后端已降级为 {repositories.backend}，近期链路记录与快照可能不完整。")
     warnings.extend([f"childcare_snapshot:{error}" for error in current_repository.errors])
 
     context = AdminQualityMetricsContext(

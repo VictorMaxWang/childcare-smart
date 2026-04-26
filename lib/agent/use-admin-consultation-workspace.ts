@@ -39,7 +39,7 @@ export interface UseAdminConsultationWorkspaceOptions {
 
 function createDefaultFeedBadge(): AdminConsultationFeedBadge {
   return {
-    label: "loading feed",
+    label: "载入中",
     variant: "outline",
   };
 }
@@ -51,28 +51,28 @@ export function getAdminConsultationFeedBadge(params: {
 }): AdminConsultationFeedBadge {
   if (params.feedStatus === "ready" && !params.fallbackUsed) {
     return {
-      label: "backend feed",
+      label: "后端推送",
       variant: "success",
     };
   }
 
   if (params.feedStatus === "ready" && params.fallbackUsed) {
     return {
-      label: "demo-backed feed",
+      label: "演示兜底",
       variant: "outline",
     };
   }
 
   if (params.feedStatus === "unavailable" && params.localConsultationCount > 0) {
     return {
-      label: "local fallback",
+      label: "本地兜底",
       variant: "outline",
     };
   }
 
   if (params.feedStatus === "unavailable") {
     return {
-      label: "feed unavailable",
+      label: "推送暂不可用",
       variant: "warning",
     };
   }

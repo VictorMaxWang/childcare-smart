@@ -35,7 +35,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { buildRecentLocalDateRange, normalizeLocalDate } from "@/lib/date";
 import { OBSERVATION_INDICATOR_MAP, type ObservationIndicatorOption } from "@/lib/mock/observation";
 import { toast } from "sonner";
-import ContentPageShell from "@/components/visuals/ContentPageShell";
 
 export default function GrowthPage() {
   const { currentUser, visibleChildren, growthRecords, addGrowthRecord } = useApp();
@@ -174,11 +173,19 @@ export default function GrowthPage() {
   }
 
   return (
-    <ContentPageShell
-      title="成长与行为记录"
-      description="支持记录握笔、独立进食、语言表达、社交互动、情绪表现、精细动作、大动作、睡眠情况、如厕情况。每条记录都包含时间、记录人角色、观察标签、描述和是否需要关注。"
-      icon={<BookHeart className="h-6 w-6 text-violet-200" />}
-    >
+    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
+      <div className="mb-8">
+        <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
+          <BookHeart className="h-8 w-8 text-rose-500" />
+          成长与行为记录
+        </h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+          支持记录握笔、独立进食、语言表达、社交互动、情绪表现、精细动作、大动作、睡眠情况、如厕情况。
+          每条记录都包含时间、记录人角色、观察标签、描述和是否需要关注。
+        </p>
+        <div className="section-divider mt-5" />
+      </div>
+
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_1fr]">
         <div className="space-y-3 xl:sticky xl:top-24 xl:h-fit">
           <Button
@@ -303,7 +310,7 @@ export default function GrowthPage() {
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <InfoStat title="待复查" value={`${pendingRecords.length}条`} icon={<CalendarClock className="h-4 w-4 text-amber-500" />} />
-        <InfoStat title="已完成复查" value={`${completedRecords.length}条`} icon={<CheckCircle2 className="h-4 w-4 text-violet-300" />} />
+            <InfoStat title="已完成复查" value={`${completedRecords.length}条`} icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" />} />
             <InfoStat title="当前身份" value={`${currentUser.role}`} />
           </div>
 
@@ -358,7 +365,7 @@ export default function GrowthPage() {
                         strokeWidth={3}
                         labelLine={{ stroke: '#94a3b8', strokeWidth: 1.5 }}
                         label={({ cx, x, y, name, value }) => (
-              <text x={x} y={y} fill="rgba(228,233,255,0.72)" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="13" fontWeight="600">
+                          <text x={x} y={y} fill="#475569" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="13" fontWeight="600">
                             {name} {value}
                           </text>
                         )}
@@ -401,14 +408,14 @@ export default function GrowthPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={reviewChartData} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
                       <defs>
-                <linearGradient id="growthReviewAmber" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#a78bfa" />
-                  <stop offset="100%" stopColor="#8b5cf6" />
-                </linearGradient>
-                <linearGradient id="growthReviewGreen" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#7c83ff" />
-                  <stop offset="100%" stopColor="#6366f1" />
-                </linearGradient>
+                        <linearGradient id="growthReviewAmber" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#fbbf24" />
+                          <stop offset="100%" stopColor="#f59e0b" />
+                        </linearGradient>
+                        <linearGradient id="growthReviewGreen" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#34d399" />
+                          <stop offset="100%" stopColor="#10b981" />
+                        </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 12 }} />
@@ -565,7 +572,7 @@ export default function GrowthPage() {
           </Card>
         </div>
       </div>
-    </ContentPageShell>
+    </div>
   );
 }
 

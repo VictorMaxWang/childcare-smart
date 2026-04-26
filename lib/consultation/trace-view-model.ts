@@ -31,6 +31,7 @@ import {
   type ConsultationTraceViewModel,
   type FollowUp48hCardData,
 } from "@/lib/consultation/trace-types";
+import { formatAdminSourceLabel } from "@/lib/agent/admin-display-text";
 
 function firstDefined<T>(...values: Array<T | null | undefined>) {
   for (const value of values) {
@@ -131,7 +132,7 @@ function buildLongTermSummaryCard(
       ...(result.continuityNotes ?? []).slice(0, 2),
       ...asTraceStringArray(asRecord(memoryMeta).usedSources)
         .slice(0, 2)
-        .map((item) => `memory source: ${item}`),
+        .map((item) => `参考来源：${formatAdminSourceLabel(item)}`),
     ].filter(Boolean),
     providerTrace: providerTrace ?? undefined,
     memoryMeta: memoryMeta ?? undefined,
@@ -183,8 +184,8 @@ function buildLongTermEvidence(
   const backend = String(resolved.backend ?? "").trim();
   if (backend) {
     evidence.push({
-      label: "memory backend",
-      detail: backend,
+      label: "记忆后端",
+      detail: formatAdminSourceLabel(backend),
     });
   }
 
@@ -192,8 +193,8 @@ function buildLongTermEvidence(
     .slice(0, 2)
     .forEach((detail) => {
       evidence.push({
-        label: "memory source",
-        detail,
+        label: "参考来源",
+        detail: formatAdminSourceLabel(detail),
       });
     });
 
@@ -306,7 +307,7 @@ function buildStageItems(
       ...(result?.continuityNotes ?? []).slice(0, 2),
       ...asTraceStringArray(asRecord(memoryMeta).usedSources)
         .slice(0, 2)
-        .map((item) => `memory source: ${item}`),
+        .map((item) => `参考来源：${formatAdminSourceLabel(item)}`),
     ].filter(Boolean);
   }
 
@@ -359,7 +360,7 @@ function buildStageSource(
     return "memory";
   }
 
-  return providerTrace?.source ?? state.result?.source ?? undefined;
+  return formatAdminSourceLabel(providerTrace?.source ?? state.result?.source ?? undefined);
 }
 
 function buildStageEmptyState(
@@ -409,8 +410,8 @@ function buildStageCallout(
   if (stage === "current_recommendation" && providerState === "fallback") {
     return {
       tone: "warning",
-      title: "当前使用 fallback 链路",
-      description: "主内容仍可展示，但需要在联调时确认真实 provider 链路是否正常。",
+      title: "当前使用兜底链路",
+      description: "主内容仍可展示，但联调时仍需确认真实模型链路是否正常。",
     };
   }
 
@@ -545,8 +546,8 @@ function buildCallouts(params: {
   if (params.providerState === "fallback") {
     callouts.push({
       tone: "warning",
-      title: "当前展示的是 fallback 结果",
-      description: "页面仍可演示，但 staging 联调时需要继续确认真实 provider 链路。",
+      title: "当前展示的是兜底结果",
+      description: "页面仍可演示，但联调时仍需继续确认真实模型链路。",
     });
   }
 

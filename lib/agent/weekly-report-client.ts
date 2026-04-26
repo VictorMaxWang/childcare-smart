@@ -5,20 +5,21 @@ import type {
   WeeklyReportRole,
   WeeklyReportSection,
 } from "@/lib/ai/types";
+import { sanitizeAdminWeeklyReportResponseForAdmin } from "@/lib/agent/admin-weekly-sanitize";
 
 type WeeklyReportBadgeVariant = "info" | "warning" | "secondary";
 
 const WEEKLY_REPORT_SOURCE_META = {
   ai: {
-    label: "AI",
+    label: "智能生成",
     variant: "info",
   },
   fallback: {
-    label: "Fallback",
+    label: "本地兜底",
     variant: "warning",
   },
   mock: {
-    label: "Demo",
+    label: "演示结果",
     variant: "secondary",
   },
 } as const satisfies Record<
@@ -28,13 +29,13 @@ const WEEKLY_REPORT_SOURCE_META = {
 
 const WEEKLY_REPORT_ROLE_META = {
   teacher: {
-    label: "Teacher Report",
+    label: "教师周报",
   },
   admin: {
-    label: "Admin Report",
+    label: "园长周报",
   },
   parent: {
-    label: "Parent Report",
+    label: "家长周报",
   },
 } as const satisfies Record<WeeklyReportRole, { label: string }>;
 
@@ -115,15 +116,17 @@ export async function fetchWeeklyReport(
   });
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response, "Weekly report preview is temporarily unavailable."));
+    throw new Error(await readErrorMessage(response, "周报预览暂时不可用"));
   }
 
   const data = (await response.json()) as unknown;
   if (!isWeeklyReportResponse(data)) {
-    throw new Error("Weekly report response shape is invalid.");
+    throw new Error("周报接口返回结构异常");
   }
 
-  return data;
+  return data.role === "admin"
+    ? sanitizeAdminWeeklyReportResponseForAdmin(data)
+    : data;
 }
 
 export function getWeeklyReportSourceMeta(source: WeeklyReportResponse["source"]) {

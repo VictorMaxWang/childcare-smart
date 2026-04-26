@@ -8,7 +8,6 @@ import {
   MessageSquareQuote,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import type {
   TeacherCopilotPayload,
   TeacherCopilotSectionId,
@@ -33,14 +32,6 @@ function hasScriptContent(payload: TeacherCopilotPayload["parentCommunicationScr
       payload.ask ||
       payload.closing ||
       payload.bullets?.length
-  );
-}
-
-function ToggleIcon({ open }: { open: boolean }) {
-  return (
-    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/12 bg-[linear-gradient(180deg,rgba(24,20,52,0.78),rgba(11,12,30,0.72))] text-white/58 shadow-[var(--shadow-card)]">
-      <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
-    </span>
   );
 }
 
@@ -80,257 +71,215 @@ export default function TeacherCopilotPanel({
   }
 
   return (
-    <div className="teacher-copilot-panel space-y-3">
+    <div className="space-y-3">
       {sections.map((sectionId) => {
         const isOpen = openSectionId === sectionId;
 
         if (sectionId === "recordCompletionHints" && payload.recordCompletionHints?.length) {
           return (
-            <Card
+            <section
               key={sectionId}
-              surface="luminous"
-              glow="soft"
-              interactive={false}
-              className="border-[rgba(164,168,255,0.18)] bg-[linear-gradient(160deg,rgba(25,18,54,0.95),rgba(14,12,37,0.92),rgba(15,18,43,0.88))]"
+              className="rounded-3xl border border-amber-100 bg-amber-50/70 p-4"
             >
-              <CardContent className="p-4">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setManualOpenSectionId((current) =>
-                      current === sectionId ? null : sectionId
-                    )
-                  }
-                  className="flex w-full items-center justify-between gap-3 text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <ClipboardList className="h-4 w-4 text-violet-200" />
-                    <p className="text-sm font-semibold text-slate-900">记录补全提示</p>
-              <Badge variant="info">{payload.recordCompletionHints.length} 条</Badge>
-                  </div>
-                  <ToggleIcon open={isOpen} />
-                </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setManualOpenSectionId((current) =>
+                    current === sectionId ? null : sectionId
+                  )
+                }
+                className="flex w-full items-center justify-between gap-3 text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-amber-600" />
+                  <p className="text-sm font-semibold text-slate-900">记录补全提示</p>
+                  <Badge variant="warning">{payload.recordCompletionHints.length} 条</Badge>
+                </div>
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/70 text-slate-500">
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </span>
+              </button>
 
-                {isOpen ? (
-                  <div className="mt-4 space-y-3">
-                    {payload.recordCompletionHints.map((hint) => (
-                      <Card
-                        key={hint.id ?? hint.title}
-                        surface="glass"
-                        glow="soft"
-                        interactive={false}
-                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(16,19,44,0.84),rgba(9,11,27,0.74))]"
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-semibold text-slate-900">{hint.title}</p>
-                            {hint.tone === "warning" ? (
-            <Badge variant="info">优先补齐</Badge>
-                            ) : (
-                              <Badge variant="info">辅助提示</Badge>
-                            )}
-                            {hint.tags?.map((tag) => (
-                              <Badge key={tag} variant="outline">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                          {hint.detail ? (
-                            <p className="mt-2 text-sm leading-6 text-slate-600">{hint.detail}</p>
-                          ) : null}
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
+              {isOpen ? (
+                <div className="mt-4 space-y-3">
+                  {payload.recordCompletionHints.map((hint) => (
+                    <div
+                      key={hint.id ?? hint.title}
+                      className="rounded-2xl border border-white/80 bg-white/80 p-4"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-900">{hint.title}</p>
+                        {hint.tone === "warning" ? (
+                          <Badge variant="warning">优先补齐</Badge>
+                        ) : (
+                          <Badge variant="info">辅助提示</Badge>
+                        )}
+                        {hint.tags?.map((tag) => (
+                          <Badge key={tag} variant="outline">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                      {hint.detail ? (
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{hint.detail}</p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </section>
           );
         }
 
         if (sectionId === "microTrainingSOP" && payload.microTrainingSOP) {
           return (
-            <Card
+            <section
               key={sectionId}
-              surface="glass"
-              glow="soft"
-              interactive={false}
-              className="border-[rgba(164,168,255,0.16)] bg-[linear-gradient(180deg,rgba(16,21,50,0.88),rgba(10,12,31,0.8))]"
+              className="rounded-3xl border border-sky-100 bg-sky-50/70 p-4"
             >
-              <CardContent className="p-4">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setManualOpenSectionId((current) =>
-                      current === sectionId ? null : sectionId
-                    )
-                  }
-                  className="flex w-full items-center justify-between gap-3 text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <GraduationCap className="h-4 w-4 text-indigo-200" />
-                    <p className="text-sm font-semibold text-slate-900">
-                      {payload.microTrainingSOP.title}
-                    </p>
-                    <Badge variant="info">
-                      {payload.microTrainingSOP.durationLabel ?? "30 秒"}
-                    </Badge>
-                  </div>
-                  <ToggleIcon open={isOpen} />
-                </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setManualOpenSectionId((current) =>
+                    current === sectionId ? null : sectionId
+                  )
+                }
+                className="flex w-full items-center justify-between gap-3 text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <GraduationCap className="h-4 w-4 text-sky-600" />
+                  <p className="text-sm font-semibold text-slate-900">
+                    {payload.microTrainingSOP.title}
+                  </p>
+                  <Badge variant="info">
+                    {payload.microTrainingSOP.durationLabel ?? "30 秒"}
+                  </Badge>
+                </div>
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/70 text-slate-500">
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </span>
+              </button>
 
-                <p className="mt-3 text-sm leading-6 text-slate-600">
-                  {payload.microTrainingSOP.summary ?? "按这 3 步把本轮老师动作落到位。"}
-                </p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                {payload.microTrainingSOP.summary ?? "按这 3 步把本轮老师动作落到位。"}
+              </p>
 
-                {isOpen && payload.microTrainingSOP.steps.length > 0 ? (
-                  <div className="mt-4 space-y-3">
-                    {payload.microTrainingSOP.steps.map((step, index) => (
-                      <Card
-                        key={`${step.title}-${index}`}
-                        surface="glass"
-                        glow="soft"
-                        interactive={false}
-                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
-                      >
-                        <CardContent className="p-4">
-                          <p className="text-sm font-semibold text-slate-900">
-                            {index + 1}. {step.title}
-                          </p>
-                          {step.detail ? (
-                            <p className="mt-2 text-sm leading-6 text-slate-600">{step.detail}</p>
-                          ) : null}
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
+              {isOpen && payload.microTrainingSOP.steps.length > 0 ? (
+                <ol className="mt-4 space-y-3">
+                  {payload.microTrainingSOP.steps.map((step, index) => (
+                    <li
+                      key={`${step.title}-${index}`}
+                      className="rounded-2xl border border-white/80 bg-white/80 p-4"
+                    >
+                      <p className="text-sm font-semibold text-slate-900">
+                        {index + 1}. {step.title}
+                      </p>
+                      {step.detail ? (
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{step.detail}</p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+            </section>
           );
         }
 
         if (sectionId === "parentCommunicationScript" && payload.parentCommunicationScript) {
           return (
-            <Card
+            <section
               key={sectionId}
-              surface="luminous"
-              glow="brand"
-              interactive={false}
-              className="border-[rgba(164,168,255,0.18)] bg-[linear-gradient(160deg,rgba(26,20,59,0.96),rgba(15,13,39,0.92),rgba(15,19,46,0.88))]"
+              className="rounded-3xl border border-indigo-100 bg-indigo-50/70 p-4"
             >
-              <CardContent className="p-4">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setManualOpenSectionId((current) =>
-                      current === sectionId ? null : sectionId
-                    )
-                  }
-                  className="flex w-full items-center justify-between gap-3 text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <MessageSquareQuote className="h-4 w-4 text-violet-200" />
-                    <p className="text-sm font-semibold text-slate-900">
-                      {payload.parentCommunicationScript.title}
-                    </p>
-                  </div>
-                  <ToggleIcon open={isOpen} />
-                </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setManualOpenSectionId((current) =>
+                    current === sectionId ? null : sectionId
+                  )
+                }
+                className="flex w-full items-center justify-between gap-3 text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <MessageSquareQuote className="h-4 w-4 text-indigo-600" />
+                  <p className="text-sm font-semibold text-slate-900">
+                    {payload.parentCommunicationScript.title}
+                  </p>
+                </div>
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/70 text-slate-500">
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </span>
+              </button>
 
-                {isOpen ? (
-                  <div className="mt-4 space-y-3">
-                    {payload.parentCommunicationScript.opening ? (
-                      <Card
-                        surface="glass"
-                        glow="soft"
-                        interactive={false}
-                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
-                      >
-                        <CardContent className="p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
-                            开场
-                          </p>
-                          <p className="mt-2 text-sm leading-6 text-slate-700">
-                            {payload.parentCommunicationScript.opening}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ) : null}
-                    {payload.parentCommunicationScript.situation ? (
-                      <Card
-                        surface="glass"
-                        glow="soft"
-                        interactive={false}
-                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
-                      >
-                        <CardContent className="p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
-                            现状
-                          </p>
-                          <p className="mt-2 text-sm leading-6 text-slate-700">
-                            {payload.parentCommunicationScript.situation}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ) : null}
-                    {payload.parentCommunicationScript.ask ? (
-                      <Card
-                        surface="glass"
-                        glow="soft"
-                        interactive={false}
-                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
-                      >
-                        <CardContent className="p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
-                            请家长配合
-                          </p>
-                          <p className="mt-2 text-sm leading-6 text-slate-700">
-                            {payload.parentCommunicationScript.ask}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ) : null}
-                    {payload.parentCommunicationScript.closing ? (
-                      <Card
-                        surface="glass"
-                        glow="soft"
-                        interactive={false}
-                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
-                      >
-                        <CardContent className="p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
-                            收口
-                          </p>
-                          <p className="mt-2 text-sm leading-6 text-slate-700">
-                            {payload.parentCommunicationScript.closing}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ) : null}
-                    {payload.parentCommunicationScript.bullets?.length ? (
-                      <Card
-                        surface="glass"
-                        glow="soft"
-                        interactive={false}
-                        className="border-[rgba(164,168,255,0.14)] bg-[linear-gradient(180deg,rgba(15,18,44,0.84),rgba(9,11,28,0.74))]"
-                      >
-                        <CardContent className="p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
-                            话术要点
-                          </p>
-                          <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
-                            {payload.parentCommunicationScript.bullets.map((bullet) => (
-                              <li key={bullet}>- {bullet}</li>
-                            ))}
-                          </ul>
-                        </CardContent>
-                      </Card>
-                    ) : null}
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
+              {isOpen ? (
+                <div className="mt-4 space-y-3">
+                  {payload.parentCommunicationScript.opening ? (
+                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
+                        开场
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">
+                        {payload.parentCommunicationScript.opening}
+                      </p>
+                    </div>
+                  ) : null}
+                  {payload.parentCommunicationScript.situation ? (
+                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
+                        现状
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">
+                        {payload.parentCommunicationScript.situation}
+                      </p>
+                    </div>
+                  ) : null}
+                  {payload.parentCommunicationScript.ask ? (
+                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
+                        请家长配合
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">
+                        {payload.parentCommunicationScript.ask}
+                      </p>
+                    </div>
+                  ) : null}
+                  {payload.parentCommunicationScript.closing ? (
+                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
+                        收口
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">
+                        {payload.parentCommunicationScript.closing}
+                      </p>
+                    </div>
+                  ) : null}
+                  {payload.parentCommunicationScript.bullets?.length ? (
+                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
+                        话术要点
+                      </p>
+                      <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+                        {payload.parentCommunicationScript.bullets.map((bullet) => (
+                          <li key={bullet}>- {bullet}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
           );
         }
 

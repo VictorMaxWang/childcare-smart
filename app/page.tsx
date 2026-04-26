@@ -7,8 +7,9 @@ import {
   ArrowRight,
   BookHeart,
   CalendarDays,
+  ClipboardList,
   History,
-  RefreshCw,
+  TrendingDown,
   Sparkles,
   TriangleAlert,
   Users,
@@ -22,24 +23,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import EmptyState from "@/components/EmptyState";
-import {
-  InlineLinkButton,
-  MetricGrid,
-  RolePageShell,
-  SectionCard,
-} from "@/components/role-shell/RoleScaffold";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import type {
-  WeeklyReportResponse,
-  WeeklyReportRole,
-  WeeklyReportSnapshot,
-} from "@/lib/ai/types";
+import type { WeeklyReportResponse, WeeklyReportSnapshot } from "@/lib/ai/types";
 import { getLocalToday, isDateWithinLastDays, shiftLocalDate } from "@/lib/date";
 import type { AdminBoardData } from "@/lib/store";
 import { INSTITUTION_NAME, useApp } from "@/lib/store";
-import WeeklyReportPreviewCard from "@/components/weekly-report/WeeklyReportPreviewCard";
+import AnimatedNumber from "@/components/AnimatedNumber";
+import EmptyState from "@/components/EmptyState";
+import ScrollReveal from "@/components/ScrollReveal";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const TODAY_TEXT = new Date().toLocaleDateString("zh-CN", {
   year: "numeric",
@@ -51,17 +44,17 @@ const TODAY_TEXT = new Date().toLocaleDateString("zh-CN", {
 const TEMPLATE_ENTRIES = [
   {
     title: "早餐批量模板",
-    description: "牛奶、鸡蛋与全麦主食的标准化组合，适合晨间快速录入。",
+    desc: "牛奶 + 鸡蛋 + 全麦主食，适合晨间快速录入。",
     foods: ["牛奶", "鸡蛋", "全麦面包"],
   },
   {
     title: "午餐均衡模板",
-    description: "主食、蛋白与蔬果的常规配比，适合班级统一执行。",
+    desc: "主食 + 蛋白 + 蔬果，适合班级统一执行。",
     foods: ["米饭", "鸡肉", "西兰花"],
   },
   {
     title: "加餐轻量模板",
-    description: "水果与奶制品的轻量场景，便于处理临时加餐。",
+    desc: "水果 + 奶制品，便于处理加餐场景。",
     foods: ["香蕉", "酸奶", "温水"],
   },
 ];
@@ -91,72 +84,6 @@ function dedupeBoardExposure(board: BoardExposureView): BoardExposureView {
     lowHydrationChildren: takeUnique(board.lowHydrationChildren),
     lowVegTrendChildren: takeUnique(board.lowVegTrendChildren),
   };
-}
-
-function getWeeklyReportRole(role: string): WeeklyReportRole {
-  return role === "机构管理员" ? "admin" : "teacher";
-}
-
-function getInsightBadgeVariant(level: "success" | "warning" | "info") {
-  if (level === "success") return "success";
-  if (level === "warning") return "warning";
-  return "info";
-}
-
-function DashboardQuickLink({
-  href,
-  eyebrow,
-  title,
-  description,
-}: {
-  href: string;
-  eyebrow: string;
-  title: string;
-  description: string;
-}) {
-  return (
-    <Link href={href} className="dashboard-quicklink">
-      <div className="space-y-2">
-        <p className="dashboard-quicklink__eyebrow">{eyebrow}</p>
-        <p className="dashboard-quicklink__title">{title}</p>
-        <p className="dashboard-quicklink__description">{description}</p>
-      </div>
-      <div className="flex items-center justify-between text-sm font-medium text-white/70">
-        <span>打开入口</span>
-        <ArrowRight className="dashboard-quicklink__icon h-4 w-4" />
-      </div>
-    </Link>
-  );
-}
-
-function BoardList({
-  title,
-  items,
-  emptyText,
-  icon,
-}: {
-  title: string;
-  items: string[];
-  emptyText: string;
-  icon: ReactNode;
-}) {
-  return (
-    <div className="content-reading-panel rounded-3xl p-4 shadow-[var(--shadow-card)]">
-      <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-white/84">
-        {icon}
-        {title}
-      </p>
-      {items.length === 0 ? (
-        <p className="text-sm leading-6 text-white/56">{emptyText}</p>
-      ) : (
-        <div className="space-y-2 text-sm leading-6 text-white/62">
-          {items.map((text) => (
-            <p key={text}>{text}</p>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export default function RootOverviewPage() {
@@ -192,24 +119,12 @@ export default function RootOverviewPage() {
 
   const visibleIds = useMemo(() => new Set(visibleChildren.map((child) => child.id)), [visibleChildren]);
   const todayAttendance = getTodayAttendance();
+  const presentCount = todayAttendance.filter((item) => item.isPresent).length;
   const todayMeals = getTodayMealRecords();
   const weeklyTrend = getWeeklyDietTrend();
   const insights = getSmartInsights();
   const adminBoard = getAdminBoardData();
   const uniqueAdminBoard = useMemo(() => dedupeBoardExposure(adminBoard), [adminBoard]);
-  const derivedRole = getWeeklyReportRole(currentUser.role);
-  const weeklyReportCtaHref =
-    derivedRole === "admin" ? "/admin/agent?action=weekly-report" : "/teacher/agent?action=weekly-report";
-  const roleHomeHref = derivedRole === "admin" ? "/admin" : "/teacher/home";
-  const presentCount = todayAttendance.filter((item) => item.isPresent).length;
-  const pendingReviews = useMemo(
-    () =>
-      growthRecords
-        .filter((record) => visibleIds.has(record.childId) && record.reviewStatus === "待复查")
-        .sort((left, right) => (left.reviewDate ?? "9999-12-31").localeCompare(right.reviewDate ?? "9999-12-31")),
-    [growthRecords, visibleIds]
-  );
-
   const adminChartData = useMemo(() => {
     const merged = new Map<
       string,
@@ -255,39 +170,38 @@ export default function RootOverviewPage() {
       )
       .slice(0, 5);
   }, [adminBoard]);
+  const pendingReviews = growthRecords
+    .filter((record) => visibleIds.has(record.childId) && record.reviewStatus === "待复查")
+    .sort((left, right) => (left.reviewDate ?? "9999-12-31").localeCompare(right.reviewDate ?? "9999-12-31"));
 
-  const recentTimeline = useMemo(
-    () =>
-      [
-        ...todayAttendance.map((item) => ({
-          id: `attendance-${item.id}`,
-          dateTime: `${item.date} ${item.checkInAt ?? (item.isPresent ? "08:30" : "09:00")}`,
-          title: item.isPresent ? "完成出勤登记" : "记录缺勤原因",
-          detail: `${visibleChildren.find((child) => child.id === item.childId)?.name ?? "幼儿"} · ${
-            item.isPresent ? `在园 ${item.checkInAt ?? "08:30"} 入园` : item.absenceReason ?? "未到园"
-          }`,
-        })),
-        ...todayMeals.map((item) => ({
-          id: `meal-${item.id}`,
-          dateTime: `${item.date} ${item.meal}`,
-          title: `完成${item.meal}录入`,
-          detail: `${visibleChildren.find((child) => child.id === item.childId)?.name ?? "幼儿"} · ${item.foods
-            .map((food) => food.name)
-            .join("、")}`,
-        })),
-        ...guardianFeedbacks
-          .filter((item) => visibleIds.has(item.childId) && item.date === getLocalToday())
-          .map((item) => ({
-            id: `feedback-${item.id}`,
-            dateTime: `${item.date} 20:00`,
-            title: `收到家长反馈 · ${item.status}`,
-            detail: `${visibleChildren.find((child) => child.id === item.childId)?.name ?? "幼儿"} · ${item.content}`,
-          })),
-      ]
-        .sort((left, right) => right.dateTime.localeCompare(left.dateTime))
-        .slice(0, 6),
-    [guardianFeedbacks, todayAttendance, todayMeals, visibleChildren, visibleIds]
-  );
+  const recentTimeline = [
+    ...todayAttendance.map((item) => ({
+      id: `attendance-${item.id}`,
+      dateTime: `${item.date} ${item.checkInAt ?? (item.isPresent ? "08:30" : "09:00")}`,
+      title: item.isPresent ? "完成出勤登记" : "记录缺勤原因",
+      detail: `${visibleChildren.find((child) => child.id === item.childId)?.name ?? "幼儿"} · ${
+        item.isPresent ? `在园 ${item.checkInAt ?? "08:30"} 入园` : item.absenceReason ?? "未到园"
+      }`,
+    })),
+    ...todayMeals.map((item) => ({
+      id: `meal-${item.id}`,
+      dateTime: `${item.date} ${item.meal}`,
+      title: `完成${item.meal}录入`,
+      detail: `${visibleChildren.find((child) => child.id === item.childId)?.name ?? "幼儿"} · ${item.foods
+        .map((food) => food.name)
+        .join("、")}`,
+    })),
+    ...guardianFeedbacks
+      .filter((item) => visibleIds.has(item.childId) && item.date === getLocalToday())
+      .map((item) => ({
+        id: `feedback-${item.id}`,
+        dateTime: `${item.date} 20:00`,
+        title: `收到家长反馈：${item.status}`,
+        detail: `${visibleChildren.find((child) => child.id === item.childId)?.name ?? "幼儿"} · ${item.content}`,
+      })),
+  ]
+    .sort((left, right) => right.dateTime.localeCompare(left.dateTime))
+    .slice(0, 6);
 
   const weeklyReportSnapshot = useMemo(() => {
     const weekAttendance = attendanceRecords.filter(
@@ -308,7 +222,7 @@ export default function RootOverviewPage() {
     return {
       institutionName: INSTITUTION_NAME,
       periodLabel: `${formatRangeDate(6)} - ${formatRangeDate(0)}`,
-      role: derivedRole,
+      role: currentUser.role,
       overview: {
         visibleChildren: visibleChildren.length,
         attendanceRate: weekAttendance.length > 0 ? Math.round((weekPresent / weekAttendance.length) * 100) : 0,
@@ -339,13 +253,13 @@ export default function RootOverviewPage() {
     adminBoard.lowHydrationChildren,
     adminBoard.lowVegTrendChildren,
     attendanceRecords,
-    derivedRole,
+    currentUser.role,
     guardianFeedbacks,
     growthRecords,
     healthCheckRecords,
     insights,
     mealRecords,
-    visibleChildren.length,
+    visibleChildren,
     visibleIds,
     weeklyTrend.balancedRate,
     weeklyTrend.hydrationAvg,
@@ -404,7 +318,7 @@ export default function RootOverviewPage() {
       }
     }
 
-    void fetchWeeklyReport();
+    fetchWeeklyReport();
 
     return () => {
       cancelled = true;
@@ -412,60 +326,12 @@ export default function RootOverviewPage() {
     };
   }, [isAuthenticated, weeklyReportKey, weeklyReportSnapshot]);
 
-  const heroMetrics = [
-    { label: "今日在园儿童", value: `${presentCount}`, tone: "sky" as const },
-    { label: "今日餐食记录", value: `${todayMeals.length}`, tone: "emerald" as const },
-    { label: "待复查事项", value: `${pendingReviews.length}`, tone: "amber" as const },
-    { label: "AI 规则建议", value: `${insights.length}`, tone: "indigo" as const },
-  ];
-
-  const heroAside = (
-    <div className="space-y-3">
-      <div className="hero-note-card">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="info">
-            <CalendarDays className="mr-1 h-3.5 w-3.5" />
-            {TODAY_TEXT}
-          </Badge>
-          <Badge variant="secondary">{currentUser.role}</Badge>
-        </div>
-        <p className="mt-4 text-base font-semibold text-white">
-          首屏集中承载今日身份、KPI、主操作与闭环状态，下层按周报、风险、建议逐级收束。
-        </p>
-        <p className="mt-2 text-sm leading-6 text-white/64">
-          维持现有品牌色，只增强明暗层次、柔和发光和空间深度，保证评委录屏时第一屏就能读懂今天该看什么。
-        </p>
-      </div>
-      <MetricGrid items={heroMetrics} className="sm:grid-cols-2" />
-      <div className="grid gap-3 sm:grid-cols-3">
-        <DashboardQuickLink
-          href="/health"
-          eyebrow="Morning Check"
-          title="晨检与健康"
-          description="批量登记体温、情绪与手口眼观察。"
-        />
-        <DashboardQuickLink
-          href="/diet"
-          eyebrow="Diet Loop"
-          title="饮食与例外处理"
-          description="批量录入餐食并处理过敏或个别调整。"
-        />
-        <DashboardQuickLink
-          href="/parent"
-          eyebrow="Family Loop"
-          title="家长反馈"
-          description="查看今晚反馈与家园协同节奏。"
-        />
-      </div>
-    </div>
-  );
-
   if (authLoading || !isAuthenticated || currentUser.role === "家长") {
     return (
       <div className="flex min-h-[calc(100vh-64px)] items-center justify-center px-6">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
-          <p className="text-sm text-white/56">正在加载平台首页…</p>
+          <p className="text-sm text-slate-500">正在加载平台首页…</p>
         </div>
       </div>
     );
@@ -476,7 +342,7 @@ export default function RootOverviewPage() {
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
         <EmptyState
           icon={<Users className="h-6 w-6" />}
-          title="当前账号还没有可展示的首页数据。"
+          title="当前账号还没有可展示的首页数据"
           description="请先使用示例账号，或为当前账号关联班级、儿童与基础记录。"
         />
       </div>
@@ -484,275 +350,418 @@ export default function RootOverviewPage() {
   }
 
   return (
-    <RolePageShell
-      intensity="strong"
-      badge={`运营总览 · ${INSTITUTION_NAME}`}
-      title="今天的托育运营，只看最重要的闭环。"
-      description="把日期、身份、关键 KPI 与主行动压进同一块舞台。周报、风险图表和规则建议继续保留，但不再让首屏沦为零散卡片墙。"
-      actions={
-        <>
-          <InlineLinkButton href={roleHomeHref} label={derivedRole === "admin" ? "进入机构首页" : "进入教师首页"} variant="premium" />
-          <InlineLinkButton href={weeklyReportCtaHref} label="进入完整 AI 周报" />
-          <InlineLinkButton href="/health" label="开始今日闭环" />
-        </>
-      }
-      heroAside={heroAside}
-    >
-      <div className="space-y-6">
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.14fr)_minmax(300px,0.86fr)]">
-          <WeeklyReportPreviewCard
-            title="AI 周报总览"
-            description="把近 7 天出勤、健康、饮食、成长与家长反馈压成一个首要阅读区，作为首页第一主内容。"
-            role={derivedRole}
-            periodLabel={weeklyReportSnapshot.periodLabel}
-            report={weeklyReport}
-            loading={weeklyReportLoading}
-            ctaHref={weeklyReportCtaHref}
-            ctaLabel="进入完整周报工作区"
-            ctaVariant="premium"
-            className="border-white/72"
-          />
-
-          <SectionCard
-            title="今日驾驶舱摘要"
-            description="首屏之外，只补充最需要被立即读懂的闭环信号与刷新动作。"
-            surface="luminous"
-            glow="brand"
-            actions={
-              <Button
-                variant="outline"
-                size="sm"
-                className="min-h-10 rounded-xl"
-                onClick={() => {
-                  weeklyReportCacheRef.current.delete(weeklyReportKey);
-                  setWeeklyReport(null);
-                  setWeeklyReportRefreshNonce((previous) => previous + 1);
-                }}
-                disabled={weeklyReportLoading}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${weeklyReportLoading ? "animate-spin" : ""}`} />
-                刷新周报
-              </Button>
-            }
-          >
-            <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="content-focus-block rounded-3xl p-4 shadow-[var(--shadow-card)]">
-                  <p className="text-xs uppercase tracking-[0.16em] text-violet-200/70">本周出勤率</p>
-                  <p className="mt-2 text-3xl font-semibold text-white">{weeklyReportSnapshot.overview.attendanceRate}%</p>
-                  <p className="mt-2 text-sm leading-6 text-white/64">
-                    可见儿童 {weeklyReportSnapshot.overview.visibleChildren} 人，家园反馈 {weeklyReportSnapshot.overview.feedbackCount} 条。
-                  </p>
-                </div>
-                <div className="content-reading-panel rounded-3xl p-4 shadow-[var(--shadow-card)]">
-                  <p className="text-xs uppercase tracking-[0.16em] text-violet-200/70">风险收束</p>
-                  <p className="mt-2 text-3xl font-semibold text-white">{adminChartData.length}</p>
-                  <p className="mt-2 text-sm leading-6 text-white/64">
-                    今日优先关注儿童 {uniqueAdminBoard.highAttentionChildren.length} 名，待复查事项 {pendingReviews.length} 条。
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {insights.slice(0, 3).map((insight) => (
-                  <div
-                    key={insight.id}
-                    className="content-reading-panel rounded-3xl border border-white/75 p-4 shadow-[var(--shadow-card)]"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={getInsightBadgeVariant(insight.level)}>{insight.level === "warning" ? "需关注" : insight.level === "success" ? "正向信号" : "今日建议"}</Badge>
-                      {insight.tags.slice(0, 2).map((tag) => (
-                        <Badge key={`${insight.id}-${tag}`} variant="secondary">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                    <p className="mt-3 text-sm font-semibold text-white">{insight.title}</p>
-                    <p className="mt-2 text-sm leading-6 text-white/64">{insight.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </SectionCard>
+    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
+      <div className="mb-8 flex flex-col gap-4 rounded-3xl border border-indigo-100 bg-linear-to-r from-indigo-50 via-sky-50 to-white p-7 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <Badge variant="info" className="px-3 py-1 text-xs">
+              <CalendarDays className="mr-1 h-3.5 w-3.5" />
+              {TODAY_TEXT}
+            </Badge>
+            <Badge variant="secondary" className="px-3 py-1 text-xs">
+              当前身份：{currentUser.role}
+            </Badge>
+          </div>
+          <h1 className="text-3xl font-bold text-slate-800">普惠托育智慧闭环看板</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+            已将功能升级为业务闭环：出勤 → 批量录入餐食 → 个别调整 → 成长观察 → 家长反馈，并以规则引擎输出可解释建议。
+          </p>
+          <p className="mt-3 text-xs text-slate-500">平台默认内置近七天评审示例数据，首次进入即可直接预览全链路效果。</p>
         </div>
-
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
-          <SectionCard
-            title="风险图表区"
-            description="优先保证图表、数字与标签可读，在不改变主题色的前提下提高空间感与信号聚焦。"
-            surface="glass"
-            glow="soft"
-          >
-            <div className="space-y-5">
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={adminChartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                    <CartesianGrid stroke="rgba(164, 175, 255, 0.18)" strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="childName" tick={{ fill: "rgba(238, 242, 255, 0.62)", fontSize: 12 }} />
-                    <YAxis tick={{ fill: "rgba(222, 228, 255, 0.5)", fontSize: 12 }} />
-                    <Tooltip />
-                    <Bar dataKey="attentionRisk" name="关注频次" fill="#8b7cff" radius={[8, 8, 0, 0]} />
-                    <Bar dataKey="hydrationRisk" name="饮水缺口" fill="#6674ff" radius={[8, 8, 0, 0]} />
-                    <Bar dataKey="vegetableRisk" name="蔬果缺口" fill="#c38eff" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-3">
-                <BoardList
-                  title="高频关注儿童"
-                  icon={<Sparkles className="h-4 w-4 text-violet-200" />}
-                  items={uniqueAdminBoard.highAttentionChildren.map((item) => `${item.childName} · ${item.count} 次`)}
-                  emptyText="暂无高频关注儿童。"
-                />
-                <BoardList
-                  title="饮水偏低提醒"
-                  icon={<BookHeart className="h-4 w-4 text-indigo-200" />}
-                  items={uniqueAdminBoard.lowHydrationChildren.map((item) => `${item.childName} · ${item.hydrationAvg} ml`)}
-                  emptyText="暂无饮水偏低提醒。"
-                />
-                <BoardList
-                  title="蔬果摄入不足"
-                  icon={<TriangleAlert className="h-4 w-4 text-violet-200" />}
-                  items={uniqueAdminBoard.lowVegTrendChildren.map((item) => `${item.childName} · ${item.vegetableDays} 天`)}
-                  emptyText="暂无蔬果不足趋势。"
-                />
-              </div>
-            </div>
-          </SectionCard>
-
-          <SectionCard
-            title="规则建议区"
-            description="保留高信息密度，但把建议块收口成可连续阅读的一列，而不是散乱卡片墙。"
-            surface="solid"
-            glow="soft"
-          >
-            <div className="space-y-3">
-              {insights.slice(0, 6).map((insight) => (
-                <div
-                  key={insight.id}
-                  className="content-reading-panel rounded-3xl border border-white/75 p-4 shadow-[var(--shadow-card)]"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <Badge variant={getInsightBadgeVariant(insight.level)}>
-                      {insight.level === "warning" ? "风险提醒" : insight.level === "success" ? "正向变化" : "行动建议"}
-                    </Badge>
-                    <div className="flex flex-wrap gap-2">
-                      {insight.tags.slice(0, 2).map((tag) => (
-                        <Badge key={`${insight.id}-${tag}`} variant="secondary">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <p className="mt-3 text-sm font-semibold text-white">{insight.title}</p>
-                  <p className="mt-2 text-sm leading-6 text-white/64">{insight.description}</p>
-                </div>
-              ))}
-            </div>
-          </SectionCard>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <QuickLink href="/health" title="晨检与健康" description="记录每日体温、情绪、手口眼" />
+          <QuickLink href="/diet" title="批量录入与例外处理" description="支持过敏拦截、手动排除、单个调整" />
+          <QuickLink href="/parent" title="家长反馈时间线" description="已知晓 / 在家已配合 / 今晚反馈" />
         </div>
+      </div>
 
-        <div className="grid gap-6 xl:grid-cols-3">
-          <SectionCard
-            title="复查与重点追踪"
-            description="第三层开始明显收束，只保留需要继续推进的事项。"
-            surface="solid"
-            glow="soft"
+      <ScrollReveal>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard title="可见幼儿" value={`${visibleChildren.length}`} desc={`${currentUser.role}权限范围`} />
+          <StatCard title="今日出勤" value={`${presentCount}`} desc={visibleChildren.length ? `出勤率 ${Math.round((presentCount / visibleChildren.length) * 100)}%` : "暂无数据"} />
+          <StatCard title="今日饮食记录" value={`${todayMeals.length}`} desc="含早餐/午餐/晚餐/加餐" />
+          <StatCard title="规则建议" value={`${insights.length}`} desc="按年龄段、过敏、连续异常生成" />
+        </div>
+      </ScrollReveal>
+
+      <Card className="mt-6 border-indigo-100 bg-linear-to-r from-indigo-50/80 via-white to-sky-50/70">
+        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Sparkles className="h-5 w-5 text-indigo-500" />
+              AI 智能周报
+              {weeklyReport?.source === "ai" ? <Badge variant="success">AI</Badge> : null}
+              {weeklyReport?.source === "fallback" ? <Badge variant="info">规则兜底</Badge> : null}
+            </CardTitle>
+            <CardDescription>聚合近 7 天出勤、健康、饮食、成长与家园反馈数据，用于答辩展示和运营复盘。</CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              weeklyReportCacheRef.current.delete(weeklyReportKey);
+              setWeeklyReport(null);
+              setWeeklyReportRefreshNonce((prev) => prev + 1);
+            }}
+            disabled={weeklyReportLoading}
           >
-            <div className="space-y-4">
-              <div className="content-focus-block rounded-3xl p-4 shadow-[var(--shadow-card)]">
-                <p className="text-xs uppercase tracking-[0.16em] text-violet-200/70">待复查总量</p>
-                <p className="mt-2 text-3xl font-semibold text-white">{pendingReviews.length}</p>
-                <p className="mt-2 text-sm leading-6 text-white/64">
-                  重点跟进成长记录与连续异常的闭环状态。
-                </p>
+            {weeklyReportLoading ? "生成中..." : "刷新周报"}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {weeklyReport ? (
+            <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+              <div className="rounded-3xl border border-white/70 bg-white/85 p-5 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">周期：{weeklyReportSnapshot.periodLabel}</Badge>
+                  <Badge variant="secondary">预测：{getTrendPredictionLabel(weeklyReport.trendPrediction)}</Badge>
+                  {weeklyReport.model ? <Badge variant="secondary">模型：{weeklyReport.model}</Badge> : null}
+                </div>
+                <p className="mt-4 text-sm leading-7 text-slate-700">{weeklyReport.summary}</p>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <WeeklyReportPanel title="本周亮点" items={weeklyReport.highlights} tone="emerald" />
+                  <WeeklyReportPanel title="主要风险" items={weeklyReport.risks} tone="rose" />
+                  <WeeklyReportPanel title="下周动作" items={weeklyReport.nextWeekActions} tone="indigo" />
+                </div>
               </div>
-              <div className="space-y-3">
-                {pendingReviews.slice(0, 4).map((record) => {
-                  const child = visibleChildren.find((item) => item.id === record.childId);
-                  return (
-                    <div
-                      key={record.id}
-                      className="content-reading-panel rounded-3xl border border-white/75 p-4 shadow-[var(--shadow-card)]"
-                    >
-                      <p className="text-sm font-semibold text-white">{child?.name ?? "幼儿"}</p>
-                      <p className="mt-2 text-sm leading-6 text-white/64">{record.followUpAction ?? record.description}</p>
-                    </div>
-                  );
-                })}
-                {pendingReviews.length === 0 ? (
-                  <p className="text-sm leading-6 text-white/56">当前没有待复查事项。</p>
-                ) : null}
+              <div className="grid gap-3">
+                <MetricCard label="本周出勤率" value={`${weeklyReportSnapshot.overview.attendanceRate}%`} />
+                <MetricCard label="健康异常记录" value={`${weeklyReportSnapshot.overview.healthAbnormalCount}次`} />
+                <MetricCard label="待复查事项" value={`${weeklyReportSnapshot.overview.pendingReviewCount}项`} />
+                <MetricCard label="家园反馈数" value={`${weeklyReportSnapshot.overview.feedbackCount}条`} />
               </div>
             </div>
-          </SectionCard>
+          ) : (
+            <div className="rounded-3xl border border-dashed border-slate-200 bg-white/70 p-5 text-sm text-slate-500">
+              {weeklyReportLoading ? "正在生成 AI 周报…" : "AI 周报暂不可用，请稍后重试。"}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-          <SectionCard
-            title="模板入口"
-            description="把批量录入模板下沉到更克制的一层，保留效率入口但不打断首屏叙事。"
-            surface="solid"
-            glow="soft"
-          >
-            <div className="space-y-3">
-              {TEMPLATE_ENTRIES.map((template) => (
-                <div
-                  key={template.title}
-                  className="content-reading-panel rounded-3xl border border-white/75 p-4 shadow-[var(--shadow-card)]"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-white">{template.title}</p>
-                      <p className="mt-2 text-sm leading-6 text-white/64">{template.description}</p>
-                    </div>
-                    <Link href="/diet">
-                      <Button size="sm" variant="outline" className="rounded-xl">
-                        使用
-                      </Button>
-                    </Link>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {template.foods.map((food) => (
-                      <Badge key={food} variant="secondary">
-                        {food}
-                      </Badge>
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <BookHeart className="h-5 w-5 text-rose-500" />
+              管理员风险对比图
+            </CardTitle>
+            <CardDescription>柱越高代表风险越需要优先关注，统一对比高关注、低饮水和蔬果不足。</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="h-65 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={adminChartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="childName" tick={{ fill: "#64748b", fontSize: 12 }} />
+                  <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                  <Tooltip />
+                  <Bar dataKey="attentionRisk" name="关注频次" fill="#fb7185" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="hydrationRisk" name="饮水缺口" fill="#38bdf8" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="vegetableRisk" name="蔬果缺口" fill="#34d399" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <BoardList
+                title="高频关注儿童"
+                icon={<AlertIcon />}
+                items={uniqueAdminBoard.highAttentionChildren.map((item) => `${item.childName}（${item.count}次）`)}
+                emptyText="暂无"
+              />
+              <BoardList
+                title="低饮水提醒"
+                icon={<TrendingDown className="h-4 w-4 text-sky-400" />}
+                items={uniqueAdminBoard.lowHydrationChildren.map((item) => `${item.childName}（${item.hydrationAvg}ml）`)}
+                emptyText="暂无"
+              />
+              <BoardList
+                title="蔬果不足趋势"
+                icon={<TrendingDown className="h-4 w-4 text-emerald-400" />}
+                items={uniqueAdminBoard.lowVegTrendChildren.map((item) => `${item.childName}（${item.vegetableDays}天）`)}
+                emptyText="暂无"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>规则建议（Top）</CardTitle>
+            <CardDescription>可直接用于答辩说明“为什么给出该建议”。</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {insights.slice(0, 6).map((insight) => (
+              <div key={insight.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <Badge variant={insight.level === "success" ? "success" : insight.level === "warning" ? "warning" : "info"}>
+                    {insight.level === "success" ? "已就绪" : insight.level === "warning" ? "需关注" : "建议"}
+                  </Badge>
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {insight.tags.slice(0, 2).map((tag) => (
+                      <span key={tag} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">
+                        {tag}
+                      </span>
                     ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          </SectionCard>
-
-          <SectionCard
-            title="今日时间线"
-            description="保留一条连续的运营轨迹，便于录屏时讲清今天已经发生了什么。"
-            surface="solid"
-            glow="soft"
-          >
-            <div className="space-y-3">
-              {recentTimeline.map((item) => (
-                <div
-                  key={item.id}
-                  className="content-timeline-item rounded-3xl border border-white/75 p-4 shadow-[var(--shadow-card)]"
-                >
-                  <p className="text-sm font-semibold text-white">{item.title}</p>
-                  <p className="mt-2 text-sm leading-6 text-white/64">{item.detail}</p>
-                  <p className="mt-2 text-xs text-white/40">{item.dateTime}</p>
-                </div>
-              ))}
-              {recentTimeline.length === 0 ? (
-                <EmptyState
-                  icon={<History className="h-6 w-6" />}
-                  title="今日时间线尚未生成。"
-                  description="当出勤、饮食或家长反馈开始产生后，这里会自动聚合成一条连续路径。"
-                />
-              ) : null}
-            </div>
-          </SectionCard>
-        </div>
+                <p className="text-sm font-semibold text-slate-700">{insight.title}</p>
+                <p className="mt-2 text-xs leading-5 text-slate-500">{insight.description}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
-    </RolePageShell>
+
+      <div className="hidden mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <CardHeader>
+            <CardTitle>业务闭环流程</CardTitle>
+            <CardDescription>比赛演示可按此顺序操作，逻辑完整且可解释。</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {[
+              ["1", "出勤", `${presentCount} 人出勤，进入今日闭环起点`, "/children"],
+              ["2", "健康晨检", "支持批量出勤幼儿进行健康状况快速录入", "/health"],
+              ["3", "批量录餐", "按出勤名单一键录入，并支持过敏拦截", "/diet"],
+              ["4", "成长观察", "记录行为、情绪、睡眠并标记复查", "/growth"],
+              ["5", "家长反馈", "已知晓 / 在家已配合 / 今晚反馈", "/parent"],
+            ].map(([icon, title, desc, href]) => (
+              <Link key={title} href={href} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow">
+                <p className="text-lg font-bold text-indigo-500">{icon}</p>
+                <p className="mt-2 text-sm font-semibold text-slate-700">{title}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{desc}</p>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <History className="h-5 w-5 text-indigo-500" />
+              今日运营时间线
+            </CardTitle>
+            <CardDescription>把出勤、录餐、反馈串成一条可讲清楚的业务路径。</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {recentTimeline.map((item) => (
+              <div key={item.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                <p className="text-sm font-semibold text-slate-700">{item.title}</p>
+                <p className="mt-2 text-xs leading-5 text-slate-500">{item.detail}</p>
+                <p className="mt-2 text-[11px] text-slate-400">{item.dateTime}</p>
+              </div>
+            ))}
+            {recentTimeline.length === 0 ? (
+              <EmptyState
+                icon={<History className="h-6 w-6" />}
+                title="今日时间线尚未生成"
+                description="当出勤、饮食或家长反馈开始产生后，这里会自动聚合为运营时间线。"
+              />
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <TriangleAlert className="h-5 w-5 text-amber-500" />
+              复查状态
+            </CardTitle>
+            <CardDescription>聚焦待复查事项，便于教师和机构管理员安排追踪。</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="rounded-2xl bg-amber-50 p-4">
+              <p className="text-xs text-amber-600">待复查事项</p>
+              <p className="mt-2 text-3xl font-bold text-amber-700">
+                <AnimatedNumber value={pendingReviews.length} />
+              </p>
+            </div>
+            {pendingReviews.slice(0, 4).map((record) => {
+              const child = visibleChildren.find((item) => item.id === record.childId);
+              return (
+                <div key={record.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <p className="text-sm font-semibold text-slate-700">{child?.name ?? "幼儿"}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">{record.followUpAction ?? record.description}</p>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <ClipboardList className="h-5 w-5 text-emerald-500" />
+              批量模板入口
+            </CardTitle>
+            <CardDescription>用于演示模板化录入、例外处理和过敏拦截。</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {TEMPLATE_ENTRIES.map((template) => (
+              <div key={template.title} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-700">{template.title}</p>
+                  <Link href="/diet">
+                    <Button size="sm" variant="outline">去使用</Button>
+                  </Link>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">{template.desc}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {template.foods.map((food) => (
+                    <span key={food} className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] text-emerald-700">
+                      {food}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <History className="h-5 w-5 text-indigo-500" />
+              今日运营时间线
+            </CardTitle>
+            <CardDescription>把出勤、录餐、反馈串成一条可讲清楚的业务路径。</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {recentTimeline.map((item) => (
+              <div key={item.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                <p className="text-sm font-semibold text-slate-700">{item.title}</p>
+                <p className="mt-2 text-xs leading-5 text-slate-500">{item.detail}</p>
+                <p className="mt-2 text-[11px] text-slate-400">{item.dateTime}</p>
+              </div>
+            ))}
+            {recentTimeline.length === 0 ? (
+              <EmptyState
+                icon={<History className="h-6 w-6" />}
+                title="今日时间线尚未生成"
+                description="当出勤、饮食或家长反馈开始产生后，这里会自动聚合为运营时间线。"
+              />
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
+}
+
+function QuickLink({ href, title, description }: { href: string; title: string; description: string }) {
+  return (
+    <Link href={href} className="group rounded-2xl border border-white/60 bg-white/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-700">{title}</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+        </div>
+        <ArrowRight className="h-4 w-4 text-slate-400 transition group-hover:text-indigo-500" />
+      </div>
+    </Link>
+  );
+}
+
+function StatCard({ title, value, desc }: { title: string; value: string; desc: string }) {
+  return (
+    <Card className="kpi-accent card-hover border-l-4 border-l-indigo-300">
+      <CardHeader className="pb-2">
+        <CardDescription>{title}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <p className="text-4xl font-bold text-slate-800">
+          <AnimatedNumber value={Number(value)} />
+        </p>
+        <p className="mt-2 text-xs text-slate-500">{desc}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function BoardList({
+  title,
+  items,
+  emptyText,
+  icon,
+}: {
+  title: string;
+  items: string[];
+  emptyText: string;
+  icon: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl bg-slate-50 p-3">
+      <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+        {icon}
+        {title}
+      </p>
+      {items.length === 0 ? (
+        <p className="py-2 text-center text-xs italic text-slate-400">{emptyText}</p>
+      ) : (
+        <div className="space-y-1.5 text-xs text-slate-600">
+          {items.map((text) => (
+            <p key={text}>• {text}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AlertIcon() {
+  return <Sparkles className="h-4 w-4 text-rose-400" />;
+}
+
+function WeeklyReportPanel({
+  title,
+  items,
+  tone,
+}: {
+  title: string;
+  items: string[];
+  tone: "emerald" | "rose" | "indigo";
+}) {
+  const toneClass = {
+    emerald: "bg-emerald-50 text-emerald-700",
+    rose: "bg-rose-50 text-rose-700",
+    indigo: "bg-indigo-50 text-indigo-700",
+  }[tone];
+
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+      <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${toneClass}`}>{title}</div>
+      <div className="mt-3 space-y-2">
+        {items.map((item, index) => (
+          <p key={`${title}-${index}`} className="text-sm leading-6 text-slate-600">
+            {index + 1}. {item}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  const parsed = Number(value.replace(/[^\d.-]/g, ""));
+  const suffix = value.replace(/[\d.-]/g, "");
+  return (
+    <div className="rounded-2xl border border-white/70 bg-white/85 p-4 shadow-sm">
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-slate-800">
+        {Number.isNaN(parsed) ? value : <AnimatedNumber value={parsed} suffix={suffix} />}
+      </p>
+    </div>
+  );
+}
+
+function getTrendPredictionLabel(value: "up" | "stable" | "down") {
+  if (value === "up") return "风险上升";
+  if (value === "down") return "风险下降";
+  return "基本稳定";
 }
 
 function isRecentDate(dateString: string, days: number) {

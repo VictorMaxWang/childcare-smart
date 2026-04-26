@@ -10,14 +10,6 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
-import {
-  AdminActionDock,
-  AdminBand,
-  AdminDataItem,
-  AdminEmptyState,
-  AdminSubsection,
-  type AdminTone,
-} from "@/components/admin/AdminVisuals";
 import RiskPriorityBoard from "@/components/admin/RiskPriorityBoard";
 import EmptyState from "@/components/EmptyState";
 import {
@@ -36,13 +28,14 @@ import {
   attachNotificationEventsToResult,
 } from "@/lib/agent/admin-agent";
 import type { AdminConsultationPriorityItem } from "@/lib/agent/admin-consultation";
+import { formatAdminDateTimeLabel } from "@/lib/agent/admin-display-text";
 import { dedupeAdminAgentResultExposure } from "@/lib/agent/admin-home-dedupe";
 import { useAdminConsultationWorkspace } from "@/lib/agent/use-admin-consultation-workspace";
 import type {
-  AdminAgentActionItem,
   AdminAgentRequestPayload,
   AdminAgentResult,
   AdminDispatchEvent,
+  AdminAgentActionItem,
   InstitutionPriorityItem,
 } from "@/lib/agent/admin-types";
 import type { AiFollowUpMessage } from "@/lib/ai/types";
@@ -70,40 +63,11 @@ function EventStatusBadge({ status }: { status: AdminDispatchEvent["status"] }) 
   return <Badge variant="outline">待派发</Badge>;
 }
 
-function getPriorityTone(level: InstitutionPriorityItem["priorityLevel"]): AdminTone {
-  if (level === "P1") return "amber";
-  if (level === "P2") return "sky";
-  return "slate";
-}
-
 function getResultSourceLabel(source: string) {
   if (source === "ai" || source === "vivo") return "智能生成";
   if (source === "mock") return "演示结果";
   if (source === "fallback") return "本地兜底";
   return "已整理结果";
-}
-
-function formatGeneratedAt(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString("zh-CN", {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function getActionEventStatus(
-  status: AdminAgentActionItem["status"]
-): AdminDispatchEvent["status"] {
-  if (status === "completed") return "completed";
-  if (status === "in_progress") return "in_progress";
-  return "pending";
 }
 
 function buildHistoryMessages(history: HistoryEntry[]) {
@@ -154,128 +118,6 @@ function getPageMode(action: string | null): PageMode {
   return action === "weekly-report" ? "weekly" : "daily";
 }
 
-function RequestErrorBanner({ message }: { message: string }) {
-  return (
-    <div className="flex items-start gap-3 rounded-[1.25rem] border border-white/10 bg-[linear-gradient(180deg,rgba(18,16,40,0.94),rgba(12,11,30,0.88))] px-4 py-3 text-sm text-white/78 shadow-[var(--shadow-card)]">
-      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" />
-      <p>{message}</p>
-    </div>
-  );
-}
-
-function LoadingState({ label }: { label: string }) {
-  return (
-    <AdminEmptyState tone="indigo" className="flex items-center gap-3">
-      <RefreshCw className="h-4 w-4 animate-spin text-indigo-500" />
-      <span>{label}</span>
-    </AdminEmptyState>
-  );
-}
-
-function ActionItemCard({
-  item,
-  dispatchAvailable,
-  dispatchStatusMessage,
-  isCreating,
-  onCreateDispatch,
-}: {
-  item: AdminAgentActionItem;
-  dispatchAvailable: boolean;
-  dispatchStatusMessage: string;
-  isCreating: boolean;
-  onCreateDispatch: (item: AdminAgentActionItem) => Promise<void>;
-}) {
-  return (
-    <AdminDataItem
-      tone={getPriorityTone(item.priorityLevel)}
-      title={item.title}
-      description={item.summary}
-      badge={<PriorityLevelBadge level={item.priorityLevel} />}
-      meta={
-        <>
-          <p>责任人：{item.ownerLabel}</p>
-          <p>截止时间：{item.deadline}</p>
-        </>
-      }
-      footer={
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <EventStatusBadge status={getActionEventStatus(item.status)} />
-            <Badge variant="outline">{item.targetName}</Badge>
-          </div>
-          {dispatchAvailable ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="premium"
-              onClick={() => void onCreateDispatch(item)}
-              disabled={isCreating || Boolean(item.relatedEventId)}
-            >
-              {isCreating ? "创建中…" : item.relatedEventId ? "已创建派单" : "生成派单"}
-            </Button>
-          ) : (
-            <Badge variant="outline">{dispatchStatusMessage}</Badge>
-          )}
-        </div>
-      }
-    >
-      <p className="text-sm leading-6 text-white/68">{item.action}</p>
-    </AdminDataItem>
-  );
-}
-
-function NotificationEventCard({
-  event,
-  dispatchAvailable,
-  updatingEventId,
-  onUpdateEventStatus,
-}: {
-  event: AdminDispatchEvent;
-  dispatchAvailable: boolean;
-  updatingEventId: string | null;
-  onUpdateEventStatus: (
-    eventId: string,
-    status: AdminDispatchEvent["status"]
-  ) => Promise<void>;
-}) {
-  return (
-    <AdminDataItem
-      title={event.title}
-      description={event.summary}
-      badge={<EventStatusBadge status={event.status} />}
-      tone={event.status === "completed" ? "emerald" : event.status === "in_progress" ? "sky" : "slate"}
-      meta={
-        <>
-          <p>责任角色：{event.recommendedOwnerRole}</p>
-          <p>建议时限：{event.recommendedDeadline}</p>
-        </>
-      }
-      footer={
-        dispatchAvailable ? (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void onUpdateEventStatus(event.id, "in_progress")}
-              disabled={updatingEventId === event.id || event.status === "in_progress"}
-            >
-              {updatingEventId === event.id ? "更新中…" : "标记处理中"}
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => void onUpdateEventStatus(event.id, "completed")}
-              disabled={updatingEventId === event.id || event.status === "completed"}
-            >
-              标记完成
-            </Button>
-          </div>
-        ) : null
-      }
-    />
-  );
-}
-
 export default function AdminAgentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -291,9 +133,8 @@ export default function AdminAgentPage() {
     : {
         workflow: "daily-priority" as const,
         label: "今日机构优先事项",
-        title: "先判断今日优先级，再把动作沉淀成可追踪闭环",
-        description:
-          "园长 AI 助手基于全园近 7 天数据判断优先级，给出责任人与时限，并把动作沉淀成可持续追踪的通知事件。",
+        title: "从识别问题，到生成动作，再到派单闭环",
+        description: "园长 AI 助手会基于全园近 7 天数据判断优先级、给出责任人和时限，并把动作沉淀成可持续追踪的通知事件。",
       };
   const {
     currentUser,
@@ -380,78 +221,77 @@ export default function AdminAgentPage() {
     [router]
   );
 
-  const runWorkflow = useCallback(
-    async (
-      workflow: AdminAgentRequestPayload["workflow"],
-      options?: { question?: string; label?: string }
-    ) => {
-      setLoading(true);
-      setRequestError(null);
+  const runWorkflow = useCallback(async (
+    workflow: AdminAgentRequestPayload["workflow"],
+    options?: { question?: string; label?: string }
+  ) => {
+    setLoading(true);
+    setRequestError(null);
 
-      try {
-        const requestPayload: AdminAgentRequestPayload = {
-          ...payload,
-          workflow,
-          question: options?.question,
-          history: workflow === "question-follow-up" ? buildHistoryMessages(history) : undefined,
-        };
-        const response = await fetch("/api/ai/admin-agent", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(requestPayload),
-        });
-        const data = (await response.json()) as unknown;
+    try {
+      const requestPayload: AdminAgentRequestPayload = {
+        ...payload,
+        workflow,
+        question: options?.question,
+        history: workflow === "question-follow-up" ? buildHistoryMessages(history) : undefined,
+      };
+      const response = await fetch("/api/ai/admin-agent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestPayload),
+      });
+      const data = (await response.json()) as unknown;
 
-        if (!response.ok) {
-          const errorMessage =
-            isRecord(data) && typeof data.error === "string" ? data.error : "园长 AI 助手请求失败";
-          setRequestError(errorMessage);
-          setResult(null);
-          return;
-        }
-
-        if (!isAdminAgentResult(data)) {
-          setResult(null);
-          setRequestError(
-            workflow === "weekly-ops-report"
-              ? "周报模式返回结构不完整，请重试或切回日常模式。"
-              : "园长 AI 助手返回结构异常，请稍后重试。"
-          );
-          return;
-        }
-
-        const nextResult = attachNotificationEventsToResult(data, notificationEvents);
-        setResult(nextResult);
-        setHistory((previous) => [
-          ...previous,
-          {
-            id: `${workflow}-${Date.now()}`,
-            workflow,
-            label:
-              options?.label ??
-              (workflow === "daily-priority"
-                ? "今日机构优先事项"
-                : workflow === "weekly-ops-report"
-                  ? "本周运营周报"
-                  : options?.question ?? "继续追问"),
-            prompt: workflow === "question-follow-up" ? options?.question : undefined,
-            result: nextResult,
-          },
-        ]);
-      } catch (error) {
-        console.error("[ADMIN_AGENT] Failed to run workflow", error);
-        setRequestError("园长 AI 助手请求失败");
-      } finally {
-        setLoading(false);
+      if (!response.ok) {
+        const errorMessage =
+          isRecord(data) && typeof data.error === "string" ? data.error : "园长 AI 助手请求失败";
+        setRequestError(errorMessage);
+        setResult(null);
+        return;
       }
-    },
-    [history, notificationEvents, payload]
-  );
+
+      if (!isAdminAgentResult(data)) {
+        setResult(null);
+        setRequestError(
+          workflow === "weekly-ops-report"
+            ? "周报模式返回结构不完整，请重试或切回日常模式。"
+            : "园长 AI 助手返回结构异常，请稍后重试。"
+        );
+        return;
+      }
+
+      const nextResult = attachNotificationEventsToResult(data, notificationEvents);
+      setResult(nextResult);
+      setHistory((prev) => [
+        ...prev,
+        {
+          id: `${workflow}-${Date.now()}`,
+          workflow,
+          label:
+            options?.label ??
+            (workflow === "daily-priority"
+              ? "今日机构优先事项"
+              : workflow === "weekly-ops-report"
+                ? "本周运营周报"
+                : options?.question ?? "继续追问"),
+          prompt: workflow === "question-follow-up" ? options?.question : undefined,
+          result: nextResult,
+        },
+      ]);
+    } catch (error) {
+      console.error("[ADMIN_AGENT] Failed to run workflow", error);
+      setRequestError("园长 AI 助手请求失败");
+    } finally {
+      setLoading(false);
+    }
+  }, [history, notificationEvents, payload]);
 
   const syncEventIntoAgentState = useCallback((event: AdminDispatchEvent) => {
-    setResult((previous) => (previous ? attachNotificationEventToResult(previous, event) : previous));
+    setResult((previous) =>
+      previous ? attachNotificationEventToResult(previous, event) : previous
+    );
     setHistory((previous) =>
       previous.map((entry) => ({
         ...entry,
@@ -470,7 +310,11 @@ export default function AdminAgentPage() {
   }, [modeConfig.label, modeConfig.workflow, pageMode, runWorkflow, visibleChildren.length]);
 
   useEffect(() => {
-    if (!notificationReady || notificationEvents.length === 0) return;
+    if (!notificationReady) return;
+
+    if (notificationEvents.length === 0) {
+      return;
+    }
 
     setResult((previous) =>
       previous ? attachNotificationEventsToResult(previous, notificationEvents) : previous
@@ -546,728 +390,334 @@ export default function AdminAgentPage() {
     );
   }
 
-  const displayResult = result ? dedupeAdminAgentResultExposure(result, consultationPriorityItems) : null;
+  const displayResult = result
+    ? dedupeAdminAgentResultExposure(result, consultationPriorityItems)
+    : null;
   const quickQuestions = displayResult?.quickQuestions ?? [...ADMIN_AGENT_QUICK_QUESTIONS];
   const scope = displayResult?.institutionScope;
   const rerunCurrentMode = () => void runWorkflow(modeConfig.workflow, { label: modeConfig.label });
   const safeDispatchStatusMessage = dispatchStatusMessage ?? "通知派单暂不可用";
-  const promptButtons = (
-    <>
-      {quickQuestions.map((question) => (
-        <Button
-          key={question}
-          variant="outline"
-          className="rounded-full"
-          onClick={() =>
-            void runWorkflow("question-follow-up", {
-              question,
-              label: question,
-            })
-          }
-          disabled={loading}
-        >
-          {question}
-        </Button>
-      ))}
-      <Button
-        variant="secondary"
-        className="rounded-full"
-        onClick={() => switchMode(isWeeklyMode ? "daily" : "weekly")}
-        disabled={loading}
+
+  if (isWeeklyMode) {
+    return (
+      <RolePageShell
+        badge={`园长 AI 助手 · ${INSTITUTION_NAME}`}
+        title="园长周报工作区"
+        description="只保留本周总结、周报追问和周报落地动作，不再混入日常优先级、历史记录和通知侧栏。"
+        actions={<InlineLinkButton href="/admin" label="返回园长首页" />}
       >
-        {isWeeklyMode ? "切回日常模式" : "打开本周运营周报"}
-      </Button>
-    </>
-  );
-
-  const statusSummary = displayResult ? (
-    <>
-      <AdminDataItem
-        tone="indigo"
-        title={displayResult.title}
-        description={displayResult.summary}
-        badge={<Badge variant="info">{getResultSourceLabel(displayResult.source)}</Badge>}
-        meta={
-          <>
-            <p>生成时间：{formatGeneratedAt(displayResult.generatedAt)}</p>
-            <p>优先事项：{displayResult.priorityTopItems.length} 条</p>
-            <p>建议动作：{displayResult.actionItems.length} 条</p>
-          </>
-        }
-      />
-      <AdminDataItem
-        tone="amber"
-        description={`风险儿童 ${displayResult.riskChildren.length} 名 · 高压力班级 ${displayResult.riskClasses.length} 个`}
-      />
-      <AdminDataItem
-        tone="emerald"
-        description={`通知事件 ${notificationEvents.length} 条 · 会诊升级 ${consultationPriorityItems.length} 条`}
-      />
-    </>
-  ) : loading ? (
-    <LoadingState label={isWeeklyMode ? "正在生成周报工作区摘要…" : "正在生成日常工作区摘要…"} />
-  ) : (
-    <AdminEmptyState>{isWeeklyMode ? "等待周报工作区结果。" : "等待今日机构优先事项结果。"}</AdminEmptyState>
-  );
-
-  const feedbackWeakness = displayResult?.feedbackRiskItems.length ? (
-    <div className="space-y-3">
-      {displayResult.feedbackRiskItems.slice(0, 4).map((item) => (
-        <AdminDataItem
-          key={item.childId}
-          tone={getPriorityTone(item.priorityLevel)}
-          title={`${item.childName} · ${item.className}`}
-          description={item.reason}
-          badge={<PriorityLevelBadge level={item.priorityLevel} />}
-          meta={
-            <>
-              <p>建议承接：{item.recommendedOwner}</p>
-              <p>最近反馈：{item.lastFeedbackDate ?? "暂无记录"}</p>
-            </>
-          }
-        />
-      ))}
-    </div>
-  ) : (
-    <AdminEmptyState>当前没有明显的家长协同薄弱点。</AdminEmptyState>
-  );
-
-  const notificationPanel = notificationEvents.length ? (
-    <div className="space-y-3">
-      {notificationEvents.slice(0, 6).map((event) => (
-        <NotificationEventCard
-          key={event.id}
-          event={event}
-          dispatchAvailable={dispatchAvailable}
-          updatingEventId={updatingEventId}
-          onUpdateEventStatus={handleUpdateEventStatus}
-        />
-      ))}
-    </div>
-  ) : (
-    <AdminEmptyState>还没有已创建的派单。</AdminEmptyState>
-  );
-
-  const entryLinks = (
-    <div className="space-y-3">
-      <button
-        type="button"
-        className="admin-entry-link text-left text-sm"
-        onClick={() => router.push("/admin")}
-      >
-        <span className="admin-entry-link__icon">
-          <ClipboardList className="h-4 w-4" />
-        </span>
-        返回园长首页
-      </button>
-      <button
-        type="button"
-        className="admin-entry-link text-left text-sm"
-        onClick={() => switchMode(isWeeklyMode ? "daily" : "weekly")}
-      >
-        <span className="admin-entry-link__icon">
-          <FileText className="h-4 w-4" />
-        </span>
-        {isWeeklyMode ? "切回日常优先级模式" : "打开本周运营周报"}
-      </button>
-      <button
-        type="button"
-        className="admin-entry-link text-left text-sm"
-        onClick={() =>
-          void runWorkflow("question-follow-up", {
-            question: "今天最该优先处理的 3 件事是什么？",
-            label: "今天最该优先处理的 3 件事是什么？",
-          })
-        }
-        disabled={loading}
-      >
-        <span className="admin-entry-link__icon">
-          <Sparkles className="h-4 w-4" />
-        </span>
-        查看机构优先级前三项
-      </button>
-    </div>
-  );
-
-  const dailyMain = (
-    <div className="space-y-6">
-      <AdminBand
-        tone="indigo"
-        eyebrow={
-          <>
-            <Badge variant="info">日常治理工作区</Badge>
-            <Badge variant="outline">{INSTITUTION_NAME}</Badge>
-            <Badge variant={dispatchAvailable ? "success" : "outline"}>{safeDispatchStatusMessage}</Badge>
-          </>
-        }
-        title="先确认今日最重要的问题，再决定谁来推进、何时闭环。"
-        description="页面级只保留轻氛围，主要层次通过主结果、优先级分组、追问解释和动作区来建立。"
-        actions={
-          <>
-            <Button type="button" variant="outline" onClick={rerunCurrentMode} disabled={loading}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              重新生成
-            </Button>
-            <Button type="button" variant="premium" onClick={() => switchMode("weekly")}>
-              打开周报模式
-            </Button>
-          </>
-        }
-      >
-        {requestError ? <RequestErrorBanner message={requestError} /> : null}
-        <div className="grid gap-3 md:grid-cols-3">{statusSummary}</div>
-      </AdminBand>
-
-      {scope ? (
-        <MetricGrid
-          items={[
-            {
-              label: "今日实到",
-              value: `${scope.todayPresentCount}/${scope.visibleChildren}`,
-              tone: "emerald",
-            },
-            { label: "重点风险儿童", value: `${scope.riskChildrenCount}`, tone: "amber" },
-            { label: "反馈完成率", value: `${scope.feedbackCompletionRate}%`, tone: "sky" },
-            { label: "待推进派单", value: `${scope.pendingDispatchCount}`, tone: "indigo" },
-          ]}
-        />
-      ) : null}
-
-      <SectionCard
-        title="核心结果 / 优先级区"
-        description="把今日核心判断、机构优先级前三项和治理重点收进同一工作区，不再让零散卡片分散决策注意力。"
-        actions={<Badge variant="info">主结果脊柱</Badge>}
-        surface="luminous"
-        glow="soft"
-        className="border-white/10"
-      >
-        {loading && !displayResult ? (
-          <LoadingState label="正在生成今日机构优先事项…" />
-        ) : displayResult ? (
-          <div className="space-y-4">
-            <AdminSubsection
-              tone="indigo"
-              title="核心结果"
-              description="先读结论，再进入优先级和动作建议。"
-              actions={<Badge variant="info">{displayResult.title}</Badge>}
-            >
-              <p className="text-sm leading-7 text-white/72">{displayResult.assistantAnswer}</p>
-            </AdminSubsection>
-
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.04fr)_minmax(320px,0.96fr)]">
-              <AdminSubsection
-                title="机构优先级前三项"
-                description="维持园长的第一决策视角。"
-                tone="amber"
-              >
-                <div className="space-y-3">
-                  {displayResult.priorityTopItems.map((item) => (
-                    <AdminDataItem
-                      key={item.id}
-                      tone={getPriorityTone(item.priorityLevel)}
-                      title={item.targetName}
-                      description={item.reason}
-                      badge={<PriorityLevelBadge level={item.priorityLevel} />}
-                      meta={
-                        <>
-                          <p>优先分：{item.priorityScore}</p>
-                          <p>建议责任人：{item.recommendedOwner.label}</p>
-                          <p>建议时限：{item.recommendedDeadline}</p>
-                        </>
-                      }
-                    />
-                  ))}
+        <RoleSplitLayout
+          stacked
+          main={
+            <div className="space-y-6">
+              <div className="rounded-[32px] border border-indigo-100 bg-linear-to-r from-indigo-50 via-white to-sky-50 p-6 shadow-sm">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0 space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="info">周报工作区</Badge>
+                      <Badge variant="outline">{INSTITUTION_NAME}</Badge>
+                      <Badge variant={dispatchAvailable ? "success" : "outline"}>
+                        {safeDispatchStatusMessage}
+                      </Badge>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-lg font-semibold text-slate-900">本周运营周报</p>
+                      <p className="mt-2 max-w-3xl whitespace-normal break-words text-sm leading-6 text-slate-600">
+                        当前页面只保留周报总结、周报追问、下周动作和必要的返回日常入口，方便园长直接讲清本周闭环与下周承接。
+                      </p>
+                    </div>
+                    {requestError ? (
+                      <div className="flex items-start gap-3 rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <p>{requestError}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2 xl:max-w-sm xl:justify-end">
+                    <Button type="button" variant="outline" onClick={() => switchMode("daily")}>
+                      切回日常模式
+                    </Button>
+                    <Button type="button" variant="premium" onClick={rerunCurrentMode} disabled={loading}>
+                      <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                      重新生成周报
+                    </Button>
+                  </div>
                 </div>
-              </AdminSubsection>
+              </div>
 
-              <AdminSubsection
-                title="治理重点"
-                description="用摘要提示维持第二层治理视角。"
-                tone="slate"
-                actions={<Badge variant="outline">{getResultSourceLabel(displayResult.source)}</Badge>}
+              {scope ? (
+                <MetricGrid
+                  items={[
+                    {
+                      label: "本周到园基线",
+                      value: `${scope.todayPresentCount}/${scope.visibleChildren}`,
+                      tone: "emerald",
+                    },
+                    { label: "本周风险儿童", value: `${scope.riskChildrenCount}`, tone: "amber" },
+                    { label: "反馈完成率", value: `${scope.feedbackCompletionRate}%`, tone: "sky" },
+                    { label: "待承接动作", value: `${scope.pendingDispatchCount}`, tone: "indigo" },
+                  ]}
+                />
+              ) : null}
+
+              <SectionCard
+                title="本周运营周报"
+                description="周报模式下只保留本周结论、延续提醒、重点摘要与风险承接，不再展示技术元信息。"
+                actions={<Badge variant="info">单一周报工作区</Badge>}
               >
-                <div className="space-y-3">
-                  {displayResult.highlights.slice(0, 6).map((item) => (
-                    <AdminDataItem key={item} description={item} />
-                  ))}
-                </div>
-              </AdminSubsection>
-            </div>
+                {loading && !displayResult ? (
+                  <div className="flex items-center gap-3 rounded-3xl border border-slate-100 bg-slate-50 p-5 text-sm text-slate-600">
+                    <RefreshCw className="h-4 w-4 animate-spin text-indigo-500" />
+                    正在生成本周运营周报...
+                  </div>
+                ) : displayResult ? (
+                  <div className="space-y-4">
+                    <div className="rounded-3xl border border-indigo-100 bg-indigo-50/60 p-5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="info">{displayResult.title}</Badge>
+                      </div>
+                      <p className="mt-4 whitespace-normal break-words text-base leading-8 text-slate-800">
+                        {displayResult.summary}
+                      </p>
+                    </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <AdminSubsection title="重点风险儿童" description="谁最需要园长越级关注。" tone="rose">
-                <div className="space-y-3">
-                  {displayResult.riskChildren.length > 0 ? (
-                    displayResult.riskChildren.slice(0, 4).map((item) => (
-                      <AdminDataItem
-                        key={item.childId}
-                        tone={getPriorityTone(item.priorityLevel)}
-                        title={`${item.childName} · ${item.className}`}
-                        description={item.reason}
-                        badge={<PriorityLevelBadge level={item.priorityLevel} />}
-                        meta={`责任建议：${item.ownerLabel} · 时限：${item.deadline}`}
-                      />
-                    ))
+                    {displayResult.continuityNotes?.length ? (
+                      <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                        <p className="text-sm font-semibold text-slate-900">连续性摘要</p>
+                        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                          {displayResult.continuityNotes.slice(0, 3).map((item) => (
+                            <li key={item}>• {item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                        <p className="text-sm font-semibold text-slate-900">本周重点结论</p>
+                        <ul className="mt-3 space-y-3">
+                          {displayResult.highlights.slice(0, 6).map((item) => (
+                            <li
+                              key={item}
+                              className="rounded-2xl bg-slate-50 px-4 py-3 whitespace-normal break-words text-sm leading-6 text-slate-600"
+                            >
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                        <p className="text-sm font-semibold text-slate-900">本周风险承接</p>
+                        <div className="mt-3 space-y-3">
+                          {displayResult.riskChildren.slice(0, 4).map((item) => (
+                            <div key={item.childId} className="rounded-2xl bg-slate-50 p-4">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0">
+                                  <p className="whitespace-normal break-words text-sm font-medium text-slate-900">
+                                    {item.childName} · {item.className}
+                                  </p>
+                                  <p className="mt-1 whitespace-normal break-words text-sm leading-6 text-slate-600">
+                                    {item.reason}
+                                  </p>
+                                </div>
+                                <PriorityLevelBadge level={item.priorityLevel} />
+                              </div>
+                            </div>
+                          ))}
+                          {displayResult.riskChildren.length === 0 ? (
+                            <p className="text-sm text-slate-500">本周没有需要行政升级承接的高风险儿童。</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-3xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">
+                    等待周报模式返回第一轮结果。
+                  </div>
+                )}
+              </SectionCard>
+
+              <AgentWorkspaceCard
+                title="周报追问"
+                description="只保留围绕本周总结的追问入口，不再混入模式切换按钮。"
+                promptButtons={
+                  <>
+                    {quickQuestions.slice(0, 4).map((question) => (
+                      <Button
+                        key={question}
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={() =>
+                          void runWorkflow("question-follow-up", {
+                            question,
+                            label: question,
+                          })
+                        }
+                        disabled={loading}
+                      >
+                        {question}
+                      </Button>
+                    ))}
+                  </>
+                }
+              >
+                <div className="rounded-3xl border border-indigo-100 bg-indigo-50/50 p-5">
+                  {loading && !displayResult ? (
+                    <div className="flex items-center gap-3 text-sm text-slate-600">
+                      <RefreshCw className="h-4 w-4 animate-spin text-indigo-500" />
+                      正在生成周报追问结果...
+                    </div>
+                  ) : displayResult ? (
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="info">{displayResult.title}</Badge>
+                      </div>
+                      <p className="whitespace-normal break-words text-base leading-7 text-slate-800">
+                        {displayResult.assistantAnswer}
+                      </p>
+                      <div className="rounded-2xl bg-white p-4">
+                        <p className="text-sm font-semibold text-slate-900">周报摘要回看</p>
+                        <p className="mt-3 whitespace-normal break-words text-sm leading-6 text-slate-600">
+                          {displayResult.summary}
+                        </p>
+                      </div>
+                    </div>
                   ) : (
-                    <AdminEmptyState>当前没有进入高优先级列表的风险儿童。</AdminEmptyState>
+                    <p className="text-sm text-slate-500">等待周报追问结果。</p>
                   )}
                 </div>
-              </AdminSubsection>
+              </AgentWorkspaceCard>
 
-              <AdminSubsection title="高压力班级" description="从班级层面判断治理承压点。" tone="sky">
-                <div className="space-y-3">
-                  {displayResult.riskClasses.length > 0 ? (
-                    displayResult.riskClasses.slice(0, 4).map((item) => (
-                      <AdminDataItem
-                        key={item.className}
-                        tone={getPriorityTone(item.priorityLevel)}
-                        title={item.className}
-                        description={item.reason}
-                        badge={<PriorityLevelBadge level={item.priorityLevel} />}
-                        meta={`关联问题 ${item.issueCount} 项 · 责任建议：${item.ownerLabel}`}
-                      />
-                    ))
-                  ) : (
-                    <AdminEmptyState>当前没有进入高优先级列表的班级问题。</AdminEmptyState>
-                  )}
-                </div>
-              </AdminSubsection>
-            </div>
-          </div>
-        ) : (
-          <AdminEmptyState>等待 AI 助手返回结构化结果。</AdminEmptyState>
-        )}
-      </SectionCard>
+              <SectionCard
+                title="周报落地动作"
+                description="把周报结论直接转成下周动作、责任人和派单入口；如派单暂不可用，则先展示只读动作摘要。"
+                actions={
+                  <Badge variant={dispatchAvailable ? "success" : "outline"}>
+                    {safeDispatchStatusMessage}
+                  </Badge>
+                }
+              >
+                {!dispatchAvailable ? (
+                  <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    {safeDispatchStatusMessage}
+                  </div>
+                ) : null}
 
-      <SectionCard
-        title="今日重点会诊 / 高风险优先事项"
-        description="重点会诊区保持第一决策视角不变，只统一板头、空态和配对式双面板材质。"
-        actions={<Badge variant={dispatchAvailable ? "success" : "outline"}>{safeDispatchStatusMessage}</Badge>}
-        surface="luminous"
-        glow="soft"
-        className="border-white/10"
-      >
-        <RiskPriorityBoard
-          items={consultationPriorityItems}
-          layoutVariant="split"
-          isLoading={feedStatus === "loading"}
-          sourceBadgeLabel={feedBadge.label}
-          sourceBadgeVariant={feedBadge.variant}
-          onCreateConsultationNotification={handleCreateConsultationNotification}
-          isCreatingConsultationNotification={isCreatingNotification}
-          dispatchAvailable={dispatchAvailable}
-          dispatchStatusMessage={safeDispatchStatusMessage}
-          emptyTitle={
-            feedStatus === "unavailable"
-              ? "重点会诊数据暂时不可用"
-              : feedStatus === "ready"
-                ? "当前还没有升级到园长侧的重点会诊"
-                : undefined
-          }
-          emptyDescription={
-            feedStatus === "unavailable"
-              ? "系统会先展示本地已有结论；如果这里仍为空，说明当前没有可展示的重点会诊。"
-              : feedStatus === "ready"
-                ? "当教师端产生新的高风险会诊后，这里会持续显示风险等级、决策卡和关键依据。"
-                : undefined
-          }
-        />
-      </SectionCard>
-
-      <AgentWorkspaceCard
-        title="追问与动作区"
-        description="继续追问当前结果，但不再给高密度卡片逐个加重动效。"
-        badgeLabel="日常追问"
-        promptButtons={promptButtons}
-      >
-        {loading && !displayResult ? (
-          <LoadingState label="正在生成追问结果…" />
-        ) : displayResult ? (
-          <div className="space-y-4">
-            <AdminSubsection
-              tone="sky"
-              title="当前解释"
-              description="保留一块连续阅读区，减少多张同级白卡打断。"
-            >
-              <p className="text-sm leading-7 text-white/72">{displayResult.assistantAnswer}</p>
-            </AdminSubsection>
-
-            <AdminActionDock
-              tone="indigo"
-              title="工作区摘要"
-              description="把当前结果和下一步路径收在同一层级。"
-              actions={<Badge variant="outline">{displayResult.actionItems.length} 条动作建议</Badge>}
-            >
-              <div className="flex flex-wrap gap-3 text-xs leading-5 text-white/46">
-                <span>优先事项 {displayResult.priorityTopItems.length} 条</span>
-                <span>会诊升级 {consultationPriorityItems.length} 条</span>
-                <span>通知事件 {notificationEvents.length} 条</span>
-              </div>
-            </AdminActionDock>
-          </div>
-        ) : (
-          <AdminEmptyState>等待 AI 助手返回结构化结果。</AdminEmptyState>
-        )}
-      </AgentWorkspaceCard>
-
-      <SectionCard
-        title="结构化行动建议"
-        description="动作条目统一到同一套 admin primitives；强调路径和闭环，而不是展示型炫技。"
-        actions={<Badge variant={dispatchAvailable ? "success" : "outline"}>{safeDispatchStatusMessage}</Badge>}
-      >
-        {!dispatchAvailable ? <RequestErrorBanner message={safeDispatchStatusMessage} /> : null}
-        {displayResult ? (
-          <div className="space-y-4">
-            <AdminActionDock
-              tone="amber"
-              title="行动 Dock"
-              description="每条动作保留责任人、时限和派单入口；派单不可用时退化为只读摘要。"
-              actions={<Badge variant="warning">{displayResult.actionItems.length} 条待处理</Badge>}
-            >
-              <div className="flex flex-wrap gap-3 text-xs leading-5 text-white/46">
-                <span>日常闭环优先级</span>
-                <span>派单状态同步到通知侧栏</span>
-              </div>
-            </AdminActionDock>
-
-            <div className="space-y-3">
-              {displayResult.actionItems.length > 0 ? (
-                displayResult.actionItems.map((item) => (
-                  <ActionItemCard
-                    key={item.id}
-                    item={item}
-                    dispatchAvailable={dispatchAvailable}
-                    dispatchStatusMessage={safeDispatchStatusMessage}
-                    isCreating={isCreatingNotification(item.id)}
-                    onCreateDispatch={handleCreateDispatch}
-                  />
-                ))
-              ) : (
-                <AdminEmptyState>当前没有需要新建的动作建议。</AdminEmptyState>
-              )}
-            </div>
-          </div>
-        ) : (
-          <AdminEmptyState>等待 AI 助手生成行动建议。</AdminEmptyState>
-        )}
-      </SectionCard>
-
-      <SectionCard title="历史记录" description="保留本次会话中已生成过的机构级回答。">
-        <div className="space-y-3">
-          {history.length > 0 ? (
-            history.map((entry) => (
-              <AdminDataItem
-                key={entry.id}
-                title={entry.label}
-                description={entry.result.summary}
-                badge={<Badge variant="outline">{getResultSourceLabel(entry.result.source)}</Badge>}
-                meta={`生成时间：${formatGeneratedAt(entry.result.generatedAt)}`}
-              />
-            ))
-          ) : (
-            <AdminEmptyState>还没有历史记录。</AdminEmptyState>
-          )}
-        </div>
-      </SectionCard>
-    </div>
-  );
-
-  const dailyAside = (
-    <div className="space-y-6 xl:sticky xl:top-5">
-      <SectionCard title="当前状态" description="园长 AI 助手当前聚焦的机构级结果摘要。">
-        <div className="grid gap-3">{statusSummary}</div>
-      </SectionCard>
-
-      <SectionCard title="家长协同薄弱点" description="方便园长快速追问家园协同链路。">
-        {feedbackWeakness}
-      </SectionCard>
-
-      <SectionCard
-        title="通知派单"
-        description="这里展示已沉淀的通知事件；当派单暂不可用时保留只读态。"
-        actions={<Badge variant={dispatchAvailable ? "success" : "outline"}>{safeDispatchStatusMessage}</Badge>}
-      >
-        {!dispatchAvailable ? <RequestErrorBanner message={safeDispatchStatusMessage} /> : null}
-        {notificationPanel}
-      </SectionCard>
-
-      <SectionCard title="工作区入口" description="保留首页、周报与常用追问入口。">
-        {entryLinks}
-      </SectionCard>
-    </div>
-  );
-
-  const weeklyMain = (
-    <div className="space-y-6">
-      <AdminBand
-        tone="indigo"
-        eyebrow={
-          <>
-            <Badge variant="info">周报工作区</Badge>
-            <Badge variant="outline">{INSTITUTION_NAME}</Badge>
-            <Badge variant={dispatchAvailable ? "success" : "outline"}>{safeDispatchStatusMessage}</Badge>
-          </>
-        }
-        title="主报告面板承接本周结论，次级解释面板负责追问，行动区负责落地。"
-        description="周报模式下不再混入日常优先级的整页噪音，只保留最关键的总结、解释和动作承接。"
-        actions={
-          <>
-            <Button type="button" variant="outline" onClick={() => switchMode("daily")}>
-              切回日常模式
-            </Button>
-            <Button type="button" variant="premium" onClick={rerunCurrentMode} disabled={loading}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              重新生成周报
-            </Button>
-          </>
-        }
-      >
-        {requestError ? <RequestErrorBanner message={requestError} /> : null}
-        <div className="grid gap-3 md:grid-cols-3">{statusSummary}</div>
-      </AdminBand>
-
-      {scope ? (
-        <MetricGrid
-          items={[
-            {
-              label: "本周到园基线",
-              value: `${scope.todayPresentCount}/${scope.visibleChildren}`,
-              tone: "emerald",
-            },
-            { label: "本周风险儿童", value: `${scope.riskChildrenCount}`, tone: "amber" },
-            { label: "反馈完成率", value: `${scope.feedbackCompletionRate}%`, tone: "sky" },
-            { label: "待承接动作", value: `${scope.pendingDispatchCount}`, tone: "indigo" },
-          ]}
-        />
-      ) : null}
-
-      <SectionCard
-        title="周报主内容脊柱"
-        description="周报主报告面板只保留本周总结、连续性摘要、重点结论与风险承接。"
-        actions={<Badge variant="info">主报告面板</Badge>}
-        surface="luminous"
-        glow="soft"
-        className="border-white/10"
-      >
-        {loading && !displayResult ? (
-          <LoadingState label="正在生成本周运营周报…" />
-        ) : displayResult ? (
-          <div className="space-y-4">
-            <AdminSubsection
-              tone="indigo"
-              title={displayResult.title}
-              description="先收口本周总结，再展开重点结论和风险承接。"
-              actions={<Badge variant="outline">{getResultSourceLabel(displayResult.source)}</Badge>}
-            >
-              <p className="text-sm leading-7 text-white/72">{displayResult.summary}</p>
-            </AdminSubsection>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <AdminSubsection title="连续性摘要" description="帮助判断本周结论与上周工作的衔接。" tone="slate">
-                {displayResult.continuityNotes?.length ? (
-                  <div className="space-y-3">
-                    {displayResult.continuityNotes.slice(0, 4).map((item) => (
-                      <AdminDataItem key={item} description={item} />
+                {displayResult ? (
+                  <div className="space-y-4">
+                    {displayResult.actionItems.map((item) => (
+                      <div key={item.id} className="rounded-3xl border border-slate-100 bg-white p-5">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                          <div className="min-w-0 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <PriorityLevelBadge level={item.priorityLevel} />
+                              <EventStatusBadge
+                                status={
+                                  item.status === "completed"
+                                    ? "completed"
+                                    : item.status === "in_progress"
+                                      ? "in_progress"
+                                      : "pending"
+                                }
+                              />
+                            </div>
+                            <p className="whitespace-normal break-words text-base font-semibold text-slate-900">
+                              {item.title}
+                            </p>
+                            <p className="whitespace-normal break-words text-sm leading-6 text-slate-600">
+                              {item.summary}
+                            </p>
+                            <div className="flex flex-wrap gap-4 text-xs text-slate-500">
+                              <span>责任人：{item.ownerLabel}</span>
+                              <span>时限：{item.deadline}</span>
+                            </div>
+                          </div>
+                          {dispatchAvailable ? (
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="premium"
+                                onClick={() => void handleCreateDispatch(item)}
+                                disabled={isCreatingNotification(item.id) || Boolean(item.relatedEventId)}
+                              >
+                                {isCreatingNotification(item.id)
+                                  ? "创建中..."
+                                  : item.relatedEventId
+                                    ? "已创建派单"
+                                    : "生成派单"}
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 ) : (
-                  <AdminEmptyState>当前没有额外的连续性提醒。</AdminEmptyState>
+                  <p className="text-sm text-slate-500">等待周报生成下周动作。</p>
                 )}
-              </AdminSubsection>
-
-              <AdminSubsection title="本周重点结论" description="保留周报解释的第二层摘要。" tone="sky">
-                <div className="space-y-3">
-                  {displayResult.highlights.slice(0, 6).map((item) => (
-                    <AdminDataItem key={item} description={item} />
-                  ))}
-                </div>
-              </AdminSubsection>
+              </SectionCard>
             </div>
-
-            <AdminSubsection title="本周风险承接" description="需要行政继续跟进的高风险儿童与班级。" tone="amber">
-              <div className="grid gap-4 lg:grid-cols-2">
+          }
+          aside={
+            <div className="space-y-6">
+              <SectionCard title="工作区控制" description="周报模式只保留返回日常、重新生成和返回首页这一组控制。">
                 <div className="space-y-3">
-                  {displayResult.riskChildren.length > 0 ? (
-                    displayResult.riskChildren.slice(0, 4).map((item) => (
-                      <AdminDataItem
-                        key={item.childId}
-                        tone={getPriorityTone(item.priorityLevel)}
-                        title={`${item.childName} · ${item.className}`}
-                        description={item.reason}
-                        badge={<PriorityLevelBadge level={item.priorityLevel} />}
-                        meta={`责任建议：${item.ownerLabel} · 时限：${item.deadline}`}
-                      />
-                    ))
-                  ) : (
-                    <AdminEmptyState>本周没有需要行政升级承接的高风险儿童。</AdminEmptyState>
-                  )}
+                  <Button
+                    type="button"
+                    variant="premium"
+                    className="w-full"
+                    onClick={rerunCurrentMode}
+                    disabled={loading}
+                  >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                    重新生成本周周报
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => switchMode("daily")}
+                  >
+                    切回日常模式
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => router.push("/admin")}
+                  >
+                    返回园长首页
+                  </Button>
                 </div>
-                <div className="space-y-3">
-                  {displayResult.riskClasses.length > 0 ? (
-                    displayResult.riskClasses.slice(0, 4).map((item) => (
-                      <AdminDataItem
-                        key={item.className}
-                        tone={getPriorityTone(item.priorityLevel)}
-                        title={item.className}
-                        description={item.reason}
-                        badge={<PriorityLevelBadge level={item.priorityLevel} />}
-                        meta={`关联问题 ${item.issueCount} 项 · 责任建议：${item.ownerLabel}`}
-                      />
-                    ))
-                  ) : (
-                    <AdminEmptyState>本周没有额外的班级治理升级项。</AdminEmptyState>
-                  )}
+              </SectionCard>
+
+              <SectionCard title="派单状态" description="这里只显示周报动作是否还能继续派单，不展示底层错误细节。">
+                <div className="space-y-3 text-sm leading-6 text-slate-600">
+                  <Badge variant={dispatchAvailable ? "success" : "outline"}>
+                    {safeDispatchStatusMessage}
+                  </Badge>
+                  <p>当前周报动作数：{displayResult?.actionItems.length ?? 0}</p>
+                  <p>当前已有通知事件：{notificationEvents.length}</p>
+                  <p>
+                    {dispatchAvailable
+                      ? "当前可以继续把周报动作生成正式派单。"
+                      : "当前暂不支持继续派单，周报页面会先保留动作摘要与责任人。"}
+                  </p>
                 </div>
-              </div>
-            </AdminSubsection>
-          </div>
-        ) : (
-          <AdminEmptyState>等待周报模式返回第一轮结果。</AdminEmptyState>
-        )}
-      </SectionCard>
-
-      <AgentWorkspaceCard
-        title="追问 / 模式切换"
-        description="周报工作区只保留围绕本周总结的追问，以及回到日常优先级的稳定入口。"
-        badgeLabel="周报追问"
-        promptButtons={promptButtons}
-      >
-        {loading && !displayResult ? (
-          <LoadingState label="正在生成周报追问结果…" />
-        ) : displayResult ? (
-          <div className="space-y-4">
-            <AdminSubsection tone="sky" title="次级解释面板" description="追问结果保持单一阅读区，不再拆成多列白卡。">
-              <p className="text-sm leading-7 text-white/72">{displayResult.assistantAnswer}</p>
-            </AdminSubsection>
-
-            <AdminActionDock
-              tone="indigo"
-              title="周报摘要回看"
-              description="追问前后始终能看到同一份周报摘要。"
-              actions={<Badge variant="outline">{displayResult.highlights.length} 条重点</Badge>}
-            >
-              <p className="text-sm leading-6 text-white/68">{displayResult.summary}</p>
-            </AdminActionDock>
-          </div>
-        ) : (
-          <AdminEmptyState>等待周报追问结果。</AdminEmptyState>
-        )}
-      </AgentWorkspaceCard>
-
-      <SectionCard
-        title="落地动作与派单状态"
-        description="周报结论直接转成下周动作、责任人和派单入口；派单不可用时统一退化为只读动作摘要。"
-        actions={<Badge variant={dispatchAvailable ? "success" : "outline"}>{safeDispatchStatusMessage}</Badge>}
-      >
-        {!dispatchAvailable ? <RequestErrorBanner message={safeDispatchStatusMessage} /> : null}
-        {displayResult ? (
-          <div className="space-y-4">
-            <AdminActionDock
-              tone="amber"
-              title="行动 Dock"
-              description="主报告之后立刻进入行动承接，避免周报结论停留在展示层。"
-              actions={<Badge variant="warning">{displayResult.actionItems.length} 条下周动作</Badge>}
-            >
-              <div className="flex flex-wrap gap-3 text-xs leading-5 text-white/46">
-                <span>当前通知事件 {notificationEvents.length} 条</span>
-                <span>{dispatchAvailable ? "支持继续派单" : "当前仅保留只读态"}</span>
-              </div>
-            </AdminActionDock>
-
-            <div className="space-y-3">
-              {displayResult.actionItems.length > 0 ? (
-                displayResult.actionItems.map((item) => (
-                  <ActionItemCard
-                    key={item.id}
-                    item={item}
-                    dispatchAvailable={dispatchAvailable}
-                    dispatchStatusMessage={safeDispatchStatusMessage}
-                    isCreating={isCreatingNotification(item.id)}
-                    onCreateDispatch={handleCreateDispatch}
-                  />
-                ))
-              ) : (
-                <AdminEmptyState>等待周报生成下周动作。</AdminEmptyState>
-              )}
+              </SectionCard>
             </div>
-          </div>
-        ) : (
-          <AdminEmptyState>等待周报工作区生成落地动作。</AdminEmptyState>
-        )}
-      </SectionCard>
-    </div>
-  );
-
-  const weeklyAside = (
-    <div className="grid gap-6 xl:grid-cols-2">
-      <SectionCard title="辅助状态" description="保留周报工作区当前承接状态与责任分布。">
-        {displayResult ? (
-          <div className="space-y-3">
-            <AdminDataItem
-              tone="indigo"
-              title="当前工作区状态"
-              description={`当前标题：${displayResult.title}`}
-              badge={<Badge variant="outline">{getResultSourceLabel(displayResult.source)}</Badge>}
-              meta={
-                <>
-                  <p>建议动作：{displayResult.actionItems.length} 条</p>
-                  <p>风险儿童：{displayResult.riskChildren.length} 名</p>
-                  <p>高压力班级：{displayResult.riskClasses.length} 个</p>
-                </>
-              }
-            />
-            <AdminSubsection title="责任承接分布" description="帮助园长判断动作是否过于集中在单一角色。">
-              <div className="space-y-3">
-                {displayResult.recommendedOwnerMap.length > 0 ? (
-                  displayResult.recommendedOwnerMap.map((item) => (
-                    <AdminDataItem
-                      key={`${item.ownerRole}-${item.ownerLabel}`}
-                      description={`${item.ownerLabel} · ${item.count} 条`}
-                    />
-                  ))
-                ) : (
-                  <AdminEmptyState>当前没有责任分布数据。</AdminEmptyState>
-                )}
-              </div>
-            </AdminSubsection>
-          </div>
-        ) : (
-          <AdminEmptyState>等待周报状态摘要。</AdminEmptyState>
-        )}
-      </SectionCard>
-
-      <SectionCard
-        title="通知派单与入口"
-        description="保留周报模式下的派单状态与稳定入口，不再混入额外展示块。"
-        actions={<Badge variant={dispatchAvailable ? "success" : "outline"}>{safeDispatchStatusMessage}</Badge>}
-      >
-        <div className="space-y-4">
-          {!dispatchAvailable ? <RequestErrorBanner message={safeDispatchStatusMessage} /> : null}
-          {notificationEvents.length > 0 ? (
-            <div className="space-y-3">
-              {notificationEvents.slice(0, 4).map((event) => (
-                <NotificationEventCard
-                  key={event.id}
-                  event={event}
-                  dispatchAvailable={dispatchAvailable}
-                  updatingEventId={updatingEventId}
-                  onUpdateEventStatus={handleUpdateEventStatus}
-                />
-              ))}
-            </div>
-          ) : (
-            <AdminEmptyState>还没有由周报承接生成的派单。</AdminEmptyState>
-          )}
-          {entryLinks}
-        </div>
-      </SectionCard>
-    </div>
-  );
+          }
+        />
+      </RolePageShell>
+    );
+  }
 
   return (
     <RolePageShell
-      intensity="light"
-      badge={`园长治理工作区 · ${INSTITUTION_NAME}`}
+      badge={`园长 AI 助手 · ${INSTITUTION_NAME}`}
       title={modeConfig.title}
       description={modeConfig.description}
       actions={
@@ -1276,22 +726,662 @@ export default function AdminAgentPage() {
           {isWeeklyMode ? (
             <InlineLinkButton href="/admin/agent" label="切回日常模式" />
           ) : (
-            <InlineLinkButton
-              href="/admin/agent?action=weekly-report"
-              label="打开周报模式"
-              variant="premium"
-            />
+            <InlineLinkButton href="/admin/agent?action=weekly-report" label="打开周报模式" variant="premium" />
           )}
         </>
       }
     >
-      <div className="admin-workbench-shell">
-        <RoleSplitLayout
-          stacked={isWeeklyMode}
-          main={isWeeklyMode ? weeklyMain : dailyMain}
-          aside={isWeeklyMode ? weeklyAside : dailyAside}
-        />
-      </div>
+      <RoleSplitLayout
+        stacked
+        main={
+          <div className="space-y-6">
+            {isWeeklyMode ? (
+              <div className="rounded-[32px] border border-indigo-100 bg-linear-to-r from-indigo-50 via-white to-sky-50 p-6 shadow-sm">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0 space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="info">周报模式</Badge>
+                      <Badge variant="outline">{INSTITUTION_NAME}</Badge>
+                      <Badge variant="outline">周报承接入口</Badge>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-lg font-semibold text-slate-900">本周运营周报工作区</p>
+                      <p className="mt-2 max-w-3xl whitespace-normal break-words text-sm leading-6 text-slate-600">
+                        当前页面已切换为周报承接模式。这里会先展示本周结论、风险儿童和下周动作，再回到日常优先级与派单闭环，避免“点进来只有空白或异常页”。
+                      </p>
+                    </div>
+                    {requestError ? (
+                      <div className="flex items-start gap-3 rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <p>{requestError}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2 xl:max-w-sm xl:justify-end">
+                    <Button type="button" variant="outline" onClick={() => switchMode("daily")}>
+                      切回日常模式
+                    </Button>
+                    <Button type="button" variant="premium" onClick={rerunCurrentMode} disabled={loading}>
+                      <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                      重新生成周报
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {scope ? (
+              <MetricGrid
+                items={[
+                  {
+                    label: "今日实到",
+                    value: `${scope.todayPresentCount}/${scope.visibleChildren}`,
+                    tone: "emerald",
+                  },
+                  { label: "重点风险儿童", value: `${scope.riskChildrenCount}`, tone: "amber" },
+                  { label: "反馈完成率", value: `${scope.feedbackCompletionRate}%`, tone: "sky" },
+                  { label: "待推进派单", value: `${scope.pendingDispatchCount}`, tone: "indigo" },
+                ]}
+              />
+            ) : null}
+
+            {isWeeklyMode ? (
+              <SectionCard
+                title="周报工作区"
+                description="周报模式下，先聚焦本周总结、下周动作和风险承接，再决定是否继续追问。"
+                actions={<Badge variant="info">最小稳定承接</Badge>}
+              >
+                {loading && !displayResult ? (
+                  <div className="flex items-center gap-3 rounded-3xl border border-slate-100 bg-slate-50 p-5 text-sm text-slate-600">
+                    <RefreshCw className="h-4 w-4 animate-spin text-indigo-500" />
+                    正在生成本周运营周报…
+                  </div>
+                ) : displayResult ? (
+                  <div className="space-y-4">
+                    <div className="space-y-4">
+                      <div className="rounded-3xl border border-indigo-100 bg-indigo-50/60 p-5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="info">{displayResult.title}</Badge>
+                        </div>
+                        <p className="mt-4 whitespace-normal break-words text-base leading-8 text-slate-800">
+                          {displayResult.summary}
+                        </p>
+                        {displayResult.continuityNotes?.length ? (
+                          <div className="mt-4 rounded-2xl border border-white/80 bg-white/80 p-4">
+                            <p className="text-sm font-semibold text-slate-900">连续性摘要</p>
+                            <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                              {displayResult.continuityNotes.slice(0, 3).map((item) => (
+                                <li key={item}>• {item}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                          <p className="text-sm font-semibold text-slate-900">下周动作</p>
+                          <div className="mt-3 space-y-3">
+                            {displayResult.actionItems.slice(0, 4).map((item) => (
+                              <div key={item.id} className="rounded-2xl bg-slate-50 p-4">
+                                <p className="whitespace-normal break-words text-sm font-medium text-slate-900">
+                                  {item.action}
+                                </p>
+                                <p className="mt-1 whitespace-normal break-words text-xs leading-5 text-slate-500">
+                                  {item.ownerLabel} · {item.deadline}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                          <p className="text-sm font-semibold text-slate-900">本周风险儿童</p>
+                          <div className="mt-3 space-y-3">
+                            {displayResult.riskChildren.slice(0, 3).map((item) => (
+                              <div key={item.childId} className="rounded-2xl bg-slate-50 p-4">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                  <div className="min-w-0">
+                                    <p className="whitespace-normal break-words text-sm font-medium text-slate-900">
+                                      {item.childName} · {item.className}
+                                    </p>
+                                    <p className="mt-1 whitespace-normal break-words text-sm leading-6 text-slate-600">
+                                      {item.reason}
+                                    </p>
+                                  </div>
+                                  <PriorityLevelBadge level={item.priorityLevel} />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                      <p className="text-sm font-semibold text-slate-900">本周结论速览</p>
+                      <ul className="mt-3 grid gap-3 xl:grid-cols-2">
+                        {displayResult.highlights.slice(0, 6).map((item) => (
+                          <li
+                            key={item}
+                            className="rounded-2xl bg-slate-50 px-4 py-3 whitespace-normal break-words text-sm leading-6 text-slate-600"
+                          >
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-3xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">
+                    等待周报模式返回第一轮机构周报结果。
+                  </div>
+                )}
+              </SectionCard>
+            ) : null}
+
+            <SectionCard
+              title="机构上下文"
+              description="这里固定展示智能判断优先级时使用的机构级上下文。"
+            >
+              {scope ? (
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                    <p className="text-sm font-semibold text-slate-900">近 7 天机构概览</p>
+                    <div className="mt-4 space-y-2 text-sm text-slate-600">
+                      <p>今日实到 {scope.todayPresentCount} / {scope.visibleChildren}</p>
+                      <p>今日出勤率 {scope.todayAttendanceRate}%</p>
+                      <p>晨检异常 {scope.healthAbnormalCount} 条</p>
+                      <p>成长关注 {scope.growthAttentionCount} 条</p>
+                      <p>待复查 {scope.pendingReviewCount} 条</p>
+                    </div>
+                  </div>
+                  <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                    <p className="text-sm font-semibold text-slate-900">当前运营链路</p>
+                    <div className="mt-4 space-y-2 text-sm text-slate-600">
+                      <p>重点班级 {scope.riskClassCount} 个</p>
+                      <p>家长反馈 {scope.feedbackCount} 条</p>
+                      <p>待推进派单 {scope.pendingDispatchCount} 条</p>
+                      <p>机构 {scope.institutionName}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">正在生成机构上下文。</p>
+              )}
+            </SectionCard>
+
+            <SectionCard
+              title="今日重点会诊 / 高风险优先事项"
+              description="把高风险会诊直接抬到园长 AI 助手顶部，先看谁最值得今天推进，再继续追问和派单。"
+              actions={<Badge variant="warning">重点会诊</Badge>}
+            >
+              <RiskPriorityBoard
+                items={consultationPriorityItems}
+                layoutVariant="stacked"
+                isLoading={feedStatus === "loading"}
+                sourceBadgeLabel={feedBadge.label}
+                sourceBadgeVariant={feedBadge.variant}
+                onCreateConsultationNotification={handleCreateConsultationNotification}
+                isCreatingConsultationNotification={isCreatingNotification}
+                dispatchAvailable={dispatchAvailable}
+                dispatchStatusMessage={dispatchStatusMessage ?? "通知派单暂不可用"}
+                emptyTitle={
+                  feedStatus === "unavailable"
+                    ? "重点会诊数据暂时不可用"
+                    : feedStatus === "ready"
+                      ? "当前还没有升级到园长侧的重点会诊"
+                      : undefined
+                }
+                emptyDescription={
+                  feedStatus === "unavailable"
+                    ? "系统会先展示本地已有结论；如果这里仍为空，说明当前没有可展示的重点会诊。"
+                    : feedStatus === "ready"
+                      ? "当教师端产生新的高风险会诊后，这里会持续显示风险等级、决策卡和关键依据。"
+                      : undefined
+                }
+              />
+            </SectionCard>
+
+            <SectionCard
+              title={isWeeklyMode ? "周报关联优先事项" : "当前优先事项"}
+              description={
+                isWeeklyMode
+                  ? "周报结论最终仍会落到具体优先事项、风险儿童和高压力班级。"
+                  : "结构化展示当前最重要的机构级问题。"
+              }
+              actions={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={rerunCurrentMode}
+                  disabled={loading}
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                  {isWeeklyMode ? "刷新周报关联优先级" : "重新生成"}
+                </Button>
+              }
+            >
+              {displayResult ? (
+                <div className="space-y-4">
+                  <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+                    {displayResult.priorityTopItems.map((item) => (
+                      <div key={item.id} className="rounded-3xl border border-amber-100 bg-amber-50/70 p-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <PriorityLevelBadge level={item.priorityLevel} />
+                          <span className="text-xs font-medium text-slate-500">分值 {item.priorityScore}</span>
+                        </div>
+                        <p className="mt-4 whitespace-normal break-words text-lg font-semibold text-slate-900">
+                          {item.targetName}
+                        </p>
+                        <p className="mt-2 whitespace-normal break-words text-sm leading-6 text-slate-600">
+                          {item.reason}
+                        </p>
+                        <div className="mt-4 space-y-2 text-sm text-slate-600">
+                          <p>负责人：{item.recommendedOwner.label}</p>
+                          <p>时限：{formatAdminDateTimeLabel(item.recommendedDeadline)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                      <p className="text-sm font-semibold text-slate-900">重点风险儿童</p>
+                      <div className="mt-4 space-y-3">
+                        {displayResult.riskChildren.slice(0, 4).map((item) => (
+                          <div key={item.childId} className="rounded-2xl bg-slate-50 p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <p className="whitespace-normal break-words text-sm font-medium text-slate-900">
+                                  {item.childName} · {item.className}
+                                </p>
+                                <p className="mt-1 whitespace-normal break-words text-sm leading-6 text-slate-600">
+                                  {item.reason}
+                                </p>
+                              </div>
+                              <PriorityLevelBadge level={item.priorityLevel} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                      <p className="text-sm font-semibold text-slate-900">高压力班级</p>
+                      <div className="mt-4 space-y-3">
+                        {displayResult.riskClasses.slice(0, 4).map((item) => (
+                          <div key={item.className} className="rounded-2xl bg-slate-50 p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <p className="whitespace-normal break-words text-sm font-medium text-slate-900">
+                                  {item.className}
+                                </p>
+                                <p className="mt-1 whitespace-normal break-words text-sm leading-6 text-slate-600">
+                                  {item.reason}
+                                </p>
+                              </div>
+                              <PriorityLevelBadge level={item.priorityLevel} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">等待生成今日机构优先事项。</p>
+              )}
+            </SectionCard>
+
+            <AgentWorkspaceCard
+              title={isWeeklyMode ? "周报追问与模式切换" : "快捷问题"}
+              description={
+                isWeeklyMode
+                  ? "周报模式下支持继续追问，也保留回到日常优先级的稳定入口。"
+                  : "用园长常见问题直接继续追问，结果仍保持结构化呈现。"
+              }
+              promptButtons={
+                <>
+                  {quickQuestions.map((question) => (
+                    <Button
+                      key={question}
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() =>
+                        void runWorkflow("question-follow-up", {
+                          question,
+                          label: question,
+                        })
+                      }
+                      disabled={loading}
+                    >
+                      {question}
+                    </Button>
+                  ))}
+                  {isWeeklyMode ? (
+                    <Button
+                      variant="secondary"
+                      className="rounded-full"
+                      onClick={() => switchMode("daily")}
+                      disabled={loading}
+                    >
+                      切回日常模式
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      className="rounded-full"
+                      onClick={() => switchMode("weekly")}
+                      disabled={loading}
+                    >
+                      打开本周运营周报
+                    </Button>
+                  )}
+                </>
+              }
+            >
+              <div className="rounded-3xl border border-indigo-100 bg-indigo-50/50 p-5">
+                {loading ? (
+                  <div className="flex items-center gap-3 text-sm text-slate-600">
+                    <RefreshCw className="h-4 w-4 animate-spin text-indigo-500" />
+                    正在生成机构级判断结果…
+                  </div>
+                ) : displayResult ? (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="info">{displayResult.title}</Badge>
+                    </div>
+                    <p className="whitespace-normal break-words text-base leading-7 text-slate-800">
+                      {displayResult.assistantAnswer}
+                    </p>
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <div className="rounded-2xl bg-white p-4">
+                        <p className="text-sm font-semibold text-slate-900">当前摘要</p>
+                        <p className="mt-3 whitespace-normal break-words text-sm leading-6 text-slate-600">
+                          {displayResult.summary}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-white p-4">
+                        <p className="text-sm font-semibold text-slate-900">关键提示</p>
+                        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                          {displayResult.highlights.map((item) => (
+                            <li key={item}>• {item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">等待 AI 助手返回结构化结果。</p>
+                )}
+              </div>
+            </AgentWorkspaceCard>
+
+            <SectionCard
+              title={isWeeklyMode ? "周报落地动作" : "结构化行动建议"}
+              description={
+                isWeeklyMode
+                  ? "把周报结论直接转成下周动作、责任人和派单入口。"
+                  : "每条建议都带责任人、截止时间和派单入口。"
+              }
+              actions={
+                <Badge variant={dispatchAvailable ? "success" : "outline"}>
+                  {dispatchAvailable ? "支持派单" : safeDispatchStatusMessage}
+                </Badge>
+              }
+            >
+              {!dispatchAvailable ? (
+                <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  {safeDispatchStatusMessage}
+                </div>
+              ) : null}
+              {displayResult ? (
+                <div className="space-y-4">
+                  {displayResult.actionItems.map((item) => (
+                    <div key={item.id} className="rounded-3xl border border-slate-100 bg-white p-5">
+                      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <PriorityLevelBadge level={item.priorityLevel} />
+                            <EventStatusBadge
+                              status={
+                                item.status === "completed"
+                                  ? "completed"
+                                  : item.status === "in_progress"
+                                    ? "in_progress"
+                                    : "pending"
+                              }
+                            />
+                          </div>
+                          <p className="whitespace-normal break-words text-base font-semibold text-slate-900">
+                            {item.title}
+                          </p>
+                          <p className="whitespace-normal break-words text-sm leading-6 text-slate-600">
+                            {item.summary}
+                          </p>
+                          <div className="flex flex-wrap gap-4 text-xs text-slate-500">
+                            <span>负责人：{item.ownerLabel}</span>
+                            <span>时限：{item.deadline}</span>
+                          </div>
+                        </div>
+                        {dispatchAvailable ? (
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="premium"
+                              onClick={() => void handleCreateDispatch(item)}
+                              disabled={isCreatingNotification(item.id) || Boolean(item.relatedEventId)}
+                            >
+                              {isCreatingNotification(item.id)
+                                ? "创建中…"
+                                : item.relatedEventId
+                                  ? "已创建派单"
+                                  : "生成派单"}
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">等待 AI 助手生成行动建议。</p>
+              )}
+            </SectionCard>
+
+            <SectionCard title="历史记录" description="保留本次会话中已经生成过的机构级回答。">
+              <div className="space-y-3">
+                {history.length > 0 ? (
+                  history.map((entry) => (
+                    <div key={entry.id} className="rounded-3xl border border-slate-100 bg-white p-4">
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-900">{entry.label}</p>
+                          <p className="mt-2 whitespace-normal break-words text-sm leading-6 text-slate-600">
+                            {entry.result.summary}
+                          </p>
+                        </div>
+                        <Badge variant="outline">{getResultSourceLabel(entry.result.source)}</Badge>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">还没有历史记录。</p>
+                )}
+              </div>
+            </SectionCard>
+          </div>
+        }
+        aside={
+          <div className={isWeeklyMode ? "grid gap-6 xl:grid-cols-2" : "space-y-6"}>
+            <SectionCard title="当前状态" description="园长 AI 助手当前聚焦的机构级结果摘要。">
+              {displayResult ? (
+                <div className="space-y-3 text-sm text-slate-600">
+                  <p>当前标题：{displayResult.title}</p>
+                  <p>重点事项：{displayResult.priorityTopItems.length} 条</p>
+                  <p>风险儿童：{displayResult.riskChildren.length} 名</p>
+                  <p>高压力班级：{displayResult.riskClasses.length} 个</p>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">等待首轮结果。</p>
+              )}
+            </SectionCard>
+
+            <SectionCard title="家长协同薄弱点" description="方便园长快速追问家园协同链路。">
+              {displayResult && displayResult.feedbackRiskItems.length > 0 ? (
+                <div className="space-y-3">
+                  {displayResult.feedbackRiskItems.slice(0, 4).map((item) => (
+                    <div key={item.childId} className="rounded-2xl border border-slate-100 bg-white p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="whitespace-normal break-words text-sm font-medium text-slate-900">
+                            {item.childName} · {item.className}
+                          </p>
+                          <p className="mt-1 whitespace-normal break-words text-sm leading-6 text-slate-600">
+                            {item.reason}
+                          </p>
+                        </div>
+                        <Badge variant="outline">{item.priorityLevel}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">当前没有明显的家长协同薄弱点。</p>
+              )}
+            </SectionCard>
+
+            <SectionCard
+              title="通知派单"
+              description="这里显示已沉淀的通知事件；当派单暂不可用时保留只读态，不提供状态更新入口。"
+              actions={
+                <Badge variant={dispatchAvailable ? "success" : "outline"}>
+                  {dispatchAvailable ? "支持派单" : safeDispatchStatusMessage}
+                </Badge>
+              }
+            >
+              {!dispatchAvailable ? (
+                <div className="mb-4 flex items-start gap-3 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>{safeDispatchStatusMessage}</p>
+                </div>
+              ) : null}
+              {notificationEvents.length > 0 ? (
+                <div className="space-y-3">
+                  {notificationEvents.slice(0, 6).map((event) => (
+                    <div key={event.id} className="rounded-3xl border border-slate-100 bg-white p-4">
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-900">{event.title}</p>
+                          <p className="mt-2 whitespace-normal break-words text-sm leading-6 text-slate-600">
+                            {event.summary}
+                          </p>
+                        </div>
+                        <EventStatusBadge status={event.status} />
+                      </div>
+                      {dispatchAvailable ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void handleUpdateEventStatus(event.id, "in_progress")}
+                            disabled={updatingEventId === event.id || event.status === "in_progress"}
+                          >
+                            {updatingEventId === event.id ? "更新中…" : "标记处理中"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => void handleUpdateEventStatus(event.id, "completed")}
+                            disabled={updatingEventId === event.id || event.status === "completed"}
+                          >
+                            标记完成
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-3xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+                  还没有已创建的派单。
+                </div>
+              )}
+            </SectionCard>
+
+            {requestError ? (
+              <SectionCard title="运行状态" description="请求失败时保留错误提示，便于说明当前兜底状态。">
+                <div className="flex items-start gap-3 rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>{requestError}</p>
+                </div>
+              </SectionCard>
+            ) : null}
+
+            <SectionCard
+              title={isWeeklyMode ? "周报入口与返回路径" : "推荐入口"}
+              description={
+                isWeeklyMode
+                  ? "保留周报重试、返回日常模式和追问入口，避免用户进入后没有承接路径。"
+                  : "常用机构级工作流入口。"
+              }
+            >
+              <div className="space-y-3">
+                {isWeeklyMode ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                    onClick={rerunCurrentMode}
+                  >
+                    <RefreshCw className="h-4 w-4 text-indigo-500" />
+                    重新生成本周运营周报
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                    onClick={() => switchMode("weekly")}
+                  >
+                    <FileText className="h-4 w-4 text-indigo-500" />
+                    打开本周运营周报
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                  onClick={() =>
+                    isWeeklyMode
+                      ? switchMode("daily")
+                      : void runWorkflow("question-follow-up", {
+                          question: "今天最该优先处理的 3 件事是什么？",
+                          label: "今天最该优先处理的 3 件事是什么？",
+                        })
+                  }
+                >
+                  <ClipboardList className="h-4 w-4 text-amber-500" />
+                  {isWeeklyMode ? "切回日常优先级模式" : "查看机构优先级 TOP 3"}
+                </button>
+
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                  onClick={() =>
+                    void runWorkflow("question-follow-up", {
+                      question: "哪些家长反馈长期缺失？",
+                      label: "哪些家长反馈长期缺失？",
+                    })
+                  }
+                >
+                  <Sparkles className="h-4 w-4 text-emerald-500" />
+                  看家长协同薄弱点
+                </button>
+              </div>
+            </SectionCard>
+          </div>
+        }
+      />
     </RolePageShell>
   );
 }

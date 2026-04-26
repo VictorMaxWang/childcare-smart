@@ -32,3 +32,17 @@ test("sanitizeAdminWhyHighPriorityText preserves natural language summaries", ()
 
   assert.equal(sanitizeAdminWhyHighPriorityText(readable), readable);
 });
+
+test("sanitizeAdminWhyHighPriorityText strips recent consultation prefix but keeps readable正文", () => {
+  const readable = "Recent consultation: 近期会诊提示需要优先补齐家长晚间反馈。";
+
+  assert.equal(
+    sanitizeAdminWhyHighPriorityText(readable),
+    "近期会诊提示需要优先补齐家长晚间反馈。"
+  );
+});
+
+test("sanitizeAdminWhyHighPriorityText localizes relative deadline text", () => {
+  assert.equal(sanitizeAdminWhyHighPriorityText("today"), "今日");
+  assert.equal(sanitizeAdminWhyHighPriorityText("Within 48 hours"), "48小时内");
+});
