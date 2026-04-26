@@ -322,7 +322,7 @@ def test_admin_consultation_feed_falls_back_to_demo_items_when_memory_empty(tmp_
     feed = asyncio.run(orchestrator.high_risk_consultation_feed(limit=3))
 
     assert feed["count"] == 4
-    assert [item["childId"] for item in feed["items"]] == ["c-16", "c-15", "c-14"]
+    assert [item["childId"] for item in feed["items"]] == ["c-15", "c-14", "c-8"]
     assert all(item["providerTraceSummary"]["fallback"] for item in feed["items"])
     assert all(item["memoryMetaSummary"]["backend"] == "demo_snapshot" for item in feed["items"])
     assert all(item["evidenceItems"] for item in feed["items"])
@@ -335,7 +335,7 @@ def test_admin_consultation_feed_demo_fallback_still_applies_filters(tmp_path, m
     orchestrator = build_orchestrator()
 
     escalated_feed = asyncio.run(orchestrator.high_risk_consultation_feed(limit=10, escalated_only=True))
-    assert [item["childId"] for item in escalated_feed["items"]] == ["c-16", "c-15", "c-14", "c-8"]
+    assert [item["childId"] for item in escalated_feed["items"]] == ["c-15", "c-14", "c-8", "c-11"]
 
     watch_feed = asyncio.run(orchestrator.high_risk_consultation_feed(limit=10, status="in_progress"))
     assert watch_feed["count"] == 1

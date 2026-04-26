@@ -1,14 +1,7 @@
 "use client";
 
-/* eslint-disable react/no-children-prop */
-
 import type { ReactNode } from "react";
 import { BrainCircuit, Database, GitBranchPlus, Network, SearchCheck } from "lucide-react";
-import {
-  AdminBand,
-  AdminDataItem,
-  AdminSubsection,
-} from "@/components/admin/AdminVisuals";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AdminConsultationPriorityItem } from "@/lib/agent/admin-consultation";
@@ -70,33 +63,37 @@ function countEvidenceGroups(groups: ConsultationEvidenceDisplayGroup[]) {
 function SectionHeading({
   icon,
   title,
+  toneClassName,
 }: {
   icon: ReactNode;
   title: string;
+  toneClassName: string;
 }) {
   return (
-    <span className="flex items-center gap-2">
-      {icon}
-      {title}
-    </span>
+    <div className="flex items-center gap-2">
+      <span className={cn("flex h-7 w-7 items-center justify-center rounded-full", toneClassName)}>
+        {icon}
+      </span>
+      <p className="text-sm font-semibold text-slate-900">{title}</p>
+    </div>
   );
 }
 
 function FilledList({
   items,
   emptyText,
-  toneClassName = "border border-white/8 bg-white/6",
+  toneClassName = "bg-slate-50",
 }: {
   items: string[];
   emptyText: string;
   toneClassName?: string;
 }) {
   if (items.length === 0) {
-    return <p className="text-sm leading-6 text-white/50">{emptyText}</p>;
+    return <p className="text-sm leading-6 text-slate-500">{emptyText}</p>;
   }
 
   return (
-    <div className="space-y-2 text-sm leading-6 text-white/68">
+    <div className="space-y-2 text-sm leading-6 text-slate-600">
       {items.map((item) => (
         <p key={item} className={cn("rounded-xl px-3 py-2 whitespace-normal break-words", toneClassName)}>
           {item}
@@ -116,16 +113,13 @@ function MetaCard({
   detail: string;
 }) {
   return (
-    <AdminDataItem
-      title={
-        <span className="flex items-center gap-2">
-          {icon}
-          {title}
-        </span>
-      }
-      description={detail}
-      tone="slate"
-    />
+    <div className="rounded-2xl border border-slate-100 bg-white/90 p-4">
+      <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+        {icon}
+        <span>{title}</span>
+      </div>
+      <p className="mt-2 whitespace-normal break-words text-sm leading-6 text-slate-600">{detail}</p>
+    </div>
   );
 }
 
@@ -137,19 +131,21 @@ function ExplainabilityList({
   emptyText: string;
 }) {
   if (items.length === 0) {
-    return <p className="text-sm leading-6 text-white/50">{emptyText}</p>;
+    return <p className="text-sm leading-6 text-slate-500">{emptyText}</p>;
   }
 
   return (
     <div className="space-y-2">
       {items.map((itemExplainability) => (
-        <AdminDataItem
+        <div
           key={`${itemExplainability.label}-${itemExplainability.detail}`}
-          title={itemExplainability.label}
-          description={itemExplainability.detail}
-          tone="slate"
-          className="px-3 py-3"
-        />
+          className="rounded-2xl border border-slate-100 bg-white/90 px-3 py-3"
+        >
+          <p className="text-sm font-semibold text-slate-900">{itemExplainability.label}</p>
+          <p className="mt-1 whitespace-normal break-words text-sm leading-6 text-slate-600">
+            {itemExplainability.detail}
+          </p>
+        </div>
       ))}
     </div>
   );
@@ -168,40 +164,37 @@ function EvidenceCard({
       : null;
 
   return (
-    <AdminDataItem
-      description={
-        <>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="info">{evidence.item.sourceLabel}</Badge>
-            <Badge variant={getEvidenceCategoryBadgeVariant(evidence.item.evidenceCategory)}>
-              {getConsultationEvidenceCategoryLabel(evidence.item.evidenceCategory)}
+    <div className="rounded-2xl border border-slate-100 bg-white/90 p-4">
+      <div className="flex flex-wrap gap-2">
+        <Badge variant="info">{evidence.item.sourceLabel}</Badge>
+        <Badge variant={getEvidenceCategoryBadgeVariant(evidence.item.evidenceCategory)}>
+          {getConsultationEvidenceCategoryLabel(evidence.item.evidenceCategory)}
+        </Badge>
+        <Badge variant={getEvidenceConfidenceBadgeVariant(evidence.item.confidence)}>
+          {getConsultationEvidenceConfidenceLabel(evidence.item.confidence)}
+        </Badge>
+        <Badge variant={evidence.item.requiresHumanReview ? "warning" : "success"}>
+          {getConsultationEvidenceHumanReviewLabel(evidence.item.requiresHumanReview)}
+        </Badge>
+      </div>
+
+      <p className="mt-3 whitespace-normal break-words text-sm leading-6 text-slate-700">
+        {evidence.item.summary}
+      </p>
+      {excerpt ? (
+        <p className="mt-2 whitespace-normal break-words text-xs leading-5 text-slate-500">{excerpt}</p>
+      ) : null}
+
+      {evidence.supportLabels.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {evidence.supportLabels.slice(0, compact ? 1 : 2).map((label) => (
+            <Badge key={`${evidence.item.id}-${label}`} variant="outline">
+              {summarizeText(label, compact ? 20 : 28)}
             </Badge>
-            <Badge variant={getEvidenceConfidenceBadgeVariant(evidence.item.confidence)}>
-              {getConsultationEvidenceConfidenceLabel(evidence.item.confidence)}
-            </Badge>
-            <Badge variant={evidence.item.requiresHumanReview ? "warning" : "success"}>
-              {getConsultationEvidenceHumanReviewLabel(evidence.item.requiresHumanReview)}
-            </Badge>
-          </div>
-          <p className="mt-3 whitespace-normal break-words text-sm leading-6 text-white/74">
-            {evidence.item.summary}
-          </p>
-          {excerpt ? (
-            <p className="mt-2 whitespace-normal break-words text-xs leading-5 text-white/46">{excerpt}</p>
-          ) : null}
-          {evidence.supportLabels.length > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {evidence.supportLabels.slice(0, compact ? 1 : 2).map((label) => (
-                <Badge key={`${evidence.item.id}-${label}`} variant="outline">
-                  {summarizeText(label, compact ? 20 : 28)}
-                </Badge>
-              ))}
-            </div>
-          ) : null}
-        </>
-      }
-      tone="slate"
-    />
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -213,23 +206,26 @@ function FallbackEvidenceList({
   emptyText: string;
 }) {
   if (model.mode === "empty") {
-    return <p className="text-sm leading-6 text-white/50">{emptyText}</p>;
+    return <p className="text-sm leading-6 text-slate-500">{emptyText}</p>;
   }
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline">兼容摘要</Badge>
-        <p className="text-xs text-white/46">当前结果暂以兼容摘要方式展示旧字段内容。</p>
+        <p className="text-xs text-slate-500">当前结果暂以兼容摘要方式展示旧字段内容。</p>
       </div>
       <div className="space-y-2">
         {model.fallbackItems.map((item) => (
-          <AdminDataItem
+          <div
             key={`${item.source}-${item.detail}`}
-            title={item.label}
-            description={item.detail}
-            tone="amber"
-          />
+            className="rounded-2xl border border-amber-100 bg-amber-50/80 px-3 py-3"
+          >
+            <p className="text-xs font-medium text-amber-700">{item.label}</p>
+            <p className="mt-1 whitespace-normal break-words text-sm leading-6 text-slate-700">
+              {item.detail}
+            </p>
+          </div>
         ))}
       </div>
     </div>
@@ -258,16 +254,16 @@ function StructuredEvidenceSection({
       </div>
 
       {remainderCount > 0 ? (
-        <details className="rounded-2xl border border-dashed border-white/10 bg-white/5 p-4">
-          <summary className="cursor-pointer list-none text-sm font-semibold text-white/88">
+        <details className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4">
+          <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">
             查看其余 {remainderCount} 条证据
           </summary>
-          <div className="mt-4 space-y-4 border-t border-white/8 pt-4">
+          <div className="mt-4 space-y-4 border-t border-slate-200 pt-4">
             {model.groupedRemainder.map((group) => (
               <div key={group.category} className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Badge variant={getEvidenceCategoryBadgeVariant(group.category)}>{group.label}</Badge>
-                  <p className="text-xs text-white/46">{group.items.length} 条</p>
+                  <p className="text-xs text-slate-500">{group.items.length} 条</p>
                 </div>
                 <div className="space-y-3">
                   {group.items.map((evidence) => (
@@ -305,55 +301,63 @@ export default function ConsultationTraceCard({
 
   return (
     <Card
-      surface="solid"
-      glow="soft"
-      className={cn("min-w-0 overflow-hidden rounded-[2rem] border-white/10", className)}
+      className={cn(
+        "min-w-0 overflow-hidden rounded-[28px] border-slate-100 bg-white/95 shadow-sm",
+        className
+      )}
     >
-      <CardHeader className="gap-5 pb-4">
+      <CardHeader className="gap-4 pb-4">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={getProviderBadgeVariant(trace.providerState)}>{trace.providerStateLabel}</Badge>
           <Badge variant={getMemoryBadgeVariant(trace.memoryState)}>{trace.memoryStateLabel}</Badge>
         </div>
 
         <div className="min-w-0">
-          <CardTitle className="flex items-center gap-2 text-lg text-white">
+          <CardTitle className="flex items-center gap-2 text-lg text-slate-900">
             <BrainCircuit className="h-5 w-5 text-indigo-500" />
             会诊决策依据
           </CardTitle>
-          <p className="mt-2 whitespace-normal break-words text-sm leading-6 text-white/66">
+          <p className="mt-2 whitespace-normal break-words text-sm leading-6 text-slate-600">
             这里只保留可用于决策和答辩的依据摘要、证据链与协作状态，不展示调试日志。
           </p>
         </div>
       </CardHeader>
 
       <CardContent className="min-w-0 space-y-4 overflow-hidden">
-        <AdminBand
-          tone="indigo"
-          title="协作摘要"
-          description={summaryPreview}
-          className="p-5"
-        >
+        <div className="rounded-3xl border border-indigo-100 bg-linear-to-br from-indigo-50 via-white to-slate-50 p-5">
+          <SectionHeading
+            icon={<SearchCheck className="h-4 w-4 text-emerald-500" />}
+            title="协作摘要"
+            toneClassName="bg-emerald-100 text-emerald-700"
+          />
+          <p className="mt-3 whitespace-normal break-words text-sm leading-7 text-slate-700">
+            {summaryPreview}
+          </p>
           {summaryPreview !== trace.collaborationSummary ? (
-            <details className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-              <summary className="cursor-pointer list-none text-sm font-semibold text-white/88">
+            <details className="mt-4 rounded-2xl border border-white/80 bg-white/80 p-4">
+              <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">
                 查看完整协作摘要
               </summary>
-              <p className="mt-3 whitespace-normal break-words text-sm leading-7 text-white/66">
+              <p className="mt-3 whitespace-normal break-words text-sm leading-7 text-slate-600">
                 {trace.collaborationSummary}
               </p>
             </details>
           ) : null}
-        </AdminBand>
+        </div>
 
         <div className="space-y-4">
-          <AdminSubsection
-            title={<SectionHeading icon={<BrainCircuit className="h-4 w-4 text-indigo-500" />} title="关键发现" />}
-            tone="slate"
-          >
-            <FilledList items={visibleKeyFindings} emptyText="当前没有额外关键发现。" />
+          <div className="rounded-3xl border border-slate-100 bg-white p-5">
+            <SectionHeading
+              icon={<BrainCircuit className="h-4 w-4 text-indigo-500" />}
+              title="关键发现"
+              toneClassName="bg-indigo-100 text-indigo-700"
+            />
+            <div className="mt-3">
+              <FilledList items={visibleKeyFindings} emptyText="当前没有额外关键发现。" />
+            </div>
             {extraKeyFindings.length > 0 ? (
-              <details className="mt-4 rounded-2xl border border-dashed border-white/10 bg-white/5 p-4">
-                <summary className="cursor-pointer list-none text-sm font-semibold text-white/88">
+              <details className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">
                   查看其余 {extraKeyFindings.length} 条关键发现
                 </summary>
                 <div className="mt-3">
@@ -361,88 +365,89 @@ export default function ConsultationTraceCard({
                 </div>
               </details>
             ) : null}
-          </AdminSubsection>
+          </div>
 
-          <AdminSubsection
-            title={
-              <SectionHeading
-                icon={<GitBranchPlus className="h-4 w-4 text-indigo-500" />}
-                title="判断依据"
-              />
-            }
-            tone="sky"
-          >
-            <ExplainabilityList items={visibleExplainability} emptyText="当前没有额外判断依据。" />
+          <div className="rounded-3xl border border-slate-100 bg-white p-5">
+            <SectionHeading
+              icon={<GitBranchPlus className="h-4 w-4 text-sky-500" />}
+              title="判断依据"
+              toneClassName="bg-sky-100 text-sky-700"
+            />
+            <div className="mt-3">
+              <ExplainabilityList items={visibleExplainability} emptyText="当前没有额外判断依据。" />
+            </div>
             {extraExplainability.length > 0 ? (
-              <details className="mt-4 rounded-2xl border border-dashed border-white/10 bg-white/5 p-4">
-                <summary className="cursor-pointer list-none text-sm font-semibold text-white/88">
+              <details className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">
                   查看其余 {extraExplainability.length} 条判断依据
                 </summary>
                 <div className="mt-3">
-                  <ExplainabilityList items={extraExplainability} emptyText="当前没有额外判断依据。" />
+                  <ExplainabilityList
+                    items={extraExplainability}
+                    emptyText="当前没有额外判断依据。"
+                  />
                 </div>
               </details>
             ) : null}
-          </AdminSubsection>
+          </div>
 
-          <AdminSubsection
-            title={
-              <SectionHeading
-                icon={<SearchCheck className="h-4 w-4 text-indigo-500" />}
-                title="关键证据链"
-              />
-            }
-            tone="amber"
-          >
-            <StructuredEvidenceSection model={evidenceModel} emptyText="当前没有可展示的证据摘要。" />
-          </AdminSubsection>
+          <div className="rounded-3xl border border-slate-100 bg-white p-5">
+            <SectionHeading
+              icon={<SearchCheck className="h-4 w-4 text-amber-500" />}
+              title="关键证据链"
+              toneClassName="bg-amber-100 text-amber-700"
+            />
+            <div className="mt-3">
+              <StructuredEvidenceSection model={evidenceModel} emptyText="当前没有可展示的证据摘要。" />
+            </div>
+          </div>
         </div>
 
-        <AdminSubsection title="协作状态" tone="slate">
-          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-            <AdminDataItem
-              title="参与环节"
-              tone="slate"
-              children={
-                trace.participants.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {trace.participants.map((participant) => (
-                      <Badge key={participant} variant="info">
-                        {participant}
-                      </Badge>
-                    ))}
-                  </div>
+        <div className="rounded-3xl border border-slate-100 bg-slate-50/70 p-5">
+          <p className="text-sm font-semibold text-slate-900">协作状态</p>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            <div className="rounded-2xl border border-slate-100 bg-white/90 p-4">
+              <p className="text-sm font-semibold text-slate-900">参与环节</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {trace.participants.length > 0 ? (
+                  trace.participants.map((participant) => (
+                    <Badge key={participant} variant="info">
+                      {participant}
+                    </Badge>
+                  ))
                 ) : (
-                  <p className="text-sm leading-6 text-white/50">当前没有参与者信息。</p>
-                )
-              }
-            />
+                  <p className="text-sm leading-6 text-slate-500">当前没有参与者信息。</p>
+                )}
+              </div>
+            </div>
+
             <MetaCard
-              icon={<Network className="h-4 w-4 text-indigo-500" />}
+              icon={<Network className="h-4 w-4 text-sky-500" />}
               title="生成方式"
               detail={trace.providerStateLabel}
             />
             <MetaCard
-              icon={<Database className="h-4 w-4 text-indigo-500" />}
+              icon={<Database className="h-4 w-4 text-emerald-500" />}
               title="参考范围"
               detail={trace.memoryDetail ?? trace.memoryStateLabel}
             />
           </div>
 
-          <AdminSubsection title="同步去向" tone="emerald" className="mt-4 p-4">
-            {trace.syncTargets.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {trace.syncTargets.map((syncTarget) => (
+          <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/80 p-4">
+            <p className="text-sm font-semibold text-emerald-900">同步去向</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {trace.syncTargets.length > 0 ? (
+                trace.syncTargets.map((syncTarget) => (
                   <Badge key={syncTarget} variant="success">
                     {syncTarget}
                   </Badge>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm leading-6 text-white/58">当前没有同步目标。</p>
-            )}
-          </AdminSubsection>
-        </AdminSubsection>
+                ))
+              ) : (
+                <p className="text-sm leading-6 text-emerald-700">当前没有同步目标。</p>
+              )}
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

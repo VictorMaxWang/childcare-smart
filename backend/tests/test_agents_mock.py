@@ -162,8 +162,8 @@ def test_admin_run_sparse_payload_uses_demo_roster_context():
     assert body["source"] == "mock"
     assert body["institutionScope"]["visibleChildren"] == 36
     assert body["institutionScope"]["healthAbnormalCount"] == 6
-    assert body["institutionScope"]["pendingReviewCount"] == 5
-    assert body["priorityTopItems"][0]["targetId"] == "c-16"
+    assert body["institutionScope"]["pendingReviewCount"] == 6
+    assert body["priorityTopItems"][0]["targetId"] == "c-15"
 
 
 def test_weekly_report_teacher_role():

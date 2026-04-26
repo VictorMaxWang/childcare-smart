@@ -17,7 +17,6 @@ import {
 } from "@/components/role-shell/RoleScaffold";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   buildTeacherAgentChildContext,
@@ -782,7 +781,6 @@ export default function TeacherAgentPage() {
 
   return (
     <RolePageShell
-      intensity="medium"
       badge={`教师 AI 助手 · ${currentUser.className ?? "当前班级"}`}
       title="把班级数据转成可执行的教师处理建议"
       description="这一页会围绕班级上下文、单个儿童上下文和三个核心任务展开：家长沟通建议、今日跟进行动、本周观察总结。"
@@ -818,25 +816,16 @@ export default function TeacherAgentPage() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Card surface="glass" glow="soft" interactive={false} className="border-white/12 bg-white/6">
-                    <CardContent className="p-4">
-                      <p className="text-sm font-semibold text-slate-900">当前班级</p>
-                      <p className="mt-2 text-2xl font-semibold text-slate-900">{classContext.className}</p>
-                    </CardContent>
-                  </Card>
-                  <Card
-                    surface="luminous"
-                    glow="soft"
-                    interactive={false}
-                    className="border-white/14 bg-[linear-gradient(180deg,rgba(21,24,55,0.94),rgba(11,13,31,0.9))]"
-                  >
-                    <CardContent className="p-4">
-                      <p className="text-sm font-semibold text-slate-900">当前服务对象</p>
-                      <p className="mt-2 text-2xl font-semibold text-slate-900">
-                        {scope === "class" ? `${classContext.visibleChildren.length} 名幼儿` : activeChildContext?.child.name ?? "未选择"}
-                      </p>
-                    </CardContent>
-                  </Card>
+                  <div className="rounded-3xl bg-white p-4 ring-1 ring-slate-100">
+                    <p className="text-sm font-semibold text-slate-900">当前班级</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-900">{classContext.className}</p>
+                  </div>
+                  <div className="rounded-3xl bg-slate-50 p-4">
+                    <p className="text-sm font-semibold text-slate-900">当前服务对象</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-900">
+                      {scope === "class" ? `${classContext.visibleChildren.length} 名幼儿` : activeChildContext?.child.name ?? "未选择"}
+                    </p>
+                  </div>
                 </div>
 
                 {scope === "child" ? (
@@ -869,55 +858,29 @@ export default function TeacherAgentPage() {
                   <>
                     {activeChildContext.todayAbnormalChecks.length > 0 ? (
                       activeChildContext.todayAbnormalChecks.map((record) => (
-                        <Card
-                          key={record.id}
-                          surface="luminous"
-                          glow="soft"
-                          interactive={false}
-                          className="border-violet-300/18 bg-[linear-gradient(180deg,rgba(28,20,58,0.94),rgba(13,11,34,0.86))]"
-                        >
-                          <CardContent className="p-4 text-sm text-slate-700">
-                            {record.date} · {activeChildContext.child.name} · 体温 {record.temperature}℃ · {record.mood} · {record.handMouthEye}
-                            {record.remark ? ` · ${record.remark}` : ""}
-                          </CardContent>
-                        </Card>
+                        <div key={record.id} className="rounded-3xl border border-rose-100 bg-rose-50/60 p-4 text-sm text-slate-700">
+                          {record.date} · {activeChildContext.child.name} · 体温 {record.temperature}℃ · {record.mood} · {record.handMouthEye}
+                          {record.remark ? ` · ${record.remark}` : ""}
+                        </div>
                       ))
                     ) : (
-                      <Card surface="glass" glow="soft" interactive={false} className="border-white/12 bg-white/6">
-                        <CardContent className="p-4 text-sm text-slate-600">
-                          {activeChildContext.child.name} 今日暂无晨检异常，适合继续围绕待复查记录和家长反馈生成建议。
-                        </CardContent>
-                      </Card>
+                      <div className="rounded-3xl border border-slate-100 bg-white p-4 text-sm text-slate-600">
+                        {activeChildContext.child.name} 今日暂无晨检异常，适合继续围绕待复查记录和家长反馈生成建议。
+                      </div>
                     )}
 
                     {activeChildContext.pendingReviews.slice(0, 2).map((record) => (
-                      <Card
-                        key={record.id}
-                        surface="luminous"
-                        glow="soft"
-                        interactive={false}
-                        className="border-indigo-300/18 bg-[linear-gradient(180deg,rgba(19,24,55,0.94),rgba(12,13,32,0.86))]"
-                      >
-                        <CardContent className="p-4 text-sm text-slate-700">
-                          待复查 · {record.category} · {record.followUpAction ?? record.description}
-                        </CardContent>
-                      </Card>
+                      <div key={record.id} className="rounded-3xl border border-amber-100 bg-amber-50/60 p-4 text-sm text-slate-700">
+                        待复查 · {record.category} · {record.followUpAction ?? record.description}
+                      </div>
                     ))}
                   </>
                 ) : classContext.todayAbnormalChildren.length > 0 ? (
                   classContext.todayAbnormalChildren.map((item) => (
-                    <Card
-                      key={item.record.id}
-                      surface="luminous"
-                      glow="soft"
-                      interactive={false}
-                      className="border-violet-300/18 bg-[linear-gradient(180deg,rgba(28,20,58,0.94),rgba(13,11,34,0.86))]"
-                    >
-                      <CardContent className="p-4 text-sm text-slate-700">
-                        {item.child.name} · 体温 {item.record.temperature}℃ · {item.record.mood} · {item.record.handMouthEye}
-                        {item.record.remark ? ` · ${item.record.remark}` : ""}
-                      </CardContent>
-                    </Card>
+                    <div key={item.record.id} className="rounded-3xl border border-rose-100 bg-rose-50/60 p-4 text-sm text-slate-700">
+                      {item.child.name} · 体温 {item.record.temperature}℃ · {item.record.mood} · {item.record.handMouthEye}
+                      {item.record.remark ? ` · ${item.record.remark}` : ""}
+                    </div>
                   ))
                 ) : (
                   <p className="text-sm text-slate-500">今天暂未发现晨检异常，适合直接做班级周总结或优先补晨检。</p>
@@ -939,19 +902,12 @@ export default function TeacherAgentPage() {
                 </div>
                 <div className="grid gap-3 lg:grid-cols-2">
                   {sortedTeacherDrafts.length > 0 ? (
-                      sortedTeacherDrafts.slice(0, 4).map((draft) => (
-                        <Card
-                          key={draft.draftId}
-                          surface="glass"
-                          glow="soft"
-                          interactive={false}
-                          className="border-white/12 bg-white/6"
-                        >
-                          <CardContent className="p-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-semibold text-slate-900">{draft.draftType.toUpperCase()} 草稿</p>
-                            <span className="text-xs text-slate-500">{getDraftSyncStatusLabel(draft.syncStatus)}</span>
-                          </div>
+                    sortedTeacherDrafts.slice(0, 4).map((draft) => (
+                      <div key={draft.draftId} className="rounded-3xl border border-slate-100 bg-white p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-slate-900">{draft.draftType.toUpperCase()} 草稿</p>
+                          <span className="text-xs text-slate-500">{getDraftSyncStatusLabel(draft.syncStatus)}</span>
+                        </div>
                         {(() => {
                           const voicePayload = readTeacherVoiceDraftPayload(draft.structuredPayload);
                           if (!voicePayload) {
@@ -961,15 +917,15 @@ export default function TeacherAgentPage() {
                           return (
                             <div className="mt-3 space-y-2">
                               <div className="flex flex-wrap gap-2">
-                                <span className="inline-flex items-center rounded-full border border-violet-300/18 bg-violet-400/10 px-2.5 py-0.5 text-xs font-semibold text-violet-100">
+                                <span className="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-700">
                                   已结构化
                                 </span>
                                 {voicePayload.understanding?.router_result.primary_category ? (
-                                  <span className="inline-flex items-center rounded-full border border-white/12 bg-white/8 px-2.5 py-0.5 text-xs font-semibold text-white/72">
+                                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
                                     {voicePayload.understanding.router_result.primary_category}
                                   </span>
                                 ) : null}
-                                <span className="inline-flex items-center rounded-full border border-indigo-300/20 bg-indigo-400/10 px-2.5 py-0.5 text-xs font-semibold text-indigo-100">
+                                <span className="inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
                                   草稿项 {voicePayload.t5Seed.draft_items.length}
                                 </span>
                               </div>
@@ -979,7 +935,7 @@ export default function TeacherAgentPage() {
                                 </p>
                               ) : null}
                               {voicePayload.t5Seed.warnings.length > 0 ? (
-                                <p className="text-xs leading-5 text-violet-200">
+                                <p className="text-xs leading-5 text-amber-600">
                                   Warnings: {voicePayload.t5Seed.warnings.join(" / ")}
                                 </p>
                               ) : null}
@@ -987,20 +943,12 @@ export default function TeacherAgentPage() {
                           );
                         })()}
                         <p className="mt-2 text-sm leading-6 text-slate-600">{draft.content}</p>
-                          </CardContent>
-                        </Card>
-                      ))
+                      </div>
+                    ))
                   ) : (
-                    <Card
-                      surface="glass"
-                      glow="soft"
-                      interactive={false}
-                      className="border-dashed border-white/14 bg-white/5"
-                    >
-                      <CardContent className="p-4 text-sm text-slate-500">
-                        当前还没有教师端本地草稿。
-                      </CardContent>
-                    </Card>
+                    <div className="rounded-3xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+                      当前还没有教师端本地草稿。
+                    </div>
                   )}
                 </div>
               </div>
@@ -1014,7 +962,7 @@ export default function TeacherAgentPage() {
                 <div className="mb-4 space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">草稿源 {teacherVoiceSourceDrafts.length} 条</Badge>
-                    <Badge variant="info">
+                    <Badge variant="warning">
                       待处理{" "}
                       {teacherVoiceSourceDrafts.reduce(
                         (total, item) => total + item.pendingCount,
@@ -1033,10 +981,10 @@ export default function TeacherAgentPage() {
                           key={item.draft.draftId}
                           type="button"
                           onClick={() => handleSelectSourceDraft(item.draft)}
-                          className={`premium-card rounded-[1.6rem] border p-4 text-left transition-all duration-200 ${
+                          className={`rounded-3xl border p-4 text-left transition ${
                             isSelected
-                              ? "surface-luminous surface-glow-brand border-white/16 bg-[linear-gradient(160deg,rgba(27,21,62,0.96),rgba(13,12,35,0.9),rgba(15,21,43,0.88))]"
-                              : "surface-glass surface-glow-soft border-white/12 bg-white/6 hover:border-white/20"
+                              ? "border-indigo-200 bg-indigo-50/70"
+                              : "border-slate-100 bg-white hover:border-slate-200"
                           }`}
                         >
                           <div className="flex flex-wrap items-center gap-2">
@@ -1044,8 +992,8 @@ export default function TeacherAgentPage() {
                               {isSelected ? "当前草稿源" : "可切换草稿源"}
                             </Badge>
                             <Badge variant="outline">{item.childName}</Badge>
-                            <Badge variant="info">待确认 {item.pendingCount}</Badge>
-                            <Badge variant="secondary">已确认 {item.confirmedCount}</Badge>
+                            <Badge variant="warning">待确认 {item.pendingCount}</Badge>
+                            <Badge variant="success">已确认 {item.confirmedCount}</Badge>
                             {item.discardedCount > 0 ? (
                               <Badge variant="secondary">
                                 已丢弃 {item.discardedCount}
@@ -1102,33 +1050,24 @@ export default function TeacherAgentPage() {
                 </>
               }
             >
-              <Card
-                surface="luminous"
-                glow="brand"
-                interactive={false}
-                className="border-indigo-100/80 bg-linear-to-br from-indigo-50/86 via-white to-sky-50/60"
-              >
-                <CardContent className="p-5">
-                  {error ? <p className="mb-4 text-sm text-rose-200">{error}</p> : null}
-                  {intentEntryHint ? (
-                    <Card surface="solid" glow="none" interactive={false} className="mb-4 border-white/12 bg-white/6">
-                      <CardContent className="p-4 text-sm leading-6 text-white/68">
-                        {intentEntryHint}
-                      </CardContent>
-                    </Card>
-                  ) : null}
+              <div className="rounded-3xl border border-indigo-100 bg-indigo-50/50 p-5">
+                {error ? <p className="mb-4 text-sm text-rose-600">{error}</p> : null}
+                {intentEntryHint ? (
+                  <div className="mb-4 rounded-2xl border border-sky-100 bg-white/80 p-4 text-sm leading-6 text-slate-600">
+                    {intentEntryHint}
+                  </div>
+                ) : null}
 
-                  {currentResult ? (
-                    <TeacherAgentResultCard result={currentResult} />
-                  ) : (
-                    <p className="text-sm text-slate-500">
-                      点击上方任一快捷操作，教师 AI 助手会基于当前班级或儿童上下文生成结构化结果。
-                    </p>
-                  )}
+                {currentResult ? (
+                  <TeacherAgentResultCard result={currentResult} />
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    点击上方任一快捷操作，教师 AI 助手会基于当前班级或儿童上下文生成结构化结果。
+                  </p>
+                )}
 
-                  {isLoading ? <p className="mt-4 text-sm text-slate-500">教师 AI 助手正在整理结果，请稍候…</p> : null}
-                </CardContent>
-              </Card>
+                {isLoading ? <p className="mt-4 text-sm text-slate-500">教师 AI 助手正在整理结果，请稍候…</p> : null}
+              </div>
             </AgentWorkspaceCard>
 
             <WeeklyReportPreviewCard
@@ -1162,20 +1101,12 @@ export default function TeacherAgentPage() {
             <SectionCard title="班级高优先级摘要" description="用于老师快速扫一眼今天最值得先处理的内容。">
               <div className="space-y-3">
                 {classContext.focusChildren.length > 0 ? (
-                    classContext.focusChildren.map((item) => (
-                      <Card
-                        key={item.childId}
-                        surface="glass"
-                        glow="soft"
-                        interactive={false}
-                        className="border-white/12 bg-white/6"
-                      >
-                        <CardContent className="p-4 text-sm text-slate-600">
-                          <p className="font-semibold text-slate-900">{item.childName}</p>
-                          <p className="mt-2 leading-6">{item.reasons.join("、")}</p>
-                        </CardContent>
-                      </Card>
-                    ))
+                  classContext.focusChildren.map((item) => (
+                    <div key={item.childId} className="rounded-2xl border border-slate-100 bg-white p-4 text-sm text-slate-600">
+                      <p className="font-semibold text-slate-900">{item.childName}</p>
+                      <p className="mt-2 leading-6">{item.reasons.join("、")}</p>
+                    </div>
+                  ))
                 ) : (
                   <p className="text-sm text-slate-500">当前没有需要重点提级的儿童，适合保持稳定记录节奏。</p>
                 )}
@@ -1185,11 +1116,11 @@ export default function TeacherAgentPage() {
             <SectionCard title="推荐展示顺序" description="录屏时可以直接沿这条顺序展示。">
               <ol className="space-y-3 text-sm text-slate-600">
                 <li className="flex items-center gap-3">
-                  <Sparkles className="h-4 w-4 text-violet-200" />
+                  <Sparkles className="h-4 w-4 text-amber-500" />
                   先选一个异常或待复查儿童，生成家长沟通建议
                 </li>
                 <li className="flex items-center gap-3">
-                  <Sparkles className="h-4 w-4 text-indigo-200" />
+                  <Sparkles className="h-4 w-4 text-sky-500" />
                   再切到今日跟进行动，展示结构化行动列表
                 </li>
                 <li className="flex items-center gap-3">
@@ -1201,16 +1132,9 @@ export default function TeacherAgentPage() {
 
             <SectionCard title="当前结果摘要" description="方便演示时在侧边快速回看。">
               {currentResult ? (
-                <Card
-                  surface="glass"
-                  glow="soft"
-                  interactive={false}
-                  className="border-white/12 bg-white/6"
-                >
-                  <CardContent className="p-4 text-sm leading-6 text-slate-600">
-                    {buildTeacherAgentResultSummary(currentResult)}
-                  </CardContent>
-                </Card>
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 text-sm leading-6 text-slate-600">
+                  {buildTeacherAgentResultSummary(currentResult)}
+                </div>
               ) : (
                 <p className="text-sm text-slate-500">还没有结果，先运行一个工作流。</p>
               )}
@@ -1219,26 +1143,18 @@ export default function TeacherAgentPage() {
             <SectionCard title="提醒中心" description="展示今晚任务、48 小时复查和升级关注提醒。">
               <div className="space-y-3">
                 {teacherReminders.length > 0 ? (
-                    teacherReminders.slice(0, 5).map((item) => (
-                      <Card
-                        key={item.reminderId}
-                        surface="glass"
-                        glow="soft"
-                        interactive={false}
-                        className="border-white/12 bg-white/6"
-                      >
-                        <CardContent className="p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2">
-                            <BellRing className="h-4 w-4 text-indigo-500" />
-                            <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                          </div>
-                          <span className="text-xs text-slate-500">{getReminderStatusLabel(item.status)}</span>
+                  teacherReminders.slice(0, 5).map((item) => (
+                    <div key={item.reminderId} className="rounded-2xl border border-slate-100 bg-white p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <BellRing className="h-4 w-4 text-indigo-500" />
+                          <p className="text-sm font-semibold text-slate-900">{item.title}</p>
                         </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
-                        </CardContent>
-                      </Card>
-                    ))
+                        <span className="text-xs text-slate-500">{getReminderStatusLabel(item.status)}</span>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+                    </div>
+                  ))
                 ) : (
                   <p className="text-sm text-slate-500">当前没有待展示提醒。</p>
                 )}

@@ -89,12 +89,12 @@ function toStableHash(input: string) {
 
 function buildDueWindow(kind: TaskDueWindow["kind"]): TaskDueWindow {
   if (kind === "same_day") {
-    return { kind, label: "Today" };
+    return { kind, label: "今日" };
   }
   if (kind === "within_48h") {
-    return { kind, label: "Within 48 hours" };
+    return { kind, label: "48小时内" };
   }
-  return { kind, label: "Deadline" };
+  return { kind, label: "截止时间" };
 }
 
 function mergeLegacyRefs(left?: TaskLegacyRefs, right?: TaskLegacyRefs): TaskLegacyRefs | undefined {

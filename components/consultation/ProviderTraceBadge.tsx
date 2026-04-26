@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { formatAdminSourceLabel } from "@/lib/agent/admin-display-text";
 import type { ConsultationProviderTrace } from "@/lib/consultation/trace-types";
 import { cn } from "@/lib/utils";
 
@@ -32,13 +33,16 @@ export default function ProviderTraceBadge({
   const resolvedTrace = trace ?? providerTrace;
   if (!resolvedTrace) return null;
 
-  const source = getTraceValue(resolvedTrace.source);
-  const provider = getTraceValue(resolvedTrace.provider);
+  const sourceRaw = getTraceValue(resolvedTrace.source);
+  const providerRaw = getTraceValue(resolvedTrace.provider);
+  const source = sourceRaw ? formatAdminSourceLabel(sourceRaw) : "";
+  const provider = providerRaw ? formatAdminSourceLabel(providerRaw) : "";
   const model = getTraceValue(resolvedTrace.model);
   const requestId = getTraceValue(resolvedTrace.requestId);
-  const transport =
+  const transportRaw =
     getTraceValue(resolvedTrace.transport) ||
     getTraceValue(resolvedTrace.transportSource);
+  const transport = transportRaw ? formatAdminSourceLabel(transportRaw) : "";
   const primaryLabel = compact ? "" : source || provider;
   const modeLabel = getModeLabel(resolvedTrace);
 

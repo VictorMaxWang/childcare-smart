@@ -12,7 +12,6 @@ import {
 } from "@/components/role-shell/RoleScaffold";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -99,31 +98,22 @@ function riskVariant(level: HealthFileBridgeRiskItem["severity"]) {
 
 function FactCard({ fact }: { fact: HealthFileBridgeFact }) {
   return (
-    <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82">
-      <CardContent className="p-4">
-        <p className="text-sm font-semibold text-slate-900">{fact.label}</p>
-        <p className="mt-2 text-sm leading-6 text-slate-600">{fact.detail}</p>
-      </CardContent>
-    </Card>
+    <div className="rounded-3xl border border-slate-100 bg-white p-4">
+      <p className="text-sm font-semibold text-slate-900">{fact.label}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{fact.detail}</p>
+    </div>
   );
 }
 
 function RiskCard({ risk }: { risk: HealthFileBridgeRiskItem }) {
   return (
-    <Card
-      surface="luminous"
-      glow="soft"
-      interactive={false}
-      className="border-rose-100/80 bg-linear-to-br from-rose-50/82 via-white to-amber-50/45"
-    >
-      <CardContent className="p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-semibold text-slate-900">{risk.title}</p>
-          <Badge variant={riskVariant(risk.severity)}>{getRiskSeverityLabel(risk.severity)}</Badge>
-        </div>
-        <p className="mt-2 text-sm leading-6 text-slate-600">{risk.detail}</p>
-      </CardContent>
-    </Card>
+    <div className="rounded-3xl border border-rose-100 bg-rose-50/50 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm font-semibold text-slate-900">{risk.title}</p>
+        <Badge variant={riskVariant(risk.severity)}>{getRiskSeverityLabel(risk.severity)}</Badge>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{risk.detail}</p>
+    </div>
   );
 }
 
@@ -132,12 +122,10 @@ function DetailCard({
   detail,
 }: Pick<HealthFileBridgeContraindication, "title" | "detail"> | Pick<HealthFileBridgeFollowUpHint, "title" | "detail">) {
   return (
-    <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82">
-      <CardContent className="p-4">
-        <p className="text-sm font-semibold text-slate-900">{title}</p>
-        <p className="mt-2 text-sm leading-6 text-slate-600">{detail}</p>
-      </CardContent>
-    </Card>
+    <div className="rounded-3xl border border-slate-100 bg-white p-4">
+      <p className="text-sm font-semibold text-slate-900">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{detail}</p>
+    </div>
   );
 }
 
@@ -240,7 +228,6 @@ export default function TeacherHealthFileBridgePage() {
 
   return (
     <RolePageShell
-      intensity="medium"
       badge={`健康文件解析 · ${currentUser.className ?? "当前班级"}`}
       title="把外部健康材料整理成可复核的关键信息"
       description="上传材料后，系统会先提取事实、风险提示和后续提醒，方便老师快速核对并继续处理。"
@@ -343,30 +330,26 @@ export default function TeacherHealthFileBridgePage() {
                   />
                 </div>
 
-                <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-linear-to-br from-white to-sky-50/35">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2">
-                      <Upload className="h-4 w-4 text-indigo-500" />
-                      <p className="text-sm font-semibold text-slate-900">已选材料</p>
-                    </div>
-                    <div className="mt-3 space-y-3">
-                      {files.length > 0 ? (
-                        files.map((file) => (
-                          <Card key={file.fileId ?? file.name} surface="solid" glow="none" interactive={false} className="border-white/80 bg-white/86">
-                            <CardContent className="p-3">
-                              <p className="text-sm font-medium text-slate-900">{file.name}</p>
-                              <p className="mt-1 text-xs text-slate-500">
-                                {(file.mimeType || "文件类型未识别")} · {formatBytes(file.sizeBytes)}
-                              </p>
-                            </CardContent>
-                          </Card>
-                        ))
-                      ) : (
-                        <p className="text-sm text-slate-500">暂未选择材料。</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                <div className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4">
+                  <div className="flex items-center gap-2">
+                    <Upload className="h-4 w-4 text-indigo-500" />
+                    <p className="text-sm font-semibold text-slate-900">已选材料</p>
+                  </div>
+                  <div className="mt-3 space-y-3">
+                    {files.length > 0 ? (
+                      files.map((file) => (
+                        <div key={file.fileId ?? file.name} className="rounded-2xl bg-white p-3">
+                          <p className="text-sm font-medium text-slate-900">{file.name}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {(file.mimeType || "文件类型未识别")} · {formatBytes(file.sizeBytes)}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-500">暂未选择材料。</p>
+                    )}
+                  </div>
+                </div>
 
                 {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 
@@ -487,32 +470,24 @@ export default function TeacherHealthFileBridgePage() {
               description="方便老师确认当前提交的是哪位幼儿、哪类材料与多少份文件。"
             >
               <div className="space-y-3 text-sm text-slate-600">
-                <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82">
-                  <CardContent className="p-4">
-                    <p className="font-semibold text-slate-900">关联幼儿</p>
-                    <p className="mt-1">
-                      {selectedChild ? `${selectedChild.name} · ${selectedChild.className}` : "暂不关联具体幼儿"}
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82">
-                  <CardContent className="p-4">
-                    <p className="font-semibold text-slate-900">补充来源</p>
-                    <p className="mt-1">{getSourceRoleLabel(sourceRole)}</p>
-                  </CardContent>
-                </Card>
-                <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82">
-                  <CardContent className="p-4">
-                    <p className="font-semibold text-slate-900">材料类型</p>
-                    <p className="mt-1">{getFileKindLabel(fileKind)}</p>
-                  </CardContent>
-                </Card>
-                <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82">
-                  <CardContent className="p-4">
-                    <p className="font-semibold text-slate-900">材料数量</p>
-                    <p className="mt-1">{files.length} 份</p>
-                  </CardContent>
-                </Card>
+                <div className="rounded-2xl bg-white p-4">
+                  <p className="font-semibold text-slate-900">关联幼儿</p>
+                  <p className="mt-1">
+                    {selectedChild ? `${selectedChild.name} · ${selectedChild.className}` : "暂不关联具体幼儿"}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white p-4">
+                  <p className="font-semibold text-slate-900">补充来源</p>
+                  <p className="mt-1">{getSourceRoleLabel(sourceRole)}</p>
+                </div>
+                <div className="rounded-2xl bg-white p-4">
+                  <p className="font-semibold text-slate-900">材料类型</p>
+                  <p className="mt-1">{getFileKindLabel(fileKind)}</p>
+                </div>
+                <div className="rounded-2xl bg-white p-4">
+                  <p className="font-semibold text-slate-900">材料数量</p>
+                  <p className="mt-1">{files.length} 份</p>
+                </div>
               </div>
             </SectionCard>
 
@@ -530,21 +505,14 @@ export default function TeacherHealthFileBridgePage() {
                     ) : null}
                     {result.liveReadyButNotVerified ? formatResultBadge("建议继续复核原件", true) : null}
                   </div>
-                  <Card
-                    surface="luminous"
-                    glow="brand"
-                    interactive={false}
-                    className="border-indigo-100/80 bg-linear-to-br from-indigo-50/86 via-white to-sky-50/55"
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-indigo-600" />
-                        <p className="text-sm font-semibold text-slate-900">结果摘要</p>
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{result.summary}</p>
-                      <p className="mt-3 text-xs leading-5 text-slate-500">{result.disclaimer}</p>
-                    </CardContent>
-                  </Card>
+                  <div className="rounded-3xl border border-indigo-100 bg-indigo-50/60 p-4">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-indigo-600" />
+                      <p className="text-sm font-semibold text-slate-900">结果摘要</p>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{result.summary}</p>
+                    <p className="mt-3 text-xs leading-5 text-slate-500">{result.disclaimer}</p>
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm text-slate-500">发起解析后，这里会汇总结果摘要与复核提醒。</p>
@@ -556,33 +524,24 @@ export default function TeacherHealthFileBridgePage() {
               description="先用解析结果缩短阅读时间，再结合原始材料做最后确认。"
             >
               <div className="space-y-3">
-                <Card
-                  surface="luminous"
-                  glow="soft"
-                  interactive={false}
-                  className="border-amber-100/80 bg-linear-to-br from-amber-50/82 via-white to-rose-50/40"
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      <p className="text-sm font-semibold text-slate-900">先看重点，再核对原件</p>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      当前结果更适合作为老师快速读材料的第一步，遇到关键结论时仍建议回看原始图片或 PDF。
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card surface="glass" glow="soft" interactive={false} className="border-white/70 bg-white/82">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2">
-                      <ShieldAlert className="h-4 w-4 text-slate-700" />
-                      <p className="text-sm font-semibold text-slate-900">先完成解析，再决定后续动作</p>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      这一步会先整理事实、风险提示和后续提醒，后续处置建议仍需要老师结合班级情况继续判断。
-                    </p>
-                  </CardContent>
-                </Card>
+                <div className="rounded-3xl border border-amber-100 bg-amber-50/60 p-4">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <p className="text-sm font-semibold text-slate-900">先看重点，再核对原件</p>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    当前结果更适合作为老师快速读材料的第一步，遇到关键结论时仍建议回看原始图片或 PDF。
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-slate-100 bg-white p-4">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="h-4 w-4 text-slate-700" />
+                    <p className="text-sm font-semibold text-slate-900">先完成解析，再决定后续动作</p>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    这一步会先整理事实、风险提示和后续提醒，后续处置建议仍需要老师结合班级情况继续判断。
+                  </p>
+                </div>
               </div>
             </SectionCard>
           </div>

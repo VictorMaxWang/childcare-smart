@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Baby, BookHeart, House, LogOut, Menu, Monitor, Salad, ShieldCheck, Users, X } from "lucide-react";
+import { useApp } from "@/lib/store";
+import { cn } from "@/lib/utils";
 import {
   buildPrimaryNavItems,
   isPrimaryNavItemActive,
   type PrimaryNavIconKey,
 } from "@/lib/navigation/primary-nav";
-import { useApp } from "@/lib/store";
-import { cn } from "@/lib/utils";
 
 const ICON_MAP: Record<PrimaryNavIconKey, typeof House> = {
   overview: House,
@@ -23,13 +23,7 @@ const ICON_MAP: Record<PrimaryNavIconKey, typeof House> = {
   screen: Monitor,
 };
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: "Admin",
-  teacher: "Teacher",
-  parent: "Parent",
-};
-
-export default function MobileNav({ onLogout }: { onLogout: () => void | Promise<void> }) {
+export default function MobileNav({ onLogout }: { onLogout: () => void }) {
   const pathname = usePathname();
   const { currentUser } = useApp();
   const [open, setOpen] = useState(false);
@@ -37,7 +31,6 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
   const panelRef = useRef<HTMLElement>(null);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const navItems = buildPrimaryNavItems(currentUser.role);
-  const roleLabel = ROLE_LABELS[currentUser.role] ?? currentUser.role;
 
   const close = () => setOpen(false);
 
@@ -96,9 +89,9 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
     <div className="md:hidden">
       <button
         ref={triggerRef}
-        onClick={() => setOpen((previous) => !previous)}
-        className="premium-glass-panel surface-glass flex h-10 w-10 items-center justify-center rounded-2xl border border-white/14 text-white/76 transition hover:bg-white/10 hover:text-white"
-        aria-label={open ? "Close navigation menu" : "Open navigation menu"}
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
+        aria-label={open ? "关闭导航菜单" : "打开导航菜单"}
         aria-expanded={open}
         aria-controls="mobile-nav-panel"
       >
@@ -107,7 +100,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
 
       <div
         className={cn(
-          "fixed inset-0 z-40 bg-[rgba(3,4,12,0.62)] backdrop-blur-md transition-opacity duration-300",
+          "fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-300",
           open ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={close}
@@ -117,23 +110,23 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
       <nav
         ref={panelRef}
         id="mobile-nav-panel"
-        aria-label="Mobile navigation"
+        aria-label="移动端主导航"
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-full w-72 flex-col border-r border-white/10 bg-[rgba(8,10,24,0.94)] shadow-[0_28px_80px_rgba(2,6,23,0.52)] backdrop-blur-2xl transition-transform duration-300 ease-out",
+          "fixed left-0 top-0 z-50 flex h-full w-72 flex-col bg-white shadow-xl transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-          <Link href="/" className="flex items-center gap-2 font-bold text-white" onClick={close}>
-            <div className="premium-glass-panel surface-glass flex h-8 w-8 items-center justify-center rounded-xl border border-white/14">
-              <Baby className="h-5 w-5 text-indigo-200" />
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <Link href="/" className="flex items-center gap-2 font-bold text-indigo-600" onClick={close}>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100">
+              <Baby className="h-5 w-5 text-indigo-600" />
             </div>
-            <span className="text-sm">Childcare Smart</span>
+            <span className="text-sm">普惠托育智慧平台</span>
           </Link>
           <button
             onClick={close}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-white/48 transition hover:bg-white/8 hover:text-white"
-            aria-label="Close navigation menu"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            aria-label="关闭菜单"
           >
             <X className="h-5 w-5" />
           </button>
@@ -152,10 +145,10 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
                   href={href}
                   onClick={close}
                   className={cn(
-                    "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-colors",
+                    "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors",
                     active
-                      ? "bg-white/10 text-white shadow-[var(--shadow-card)]"
-                      : "text-white/68 hover:bg-white/6 hover:text-white"
+                      ? "bg-indigo-50 text-indigo-600"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   )}
                 >
                   <Icon className="h-5 w-5" />
@@ -166,22 +159,22 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
           </div>
         </div>
 
-        <div className="border-t border-white/10 px-5 py-4">
+        <div className="border-t border-slate-100 px-5 py-4">
           <div className="mb-3 text-sm">
-            <p className="text-xs text-white/42">Signed in</p>
-            <p className="font-semibold text-white">
-              {currentUser.avatar} {currentUser.name} <span className="text-white/46">·</span> {roleLabel}
+            <p className="text-xs text-slate-400">当前身份</p>
+            <p className="font-semibold text-slate-700">
+              {currentUser.avatar} {currentUser.name} · {currentUser.role}
             </p>
           </div>
           <button
             onClick={() => {
               close();
-              void onLogout();
+              onLogout();
             }}
-            className="premium-glass-panel surface-glass flex w-full items-center justify-center gap-2 rounded-2xl border border-white/14 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
           >
             <LogOut className="h-4 w-4" />
-            Sign out
+            退出登录
           </button>
         </div>
       </nav>

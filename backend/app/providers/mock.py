@@ -120,7 +120,7 @@ def _auto_context(payload: dict[str, Any], child_name: str) -> dict[str, Any]:
         item = safe_dict(record)
         if item.get("isAbnormal"):
             morning_check_alerts.append(
-                f"{item.get('date', 'today')} 晨检异常，体温 {item.get('temperature', '--')}，情绪 {item.get('mood', '待观察')}"
+                f"{item.get('date', '今日')} 晨检异常，体温 {item.get('temperature', '--')}，情绪 {item.get('mood', '待观察')}"
             )
 
     pending_review_notes = []
@@ -897,9 +897,9 @@ def build_mock_high_risk_bundle(payload: dict[str, Any]) -> dict[str, Any]:
         "participants": [
             {"id": "health-agent", "label": "健康观察"},
             {"id": "diet-agent", "label": "饮食行为"},
-            {"id": "coparenting-agent", "label": "家园协同"},
-            {"id": "execution-agent", "label": "执行落地"},
-            {"id": "coordinator", "label": "协调器"},
+            {"id": "coparenting-agent", "label": "家园沟通"},
+            {"id": "execution-agent", "label": "园内执行"},
+            {"id": "coordinator", "label": "协调中枢"},
         ],
         "childId": child_id,
         "riskLevel": "high",

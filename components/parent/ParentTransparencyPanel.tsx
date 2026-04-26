@@ -41,9 +41,6 @@ function ParentTransparencyPanelContent({
     <SectionCard
       title={title}
       description={description}
-      tone="brand"
-      surface="glass"
-      glow="brand"
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={model.warnings.length > 0 ? "warning" : "info"} className="px-3 py-1">
@@ -59,7 +56,7 @@ function ParentTransparencyPanelContent({
       }
     >
       <div data-testid="parent-transparency-panel" className="space-y-4">
-        <div className="content-reading-panel rounded-3xl p-4">
+        <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
           <p className="text-xs font-medium tracking-[0.14em] text-slate-400">摘要</p>
           <p className={careMode ? "mt-3 text-base leading-8 text-slate-800" : "mt-2 text-sm leading-7 text-slate-700"}>
             {model.summarySentence}
@@ -96,7 +93,7 @@ function ParentTransparencyPanelContent({
         ) : null}
 
         {model.warnings.length > 0 ? (
-          <div className="content-focus-block rounded-3xl border-amber-200/80 p-4">
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
             <div className="flex items-start gap-3">
               <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
               <div className="min-w-0">
@@ -111,7 +108,7 @@ function ParentTransparencyPanelContent({
           </div>
         ) : null}
 
-        <div className="content-form-panel rounded-3xl p-4">
+        <div className="rounded-3xl border border-slate-100 bg-white p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-slate-900">
@@ -155,7 +152,7 @@ function ParentTransparencyPanelContent({
                 </div>
               ) : null}
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="content-reading-panel rounded-3xl p-4">
+                <div className="rounded-3xl bg-slate-50 p-4">
                   <p className="text-sm font-semibold text-slate-900">这次主要参考了什么</p>
                   <ul className={careMode ? "mt-3 space-y-3 text-base leading-7 text-slate-600" : "mt-3 space-y-2 text-sm leading-6 text-slate-600"}>
                     {model.evidenceBullets.map((item) => (
@@ -163,7 +160,7 @@ function ParentTransparencyPanelContent({
                     ))}
                   </ul>
                 </div>
-                <div className="content-reading-panel rounded-3xl p-4">
+                <div className="rounded-3xl bg-slate-50 p-4">
                   <p className="text-sm font-semibold text-slate-900">需要一起记住的边界</p>
                   <ul className={careMode ? "mt-3 space-y-3 text-base leading-7 text-slate-600" : "mt-3 space-y-2 text-sm leading-6 text-slate-600"}>
                     {model.boundaryNotes.map((item) => (
@@ -194,7 +191,7 @@ function InfoBlock({
   careMode?: boolean;
 }) {
   return (
-    <div className="content-reading-panel rounded-3xl p-4">
+    <div className="rounded-3xl border border-slate-100 bg-white p-4">
       <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
         <span className="text-slate-500">{icon}</span>
         {title}

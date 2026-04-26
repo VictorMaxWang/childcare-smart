@@ -248,3 +248,28 @@ test("sanitizeAdminWeeklyReportResponseForAdmin removes dirty weekly-report payl
   ]);
   assert.equal(report.primaryAction?.detail, "");
 });
+
+test("sanitizeAdminWeeklyReportResponseForAdmin localizes relative due window copy", () => {
+  const report = sanitizeAdminWeeklyReportResponseForAdmin({
+    schemaVersion: "v2-actionized",
+    role: "admin",
+    summary: "本周重点是继续补齐会诊闭环。",
+    highlights: [],
+    risks: [],
+    nextWeekActions: [],
+    trendPrediction: "stable",
+    sections: [],
+    continuityNotes: [],
+    disclaimer: "仅用于运营复盘参考。",
+    source: "ai",
+    model: "test-model",
+    primaryAction: {
+      title: "下周第一动作",
+      detail: "先完成 48 小时复查。",
+      ownerRole: "admin",
+      dueWindow: "Today",
+    },
+  });
+
+  assert.equal(report.primaryAction?.dueWindow, "今日");
+});

@@ -22,10 +22,10 @@ interface ParentCareFocusCardProps {
 }
 
 const toneClassMap: Record<ParentCareFocusTone, string> = {
-  sky: "border-white/12 border-l-4 border-l-blue-300 bg-white/6",
-  amber: "border-white/12 border-l-4 border-l-violet-300 bg-white/6",
-  emerald: "border-white/12 border-l-4 border-l-violet-200 bg-white/6",
-  slate: "border-white/12 border-l-4 border-l-indigo-300 bg-white/6",
+  sky: "border-sky-100 bg-sky-50/80",
+  amber: "border-amber-100 bg-amber-50/80",
+  emerald: "border-emerald-100 bg-emerald-50/80",
+  slate: "border-slate-100 bg-slate-50/90",
 };
 
 export default function ParentCareFocusCard({
@@ -39,7 +39,7 @@ export default function ParentCareFocusCard({
   return (
     <section
       className={cn(
-        "content-focus-block rounded-[32px] border border-white/14 p-5 shadow-[var(--shadow-card-strong)] sm:p-6",
+        "rounded-[32px] border border-indigo-100 bg-linear-to-br from-white via-indigo-50/60 to-sky-50/70 p-5 shadow-[0_18px_50px_rgba(79,70,229,0.12)] sm:p-6",
         className
       )}
     >
@@ -67,7 +67,7 @@ export default function ParentCareFocusCard({
             <div
               key={`${item.label}-${item.value}`}
               className={cn(
-                "rounded-[24px] border p-4 backdrop-blur-xl",
+                "rounded-[24px] border p-4",
                 toneClassMap[item.tone ?? "slate"]
               )}
             >

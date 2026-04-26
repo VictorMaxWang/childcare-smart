@@ -29,7 +29,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import AmbientBackground from "@/components/visuals/AmbientBackground";
 import { PARENT_STORYBOOK_PRESETS, splitStoryBookCaptionSegments } from "@/lib/agent/parent-storybook-presets";
 import type {
   ParentStoryBookGenerationMode,
@@ -260,37 +259,37 @@ export function getCaptionIndexForCharIndex(timeline: CaptionTimeline, charIndex
 function getTheme(preset: ParentStoryBookStylePreset) {
   if (preset === "moonlit-cutout") {
     return {
-      page: "bg-[radial-gradient(circle_at_top,_rgba(112,104,255,0.18),_rgba(30,41,59,0)_26%),radial-gradient(circle_at_right,_rgba(177,132,255,0.12),_rgba(30,41,59,0)_34%),linear-gradient(180deg,rgba(7,10,24,0.9),rgba(10,12,32,0.76)_38%,rgba(8,10,25,0.92)_100%)]",
-      panel: "surface-luminous border-white/12",
-      accent: "bg-indigo-500 text-white hover:bg-indigo-500/90",
-      quiet: "border-white/12 bg-white/8 text-indigo-100 hover:bg-white/12",
-      dot: "bg-indigo-500",
-      dotIdle: "bg-indigo-200/30",
-      chip: "bg-indigo-400/14 text-indigo-100",
-      progress: "bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-400",
+      page: "bg-[radial-gradient(circle_at_top,_rgba(219,234,254,0.95),_rgba(191,219,254,0.82)_30%,_rgba(224,231,255,0.76)_62%,_rgba(248,250,252,1)_100%)]",
+      panel: "bg-white/82 border-white/70",
+      accent: "bg-sky-600 text-white hover:bg-sky-600/90",
+      quiet: "border-sky-200/80 bg-white/80 text-sky-900 hover:bg-sky-50",
+      dot: "bg-sky-600",
+      dotIdle: "bg-sky-100",
+      chip: "bg-sky-100 text-sky-700",
+      progress: "bg-gradient-to-r from-sky-600 via-indigo-500 to-slate-500",
     };
   }
   if (preset === "forest-crayon") {
     return {
-      page: "bg-[radial-gradient(circle_at_top_right,_rgba(147,51,234,0.18),_rgba(30,41,59,0)_26%),radial-gradient(circle_at_bottom_left,_rgba(112,104,255,0.12),_rgba(30,41,59,0)_34%),linear-gradient(180deg,rgba(9,10,24,0.9),rgba(11,12,32,0.76)_38%,rgba(8,10,25,0.92)_100%)]",
-      panel: "surface-luminous border-white/12",
-      accent: "bg-violet-500 text-white hover:bg-violet-500/90",
-      quiet: "border-white/12 bg-white/8 text-violet-100 hover:bg-white/12",
-      dot: "bg-violet-500",
-      dotIdle: "bg-violet-200/30",
-      chip: "bg-violet-400/14 text-violet-100",
-      progress: "bg-gradient-to-r from-violet-500 via-indigo-500 to-fuchsia-400",
+      page: "bg-[radial-gradient(circle_at_top_right,_rgba(220,252,231,0.92),_rgba(187,247,208,0.78)_30%,_rgba(254,249,195,0.66)_58%,_rgba(248,250,252,1)_100%)]",
+      panel: "bg-white/82 border-white/70",
+      accent: "bg-emerald-600 text-white hover:bg-emerald-600/90",
+      quiet: "border-emerald-200/80 bg-white/80 text-emerald-900 hover:bg-emerald-50",
+      dot: "bg-emerald-600",
+      dotIdle: "bg-emerald-100",
+      chip: "bg-emerald-100 text-emerald-700",
+      progress: "bg-gradient-to-r from-emerald-600 via-lime-500 to-amber-400",
     };
   }
   return {
-    page: "bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.18),_rgba(30,41,59,0)_28%),radial-gradient(circle_at_right,_rgba(112,104,255,0.12),_rgba(30,41,59,0)_34%),linear-gradient(180deg,rgba(8,10,25,0.92),rgba(10,12,31,0.76)_40%,rgba(7,10,24,0.94)_100%)]",
-    panel: "surface-luminous border-white/12",
-    accent: "bg-violet-500 text-white hover:bg-violet-500/90",
-    quiet: "border-white/12 bg-white/8 text-violet-100 hover:bg-white/12",
-    dot: "bg-violet-500",
-    dotIdle: "bg-violet-200/30",
-    chip: "bg-violet-400/14 text-violet-100",
-    progress: "bg-gradient-to-r from-violet-500 via-indigo-500 to-fuchsia-400",
+    page: "bg-[radial-gradient(circle_at_top_left,_rgba(255,245,220,0.95),_rgba(254,226,226,0.75)_32%,_rgba(224,242,254,0.9)_68%,_rgba(248,250,252,1)_100%)]",
+    panel: "bg-white/82 border-white/70",
+    accent: "bg-amber-500 text-white hover:bg-amber-500/90",
+    quiet: "border-amber-200/80 bg-white/80 text-amber-900 hover:bg-amber-50",
+    dot: "bg-amber-500",
+    dotIdle: "bg-amber-100",
+    chip: "bg-amber-100 text-amber-700",
+    progress: "bg-gradient-to-r from-amber-500 via-orange-400 to-rose-400",
   };
 }
 
@@ -1172,16 +1171,8 @@ export default function StoryBookViewer({
   );
 
   return (
-    <AmbientBackground
-      intensity="medium"
-      tone="brand"
-      className="min-h-[100svh] px-4 py-4 sm:px-6 sm:py-6"
-      contentClassName="min-h-[100svh]"
-    >
-      <div
-        className={cn("content-atmosphere-shell mx-auto max-w-3xl space-y-4", theme.page)}
-        data-content-tone="brand"
-      >
+    <div className={cn("min-h-[100svh] px-4 py-4 sm:px-6 sm:py-6", theme.page)}>
+      <div className="mx-auto max-w-3xl space-y-4">
         <div className="flex items-center justify-between gap-3">
           <Button
             asChild
@@ -1209,7 +1200,7 @@ export default function StoryBookViewer({
 
         <Card className={cn("overflow-hidden backdrop-blur-xl", theme.panel)}>
           {story ? (
-            <div className="space-y-2 border-b border-white/10 bg-white/6 px-4 py-4 sm:px-5">
+            <div className="space-y-2 border-b border-white/70 bg-white/60 px-4 py-4 sm:px-5">
               <div className="flex flex-wrap gap-2">
                 {runtimeBanners.map((item) => (
                   <Badge
@@ -1228,7 +1219,7 @@ export default function StoryBookViewer({
                 ))}
               </div>
               {runtimeBanners[0]?.detail ? (
-                <p className="text-xs leading-6 text-white/52">
+                <p className="text-xs leading-6 text-slate-500">
                   {runtimeBanners[0].detail}
                 </p>
               ) : null}
@@ -1236,16 +1227,16 @@ export default function StoryBookViewer({
           ) : null}
           <CardHeader className="space-y-4 pb-4">
             <div className="space-y-2">
-              <CardTitle className="text-2xl tracking-tight text-white">
+              <CardTitle className="text-2xl tracking-tight text-slate-950">
                 {story?.title ?? "Parent Storybook V2"}
               </CardTitle>
-              <CardDescription className="max-w-2xl text-sm leading-7 text-white/64">
+              <CardDescription className="max-w-2xl text-sm leading-7 text-slate-600">
                 {story?.summary ??
                   "把孩子的成长线索、家长反馈和教育主题，讲成一部图文音一体、移动端优先的成长绘本。"}
               </CardDescription>
             </div>
 
-            <div className="rounded-[30px] border border-white/10 bg-white/6 p-4 sm:p-5">
+            <div className="rounded-[30px] border border-white/70 bg-white/68 p-4 sm:p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">
                   {getGenerationModeCopy(generationMode).label}
@@ -1257,13 +1248,13 @@ export default function StoryBookViewer({
                   <Badge variant="warning">当前未选择孩子</Badge>
                 )}
               </div>
-              <p className="mt-3 text-sm leading-7 text-white/68">
+              <p className="mt-3 text-sm leading-7 text-slate-700">
                 {getGenerationModeCopy(generationMode).description}
               </p>
 
               <div className="mt-4 space-y-4">
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/46">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                     生成模式
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -1281,7 +1272,7 @@ export default function StoryBookViewer({
                           key={value}
                           type="button"
                           variant={selected ? "default" : "outline"}
-                        className={cn("rounded-full", selected ? theme.accent : theme.quiet)}
+                          className={cn("rounded-full", selected ? theme.accent : theme.quiet)}
                           disabled={disabled}
                           onClick={() => onGenerationModeChange(value)}
                         >
@@ -1295,7 +1286,7 @@ export default function StoryBookViewer({
                 {requiresTheme ? (
                   <div className="space-y-3">
                     <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/46">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                         快捷主题
                       </p>
                       <div className="flex flex-wrap gap-2">
@@ -1307,8 +1298,8 @@ export default function StoryBookViewer({
                             className={cn(
                               "rounded-full border px-3 py-2 text-sm transition-all",
                               selectedThemeChip === themeLabel
-                                ? "border-white/20 bg-white/14 text-white shadow-sm"
-                                : "border-white/10 bg-white/6 text-white/72 hover:bg-white/10"
+                                ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                                : "border-white/60 bg-white/75 text-slate-700 hover:bg-white"
                             )}
                           >
                             {themeLabel}
@@ -1318,21 +1309,21 @@ export default function StoryBookViewer({
                     </div>
 
                     <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/46">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                         主题输入
                       </p>
                       <Input
                         value={manualTheme}
                         onChange={(event) => onManualThemeChange(event.target.value)}
                         placeholder="例如：表达情绪、独立入睡、勇敢尝试"
-                        className="h-11 rounded-2xl border-white/10 bg-white/8 text-white placeholder:text-white/34"
+                        className="h-11 rounded-2xl border-white/70 bg-white/88 text-slate-900 placeholder:text-slate-400"
                       />
                     </div>
                   </div>
                 ) : null}
 
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/46">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                     页数切换
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -1352,7 +1343,7 @@ export default function StoryBookViewer({
 
                 <div className="space-y-3">
                   <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/46">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                       风格模式
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -1378,25 +1369,25 @@ export default function StoryBookViewer({
                   {styleMode === "custom" ? (
                     <div className="grid gap-3">
                       <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/46">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                           自定义风格
                         </p>
                         <Input
                           value={customStylePrompt}
                           onChange={(event) => onCustomStylePromptChange(event.target.value)}
                           placeholder="例如：梦幻3D儿童绘本、柔焦、低饱和、电影级光影、浅景深"
-                          className="h-11 rounded-2xl border-white/10 bg-white/8 text-white placeholder:text-white/34"
+                          className="h-11 rounded-2xl border-white/70 bg-white/88 text-slate-900 placeholder:text-slate-400"
                         />
                       </div>
                       <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/46">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                           负面约束
                         </p>
                         <Input
                           value={customStyleNegativePrompt}
                           onChange={(event) => onCustomStyleNegativePromptChange(event.target.value)}
                           placeholder="例如：不要照片感、不要复杂背景、不要写实人脸、不要过度文字"
-                          className="h-11 rounded-2xl border-white/10 bg-white/8 text-white placeholder:text-white/34"
+                          className="h-11 rounded-2xl border-white/70 bg-white/88 text-slate-900 placeholder:text-slate-400"
                         />
                       </div>
                     </div>
@@ -1404,7 +1395,7 @@ export default function StoryBookViewer({
                 </div>
 
                 <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/46">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                     风格预设
                   </p>
                   {styleMode === "preset" ? (
@@ -1420,8 +1411,8 @@ export default function StoryBookViewer({
                             className={cn(
                               "rounded-2xl border px-3 py-2 text-left text-sm transition-all",
                               selected
-                                ? "border-white/20 bg-white/14 text-white shadow-sm"
-                                : "border-white/10 bg-white/6 text-white/68"
+                                ? "border-slate-900 bg-white text-slate-950 shadow-sm"
+                                : "border-white/60 bg-white/65 text-slate-600"
                             )}
                           >
                             <div className="font-semibold">{presetCopy.shortLabel}</div>
@@ -1433,14 +1424,14 @@ export default function StoryBookViewer({
                       })}
                     </div>
                   ) : (
-                    <div className="rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm leading-6 text-white/62">
+                    <div className="rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm leading-6 text-slate-600">
                       当前使用自定义风格；预设仅作为切回 preset 时的记忆值，不会混入这次插画 prompt。
                     </div>
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-white/10 bg-white/6 px-4 py-3">
-                  <div className="text-sm text-white/62">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-white/70 bg-white/72 px-4 py-3">
+                  <div className="text-sm text-slate-600">
                     {generationHint ? generationHint : "参数调整完成后，点击重新生成应用到整本绘本。"}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1470,12 +1461,12 @@ export default function StoryBookViewer({
             </div>
 
             {refreshMessage ? (
-              <div className="rounded-3xl border border-white/14 bg-[linear-gradient(180deg,rgba(26,23,62,0.9),rgba(13,15,36,0.82))] px-4 py-3 text-sm leading-6 text-violet-100 shadow-[var(--shadow-card)]">
+              <div className="rounded-3xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-6 text-amber-900">
                 {refreshMessage}
               </div>
             ) : null}
             {isRefreshing ? (
-              <div className="flex items-center gap-2 text-sm text-white/52">
+              <div className="flex items-center gap-2 text-sm text-slate-500">
                 <LoaderCircle className="h-4 w-4 animate-spin" />
                 正在刷新绘本资源，当前先保留上一版内容。
               </div>
@@ -1487,7 +1478,7 @@ export default function StoryBookViewer({
 
             {story ? (
               <div className="grid gap-3 sm:grid-cols-2">
-                <Card className={cn("border-white/10", theme.panel)}>
+                <Card className={cn("border-white/70", theme.panel)}>
                   <CardContent className="space-y-3 p-4">
                     <div className="flex flex-wrap gap-2">
                       {modeCopy ? (
@@ -1496,16 +1487,16 @@ export default function StoryBookViewer({
                       <Badge variant="outline">分镜 {story.providerMeta.sceneCount}</Badge>
                       <Badge variant="outline">亮点 {story.providerMeta.highlightCount}</Badge>
                     </div>
-                    <p className="text-sm leading-7 text-white/62">
+                    <p className="text-sm leading-7 text-slate-600">
                       {modeCopy?.summary}
                     </p>
-                    <p className="text-sm leading-7 text-white/62">
+                    <p className="text-sm leading-7 text-slate-600">
                       收束提示：{story.parentNote}
                     </p>
                   </CardContent>
                 </Card>
 
-                <Card className={cn("border-white/10", theme.panel)}>
+                <Card className={cn("border-white/70", theme.panel)}>
                   <CardContent className="space-y-3 p-4">
                     <div className="flex flex-wrap gap-2">
                       <Badge variant="outline">
@@ -1525,13 +1516,13 @@ export default function StoryBookViewer({
                         </Badge>
                       ) : null}
                     </div>
-                    <p className="text-sm leading-7 text-white/62">
+                    <p className="text-sm leading-7 text-slate-600">
                       画风：{getStoryBookPresetCopy(story.stylePreset ?? selectedPresetId).label}
                     </p>
-                    <p className="text-sm leading-7 text-white/62">
+                    <p className="text-sm leading-7 text-slate-600">
                       来源：{formatStoryBookHighlightSource(story.scenes[0]?.highlightSource)}
                     </p>
-                    <p className="text-sm leading-7 text-white/62">
+                    <p className="text-sm leading-7 text-slate-600">
                       朗读方式：{getStoryAudioRuntimeLabelHotfix(
                         runtimeState?.audioDelivery ??
                           story.providerMeta.audioDelivery ??
@@ -1546,7 +1537,7 @@ export default function StoryBookViewer({
           </CardContent>
         </Card>
       </div>
-    </AmbientBackground>
+    </div>
   );
 }
 
@@ -1977,7 +1968,7 @@ function StoryBookSceneStream({
 
   useEffect(() => {
     startAudioRef.current = startAudio;
-  });
+  }, [startAudio]);
 
   useEffect(() => {
     const handoffSceneIndex = resolveLocalSpeechHandoffSceneIndexHotfix(
@@ -2028,7 +2019,7 @@ function StoryBookSceneStream({
 
   useEffect(() => {
     startScenePlaybackRef.current = startScenePlayback;
-  });
+  }, [startScenePlayback]);
 
   function handlePlayScene(scene: ParentStoryBookScene, index: number) {
     if (playbackSceneIndex === index) {
@@ -2081,7 +2072,7 @@ function StoryBookSceneStream({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 rounded-[28px] border border-white/10 bg-white/6 px-4 py-3 text-sm text-white/64">
+      <div className="flex items-center justify-between gap-3 rounded-[28px] border border-white/70 bg-white/70 px-4 py-3 text-sm text-slate-600">
         <div className="flex items-center gap-2">
           <Badge variant="info">
             <Sparkles className="mr-1.5 h-3.5 w-3.5" />
@@ -2107,7 +2098,7 @@ function StoryBookSceneStream({
             isBookPlaying
           )}
         </Button>
-        <p className="text-xs text-white/46">
+        <p className="text-xs text-slate-500">
           {getStoryAudioRuntimeLabelHotfix(
             resolveRuntimeAudioDeliveryHotfix(story as StoryBookRuntimeResponse),
             canUseLocalSpeech
@@ -2146,9 +2137,9 @@ function StoryBookSceneStream({
               }}
               data-scene-index={index}
               className={cn(
-                "rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,rgba(14,18,42,0.9),rgba(8,10,28,0.82))] p-4 shadow-[0_28px_88px_rgba(2,4,16,0.32)] transition-all duration-500 sm:p-5",
+                "rounded-[34px] border border-white/65 bg-white/84 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] transition-all duration-500 sm:p-5",
                 activeIndex === index
-                  ? "scale-[1.01] border-white/14 shadow-[0_34px_104px_rgba(3,5,20,0.42)]"
+                  ? "scale-[1.01] shadow-[0_28px_80px_rgba(15,23,42,0.14)]"
                   : "scale-[0.992] opacity-95"
               )}
             >
@@ -2216,7 +2207,7 @@ function StoryBookSceneStream({
                 </div>
               </div>
 
-              <div className="relative mt-4 overflow-hidden rounded-[30px] border border-white/12 bg-[#0b0d24] shadow-[0_24px_70px_rgba(2,4,16,0.28)]">
+              <div className="relative mt-4 overflow-hidden rounded-[30px] border border-white/80 bg-white shadow-sm">
                 <div className="relative aspect-[4/5] w-full sm:aspect-[5/6]">
                   <StoryBookImage
                     src={sceneImageSrc}
@@ -2234,7 +2225,7 @@ function StoryBookSceneStream({
                     }}
                   />
                 </div>
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#080a1f]/82 via-[#080a1f]/26 to-transparent px-4 py-4">
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/55 via-slate-950/10 to-transparent px-4 py-4">
                   <p className="text-lg font-semibold tracking-tight text-white">
                     {scene.sceneTitle}
                   </p>
@@ -2242,13 +2233,13 @@ function StoryBookSceneStream({
               </div>
 
               <div className="mt-4 space-y-4">
-                <p className="text-base leading-8 text-white/74">{scene.sceneText}</p>
+                <p className="text-base leading-8 text-slate-700">{scene.sceneText}</p>
 
-                <div className="rounded-[28px] border border-white/10 bg-white/6 p-4">
+                <div className="rounded-[28px] border border-white/70 bg-white/78 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-white">逐页朗读</p>
-                      <p className="mt-1 text-xs leading-6 text-white/48">
+                      <p className="text-sm font-semibold text-slate-950">逐页朗读</p>
+                      <p className="mt-1 text-xs leading-6 text-slate-500">
                         {getRuntimeCaptionStatusText(
                           playbackSource,
                           isPlaying,
@@ -2278,7 +2269,7 @@ function StoryBookSceneStream({
                     </Button>
                   </div>
 
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                     <div
                       className={cn(
                         "h-full rounded-full transition-[width] duration-300",
@@ -2294,7 +2285,7 @@ function StoryBookSceneStream({
                       }}
                     />
                   </div>
-                  <div className="mt-3 flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-white/38">
+                  <div className="mt-3 flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-slate-400">
                       <span>{formatStoryBookVoiceStyle(scene.voiceStyle)}</span>
                     <span>
                       {getRuntimePlaybackTimeLabel(
@@ -2314,8 +2305,8 @@ function StoryBookSceneStream({
                         className={cn(
                           "rounded-2xl border px-3 py-2 text-sm leading-6 transition-all duration-300",
                           isPlaying && segmentIndex === captionIndex
-                            ? "border-indigo-300/28 bg-indigo-400/16 text-white"
-                            : "border-white/12 bg-white/6 text-white/64"
+                            ? "border-transparent bg-slate-900 text-white"
+                            : "border-white/60 bg-white/70 text-slate-600"
                         )}
                       >
                         {segment}
@@ -2353,12 +2344,12 @@ function EmptyStoryState({
         {[0, 1].map((item) => (
           <div
             key={item}
-            className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(14,18,42,0.86),rgba(8,10,28,0.78))] p-4 shadow-[0_24px_70px_rgba(2,4,16,0.28)]"
+            className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-sm"
           >
-            <div className="h-5 w-24 animate-pulse rounded-full bg-white/12" />
-            <div className="mt-4 aspect-[4/5] animate-pulse rounded-[26px] bg-white/8" />
-            <div className="mt-4 h-4 w-5/6 animate-pulse rounded-full bg-white/12" />
-            <div className="mt-3 h-4 w-3/4 animate-pulse rounded-full bg-white/12" />
+            <div className="h-5 w-24 animate-pulse rounded-full bg-slate-200" />
+            <div className="mt-4 aspect-[4/5] animate-pulse rounded-[26px] bg-slate-100" />
+            <div className="mt-4 h-4 w-5/6 animate-pulse rounded-full bg-slate-200" />
+            <div className="mt-3 h-4 w-3/4 animate-pulse rounded-full bg-slate-200" />
           </div>
         ))}
       </div>
@@ -2367,10 +2358,10 @@ function EmptyStoryState({
 
   if (status === "error") {
     return (
-      <Card className="border-white/14 bg-[linear-gradient(180deg,rgba(22,20,54,0.92),rgba(10,11,30,0.86))] shadow-[var(--shadow-card)]">
+      <Card className="border-red-100 bg-red-50/80">
         <CardHeader>
-          <CardTitle className="text-xl text-white">成长绘本暂时不可用</CardTitle>
-          <CardDescription className="leading-7 text-white/68">
+          <CardTitle className="text-xl text-red-900">成长绘本暂时不可用</CardTitle>
+          <CardDescription className="leading-7 text-red-700">
             {errorMessage ?? "请稍后重试，或调整参数后再次生成。"}
           </CardDescription>
         </CardHeader>
@@ -2390,14 +2381,14 @@ function EmptyStoryState({
   }
 
   return (
-    <Card className="border-white/10 bg-white/6">
+    <Card className="border-white/70 bg-white/78">
       <CardHeader>
-        <CardTitle className="text-xl text-white">先设定这本成长绘本</CardTitle>
-        <CardDescription className="leading-7 text-white/68">
+        <CardTitle className="text-xl text-slate-950">先设定这本成长绘本</CardTitle>
+        <CardDescription className="leading-7 text-slate-600">
           选择模式、主题、页数和风格后，点击“重新生成”，就会得到一部图文音一体的成长绘本。
         </CardDescription>
       </CardHeader>
-      <CardContent className="text-sm leading-7 text-white/62">
+      <CardContent className="text-sm leading-7 text-slate-600">
         主题模式和混合模式需要先输入主题；如果当前没有可用孩子数据，系统会自动推荐你先用主题模式开始。
       </CardContent>
     </Card>

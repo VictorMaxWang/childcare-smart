@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { Square, Volume2 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   getBrowserTtsSupport,
@@ -22,19 +22,19 @@ interface ParentSpeakButtonProps {
 function getStatusCopy(status: BrowserTtsStatus) {
   switch (status) {
     case "speaking":
-      return "Reading with the current browser. You can stop playback at any time.";
+      return "正在用当前浏览器朗读，你可以随时停止。";
     case "unsupported":
-      return "This browser does not support speech playback. Please switch to a supported browser.";
+      return "当前浏览器暂不支持朗读，请改用支持语音播报的浏览器。";
     case "error":
-      return "The speech playback did not complete. Please try again in a moment.";
+      return "这次浏览器朗读没有完成，请稍后再试。";
     default:
-      return "Playback runs only in the current browser for a quick parent-side preview.";
+      return "仅在当前浏览器里朗读，方便家里直接听一遍。";
   }
 }
 
 export default function ParentSpeakButton({
   text,
-  label = "Play audio",
+  label = "读给我听",
   careMode = false,
   className,
   variant = "outline",
@@ -74,9 +74,9 @@ export default function ParentSpeakButton({
         ) : (
           <Volume2 className="mr-2 h-4 w-4" />
         )}
-        {status === "speaking" ? "Stop playback" : label}
+        {status === "speaking" ? "\u505c\u6b62\u64ad\u62a5" : label}
       </Button>
-      <p className={cn(careMode ? "text-sm leading-6 text-white/68" : "text-xs leading-5 text-white/56")}>
+      <p className={cn(careMode ? "text-sm leading-6 text-slate-600" : "text-xs leading-5 text-slate-500")}>
         {getStatusCopy(status)}
       </p>
     </div>
