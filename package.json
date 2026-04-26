@@ -27,7 +27,9 @@
     "release:sql:pass": "node ./scripts/release-sql-check-set.mjs --overall-passed=true",
     "release:sql:fail": "node ./scripts/release-sql-check-set.mjs --overall-passed=false",
     "release:status": "node ./scripts/release-status.mjs",
-    "release:ready": "node ./scripts/release-ready.mjs"
+    "release:ready": "node ./scripts/release-ready.mjs",
+    "capture:ui": "playwright test tests/visual/capture-ui-screenshots.spec.ts --browser=chromium --reporter=line",
+    "package:gpt-image2": "node scripts/package-gpt-image2-input.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -51,6 +53,7 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
