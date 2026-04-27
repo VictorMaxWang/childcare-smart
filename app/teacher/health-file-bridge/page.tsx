@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import { AlertTriangle, ArrowLeft, FileText, ShieldAlert, Stethoscope, Upload } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import { TeacherContextStrip, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import {
   InlineLinkButton,
   RolePageShell,
@@ -98,7 +99,7 @@ function riskVariant(level: HealthFileBridgeRiskItem["severity"]) {
 
 function FactCard({ fact }: { fact: HealthFileBridgeFact }) {
   return (
-    <div className="rounded-3xl border border-slate-100 bg-white p-4">
+    <div className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
       <p className="text-sm font-semibold text-slate-900">{fact.label}</p>
       <p className="mt-2 text-sm leading-6 text-slate-600">{fact.detail}</p>
     </div>
@@ -107,7 +108,7 @@ function FactCard({ fact }: { fact: HealthFileBridgeFact }) {
 
 function RiskCard({ risk }: { risk: HealthFileBridgeRiskItem }) {
   return (
-    <div className="rounded-3xl border border-rose-100 bg-rose-50/50 p-4">
+    <div className="rounded-lg border border-rose-100 bg-rose-50/70 p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm font-semibold text-slate-900">{risk.title}</p>
         <Badge variant={riskVariant(risk.severity)}>{getRiskSeverityLabel(risk.severity)}</Badge>
@@ -122,7 +123,7 @@ function DetailCard({
   detail,
 }: Pick<HealthFileBridgeContraindication, "title" | "detail"> | Pick<HealthFileBridgeFollowUpHint, "title" | "detail">) {
   return (
-    <div className="rounded-3xl border border-slate-100 bg-white p-4">
+    <div className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
       <p className="text-sm font-semibold text-slate-900">{title}</p>
       <p className="mt-2 text-sm leading-6 text-slate-600">{detail}</p>
     </div>
@@ -246,6 +247,21 @@ export default function TeacherHealthFileBridgePage() {
       <RoleSplitLayout
         main={
           <div className="space-y-6">
+            <TeacherContextStrip
+              items={[
+                { label: "解析对象", value: selectedChild?.name ?? "暂不关联", tone: "indigo" },
+                { label: "材料类型", value: getFileKindLabel(fileKind), tone: "sky" },
+                { label: "材料数量", value: `${files.length}份`, tone: files.length > 0 ? "emerald" : "amber" },
+                { label: "补充来源", value: getSourceRoleLabel(sourceRole), tone: sourceRole === "teacher" ? "indigo" : "sky" },
+              ]}
+            />
+            <TeacherMiniPanel title="解析前核对" badge={files.length > 0 ? "材料已选择" : "等待上传"} tone={files.length > 0 ? "emerald" : "amber"}>
+              <div className="grid gap-3 text-sm leading-6 text-slate-600 md:grid-cols-3">
+                <p className="rounded-lg bg-white/80 px-3 py-2">优先补充 OCR 文字或老师已确认事实，减少误读。</p>
+                <p className="rounded-lg bg-white/80 px-3 py-2">解析结果先用于核对风险、谨慎事项和后续提醒。</p>
+                <p className="rounded-lg bg-white/80 px-3 py-2">最终处置仍以原始材料和老师判断为准。</p>
+              </div>
+            </TeacherMiniPanel>
             <SectionCard
               title="发起解析"
               description="上传材料后，可补充 OCR 文字或老师已确认的事实，帮助系统更快整理关键信息。"
@@ -330,7 +346,7 @@ export default function TeacherHealthFileBridgePage() {
                   />
                 </div>
 
-                <div className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4">
+                <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-4">
                   <div className="flex items-center gap-2">
                     <Upload className="h-4 w-4 text-indigo-500" />
                     <p className="text-sm font-semibold text-slate-900">已选材料</p>
@@ -338,7 +354,7 @@ export default function TeacherHealthFileBridgePage() {
                   <div className="mt-3 space-y-3">
                     {files.length > 0 ? (
                       files.map((file) => (
-                        <div key={file.fileId ?? file.name} className="rounded-2xl bg-white p-3">
+                        <div key={file.fileId ?? file.name} className="rounded-lg bg-white p-3">
                           <p className="text-sm font-medium text-slate-900">{file.name}</p>
                           <p className="mt-1 text-xs text-slate-500">
                             {(file.mimeType || "文件类型未识别")} · {formatBytes(file.sizeBytes)}
@@ -470,21 +486,21 @@ export default function TeacherHealthFileBridgePage() {
               description="方便老师确认当前提交的是哪位幼儿、哪类材料与多少份文件。"
             >
               <div className="space-y-3 text-sm text-slate-600">
-                <div className="rounded-2xl bg-white p-4">
+                <div className="rounded-lg bg-white p-4">
                   <p className="font-semibold text-slate-900">关联幼儿</p>
                   <p className="mt-1">
                     {selectedChild ? `${selectedChild.name} · ${selectedChild.className}` : "暂不关联具体幼儿"}
                   </p>
                 </div>
-                <div className="rounded-2xl bg-white p-4">
+                <div className="rounded-lg bg-white p-4">
                   <p className="font-semibold text-slate-900">补充来源</p>
                   <p className="mt-1">{getSourceRoleLabel(sourceRole)}</p>
                 </div>
-                <div className="rounded-2xl bg-white p-4">
+                <div className="rounded-lg bg-white p-4">
                   <p className="font-semibold text-slate-900">材料类型</p>
                   <p className="mt-1">{getFileKindLabel(fileKind)}</p>
                 </div>
-                <div className="rounded-2xl bg-white p-4">
+                <div className="rounded-lg bg-white p-4">
                   <p className="font-semibold text-slate-900">材料数量</p>
                   <p className="mt-1">{files.length} 份</p>
                 </div>
@@ -505,7 +521,7 @@ export default function TeacherHealthFileBridgePage() {
                     ) : null}
                     {result.liveReadyButNotVerified ? formatResultBadge("建议继续复核原件", true) : null}
                   </div>
-                  <div className="rounded-3xl border border-indigo-100 bg-indigo-50/60 p-4">
+                  <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4">
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-indigo-600" />
                       <p className="text-sm font-semibold text-slate-900">结果摘要</p>
@@ -524,7 +540,7 @@ export default function TeacherHealthFileBridgePage() {
               description="先用解析结果缩短阅读时间，再结合原始材料做最后确认。"
             >
               <div className="space-y-3">
-                <div className="rounded-3xl border border-amber-100 bg-amber-50/60 p-4">
+                <div className="rounded-lg border border-amber-100 bg-amber-50/60 p-4">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-600" />
                     <p className="text-sm font-semibold text-slate-900">先看重点，再核对原件</p>
@@ -533,7 +549,7 @@ export default function TeacherHealthFileBridgePage() {
                     当前结果更适合作为老师快速读材料的第一步，遇到关键结论时仍建议回看原始图片或 PDF。
                   </p>
                 </div>
-                <div className="rounded-3xl border border-slate-100 bg-white p-4">
+                <div className="rounded-lg border border-slate-100 bg-white p-4">
                   <div className="flex items-center gap-2">
                     <ShieldAlert className="h-4 w-4 text-slate-700" />
                     <p className="text-sm font-semibold text-slate-900">先完成解析，再决定后续动作</p>

@@ -17,12 +17,20 @@ import EmptyState from "@/components/EmptyState";
 import UnifiedIntentEntryCard from "@/components/intent/UnifiedIntentEntryCard";
 import CareModeToggle from "@/components/parent/CareModeToggle";
 import ParentCareFocusCard from "@/components/parent/ParentCareFocusCard";
+import {
+  ParentActionCard,
+  ParentGentleNotice,
+  ParentHeroCard,
+  ParentTimelineCard,
+  ParentWeeklySignalGrid,
+  type ParentTimelineItem,
+  type ParentWeeklySignal,
+} from "@/components/parent/ParentReviewKit";
 import ParentSpeakButton from "@/components/parent/ParentSpeakButton";
 import ParentTransparencyPanel from "@/components/parent/ParentTransparencyPanel";
 import WeeklyReportPreviewCard from "@/components/weekly-report/WeeklyReportPreviewCard";
 import {
   InlineLinkButton,
-  MetricGrid,
   RolePageShell,
   RoleSplitLayout,
   SectionCard,
@@ -316,6 +324,121 @@ export default function ParentHomePage() {
     ],
     outro: "浏览器播报，仅用于当前设备预览，不是后端真实语音。",
   });
+  const childMeta = `${viewModel.child.className} · ${getAgeText(
+    viewModel.child.birthDate
+  )} · 出生于 ${formatDisplayDate(viewModel.child.birthDate)}`;
+  const latestHealthCheck = previewContext.weeklyHealthChecks[0];
+  const latestMeal = previewContext.todayMeals[0] ?? previewContext.weeklyMeals[0];
+  const latestGrowthRecord = previewContext.weeklyGrowthRecords[0];
+  const latestFeedback = previewContext.latestFeedback;
+  const hasHealthWarning = previewContext.weeklyHealthChecks.some((item) => item.isAbnormal);
+  const hasPendingFeedback = viewModel.pendingFeedback.status === "pending";
+  const parentStatusLabel = hasPendingFeedback
+    ? "今晚待反馈"
+    : hasHealthWarning
+      ? "需留意晨检"
+      : "今日状态稳定";
+  const parentStatusVariant = hasPendingFeedback
+    ? "warning"
+    : hasHealthWarning
+      ? "warning"
+      : "success";
+  const heroPills = [
+    { label: "今日饮食", value: `${previewContext.todayMeals.length} 条`, tone: "sky" as const },
+    {
+      label: "今日成长",
+      value: `${feed.todayGrowth.length} 条`,
+      tone: "emerald" as const,
+    },
+    {
+      label: "近 7 天补水",
+      value: viewModel.todaySummary[2]?.value ?? "待观察",
+      tone: "indigo" as const,
+    },
+    {
+      label: "反馈状态",
+      value: hasPendingFeedback ? "待提交" : "已同步",
+      tone: hasPendingFeedback ? ("amber" as const) : ("emerald" as const),
+    },
+  ];
+  const todayTimelineItems: ParentTimelineItem[] = [
+    {
+      id: "health",
+      title: "晨检结果",
+      meta: latestHealthCheck ? formatDisplayDate(latestHealthCheck.date) : "今日暂无晨检",
+      description: latestHealthCheck
+        ? `${latestHealthCheck.temperature.toFixed(1)}°C · 情绪${latestHealthCheck.mood} · 手口眼${latestHealthCheck.handMouthEye}${latestHealthCheck.remark ? ` · ${latestHealthCheck.remark}` : ""}`
+        : "当前还没有同步到晨检记录。",
+      tone: latestHealthCheck?.isAbnormal ? "amber" : "emerald",
+      icon: <CheckCircle2 className="h-4 w-4" />,
+      status: latestHealthCheck
+        ? latestHealthCheck.isAbnormal
+          ? "需关注"
+          : "正常"
+        : "暂无",
+      statusVariant: latestHealthCheck?.isAbnormal ? "warning" : latestHealthCheck ? "success" : "secondary",
+    },
+    {
+      id: "meal",
+      title: "饮食摘要",
+      meta: latestMeal ? `${formatDisplayDate(latestMeal.date)} · ${latestMeal.meal}` : "今日暂无饮食记录",
+      description: latestMeal
+        ? `${latestMeal.foods.map((food) => `${food.name}${food.amount ? `(${food.amount})` : ""}`).join("、")} · 饮水 ${latestMeal.waterMl} ml · 营养评分 ${latestMeal.nutritionScore}`
+        : "还没有可展示的餐食记录。",
+      tone: latestMeal?.allergyReaction ? "amber" : "sky",
+      icon: <CalendarDays className="h-4 w-4" />,
+      status: latestMeal?.allergyReaction ? "有过敏提示" : latestMeal ? "已记录" : "暂无",
+      statusVariant: latestMeal?.allergyReaction ? "warning" : latestMeal ? "info" : "secondary",
+    },
+    {
+      id: "growth",
+      title: "成长动态",
+      meta: latestGrowthRecord ? formatTimelineTime(latestGrowthRecord.createdAt) : "今日暂无成长记录",
+      description: latestGrowthRecord?.description ?? "还没有可展示的成长观察。",
+      tone: latestGrowthRecord?.needsAttention ? "amber" : "emerald",
+      icon: <BookOpenText className="h-4 w-4" />,
+      status: latestGrowthRecord?.needsAttention ? "需继续观察" : latestGrowthRecord ? "稳定亮点" : "暂无",
+      statusVariant: latestGrowthRecord?.needsAttention ? "warning" : latestGrowthRecord ? "success" : "secondary",
+    },
+    {
+      id: "feedback",
+      title: "老师反馈 / 家庭反馈",
+      meta: latestFeedback ? formatDisplayDate(latestFeedback.date) : "今晚可补一条反馈",
+      description:
+        latestFeedback?.content ??
+        (previewResult?.feedbackPrompt ?? viewModel.pendingFeedback.description),
+      tone: hasPendingFeedback ? "amber" : "indigo",
+      icon: <MessageCircleMore className="h-4 w-4" />,
+      status: hasPendingFeedback ? "待提交" : "已同步",
+      statusVariant: hasPendingFeedback ? "warning" : "success",
+    },
+  ];
+  const weeklySignals: ParentWeeklySignal[] = [
+    {
+      label: "近 7 天饮食记录",
+      value: `${previewContext.weeklyMeals.length} 条`,
+      helper: `均衡率 ${previewContext.weeklyTrend.balancedRate}% · 蔬菜 ${previewContext.weeklyTrend.vegetableDays} 天`,
+      tone: "sky",
+    },
+    {
+      label: "晨检记录",
+      value: `${previewContext.weeklyHealthChecks.length} 天`,
+      helper: hasHealthWarning ? "出现过异常记录，今晚继续留意。" : "近 7 天晨检整体平稳。",
+      tone: hasHealthWarning ? "amber" : "emerald",
+    },
+    {
+      label: "成长记录",
+      value: `${previewContext.weeklyGrowthRecords.length} 条`,
+      helper: `${previewContext.attentionGrowthRecords.length} 条需继续观察`,
+      tone: previewContext.attentionGrowthRecords.length > 0 ? "amber" : "emerald",
+    },
+    {
+      label: "家庭反馈",
+      value: `${previewContext.weeklyFeedbacks.length} 条`,
+      helper: hasPendingFeedback ? "今晚还缺一条执行反馈。" : "最近反馈已进入闭环。",
+      tone: hasPendingFeedback ? "amber" : "indigo",
+    },
+  ];
 
   const headerActions = (
     <>
@@ -435,18 +558,11 @@ export default function ParentHomePage() {
 
   const weeklyTrendSection = (
     <SectionCard
-      title="最近 7 天趋势入口"
-      description="给家长一个足够轻量的趋势摘要，避免首页变成报表页。"
+      title="近 7 天记录与趋势"
+      description="保留饮食、晨检、成长和反馈的关键记录数，家长先看结论，需要细问再进入趋势问答。"
       actions={<InlineLinkButton href={agentHref} label="进入趋势与追问" />}
     >
-      <div className="grid gap-3 sm:grid-cols-3">
-        {viewModel.weeklyTrend.map((item) => (
-          <div key={item.label} className="rounded-3xl border border-slate-100 bg-white p-4">
-            <p className="text-xs text-slate-400">{item.label}</p>
-            <p className="mt-2 text-xl font-semibold text-slate-900">{item.value}</p>
-          </div>
-        ))}
-      </div>
+      <ParentWeeklySignalGrid items={weeklySignals} />
     </SectionCard>
   );
 
@@ -670,49 +786,56 @@ export default function ParentHomePage() {
       <RoleSplitLayout
         main={
           <div className="space-y-6">
-            <MetricGrid
-              items={viewModel.todaySummary.map((item) => ({
-                label: item.label,
-                value: item.value,
-                tone:
-                  item.tone === "warning"
-                    ? "amber"
-                    : item.tone === "success"
-                      ? "emerald"
-                      : "sky",
-              }))}
+            <ParentHeroCard
+              eyebrow="今日照护摘要"
+              title={`${viewModel.child.name} 今天的状态`}
+              description="先确认孩子今天在园状态，再看今晚只需要完成的一件家庭动作。所有信息仍来自当前孩子的真实记录。"
+              childName={viewModel.child.name}
+              childMeta={childMeta}
+              allergies={viewModel.child.allergies}
+              statusLabel={parentStatusLabel}
+              statusVariant={parentStatusVariant}
+              pills={heroPills}
+              actions={
+                <>
+                  <InlineLinkButton href={agentHref} label="看今晚怎么做" variant="premium" />
+                  <InlineLinkButton href={`${agentHref}#feedback`} label="做完去反馈" />
+                </>
+              }
             />
 
-            <SectionCard title="孩子今日情况摘要" description="先把家长最关心的几件事压缩到首屏。">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
-                  <p className="text-sm font-semibold text-slate-900">{viewModel.child.name}</p>
-                  <p className="mt-2 text-sm text-slate-500">
-                    {viewModel.child.className} · {getAgeText(viewModel.child.birthDate)} · 出生于{" "}
-                    {formatDisplayDate(viewModel.child.birthDate)}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {viewModel.child.allergies.length > 0 ? (
-                      viewModel.child.allergies.map((item) => (
-                        <Badge key={item} variant="warning">
-                          过敏：{item}
-                        </Badge>
-                      ))
-                    ) : (
-                      <Badge variant="success">暂无过敏风险提示</Badge>
-                    )}
-                  </div>
-                </div>
-                <div className="rounded-3xl border border-slate-100 bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-900">今晚闭环重点</p>
-                  <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
-                    <li>先看 AI 干预卡，再决定今晚只做哪一件事。</li>
-                    <li>做完后直接在家长 Agent 页提交反馈，明天老师会继续接着看。</li>
-                    <li>如果今晚有明显变化，直接进入 AI 助手继续追问。</li>
-                  </ul>
-                </div>
-              </div>
-            </SectionCard>
+            <ParentTimelineCard
+              title="今天先看这 4 件事"
+              description="按家长查看顺序整理晨检、饮食、成长动态和反馈状态，手机上从上往下读即可。"
+              items={todayTimelineItems}
+            />
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <ParentActionCard
+                title="今晚怎么做"
+                description="直接进入家长助手，看一条温和、可执行的家庭动作。"
+                href={agentHref}
+                actionLabel="查看建议"
+                tone="indigo"
+                icon={<BrainCircuit className="h-5 w-5" />}
+              />
+              <ParentActionCard
+                title="做完去反馈"
+                description="提交是否执行、孩子反应和补充说明，明天老师继续跟进。"
+                href={`${agentHref}#feedback`}
+                actionLabel="提交反馈"
+                tone="amber"
+                icon={<MessageCircleMore className="h-5 w-5" />}
+              />
+              <ParentActionCard
+                title="读成长绘本"
+                description="把成长记录整理成更轻的亲子阅读视图。"
+                href={storybookHref}
+                actionLabel="打开绘本"
+                tone="emerald"
+                icon={<BookOpenText className="h-5 w-5" />}
+              />
+            </div>
 
             <SectionCard
               title="AI 今日提醒"
@@ -822,6 +945,12 @@ export default function ParentHomePage() {
             </div>
 
             {growthAndMediaSection}
+
+            <ParentGentleNotice
+              title="今晚不用一次看完全部内容"
+              description="首页已经把关键提醒、家庭任务和反馈入口放在前面；周报和趋势可以等孩子休息后再细看。"
+              action={<InlineLinkButton href={`${agentHref}#feedback`} label="先反馈今晚情况" />}
+            />
 
             <WeeklyReportPreviewCard
               title="本周家庭周报预览"

@@ -62,7 +62,7 @@ export default function ConsultationTracePanel({
         </CardHeader>
         <CardContent className="space-y-3">
           {viewModel.syncTargets.length ? (
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 p-4">
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50/80 p-4">
               <p className="text-sm font-semibold text-emerald-900">结果同步去向</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {viewModel.syncTargets.map((item) => (
@@ -75,7 +75,7 @@ export default function ConsultationTracePanel({
           ) : null}
 
           {!viewModel.hasContent && viewModel.overallStatus === "idle" ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-600">
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-600">
               启动会诊后，这里会按“长期画像 {"->"} 最近会诊 / 快照 {"->"} 当前建议”依次展开，便于老师讲解与查看重点。
             </div>
           ) : null}
@@ -85,7 +85,7 @@ export default function ConsultationTracePanel({
       {viewModel.callouts.length ? (
         <div className="space-y-3">
           {viewModel.callouts.map((callout, index) => (
-            <div key={`${callout.title}-${index}`} className={cn("rounded-2xl border p-4", getCalloutClasses(callout))}>
+            <div key={`${callout.title}-${index}`} className={cn("rounded-lg border p-4", getCalloutClasses(callout))}>
               <p className="text-sm font-semibold">{callout.title}</p>
               <p className="mt-1 text-sm leading-6">{callout.description}</p>
             </div>

@@ -9,6 +9,7 @@ import {
   CalendarDays,
   ClipboardList,
   History,
+  School,
   TrendingDown,
   Sparkles,
   TriangleAlert,
@@ -120,10 +121,14 @@ export default function RootOverviewPage() {
   const visibleIds = useMemo(() => new Set(visibleChildren.map((child) => child.id)), [visibleChildren]);
   const todayAttendance = getTodayAttendance();
   const presentCount = todayAttendance.filter((item) => item.isPresent).length;
+  const absentCount = todayAttendance.filter((item) => !item.isPresent).length;
   const todayMeals = getTodayMealRecords();
   const weeklyTrend = getWeeklyDietTrend();
   const insights = getSmartInsights();
   const adminBoard = getAdminBoardData();
+  const todayHealthAbnormalCount = healthCheckRecords.filter(
+    (record) => visibleIds.has(record.childId) && record.date === getLocalToday() && record.isAbnormal
+  ).length;
   const uniqueAdminBoard = useMemo(() => dedupeBoardExposure(adminBoard), [adminBoard]);
   const adminChartData = useMemo(() => {
     const merged = new Map<
@@ -173,6 +178,30 @@ export default function RootOverviewPage() {
   const pendingReviews = growthRecords
     .filter((record) => visibleIds.has(record.childId) && record.reviewStatus === "待复查")
     .sort((left, right) => (left.reviewDate ?? "9999-12-31").localeCompare(right.reviewDate ?? "9999-12-31"));
+  const classStatus = useMemo(() => {
+    const rows = new Map<string, { className: string; total: number; present: number; abnormal: number }>();
+    const todayHealth = new Map(
+      healthCheckRecords
+        .filter((record) => record.date === getLocalToday())
+        .map((record) => [record.childId, record] as const)
+    );
+
+    visibleChildren.forEach((child) => {
+      const current = rows.get(child.className) ?? {
+        className: child.className,
+        total: 0,
+        present: 0,
+        abnormal: 0,
+      };
+      const attendance = todayAttendance.find((record) => record.childId === child.id);
+      current.total += 1;
+      current.present += attendance?.isPresent ? 1 : 0;
+      current.abnormal += todayHealth.get(child.id)?.isAbnormal ? 1 : 0;
+      rows.set(child.className, current);
+    });
+
+    return Array.from(rows.values()).sort((left, right) => right.abnormal - left.abnormal || right.total - left.total);
+  }, [healthCheckRecords, todayAttendance, visibleChildren]);
 
   const recentTimeline = [
     ...todayAttendance.map((item) => ({
@@ -350,8 +379,8 @@ export default function RootOverviewPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
-      <div className="mb-8 flex flex-col gap-4 rounded-3xl border border-indigo-100 bg-linear-to-r from-indigo-50 via-sky-50 to-white p-7 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+    <div className="app-page page-enter">
+      <div className="mb-6 flex flex-col gap-5 rounded-xl border border-indigo-100 bg-linear-to-r from-indigo-50 via-white to-sky-50 p-5 shadow-[var(--shadow-card)] lg:flex-row lg:items-center lg:justify-between sm:p-6">
         <div>
           <div className="mb-2 flex items-center gap-2">
             <Badge variant="info" className="px-3 py-1 text-xs">
@@ -362,29 +391,31 @@ export default function RootOverviewPage() {
               当前身份：{currentUser.role}
             </Badge>
           </div>
-          <h1 className="text-3xl font-bold text-slate-800">普惠托育智慧闭环看板</h1>
+          <h1 className="text-3xl font-bold text-slate-900">全园运营数据总览</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
             已将功能升级为业务闭环：出勤 → 批量录入餐食 → 个别调整 → 成长观察 → 家长反馈，并以规则引擎输出可解释建议。
           </p>
           <p className="mt-3 text-xs text-slate-500">平台默认内置近七天评审示例数据，首次进入即可直接预览全链路效果。</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[30rem]">
           <QuickLink href="/health" title="晨检与健康" description="记录每日体温、情绪、手口眼" />
           <QuickLink href="/diet" title="批量录入与例外处理" description="支持过敏拦截、手动排除、单个调整" />
-          <QuickLink href="/parent" title="家长反馈时间线" description="已知晓 / 在家已配合 / 今晚反馈" />
+          <QuickLink href="/admin/agent" title="园长 AI 助手" description="优先级、派单、周报统一入口" />
         </div>
       </div>
 
       <ScrollReveal>
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
           <StatCard title="可见幼儿" value={`${visibleChildren.length}`} desc={`${currentUser.role}权限范围`} />
           <StatCard title="今日出勤" value={`${presentCount}`} desc={visibleChildren.length ? `出勤率 ${Math.round((presentCount / visibleChildren.length) * 100)}%` : "暂无数据"} />
+          <StatCard title="今日缺勤" value={`${absentCount}`} desc="含请假和未到园记录" />
+          <StatCard title="健康异常" value={`${todayHealthAbnormalCount}`} desc="今日晨检异常人数" />
           <StatCard title="今日饮食记录" value={`${todayMeals.length}`} desc="含早餐/午餐/晚餐/加餐" />
           <StatCard title="规则建议" value={`${insights.length}`} desc="按年龄段、过敏、连续异常生成" />
         </div>
       </ScrollReveal>
 
-      <Card className="mt-6 border-indigo-100 bg-linear-to-r from-indigo-50/80 via-white to-sky-50/70">
+      <Card className="mt-6 rounded-xl border-indigo-100 bg-linear-to-r from-indigo-50/80 via-white to-sky-50/70">
         <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -411,7 +442,7 @@ export default function RootOverviewPage() {
         <CardContent>
           {weeklyReport ? (
             <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-              <div className="rounded-3xl border border-white/70 bg-white/85 p-5 shadow-sm">
+              <div className="rounded-lg border border-white/70 bg-white/90 p-5 shadow-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">周期：{weeklyReportSnapshot.periodLabel}</Badge>
                   <Badge variant="secondary">预测：{getTrendPredictionLabel(weeklyReport.trendPrediction)}</Badge>
@@ -432,7 +463,7 @@ export default function RootOverviewPage() {
               </div>
             </div>
           ) : (
-            <div className="rounded-3xl border border-dashed border-slate-200 bg-white/70 p-5 text-sm text-slate-500">
+            <div className="rounded-lg border border-dashed border-slate-200 bg-white/70 p-5 text-sm text-slate-500">
               {weeklyReportLoading ? "正在生成 AI 周报…" : "AI 周报暂不可用，请稍后重试。"}
             </div>
           )}
@@ -564,7 +595,7 @@ export default function RootOverviewPage() {
         </Card>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-4">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -589,6 +620,33 @@ export default function RootOverviewPage() {
                 </div>
               );
             })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <School className="h-5 w-5 text-sky-500" />
+              班级状态
+            </CardTitle>
+            <CardDescription>按班级查看今日出勤和异常，便于园长快速定位压力点。</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {classStatus.map((row) => (
+              <div key={row.className} className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-900">{row.className}</p>
+                  <Badge variant={row.abnormal > 0 ? "warning" : "success"}>
+                    {row.abnormal > 0 ? `${row.abnormal} 项异常` : "平稳"}
+                  </Badge>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-500">
+                  <span>幼儿 {row.total}</span>
+                  <span>出勤 {row.present}</span>
+                  <span>缺勤 {Math.max(row.total - row.present, 0)}</span>
+                </div>
+              </div>
+            ))}
           </CardContent>
         </Card>
 
@@ -654,7 +712,7 @@ export default function RootOverviewPage() {
 
 function QuickLink({ href, title, description }: { href: string; title: string; description: string }) {
   return (
-    <Link href={href} className="group rounded-2xl border border-white/60 bg-white/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow">
+    <Link href={href} className="group rounded-lg border border-white/70 bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-700">{title}</p>
@@ -668,7 +726,7 @@ function QuickLink({ href, title, description }: { href: string; title: string; 
 
 function StatCard({ title, value, desc }: { title: string; value: string; desc: string }) {
   return (
-    <Card className="kpi-accent card-hover border-l-4 border-l-indigo-300">
+    <Card className="kpi-accent card-hover min-h-32 rounded-lg border-l-4 border-l-indigo-300">
       <CardHeader className="pb-2">
         <CardDescription>{title}</CardDescription>
       </CardHeader>
@@ -694,7 +752,7 @@ function BoardList({
   icon: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl bg-slate-50 p-3">
+    <div className="rounded-lg bg-slate-50 p-3">
       <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
         {icon}
         {title}
@@ -732,7 +790,7 @@ function WeeklyReportPanel({
   }[tone];
 
   return (
-    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+    <div className="rounded-lg border border-slate-100 bg-slate-50 p-4">
       <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${toneClass}`}>{title}</div>
       <div className="mt-3 space-y-2">
         {items.map((item, index) => (
@@ -749,7 +807,7 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   const parsed = Number(value.replace(/[^\d.-]/g, ""));
   const suffix = value.replace(/[\d.-]/g, "");
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/85 p-4 shadow-sm">
+    <div className="rounded-lg border border-white/70 bg-white/90 p-4 shadow-sm">
       <p className="text-xs text-slate-400">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-slate-800">
         {Number.isNaN(parsed) ? value : <AnimatedNumber value={parsed} suffix={suffix} />}

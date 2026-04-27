@@ -326,3 +326,68 @@ Task ID:
 - “Parent trend 是本地完整能力”
 - “高风险会诊已经等于完整 T8 全量交付”
 
+<!-- BEGIN FRONTEND VISUAL REFACTOR RULES -->
+
+# SmartChildcare Frontend Visual Refactor Rules
+
+Updated: 2026-04-27
+
+This section governs the SmartChildcare frontend visual refactor and preserves the existing agent handbook in this file.
+
+## Required Reading Before Any Refactor Thread
+
+Every Codex follow-up thread must read these files before changing code:
+
+1. `AGENTS.md`
+2. `docs/refactor/TASK_SEQUENCE.md`
+3. `docs/refactor/TASK_STATUS.md`
+4. `docs/refactor/DESIGN_SYSTEM_SPEC.md`
+5. `docs/refactor/ROUTE_PAGE_MAP.md`
+6. `docs/refactor/DESIGN_ASSET_INDEX.md`
+
+## Non-Negotiable UI Refactor Rules
+
+- Do not change business logic.
+- Do not change backend APIs.
+- Do not break demo account entry points.
+- Do not delete existing routes.
+- Do not delete core fields.
+- Do not turn pages into static images.
+- Do not treat GPT Image 2 text as business-field truth.
+- Business fields, routes, permissions, interactions, and data flow come from the current codebase.
+- Design images are references for layout, color, component style, information hierarchy, and visual tone only.
+
+## Unified Visual Direction
+
+- Chinese B2B SaaS management system.
+- Professional, trustworthy, warm, and approachable.
+- Soft blue-violet and blue-green primary palette.
+- Light backgrounds.
+- Lightweight cards.
+- Moderate radius.
+- Clear tables.
+- Unified buttons, tags, inputs, dialogs, drawers, empty states, and error states.
+- Director pages emphasize data and management.
+- Teacher pages emphasize high-frequency operation and records.
+- Parent pages emphasize review, feedback, and mobile readability.
+- The product must not feel visually fragmented across modules.
+
+## Thread Closeout Requirements
+
+Before finishing, each refactor thread must:
+
+- Update `docs/refactor/TASK_STATUS.md`.
+- Update `docs/refactor/IMPLEMENTATION_LOG.md`.
+- Update `docs/refactor/DECISIONS.md` if there is an important design tradeoff.
+- Run needed checks, prioritizing `npm run lint` and `npm run build`.
+- If a check fails, record the failure reason.
+- In the final reply, list changed files, completed task, check results, and open issues.
+
+## Large File and Asset Rules
+
+- Do not commit or add `node_modules`.
+- Do not include Playwright trace/video/debug-heavy files in refactor deliverables.
+- `artifacts/refactor-design-assets/` is a local reference asset directory, not production UI dependency.
+- Production UI must not depend on these PNG design images as page bodies.
+
+<!-- END FRONTEND VISUAL REFACTOR RULES -->

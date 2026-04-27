@@ -204,7 +204,6 @@ export default function AdminHomePage() {
       }
     >
       <RoleSplitLayout
-        stacked
         main={
           <div className="space-y-6">
             <UnifiedIntentEntryCard

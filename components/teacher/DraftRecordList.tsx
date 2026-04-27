@@ -53,7 +53,7 @@ export default function DraftRecordList({
 
   if (items.length === 0) {
     return (
-      <div className="rounded-3xl border border-dashed border-slate-200 px-4 py-5 text-sm text-slate-500">
+      <div className="rounded-lg border border-dashed border-slate-200 px-4 py-5 text-sm text-slate-500">
         当前没有可处理的草稿。
         {discardedCount > 0
           ? ` 已软隐藏 ${discardedCount} 条已丢弃记录，source draft 仍然保留。`

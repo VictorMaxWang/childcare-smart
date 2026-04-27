@@ -15,10 +15,10 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
     >
       <div
         className={cn(
-          "h-full w-full flex-1 bg-(--primary) transition-all duration-500",
+          "h-full w-full flex-1 rounded-full bg-(--primary) transition-transform duration-500 ease-out",
           indicatorClassName
         )}
-        style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
+        style={{ transform: `translateX(-${100 - Math.min(100, Math.max(0, value || 0))}%)` }}
       />
     </div>
   )

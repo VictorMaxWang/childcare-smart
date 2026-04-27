@@ -25,7 +25,7 @@ export default function TeacherAgentHistoryList({ items }: { items: TeacherAgent
   return (
     <div className="space-y-3">
       {items.map((item) => (
-        <div key={item.id} className="rounded-3xl border border-slate-100 bg-white p-4">
+        <div key={item.id} className="rounded-lg border border-slate-100 bg-white p-4">
           <div className="flex flex-wrap items-center gap-2">
             <Sparkles className="h-4 w-4 text-indigo-500" />
             <p className="text-sm font-semibold text-slate-900">动作类型：{item.actionLabel}</p>

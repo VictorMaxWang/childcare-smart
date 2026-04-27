@@ -20,13 +20,13 @@ export default function FollowUp48hCard({ data }: { data: FollowUp48hCardData })
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="rounded-2xl border border-white/70 bg-white/85 p-4">
+        <div className="rounded-lg border border-white/70 bg-white/85 p-4">
           <p className="text-sm font-semibold text-slate-900">复查节点</p>
           <p className="mt-2 text-sm leading-7 text-slate-600">{data.reviewIn48h || "48 小时后回看本轮干预是否落实到位，并补充新的观察记录。"}</p>
         </div>
 
         {data.items.length ? (
-          <div className="rounded-2xl border border-white/70 bg-white/85 p-4">
+          <div className="rounded-lg border border-white/70 bg-white/85 p-4">
             <p className="text-sm font-semibold text-slate-900">后续观察</p>
             <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
               {data.items.map((item, index) => (
@@ -35,7 +35,7 @@ export default function FollowUp48hCard({ data }: { data: FollowUp48hCardData })
             </ul>
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-emerald-200 bg-white/75 p-4 text-sm leading-6 text-slate-600">
+          <div className="rounded-lg border border-dashed border-emerald-200 bg-white/75 p-4 text-sm leading-6 text-slate-600">
             当前未返回额外的后续观察清单，建议按复查节点回看本次干预是否闭环。
           </div>
         )}

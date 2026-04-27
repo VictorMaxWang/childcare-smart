@@ -212,14 +212,14 @@ export default function TrendLineChart({
           <div className="h-6 w-28 rounded-full bg-slate-100" />
           <div className="h-6 w-24 rounded-full bg-slate-100" />
         </div>
-        <div className="h-48 rounded-3xl border border-slate-100 bg-slate-50" />
+        <div className="h-48 rounded-2xl border border-slate-100 bg-slate-50" />
       </div>
     );
   }
 
   if (displayError) {
     return (
-      <div className="rounded-3xl border border-rose-100 bg-rose-50/80 p-4" data-testid="trend-chart-error">
+      <div className="rounded-2xl border border-rose-100 bg-rose-50/80 p-4" data-testid="trend-chart-error">
         <p className="text-sm font-semibold text-rose-700">趋势图暂时不可用</p>
         <p className="mt-2 text-sm leading-6 text-rose-700/90">{displayError}</p>
         {onRetry ? (
@@ -234,7 +234,7 @@ export default function TrendLineChart({
   if (!primarySeries || chartRows.length === 0) {
     return (
       <div
-        className="flex h-48 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 text-center"
+        className="flex h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 text-center"
         data-testid="trend-chart-empty"
       >
         <BarChart3 className="h-5 w-5 text-slate-400" />
@@ -258,7 +258,7 @@ export default function TrendLineChart({
             </Badge>
           ))}
         </div>
-        <div className="flex h-48 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 text-center">
+        <div className="flex h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 text-center">
           <BarChart3 className="h-5 w-5 text-slate-400" />
           <p className="mt-3 text-sm font-semibold text-slate-700">当前有效记录不足，暂时无法形成趋势线</p>
           <p className="mt-1 text-sm text-slate-500">至少需要 2 个有效点位，现阶段更适合把图表作为参考。</p>

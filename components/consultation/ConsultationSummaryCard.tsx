@@ -42,12 +42,12 @@ export default function ConsultationSummaryCard({ data }: { data: ConsultationSu
         {data.providerTrace ? <ProviderTraceBadge trace={data.providerTrace} compact /> : null}
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="rounded-2xl border border-white/70 bg-white/85 p-4">
+        <div className="rounded-lg border border-white/70 bg-white/85 p-4">
           <p className="text-sm leading-7 text-slate-700">{content}</p>
         </div>
 
         {data.items?.length ? (
-          <div className="rounded-2xl border border-white/70 bg-white/85 p-4">
+          <div className="rounded-lg border border-white/70 bg-white/85 p-4">
             <p className="text-sm font-semibold text-slate-900">本阶段要点</p>
             <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
               {data.items.map((item, index) => (

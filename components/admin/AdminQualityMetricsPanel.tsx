@@ -45,7 +45,7 @@ function MetricCard({ metric }: { metric: AdminQualityMetric }) {
   const primaryValue = formatMetricPrimaryValue(metric);
 
   return (
-    <Card className="rounded-3xl border-slate-200 bg-white shadow-sm hover:shadow-sm">
+    <Card className="rounded-lg border-slate-200 bg-white shadow-sm hover:shadow-sm">
       <CardContent className="space-y-4 p-5">
         <div className="space-y-2">
           <p className="text-sm font-semibold text-slate-900">{metric.label}</p>
@@ -126,7 +126,7 @@ function LoadingState() {
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {(sectionIndex === 1 ? [0, 1] : [0, 1, 2]).map((cardIndex) => (
-              <Card key={`${sectionIndex}-${cardIndex}`} className="rounded-3xl border-slate-200 bg-white shadow-sm">
+              <Card key={`${sectionIndex}-${cardIndex}`} className="rounded-lg border-slate-200 bg-white shadow-sm">
                 <CardContent className="space-y-4 p-5">
                   <div className="space-y-3">
                     <div className="h-4 w-36 animate-pulse rounded-full bg-slate-200" />
@@ -155,7 +155,7 @@ function LoadingState() {
 
 function ErrorState({ error }: { error: string | null }) {
   return (
-    <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50/70 p-5">
+    <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 p-5">
       <div className="flex items-start gap-3">
         <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
         <div className="space-y-2 text-sm leading-6">
@@ -222,7 +222,7 @@ export default function AdminQualityMetricsPanel({
           </div>
 
           {data.warnings.length > 0 ? (
-            <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
+            <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
               <p className="font-semibold">数据说明</p>
               <div className="mt-2 space-y-1.5 text-amber-800">
                 {data.warnings.slice(0, 2).map((warning) => (
