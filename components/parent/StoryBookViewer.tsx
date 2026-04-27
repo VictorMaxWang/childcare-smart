@@ -1187,7 +1187,7 @@ export default function StoryBookViewer({
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Badge variant="info">
               <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              成长绘本 Agent V2
+              成长绘本助手
             </Badge>
             {modeCopy ? (
               <Badge variant={modeCopy.badgeVariant}>
@@ -1228,7 +1228,7 @@ export default function StoryBookViewer({
           <CardHeader className="space-y-4 pb-4">
             <div className="space-y-2">
               <CardTitle className="text-2xl tracking-tight text-slate-950">
-                {story?.title ?? "Parent Storybook V2"}
+                {story?.title ?? "成长绘本"}
               </CardTitle>
               <CardDescription className="max-w-2xl text-sm leading-7 text-slate-600">
                 {story?.summary ??
