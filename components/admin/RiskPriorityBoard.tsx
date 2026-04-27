@@ -51,7 +51,7 @@ export default function RiskPriorityBoard({
     return (
       <div
         className={cn(
-          "rounded-[28px] border border-dashed border-slate-200 bg-slate-50/70 p-5 text-sm text-slate-600",
+          "rounded-lg border border-dashed border-slate-200 bg-slate-50/70 p-5 text-sm text-slate-600",
           className
         )}
       >

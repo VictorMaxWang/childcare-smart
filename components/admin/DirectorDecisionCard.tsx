@@ -145,7 +145,7 @@ export default function DirectorDecisionCard({
   return (
     <Card
       className={cn(
-        "h-full rounded-[28px] border-amber-100 bg-linear-to-br from-amber-50 via-white to-rose-50 shadow-sm",
+        "h-full rounded-lg border-amber-100 bg-linear-to-br from-amber-50 via-white to-rose-50 shadow-sm",
         className
       )}
     >
@@ -167,7 +167,7 @@ export default function DirectorDecisionCard({
             </p>
           </div>
 
-          <div className="rounded-2xl border border-amber-100 bg-white/85 p-4">
+          <div className="rounded-lg border border-amber-100 bg-white/85 p-4">
             <p className="text-xs font-semibold tracking-[0.24em] text-amber-700">优先处理原因</p>
             <p className="mt-3 whitespace-normal break-words text-sm leading-7 text-slate-700">
               {decision.whyHighPriority}
@@ -178,7 +178,7 @@ export default function DirectorDecisionCard({
 
       <CardContent className="space-y-4">
         <div className="grid gap-3 xl:grid-cols-3">
-          <div className="rounded-2xl border border-white/80 bg-white/90 p-4">
+          <div className="rounded-lg border border-white/80 bg-white/90 p-4">
             <div className="flex items-center gap-2">
               <UserRound className="h-4 w-4 text-indigo-500" />
               <p className="text-sm font-semibold text-slate-900">建议负责人</p>
@@ -188,7 +188,7 @@ export default function DirectorDecisionCard({
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/80 bg-white/90 p-4">
+          <div className="rounded-lg border border-white/80 bg-white/90 p-4">
             <div className="flex items-center gap-2">
               <CalendarClock className="h-4 w-4 text-sky-500" />
               <p className="text-sm font-semibold text-slate-900">建议截止时间</p>
@@ -198,7 +198,7 @@ export default function DirectorDecisionCard({
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/80 bg-white/90 p-4">
+          <div className="rounded-lg border border-white/80 bg-white/90 p-4">
             <div className="flex items-center gap-2">
               <ShieldAlert className="h-4 w-4 text-amber-500" />
               <p className="text-sm font-semibold text-slate-900">当前状态</p>
@@ -210,7 +210,7 @@ export default function DirectorDecisionCard({
         </div>
 
         <div className="grid gap-3 xl:grid-cols-2">
-          <div className="rounded-2xl border border-white/80 bg-white/90 p-4">
+          <div className="rounded-lg border border-white/80 bg-white/90 p-4">
             <p className="text-sm font-semibold text-slate-900">触发原因</p>
             <div className="mt-3">
               <ExpandableList
@@ -223,7 +223,7 @@ export default function DirectorDecisionCard({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/80 bg-white/90 p-4">
+          <div className="rounded-lg border border-white/80 bg-white/90 p-4">
             <p className="text-sm font-semibold text-slate-900">关键发现</p>
             <div className="mt-3">
               <ExpandableList
@@ -263,7 +263,7 @@ export default function DirectorDecisionCard({
           {hasChildLevelFallbackNotification ? " | 当前按儿童维度关联" : ""}
         </p>
 
-        <div className="rounded-2xl border border-slate-100 bg-white/90 p-4">
+        <div className="rounded-lg border border-slate-100 bg-white/90 p-4">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0 space-y-1">
               <p className="text-sm font-semibold text-slate-900">会诊派单入口</p>

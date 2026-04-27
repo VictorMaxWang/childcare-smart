@@ -407,10 +407,9 @@ export default function AdminAgentPage() {
         actions={<InlineLinkButton href="/admin" label="返回园长首页" />}
       >
         <RoleSplitLayout
-          stacked
           main={
             <div className="space-y-6">
-              <div className="rounded-[32px] border border-indigo-100 bg-linear-to-r from-indigo-50 via-white to-sky-50 p-6 shadow-sm">
+              <div className="rounded-xl border border-indigo-100 bg-linear-to-r from-indigo-50 via-white to-sky-50 p-6 shadow-sm">
                 <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0 space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
@@ -732,11 +731,10 @@ export default function AdminAgentPage() {
       }
     >
       <RoleSplitLayout
-        stacked
         main={
           <div className="space-y-6">
             {isWeeklyMode ? (
-              <div className="rounded-[32px] border border-indigo-100 bg-linear-to-r from-indigo-50 via-white to-sky-50 p-6 shadow-sm">
+              <div className="rounded-xl border border-indigo-100 bg-linear-to-r from-indigo-50 via-white to-sky-50 p-6 shadow-sm">
                 <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0 space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
@@ -1214,7 +1212,7 @@ export default function AdminAgentPage() {
           </div>
         }
         aside={
-          <div className={isWeeklyMode ? "grid gap-6 xl:grid-cols-2" : "space-y-6"}>
+          <div className="space-y-6">
             <SectionCard title="当前状态" description="园长 AI 助手当前聚焦的机构级结果摘要。">
               {displayResult ? (
                 <div className="space-y-3 text-sm text-slate-600">

@@ -1,15 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import {
   AlertTriangle,
   BookOpenCheck,
   BrainCircuit,
+  ClipboardCheck,
   FileText,
+  HeartPulse,
   MessageSquareText,
   PencilLine,
   ShieldAlert,
   ShieldCheck,
+  Utensils,
   UsersRound,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
@@ -17,12 +19,16 @@ import UnifiedIntentEntryCard from "@/components/intent/UnifiedIntentEntryCard";
 import {
   AssistantEntryCard,
   InlineLinkButton,
-  MetricGrid,
   RolePageShell,
   RoleSplitLayout,
   SectionCard,
 } from "@/components/role-shell/RoleScaffold";
-import { Badge } from "@/components/ui/badge";
+import {
+  TeacherActionTile,
+  TeacherContextStrip,
+  TeacherMiniPanel,
+  TeacherTaskRow,
+} from "@/components/teacher/TeacherOperationKit";
 import { buildTeacherHomeViewModel } from "@/lib/view-models/role-home";
 import { useApp } from "@/lib/store";
 
@@ -61,135 +67,184 @@ export default function TeacherWorkbenchPage() {
     );
   }
 
+  const teacherStats = [
+    { label: "当前班级", value: currentUser.className ?? "当前班级", tone: "indigo" as const },
+    { label: "班级幼儿", value: `${visibleChildren.length} 人`, tone: "sky" as const },
+    { label: "今日出勤", value: `${presentChildren.length} 人`, tone: "emerald" as const },
+    {
+      label: "待处理",
+      value: `${viewModel.todayAbnormalChildren.length + viewModel.uncheckedMorningChecks.length + viewModel.pendingReviews.length} 项`,
+      tone: viewModel.todayAbnormalChildren.length > 0 ? ("rose" as const) : ("amber" as const),
+    },
+  ];
+
   return (
     <RolePageShell
       badge={`教师工作台 · ${currentUser.className ?? "当前班级"} · ${TODAY_TEXT}`}
-      title="今天先处理最紧急的儿童，再把家长沟通和录入路径走顺"
-      description="教师工作台只保留高频任务：异常儿童、未晨检、待复查、待沟通家长和快捷录入入口。移动端优先看任务，PC 端补充摘要。"
+      title="今日班级运营"
+      description="班级状态、晨检补录、复查跟进和家园沟通集中在一页处理，优先露出老师每天最常用的入口。"
       actions={
         <>
           <InlineLinkButton href="/teacher/high-risk-consultation" label="发起高风险会诊" variant="premium" />
-          <InlineLinkButton href="/teacher/agent" label="进入教师 AI 助手" variant="premium" />
-          <InlineLinkButton href="/teacher/health-file-bridge" label="外部健康文件桥接" />
-          <InlineLinkButton href="/teacher/agent?action=communication" label="一键生成家长沟通建议" />
+          <InlineLinkButton href="/teacher/agent?action=communication" label="生成家园沟通建议" variant="premium" />
+          <InlineLinkButton href="/teacher/health-file-bridge" label="健康材料解析" />
         </>
       }
     >
       <RoleSplitLayout
         main={
           <div className="flex flex-col gap-6">
-            <div className="order-last">
-              <MetricGrid
-              items={viewModel.heroStats.map((item, index) => ({
-                ...item,
-                tone: index === 0 ? "amber" : index === 1 ? "sky" : index === 2 ? "indigo" : "emerald",
-              }))}
-              />
-            </div>
+            <TeacherContextStrip items={teacherStats} />
 
-            <SectionCard title="今日异常儿童" description="优先处理晨检异常，避免高频事项被淹没。">
-              <div className="space-y-3">
-                {viewModel.todayAbnormalChildren.length > 0 ? (
-                  viewModel.todayAbnormalChildren.map((item) => (
-                    <div key={item.record.id} className="rounded-3xl border border-rose-100 bg-rose-50/70 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-semibold text-slate-900">{item.child.name}</p>
-                        <Badge variant="warning">需优先处理</Badge>
-                      </div>
-                      <p className="mt-2 text-sm text-slate-600">
-                        体温 {item.record.temperature}°C · {item.record.mood} · {item.record.handMouthEye}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-slate-500">今日暂未发现异常晨检儿童。</p>
-                )}
+            <SectionCard title="今日优先处理" description="异常、未检和复查对象会按当前班级数据自动收拢。">
+              <div className="grid gap-4 xl:grid-cols-3">
+                <TeacherMiniPanel
+                  title="晨检异常"
+                  badge={`${viewModel.todayAbnormalChildren.length} 人`}
+                  tone={viewModel.todayAbnormalChildren.length > 0 ? "rose" : "slate"}
+                >
+                  <div className="space-y-3">
+                    {viewModel.todayAbnormalChildren.length > 0 ? (
+                      viewModel.todayAbnormalChildren.map((item) => (
+                        <TeacherTaskRow
+                          key={item.record.id}
+                          title={item.child.name}
+                          meta={item.child.className}
+                          detail={`体温 ${item.record.temperature}°C · ${item.record.mood} · ${item.record.handMouthEye}`}
+                          status="需优先处理"
+                          statusVariant="danger"
+                          tone="rose"
+                        />
+                      ))
+                    ) : (
+                      <p className="text-sm leading-6 text-slate-500">今日暂未发现异常晨检儿童。</p>
+                    )}
+                  </div>
+                </TeacherMiniPanel>
+
+                <TeacherMiniPanel
+                  title="待晨检"
+                  badge={`${viewModel.uncheckedMorningChecks.length} 人`}
+                  tone={viewModel.uncheckedMorningChecks.length > 0 ? "amber" : "slate"}
+                >
+                  <div className="space-y-3">
+                    {viewModel.uncheckedMorningChecks.length > 0 ? (
+                      viewModel.uncheckedMorningChecks.map((child) => (
+                        <TeacherTaskRow
+                          key={child.id}
+                          title={child.name}
+                          meta={child.className}
+                          detail="今日已出勤，晨检记录尚未补齐。"
+                          status="待晨检"
+                          statusVariant="warning"
+                          tone="amber"
+                        />
+                      ))
+                    ) : (
+                      <p className="text-sm leading-6 text-slate-500">今日出勤儿童都已完成晨检。</p>
+                    )}
+                  </div>
+                </TeacherMiniPanel>
+
+                <TeacherMiniPanel
+                  title="待复查"
+                  badge={`${viewModel.pendingReviews.length} 项`}
+                  tone={viewModel.pendingReviews.length > 0 ? "sky" : "slate"}
+                >
+                  <div className="space-y-3">
+                    {viewModel.pendingReviews.length > 0 ? (
+                      viewModel.pendingReviews.map((item) => (
+                        <TeacherTaskRow
+                          key={item.record.id}
+                          title={item.child.name}
+                          meta={`${item.child.className} · ${item.record.category}`}
+                          detail={item.record.followUpAction ?? item.record.description}
+                          status="待复查"
+                          statusVariant="info"
+                          tone="sky"
+                        />
+                      ))
+                    ) : (
+                      <p className="text-sm leading-6 text-slate-500">当前没有待复查名单。</p>
+                    )}
+                  </div>
+                </TeacherMiniPanel>
               </div>
             </SectionCard>
 
-            <div className="grid gap-6 xl:grid-cols-2">
-              <SectionCard title="未完成晨检" description="先补基础记录，后续 AI 建议才可靠。">
-                <div className="space-y-3">
-                  {viewModel.uncheckedMorningChecks.length > 0 ? (
-                    viewModel.uncheckedMorningChecks.map((child) => (
-                      <div key={child.id} className="rounded-3xl border border-slate-100 bg-white p-4">
-                        <p className="text-sm font-semibold text-slate-900">{child.name}</p>
-                        <p className="mt-1 text-sm text-slate-500">{child.className} · 今日待晨检</p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-slate-500">今日出勤儿童都已完成晨检。</p>
-                  )}
-                </div>
-              </SectionCard>
+            <SectionCard title="高频操作入口" description="晨检、饮食、成长、AI 和健康材料处理保持直达。">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <TeacherActionTile
+                  href="/teacher/high-risk-consultation"
+                  icon={<ShieldAlert className="h-5 w-5" />}
+                  title="高风险会诊"
+                  description="带入晨检、复查、观察和反馈，生成园内动作与家庭任务。"
+                  tone="rose"
+                  highlight
+                />
+                <TeacherActionTile
+                  href="/health"
+                  icon={<HeartPulse className="h-5 w-5" />}
+                  title="晨检录入"
+                  description="查看待检、正常、异常状态，补齐体温、情绪和手口眼记录。"
+                  tone="sky"
+                />
+                <TeacherActionTile
+                  href="/diet"
+                  icon={<Utensils className="h-5 w-5" />}
+                  title="饮食记录"
+                  description="批量录入餐次，再对个别幼儿做饮水、过敏和进餐状态调整。"
+                  tone="emerald"
+                />
+                <TeacherActionTile
+                  href="/growth"
+                  icon={<BookOpenCheck className="h-5 w-5" />}
+                  title="成长观察"
+                  description="补充观察标签、复查日期和后续动作，形成可追踪时间线。"
+                  tone="indigo"
+                />
+                <TeacherActionTile
+                  href="/teacher/agent?action=communication"
+                  icon={<MessageSquareText className="h-5 w-5" />}
+                  title="家园沟通"
+                  description="根据当前儿童状态生成家长沟通建议和后续提醒。"
+                  tone="amber"
+                />
+                <TeacherActionTile
+                  href="/teacher/health-file-bridge"
+                  icon={<FileText className="h-5 w-5" />}
+                  title="健康材料解析"
+                  description="整理外部图片或 PDF 材料中的事实、风险和复查提示。"
+                  tone="slate"
+                />
+              </div>
+            </SectionCard>
 
-              <SectionCard title="待复查名单" description="把需要继续观察的儿童压缩到一个列表。">
-                <div className="space-y-3">
-                  {viewModel.pendingReviews.length > 0 ? (
-                    viewModel.pendingReviews.map((item) => (
-                      <div key={item.record.id} className="rounded-3xl border border-slate-100 bg-white p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-semibold text-slate-900">{item.child.name}</p>
-                          <Badge variant="secondary">{item.record.category}</Badge>
-                        </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">
-                          {item.record.followUpAction ?? item.record.description}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-slate-500">当前没有待复查名单。</p>
-                  )}
-                </div>
-              </SectionCard>
-            </div>
-
-            <SectionCard title="今日待沟通家长" description="把真正需要今天同步的家长挑出来。">
-              <div className="space-y-3">
+            <SectionCard title="今日家园沟通" description="把需要今天同步的对象放在记录区旁边。">
+              <div className="grid gap-3 lg:grid-cols-2">
                 {viewModel.parentsToCommunicate.length > 0 ? (
                   viewModel.parentsToCommunicate.map((item) => (
-                    <div key={item.child.id} className="rounded-3xl border border-slate-100 bg-white p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-semibold text-slate-900">{item.child.name}</p>
-                        <Badge variant="info">建议沟通</Badge>
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{item.reason}</p>
-                    </div>
+                    <TeacherTaskRow
+                      key={item.child.id}
+                      title={item.child.name}
+                      meta={item.child.className}
+                      detail={item.reason}
+                      status="建议沟通"
+                      statusVariant="info"
+                      tone="indigo"
+                    />
                   ))
                 ) : (
-                  <p className="text-sm text-slate-500">当前没有必须立即沟通的家长对象。</p>
+                  <TeacherMiniPanel title="沟通状态" badge="稳定" tone="emerald">
+                    <p className="text-sm leading-6 text-slate-600">当前没有必须立即沟通的家长对象。</p>
+                  </TeacherMiniPanel>
                 )}
-              </div>
-            </SectionCard>
-
-            <SectionCard title="快捷录入入口" description="保持业务主路径直达，不让老师来回找页面。">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <Link
-                  href="/teacher/high-risk-consultation"
-                  className="rounded-3xl border border-rose-100 bg-linear-to-br from-rose-50 via-white to-amber-50 p-4 text-sm font-semibold text-slate-900 shadow-sm"
-                >
-                  <ShieldAlert className="mb-3 h-5 w-5 text-rose-500" />
-                  发起高风险会诊
-                </Link>
-                <Link href="/health" className="rounded-3xl border border-slate-100 bg-white p-4 text-sm font-semibold text-slate-900 shadow-sm">
-                  <ShieldCheck className="mb-3 h-5 w-5 text-sky-500" />
-                  去晨检录入
-                </Link>
-                <Link href="/growth" className="rounded-3xl border border-slate-100 bg-white p-4 text-sm font-semibold text-slate-900 shadow-sm">
-                  <BookOpenCheck className="mb-3 h-5 w-5 text-indigo-500" />
-                  去成长观察
-                </Link>
-                <Link href="/diet" className="rounded-3xl border border-slate-100 bg-white p-4 text-sm font-semibold text-slate-900 shadow-sm">
-                  <PencilLine className="mb-3 h-5 w-5 text-emerald-500" />
-                  去饮食录入
-                </Link>
-                <Link
-                  href="/teacher/health-file-bridge"
-                  className="rounded-3xl border border-slate-100 bg-white p-4 text-sm font-semibold text-slate-900 shadow-sm"
-                >
-                  <FileText className="mb-3 h-5 w-5 text-violet-500" />
-                  外部健康文件桥接
-                </Link>
+                <TeacherMiniPanel title="沟通建议预览" badge="AI 助手" tone="indigo">
+                  <div className="flex items-start gap-3">
+                    <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" />
+                    <p className="text-sm leading-7 text-slate-600">{viewModel.communicationPreview}</p>
+                  </div>
+                </TeacherMiniPanel>
               </div>
             </SectionCard>
           </div>
@@ -199,7 +254,7 @@ export default function TeacherWorkbenchPage() {
             <UnifiedIntentEntryCard
               roleHint="teacher"
               sourcePage="/teacher"
-              title="一句话让老师助手帮你找对入口"
+              title="一句话定位教师工作"
               placeholder="例如：帮我看看今天最需要优先处理的孩子，或生成本周周报"
               examples={[
                 "帮我看看今天最需要优先处理的孩子",
@@ -210,46 +265,47 @@ export default function TeacherWorkbenchPage() {
             />
 
             <AssistantEntryCard
-              title="高风险儿童一键会诊"
-              description="适合录屏展示的主路径：自动带入晨检异常、待复查、近 7 天观察和家长反馈，直接输出园内动作、家庭任务和园长决策卡。"
+              title="教师 AI 助手"
+              description="按当前班级上下文生成家长沟通、今日跟进和本周总结。"
+              href="/teacher/agent"
+              buttonLabel="进入教师 AI 助手"
+            >
+              <TeacherMiniPanel title="当前上下文" badge={currentUser.className ?? "当前班级"} tone="sky">
+                <ul className="space-y-2 text-sm leading-6 text-slate-600">
+                  <li>异常晨检：{viewModel.todayAbnormalChildren.length} 人</li>
+                  <li>待复查：{viewModel.pendingReviews.length} 项</li>
+                  <li>待沟通：{viewModel.parentsToCommunicate.length} 人</li>
+                </ul>
+              </TeacherMiniPanel>
+            </AssistantEntryCard>
+
+            <AssistantEntryCard
+              title="高风险儿童会诊"
+              description="围绕儿童长期画像、最近状态和当前补充信息输出可执行卡片。"
               href="/teacher/high-risk-consultation"
               buttonLabel="发起高风险会诊"
             >
               <ul className="space-y-3 text-sm leading-6 text-slate-600">
-                <li>适用场景：晨检异常、反复待复查、家长反馈提示持续风险</li>
-                <li>输入方式：结构化上下文 + 图片占位 + 语音速记 + 教师补充</li>
-                <li>输出闭环：教师动作、家长今晚任务、园长优先级决策</li>
+                <li className="flex items-center gap-3">
+                  <ShieldCheck className="h-4 w-4 text-sky-500" />
+                  晨检异常和复查记录自动带入
+                </li>
+                <li className="flex items-center gap-3">
+                  <PencilLine className="h-4 w-4 text-emerald-500" />
+                  教师补充、图片占位和语音速记保持原流程
+                </li>
+                <li className="flex items-center gap-3">
+                  <ClipboardCheck className="h-4 w-4 text-indigo-500" />
+                  会诊结果同步到教师、家长和园长视角
+                </li>
               </ul>
             </AssistantEntryCard>
 
-            <AssistantEntryCard
-              title="进入教师 AI 助手"
-              description="老师进入后直接看到班级上下文、异常摘要和可一键生成的沟通建议。"
-              href="/teacher/agent"
-              buttonLabel="进入教师 AI 助手"
-            >
-              <ul className="space-y-3 text-sm leading-6 text-slate-600">
-                <li>当前班级：{currentUser.className ?? "当前班级"}</li>
-                <li>当前任务：异常处理、复查、家长沟通</li>
-                <li>推荐入口：家长沟通建议 / 今日跟进行动</li>
-              </ul>
-            </AssistantEntryCard>
-
-            <SectionCard title="沟通建议预览" description="首页直接露出一条可演示的沟通方向。">
-              <div className="rounded-3xl border border-indigo-100 bg-indigo-50/60 p-5">
-                <div className="flex items-center gap-2">
-                  <MessageSquareText className="h-4 w-4 text-indigo-600" />
-                  <p className="text-sm font-semibold text-slate-900">家长沟通建议</p>
-                </div>
-                <p className="mt-3 text-sm leading-7 text-slate-600">{viewModel.communicationPreview}</p>
-              </div>
-            </SectionCard>
-
-            <SectionCard title="老师今日顺序" description="移动端一进来先处理这三件事。">
+            <SectionCard title="今日处理顺序" description="移动端进入后先看这三项。">
               <ol className="space-y-3 text-sm text-slate-600">
                 <li className="flex items-center gap-3">
                   <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  先看异常儿童
+                  先处理异常儿童
                 </li>
                 <li className="flex items-center gap-3">
                   <ShieldCheck className="h-4 w-4 text-sky-500" />
@@ -257,7 +313,7 @@ export default function TeacherWorkbenchPage() {
                 </li>
                 <li className="flex items-center gap-3">
                   <BrainCircuit className="h-4 w-4 text-indigo-500" />
-                  再生成家长沟通建议
+                  生成家园沟通建议
                 </li>
               </ol>
             </SectionCard>

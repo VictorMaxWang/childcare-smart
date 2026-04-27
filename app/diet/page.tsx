@@ -2,7 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { AlertTriangle, Camera, ChefHat, Loader2, Plus, Salad, ShieldAlert, Sparkles, X } from "lucide-react";
+import {
+  AlertTriangle,
+  BookHeart,
+  Camera,
+  ChefHat,
+  HeartPulse,
+  Loader2,
+  MessageSquareText,
+  Plus,
+  Salad,
+  ShieldAlert,
+  Sparkles,
+  X,
+} from "lucide-react";
 import {
   calcNutritionScore,
   FOOD_CATEGORY_OPTIONS,
@@ -23,9 +36,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { MetricCard } from "@/components/ui/metric-card";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TeacherActionTile, TeacherContextStrip, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import { getLocalToday } from "@/lib/date";
 import { getHydrationDisplayState } from "@/lib/hydration-display";
 import { cn } from "@/lib/utils";
@@ -171,8 +187,18 @@ export default function DietPage() {
     visibleChildren.some((child) => child.id === selectedChildId) ? selectedChildId : defaultSelectedChildId;
 
   const selectedChild = visibleChildren.find((child) => child.id === resolvedSelectedChildId) ?? null;
+  const isTeacher = currentUser.role === "教师";
   const todayAttendance = getTodayAttendance();
   const attendanceMap = new Map(todayAttendance.map((item) => [item.childId, item]));
+  const visibleChildIds = useMemo(() => new Set(visibleChildren.map((child) => child.id)), [visibleChildren]);
+  const todayVisibleMealRecords = useMemo(
+    () => mealRecords.filter((record) => visibleChildIds.has(record.childId) && record.date === TODAY),
+    [mealRecords, visibleChildIds]
+  );
+  const todayRecordedChildCount = useMemo(
+    () => new Set(todayVisibleMealRecords.map((record) => record.childId)).size,
+    [todayVisibleMealRecords]
+  );
 
   const selectedChildMeals = useMemo(() => {
     if (!selectedChild) return {} as Partial<Record<MealType, MealRecord>>;
@@ -406,8 +432,8 @@ export default function DietPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
-      <div className="mb-8">
+    <div className="app-page page-enter">
+      <div className="mb-6 rounded-xl border border-emerald-100 bg-linear-to-r from-white via-emerald-50/60 to-indigo-50/60 p-5 shadow-[var(--shadow-card)] sm:p-6">
         <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
           <Salad className="h-8 w-8 text-emerald-500" />
           饮食记录
@@ -415,10 +441,64 @@ export default function DietPage() {
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
           流程已升级为：先批量录入出勤幼儿，再做例外排除与过敏拦截，最后对个别幼儿进行单独调整。
         </p>
-        <div className="section-divider mt-5" />
       </div>
 
-      <Card className="mb-6 border-emerald-100 bg-linear-to-r from-emerald-50 to-white">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="今日出勤幼儿" value={`${presentChildren.length}人`} tone="success" />
+        <MetricCard label="今日餐食记录" value={`${todayVisibleMealRecords.length}条`} tone="primary" />
+        <MetricCard label="已覆盖幼儿" value={`${todayRecordedChildCount}人`} tone="info" />
+        <MetricCard label="过敏拦截预览" value={`${bulkPreviewSummary.blocked.length}人`} tone={bulkPreviewSummary.blocked.length > 0 ? "warning" : "neutral"} />
+      </div>
+
+      {isTeacher ? (
+        <div className="mb-6 space-y-4">
+          <TeacherContextStrip
+            items={[
+              { label: "出勤幼儿", value: `${presentChildren.length}人`, tone: "emerald" },
+              { label: "覆盖幼儿", value: `${todayRecordedChildCount}/${Math.max(presentChildren.length, 1)}`, tone: "indigo" },
+              { label: "当前对象", value: selectedChild?.name ?? "未选择", tone: "sky" },
+              { label: "过敏拦截", value: `${bulkPreviewSummary.blocked.length}人`, tone: bulkPreviewSummary.blocked.length > 0 ? "amber" : "emerald" },
+            ]}
+          />
+          <div className="grid gap-3 md:grid-cols-3">
+            <TeacherActionTile
+              href="/health"
+              icon={<HeartPulse className="h-5 w-5" />}
+              title="先看晨检"
+              description="核对体温、精神状态和异常提醒。"
+              tone="rose"
+            />
+            <TeacherActionTile
+              href="/growth"
+              icon={<BookHeart className="h-5 w-5" />}
+              title="补成长记录"
+              description="把拒食、饮水少等表现转成观察记录。"
+              tone="amber"
+            />
+            <TeacherActionTile
+              href="/teacher/agent?action=communication"
+              icon={<MessageSquareText className="h-5 w-5" />}
+              title="家园沟通"
+              description="生成饮食反馈和今晚观察建议。"
+              tone="indigo"
+              highlight
+            />
+          </div>
+          <TeacherMiniPanel
+            title="餐次处理提示"
+            badge={bulkFoods.length > 0 ? `${bulkFoods.length}项待批量应用` : "可先准备餐单"}
+            tone={bulkPreviewSummary.blocked.length > 0 ? "amber" : "emerald"}
+          >
+            <div className="grid gap-3 text-sm leading-6 text-slate-600 md:grid-cols-3">
+              <p className="rounded-lg bg-white/80 px-3 py-2">先录入本餐公共餐单，再确认过敏拦截与手动排除。</p>
+              <p className="rounded-lg bg-white/80 px-3 py-2">批量确认前会预览适用、拦截和排除名单。</p>
+              <p className="rounded-lg bg-white/80 px-3 py-2">单个幼儿仍可在下方餐次卡片里调整进食、饮水和备注。</p>
+            </div>
+          </TeacherMiniPanel>
+        </div>
+      ) : null}
+
+      <Card className="mb-6 rounded-lg border-emerald-100 bg-linear-to-r from-emerald-50 to-white">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <ChefHat className="h-5 w-5 text-emerald-600" />
@@ -429,66 +509,82 @@ export default function DietPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 lg:grid-cols-6">
-            <Select value={bulkMeal} onValueChange={(value) => setBulkMeal(value as MealType)}>
-              <SelectTrigger>
-                <SelectValue placeholder="选择餐次" />
-              </SelectTrigger>
-              <SelectContent>
-                {MEAL_TYPES.map((meal) => (
-                  <SelectItem key={meal} value={meal}>
-                    {meal}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input value={bulkFoodName} onChange={(event) => setBulkFoodName(event.target.value)} placeholder="食物名称" />
-            <Select value={bulkFoodCategory} onValueChange={(value) => setBulkFoodCategory(value as FoodCategory)}>
-              <SelectTrigger>
-                <SelectValue placeholder="食物分类" />
-              </SelectTrigger>
-              <SelectContent>
-                {FOOD_CATEGORY_OPTIONS.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input value={bulkFoodAmount} onChange={(event) => setBulkFoodAmount(event.target.value)} placeholder="摄入量" />
-            <Button variant="outline" onClick={addBulkFood}>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <FormField label="餐次">
+              <Select value={bulkMeal} onValueChange={(value) => setBulkMeal(value as MealType)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="选择餐次" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MEAL_TYPES.map((meal) => (
+                    <SelectItem key={meal} value={meal}>
+                      {meal}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="食物名称">
+              <Input value={bulkFoodName} onChange={(event) => setBulkFoodName(event.target.value)} placeholder="食物名称" />
+            </FormField>
+            <FormField label="食物分类">
+              <Select value={bulkFoodCategory} onValueChange={(value) => setBulkFoodCategory(value as FoodCategory)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="食物分类" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FOOD_CATEGORY_OPTIONS.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="摄入量">
+              <Input value={bulkFoodAmount} onChange={(event) => setBulkFoodAmount(event.target.value)} placeholder="摄入量" />
+            </FormField>
+            <Button variant="outline" onClick={addBulkFood} className="self-end">
               添加食物
             </Button>
-            <Button onClick={applyBulkTemplate}>执行批量录入</Button>
+            <Button onClick={applyBulkTemplate} className="self-end">执行批量录入</Button>
           </div>
 
           <div className="grid gap-3 md:grid-cols-4">
-            <Select value={bulkIntake} onValueChange={(value) => setBulkIntake(value as IntakeLevel)}>
-              <SelectTrigger>
-                <SelectValue placeholder="摄入量级别" />
-              </SelectTrigger>
-              <SelectContent>
-                {INTAKE_OPTIONS.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={bulkPreference} onValueChange={(value) => setBulkPreference(value as PreferenceStatus)}>
-              <SelectTrigger>
-                <SelectValue placeholder="偏好状态" />
-              </SelectTrigger>
-              <SelectContent>
-                {PREFERENCE_OPTIONS.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input value={bulkWaterMl} onChange={(event) => setBulkWaterMl(event.target.value)} placeholder="补水内部记录（ml）" />
-            <Input value={bulkAllergyReaction} onChange={(event) => setBulkAllergyReaction(event.target.value)} placeholder="过敏反应（可留空）" />
+            <FormField label="摄入量级别">
+              <Select value={bulkIntake} onValueChange={(value) => setBulkIntake(value as IntakeLevel)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="摄入量级别" />
+                </SelectTrigger>
+                <SelectContent>
+                  {INTAKE_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="偏好状态">
+              <Select value={bulkPreference} onValueChange={(value) => setBulkPreference(value as PreferenceStatus)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="偏好状态" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PREFERENCE_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="补水内部记录（ml）">
+              <Input value={bulkWaterMl} onChange={(event) => setBulkWaterMl(event.target.value)} placeholder="补水内部记录（ml）" />
+            </FormField>
+            <FormField label="过敏反应">
+              <Input value={bulkAllergyReaction} onChange={(event) => setBulkAllergyReaction(event.target.value)} placeholder="可留空" />
+            </FormField>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -508,10 +604,15 @@ export default function DietPage() {
               {bulkVisionModel ? <Badge variant="secondary">{bulkVisionModel}</Badge> : null}
             </div>
 
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-emerald-300 bg-white px-3 py-2 text-xs text-emerald-700 transition hover:bg-emerald-50">
-              <Camera className="h-4 w-4" />
+            <label
+              className={cn(
+                "flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-emerald-300 bg-white px-3 py-2 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50",
+                bulkVisionLoading && "cursor-wait opacity-70"
+              )}
+            >
+              {bulkVisionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
               {bulkVisionLoading ? "识别中..." : "拍照 / 上传餐盘图片"}
-              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleBulkVisionUpload} />
+              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleBulkVisionUpload} disabled={bulkVisionLoading} />
             </label>
 
             {bulkPhotoPreview ? (
@@ -632,6 +733,10 @@ export default function DietPage() {
                 </p>
               </div>
             ) : null}
+            <div className="flex items-start gap-3 rounded-lg border border-(--warning-border) bg-(--warning-soft) p-3 text-sm leading-6 text-(--warning-foreground)">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <p>确认后会批量写入本餐记录。请先核对适用、拦截和排除名单，再继续。</p>
+            </div>
           </div>
 
           <DialogFooter>
@@ -643,7 +748,7 @@ export default function DietPage() {
 
       <div className="flex flex-col gap-6 xl:flex-row">
         <aside className="w-full xl:w-80">
-          <Card>
+          <Card className="rounded-lg">
             <CardHeader>
               <CardTitle className="text-lg">选择幼儿（个别调整）</CardTitle>
               <CardDescription>批量后可在此对单个孩子做精细调整。</CardDescription>
@@ -689,7 +794,7 @@ export default function DietPage() {
         <section className="flex-1 space-y-6">
           {selectedChild ? (
             <>
-              <Card>
+              <Card className="rounded-lg">
                 <CardContent className="flex flex-col gap-4 py-6 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-4">
                     <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-4xl">
@@ -708,7 +813,7 @@ export default function DietPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="min-w-55 rounded-3xl bg-slate-50 p-4 text-right">
+                  <div className="min-w-[13.75rem] rounded-lg bg-slate-50 p-4 text-right">
                     <p className="text-xs text-slate-400">今日综合营养评分</p>
                     <p className="mt-2 text-4xl font-bold text-slate-800">{overallScore || "--"}</p>
                     <Progress
@@ -734,7 +839,7 @@ export default function DietPage() {
               </div>
 
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                <Card className="xl:col-span-2">
+                <Card className="rounded-lg xl:col-span-2">
                   <CardHeader>
                     <CardTitle>最近一周饮食趋势</CardTitle>
                     <CardDescription>可用于识别饮食单一、营养失衡与补水需关注情况。</CardDescription>
@@ -758,7 +863,7 @@ export default function DietPage() {
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="rounded-lg">
                   <CardHeader>
                     <CardTitle>系统建议</CardTitle>
                     <CardDescription>规则引擎先判定，再生成可解释建议。</CardDescription>
@@ -933,7 +1038,7 @@ function MealEditorCard({
   }
 
   return (
-    <Card className="border-slate-100 shadow-sm">
+    <Card className="rounded-lg border-slate-100 shadow-sm">
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -987,26 +1092,32 @@ function MealEditorCard({
           </div>
         ) : null}
 
-        <div className="grid gap-2 md:grid-cols-3">
-          <Input value={foodName} onChange={(event) => setFoodName(event.target.value)} placeholder="食物名称" />
-          <Select value={foodCategory} onValueChange={(value) => setFoodCategory(value as FoodCategory)}>
-            <SelectTrigger>
-              <SelectValue placeholder="类别" />
-            </SelectTrigger>
-            <SelectContent>
-              {FOOD_CATEGORY_OPTIONS.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex gap-2">
-            <Input value={foodAmount} onChange={(event) => setFoodAmount(event.target.value)} placeholder="摄入量" />
-            <Button size="icon" variant="outline" onClick={() => addFood()}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <FormField label="食物名称">
+            <Input value={foodName} onChange={(event) => setFoodName(event.target.value)} placeholder="食物名称" />
+          </FormField>
+          <FormField label="类别">
+            <Select value={foodCategory} onValueChange={(value) => setFoodCategory(value as FoodCategory)}>
+              <SelectTrigger>
+                <SelectValue placeholder="类别" />
+              </SelectTrigger>
+              <SelectContent>
+                {FOOD_CATEGORY_OPTIONS.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
+          <FormField label="摄入量">
+            <div className="flex gap-2">
+              <Input value={foodAmount} onChange={(event) => setFoodAmount(event.target.value)} placeholder="摄入量" />
+              <Button size="icon" variant="outline" onClick={() => addFood()} aria-label={`添加${meal}食物`}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </FormField>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -1014,7 +1125,7 @@ function MealEditorCard({
             <button
               key={`${meal}-${food.name}`}
               onClick={() => addFood(food)}
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-50"
+              className="min-h-9 rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-50"
             >
               + {food.name}
             </button>
@@ -1027,10 +1138,15 @@ function MealEditorCard({
             {visionModel ? <Badge variant="secondary">{visionModel}</Badge> : null}
           </div>
 
-          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-emerald-300 bg-white px-3 py-2 text-xs text-emerald-700 transition hover:bg-emerald-50">
-            <Camera className="h-4 w-4" />
+          <label
+            className={cn(
+              "flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-emerald-300 bg-white px-3 py-2 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50",
+              visionLoading && "cursor-wait opacity-70"
+            )}
+          >
+            {visionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
             {visionLoading ? "识别中..." : "拍照 / 上传餐盘图片"}
-            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleVisionUpload} />
+            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleVisionUpload} disabled={visionLoading} />
           </label>
 
           {photoPreview ? (
@@ -1047,15 +1163,15 @@ function MealEditorCard({
           {visionFoods.length > 0 ? (
             <div className="space-y-2 rounded-xl bg-white p-2">
               {visionFoods.map((food, index) => (
-                <div key={food.id} className="grid grid-cols-12 gap-2">
+                <div key={food.id} className="grid grid-cols-1 gap-2 sm:grid-cols-12">
                   <Input
                     value={food.name}
                     onChange={(event) => updateVisionFood(index, "name", event.target.value)}
-                    className="col-span-4"
+                    className="sm:col-span-4"
                     placeholder="食物名"
                   />
                   <Select value={food.category} onValueChange={(value) => updateVisionFood(index, "category", value)}>
-                    <SelectTrigger className="col-span-3">
+                    <SelectTrigger className="sm:col-span-3">
                       <SelectValue placeholder="分类" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1069,13 +1185,13 @@ function MealEditorCard({
                   <Input
                     value={food.amount}
                     onChange={(event) => updateVisionFood(index, "amount", event.target.value)}
-                    className="col-span-4"
+                    className="sm:col-span-4"
                     placeholder="分量"
                   />
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="col-span-1"
+                    className="sm:col-span-1"
                     onClick={() => setVisionFoods((prev) => prev.filter((_, currentIndex) => currentIndex !== index))}
                   >
                     <X className="h-4 w-4" />
@@ -1097,62 +1213,70 @@ function MealEditorCard({
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
-          <Select
-            value={intakeLevel}
-            onValueChange={(value) => {
-              const next = value as IntakeLevel;
-              setIntakeLevel(next);
-              onSave({ foods, intakeLevel: next, preference, allergyReaction, waterMl: Number(waterMl) || 0 });
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="摄入量级别" />
-            </SelectTrigger>
-            <SelectContent>
-              {INTAKE_OPTIONS.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={preference}
-            onValueChange={(value) => {
-              const next = value as PreferenceStatus;
-              setPreference(next);
-              onSave({ foods, intakeLevel, preference: next, allergyReaction, waterMl: Number(waterMl) || 0 });
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="偏好 / 拒食" />
-            </SelectTrigger>
-            <SelectContent>
-              {PREFERENCE_OPTIONS.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Input
-            value={waterMl}
-            onChange={(event) => {
-              const next = event.target.value;
-              setWaterMl(next);
-              onSave({ foods, intakeLevel, preference, allergyReaction, waterMl: Number(next) || 0 });
-            }}
-            placeholder="补水内部记录（ml）"
-          />
-          <Input
-            value={allergyReaction}
-            onChange={(event) => {
-              const next = event.target.value;
-              setAllergyReaction(next);
-              onSave({ foods, intakeLevel, preference, allergyReaction: next, waterMl: Number(waterMl) || 0 });
-            }}
-            placeholder="过敏反应 / 特殊说明"
-          />
+          <FormField label="摄入量级别">
+            <Select
+              value={intakeLevel}
+              onValueChange={(value) => {
+                const next = value as IntakeLevel;
+                setIntakeLevel(next);
+                onSave({ foods, intakeLevel: next, preference, allergyReaction, waterMl: Number(waterMl) || 0 });
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="摄入量级别" />
+              </SelectTrigger>
+              <SelectContent>
+                {INTAKE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
+          <FormField label="偏好 / 拒食">
+            <Select
+              value={preference}
+              onValueChange={(value) => {
+                const next = value as PreferenceStatus;
+                setPreference(next);
+                onSave({ foods, intakeLevel, preference: next, allergyReaction, waterMl: Number(waterMl) || 0 });
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="偏好 / 拒食" />
+              </SelectTrigger>
+              <SelectContent>
+                {PREFERENCE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
+          <FormField label="补水内部记录（ml）">
+            <Input
+              value={waterMl}
+              onChange={(event) => {
+                const next = event.target.value;
+                setWaterMl(next);
+                onSave({ foods, intakeLevel, preference, allergyReaction, waterMl: Number(next) || 0 });
+              }}
+              placeholder="补水内部记录（ml）"
+            />
+          </FormField>
+          <FormField label="过敏反应 / 特殊说明">
+            <Input
+              value={allergyReaction}
+              onChange={(event) => {
+                const next = event.target.value;
+                setAllergyReaction(next);
+                onSave({ foods, intakeLevel, preference, allergyReaction: next, waterMl: Number(waterMl) || 0 });
+              }}
+              placeholder="过敏反应 / 特殊说明"
+            />
+          </FormField>
         </div>
 
         {allergyReaction ? (

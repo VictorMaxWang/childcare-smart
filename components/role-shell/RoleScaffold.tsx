@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
 
 export function RolePageShell({
@@ -22,18 +23,18 @@ export function RolePageShell({
   children: ReactNode;
 }) {
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 page-enter">
-      <div className="rounded-[28px] border border-white/60 bg-white/75 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur-sm sm:p-7">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
+    <div className="app-page page-enter">
+      <div className="rounded-xl border border-(--border) bg-linear-to-r from-white via-indigo-50/60 to-sky-50 p-5 shadow-[var(--shadow-card)] backdrop-blur-sm sm:p-6">
+        <PageHeader
+          eyebrow={
             <Badge variant="info" className="px-3 py-1 text-xs">
               {badge}
             </Badge>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">{title}</h1>
-            <p className="mt-3 text-sm leading-7 text-slate-500 sm:text-base">{description}</p>
-          </div>
-          {actions ? <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">{actions}</div> : null}
-        </div>
+          }
+          title={title}
+          description={description}
+          actions={actions}
+        />
       </div>
       <div className="mt-6">{children}</div>
     </div>
@@ -49,11 +50,15 @@ export function RoleSplitLayout({
   aside: ReactNode;
   stacked?: boolean;
 }) {
+  const hasAside = Boolean(aside);
+
   return (
     <div
       className={cn(
         "grid gap-6",
-        stacked ? "grid-cols-1" : "lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]"
+        stacked || !hasAside
+          ? "grid-cols-1"
+          : "lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]"
       )}
     >
       {main}
@@ -68,12 +73,18 @@ export function MetricGrid({
   items: Array<{ label: string; value: string; tone?: "indigo" | "emerald" | "amber" | "sky" }>;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {items.map((item) => (
-        <Card key={item.label} className={cn("overflow-hidden border-l-4 bg-white", toneClassMap[item.tone ?? "indigo"])}>
+        <Card
+          key={item.label}
+          className={cn(
+            "min-h-31 overflow-hidden rounded-lg border-(--border) border-l-4 bg-white shadow-[var(--shadow-card)]",
+            toneClassMap[item.tone ?? "indigo"]
+          )}
+        >
           <CardContent className="py-4">
-            <p className="text-xs text-slate-500">{item.label}</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">{item.value}</p>
+            <p className="text-sm font-medium text-(--text-tertiary)">{item.label}</p>
+            <p className="mt-2 text-3xl font-semibold leading-tight text-(--text-primary)">{item.value}</p>
           </CardContent>
         </Card>
       ))}
@@ -95,10 +106,10 @@ export function SectionCard({
   className?: string;
 }) {
   return (
-    <Card className={cn("border-slate-100 shadow-sm", className)}>
+    <Card className={cn("rounded-lg border-(--border) shadow-[var(--shadow-card)]", className)}>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <CardTitle className="text-lg text-slate-900">{title}</CardTitle>
+          <CardTitle className="text-lg text-(--text-primary)">{title}</CardTitle>
           {description ? <CardDescription className="mt-2">{description}</CardDescription> : null}
         </div>
         {actions}

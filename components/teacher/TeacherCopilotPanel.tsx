@@ -79,7 +79,7 @@ export default function TeacherCopilotPanel({
           return (
             <section
               key={sectionId}
-              className="rounded-3xl border border-amber-100 bg-amber-50/70 p-4"
+              className="rounded-lg border border-amber-100 bg-amber-50/70 p-4"
             >
               <button
                 type="button"
@@ -109,7 +109,7 @@ export default function TeacherCopilotPanel({
                   {payload.recordCompletionHints.map((hint) => (
                     <div
                       key={hint.id ?? hint.title}
-                      className="rounded-2xl border border-white/80 bg-white/80 p-4"
+                      className="rounded-lg border border-white/80 bg-white/80 p-4"
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-semibold text-slate-900">{hint.title}</p>
@@ -139,7 +139,7 @@ export default function TeacherCopilotPanel({
           return (
             <section
               key={sectionId}
-              className="rounded-3xl border border-sky-100 bg-sky-50/70 p-4"
+              className="rounded-lg border border-sky-100 bg-sky-50/70 p-4"
             >
               <button
                 type="button"
@@ -177,7 +177,7 @@ export default function TeacherCopilotPanel({
                   {payload.microTrainingSOP.steps.map((step, index) => (
                     <li
                       key={`${step.title}-${index}`}
-                      className="rounded-2xl border border-white/80 bg-white/80 p-4"
+                      className="rounded-lg border border-white/80 bg-white/80 p-4"
                     >
                       <p className="text-sm font-semibold text-slate-900">
                         {index + 1}. {step.title}
@@ -197,7 +197,7 @@ export default function TeacherCopilotPanel({
           return (
             <section
               key={sectionId}
-              className="rounded-3xl border border-indigo-100 bg-indigo-50/70 p-4"
+              className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-4"
             >
               <button
                 type="button"
@@ -226,7 +226,7 @@ export default function TeacherCopilotPanel({
               {isOpen ? (
                 <div className="mt-4 space-y-3">
                   {payload.parentCommunicationScript.opening ? (
-                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
+                    <div className="rounded-lg border border-white/80 bg-white/80 p-4">
                       <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                         开场
                       </p>
@@ -236,7 +236,7 @@ export default function TeacherCopilotPanel({
                     </div>
                   ) : null}
                   {payload.parentCommunicationScript.situation ? (
-                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
+                    <div className="rounded-lg border border-white/80 bg-white/80 p-4">
                       <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                         现状
                       </p>
@@ -246,7 +246,7 @@ export default function TeacherCopilotPanel({
                     </div>
                   ) : null}
                   {payload.parentCommunicationScript.ask ? (
-                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
+                    <div className="rounded-lg border border-white/80 bg-white/80 p-4">
                       <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                         请家长配合
                       </p>
@@ -256,7 +256,7 @@ export default function TeacherCopilotPanel({
                     </div>
                   ) : null}
                   {payload.parentCommunicationScript.closing ? (
-                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
+                    <div className="rounded-lg border border-white/80 bg-white/80 p-4">
                       <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                         收口
                       </p>
@@ -266,7 +266,7 @@ export default function TeacherCopilotPanel({
                     </div>
                   ) : null}
                   {payload.parentCommunicationScript.bullets?.length ? (
-                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
+                    <div className="rounded-lg border border-white/80 bg-white/80 p-4">
                       <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                         话术要点
                       </p>

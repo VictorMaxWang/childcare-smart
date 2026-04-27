@@ -1,7 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BookHeart, CalendarClock, CheckCircle2, ChevronDown, Clock3, PlusCircle, Workflow } from "lucide-react";
+import {
+  BookHeart,
+  CalendarClock,
+  CheckCircle2,
+  ChevronDown,
+  Clock3,
+  HeartPulse,
+  MessageSquareText,
+  PlusCircle,
+  Utensils,
+  Workflow,
+} from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -26,12 +37,16 @@ import {
 } from "../../lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ChartCard } from "@/components/ui/chart-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { FormField } from "@/components/ui/form-field";
 import EmptyState from "@/components/EmptyState";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { MetricCard } from "@/components/ui/metric-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";  
+import { TeacherActionTile, TeacherContextStrip, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import { buildRecentLocalDateRange, normalizeLocalDate } from "@/lib/date";
 import { OBSERVATION_INDICATOR_MAP, type ObservationIndicatorOption } from "@/lib/mock/observation";
 import { toast } from "sonner";
@@ -50,6 +65,7 @@ export default function GrowthPage() {
   const [reviewDate, setReviewDate] = useState("");
   const [showFormOnMobile, setShowFormOnMobile] = useState(false);
 
+  const isTeacher = currentUser.role === "教师";
   const visibleIds = visibleChildren.map((child) => child.id);
   const filteredRecords = useMemo(() => {
     return growthRecords.filter((record) => {
@@ -173,8 +189,8 @@ export default function GrowthPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
-      <div className="mb-8">
+    <div className="app-page page-enter">
+      <div className="mb-6 rounded-xl border border-rose-100 bg-linear-to-r from-white via-rose-50/50 to-indigo-50/60 p-5 shadow-[var(--shadow-card)] sm:p-6">
         <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
           <BookHeart className="h-8 w-8 text-rose-500" />
           成长与行为记录
@@ -183,7 +199,6 @@ export default function GrowthPage() {
           支持记录握笔、独立进食、语言表达、社交互动、情绪表现、精细动作、大动作、睡眠情况、如厕情况。
           每条记录都包含时间、记录人角色、观察标签、描述和是否需要关注。
         </p>
-        <div className="section-divider mt-5" />
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_1fr]">
@@ -201,16 +216,15 @@ export default function GrowthPage() {
             <ChevronDown className={`h-4 w-4 transition-transform ${showFormOnMobile ? "rotate-180" : ""}`} />
           </Button>
 
-        <Card className={`h-fit overflow-hidden border-t-2 border-t-indigo-500 ${showFormOnMobile ? "block" : "hidden xl:block"}`}>
+        <Card className={`h-fit overflow-hidden rounded-lg border-t-2 border-t-indigo-500 ${showFormOnMobile ? "block" : "hidden xl:block"}`}>
           <CardHeader>
             <CardTitle className="text-lg">新增观察记录</CardTitle>
             <CardDescription>家长和教师均可补充观察，机构管理员可做复盘。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>记录对象</Label>
+            <FormField label="记录对象" htmlFor="growth-child" required>
               <Select value={selectedChildId} onValueChange={setSelectedChildId}>
-                <SelectTrigger>
+                <SelectTrigger id="growth-child">
                   <SelectValue placeholder="选择幼儿" />
                 </SelectTrigger>
                 <SelectContent>
@@ -221,11 +235,10 @@ export default function GrowthPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>观察维度</Label>
+            </FormField>
+            <FormField label="观察维度" htmlFor="growth-category" required>
               <Select value={category} onValueChange={(value) => setCategory(value as BehaviorCategory)}>
-                <SelectTrigger>
+                <SelectTrigger id="growth-category">
                   <SelectValue placeholder="选择维度" />
                 </SelectTrigger>
                 <SelectContent>
@@ -236,7 +249,7 @@ export default function GrowthPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </FormField>
             
             {availableIndicators.length > 0 && (
               <fieldset className="space-y-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
@@ -274,22 +287,28 @@ export default function GrowthPage() {
               </fieldset>
             )}
 
-            <div className="space-y-2">
-              <Label>观察标签</Label>
-              <Input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="如：午睡前, 自主进食" />
-            </div>
-            <div className="space-y-2">
-              <Label>描述</Label>
-              <Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="请记录具体表现、触发场景和处理方式。" />
-            </div>
-            <div className="space-y-2">
-              <Label>跟进行动</Label>
-              <Input value={followUpAction} onChange={(event) => setFollowUpAction(event.target.value)} placeholder="如：午睡前增加绘本安抚、明早复查入园情绪" />
-            </div>
-            <div className="space-y-2">
-              <Label>复查日期</Label>
-              <Input type="date" value={reviewDate} onChange={(event) => setReviewDate(event.target.value)} />
-            </div>
+            <FormField label="观察标签" htmlFor="growth-tags" description="用逗号分隔多个标签。">
+              <Input id="growth-tags" value={tags} onChange={(event) => setTags(event.target.value)} placeholder="如：午睡前, 自主进食" />
+            </FormField>
+            <FormField label="描述" htmlFor="growth-description" required>
+              <Textarea
+                id="growth-description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="请记录具体表现、触发场景和处理方式。"
+              />
+            </FormField>
+            <FormField label="跟进行动" htmlFor="growth-follow-up">
+              <Input
+                id="growth-follow-up"
+                value={followUpAction}
+                onChange={(event) => setFollowUpAction(event.target.value)}
+                placeholder="如：午睡前增加绘本安抚、明早复查入园情绪"
+              />
+            </FormField>
+            <FormField label="复查日期" htmlFor="growth-review-date">
+              <Input id="growth-review-date" type="date" value={reviewDate} onChange={(event) => setReviewDate(event.target.value)} />
+            </FormField>
             <div className="flex items-center justify-between rounded-2xl bg-slate-50 p-3">
               <div>
                 <p className="text-sm font-medium text-slate-700">是否需要关注</p>
@@ -309,18 +328,73 @@ export default function GrowthPage() {
 
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <InfoStat title="待复查" value={`${pendingRecords.length}条`} icon={<CalendarClock className="h-4 w-4 text-amber-500" />} />
-            <InfoStat title="已完成复查" value={`${completedRecords.length}条`} icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" />} />
-            <InfoStat title="当前身份" value={`${currentUser.role}`} />
+            <MetricCard label="待复查" value={`${pendingRecords.length}条`} icon={<CalendarClock className="h-5 w-5" />} tone="warning" />
+            <MetricCard label="已完成复查" value={`${completedRecords.length}条`} icon={<CheckCircle2 className="h-5 w-5" />} tone="success" />
+            <MetricCard label="当前身份" value={currentUser.role} tone="primary" />
           </div>
 
+          {isTeacher ? (
+            <div className="space-y-4">
+              <TeacherContextStrip
+                items={[
+                  { label: "可见幼儿", value: `${visibleChildren.length}人`, tone: "indigo" },
+                  { label: "今日待复查", value: `${pendingRecords.length}条`, tone: pendingRecords.length > 0 ? "amber" : "emerald" },
+                  { label: "当前观察维度", value: filterValue === "全部" ? "全部维度" : filterValue, tone: "sky" },
+                  { label: "新增入口", value: showFormOnMobile ? "已展开" : "左侧固定", tone: "rose" },
+                ]}
+              />
+              <div className="grid gap-3 md:grid-cols-3">
+                <TeacherActionTile
+                  href="/health"
+                  icon={<HeartPulse className="h-5 w-5" />}
+                  title="回看晨检"
+                  description="先确认今天的异常和复查状态。"
+                  tone="rose"
+                />
+                <TeacherActionTile
+                  href="/diet"
+                  icon={<Utensils className="h-5 w-5" />}
+                  title="补充饮食"
+                  description="把进餐、饮水和过敏反馈补齐。"
+                  tone="emerald"
+                />
+                <TeacherActionTile
+                  href="/teacher/agent?action=communication"
+                  icon={<MessageSquareText className="h-5 w-5" />}
+                  title="生成沟通建议"
+                  description="把观察记录整理成家园沟通话术。"
+                  tone="indigo"
+                  highlight
+                />
+              </div>
+              <TeacherMiniPanel
+                title="教师扫读重点"
+                badge={pendingRecords.length > 0 ? `${pendingRecords.length}条待复查` : "暂无待复查"}
+                tone={pendingRecords.length > 0 ? "amber" : "emerald"}
+              >
+                <div className="space-y-2 text-sm leading-6 text-slate-600">
+                  {pendingRecords.slice(0, 3).map((record) => {
+                    const child = visibleChildren.find((item) => item.id === record.childId);
+                    return (
+                      <div key={`teacher-growth-focus-${record.id}`} className="rounded-lg bg-white/80 px-3 py-2">
+                        <span className="font-semibold text-slate-900">{child?.name ?? "未识别幼儿"}</span>
+                        <span className="text-slate-400"> · </span>
+                        <span>{record.category}</span>
+                        <span className="text-slate-400"> · </span>
+                        <span>{record.followUpAction ?? record.description}</span>
+                      </div>
+                    );
+                  })}
+                  {pendingRecords.length === 0 ? (
+                    <p>当前筛选下暂无待复查记录，可以继续新增观察或生成班级周总结。</p>
+                  ) : null}
+                </div>
+              </TeacherMiniPanel>
+            </div>
+          ) : null}
+
           <div className="grid gap-6 xl:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">观察维度分布</CardTitle>
-                <CardDescription>把近期观察重点直接转成图表，更容易讲清楚班级关注面。</CardDescription>
-              </CardHeader>
-              <CardContent>
+            <ChartCard title="观察维度分布" description="把近期观察重点直接转成图表，更容易讲清楚班级关注面。" minHeight="22rem">
                 <div className="rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
@@ -395,15 +469,9 @@ export default function GrowthPage() {
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
+            </ChartCard>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">复查状态对比</CardTitle>
-                <CardDescription>用柱状图快速说明当前待追踪工作量和已闭环完成度。</CardDescription>
-              </CardHeader>
-              <CardContent>
+            <ChartCard title="复查状态对比" description="用柱状图快速说明当前待追踪工作量和已闭环完成度。" minHeight="18rem">
                 <div className="h-65 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={reviewChartData} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
@@ -429,19 +497,14 @@ export default function GrowthPage() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-              </CardContent>
-            </Card>
+            </ChartCard>
           </div>
 
-          <Card>
-            <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <CardTitle className="text-lg">观察台账</CardTitle>
-                <CardDescription>可按维度与复查状态过滤，便于教师与家长共同追踪变化。</CardDescription>
-              </div>
-              <div className="grid w-full gap-3 md:w-auto md:grid-cols-2">
+          <FilterBar
+            filters={
+              <>
                 <Select value={filterValue} onValueChange={setFilterValue}>
-                  <SelectTrigger>
+                  <SelectTrigger className="min-w-44">
                     <SelectValue placeholder="筛选维度" />
                   </SelectTrigger>
                   <SelectContent>
@@ -454,7 +517,7 @@ export default function GrowthPage() {
                   </SelectContent>
                 </Select>
                 <Select value={reviewFilter} onValueChange={setReviewFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger className="min-w-44">
                     <SelectValue placeholder="筛选复查状态" />
                   </SelectTrigger>
                   <SelectContent>
@@ -463,6 +526,15 @@ export default function GrowthPage() {
                     <SelectItem value="已完成">已完成</SelectItem>
                   </SelectContent>
                 </Select>
+              </>
+            }
+          />
+
+          <Card className="rounded-lg">
+            <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <CardTitle className="text-lg">观察台账</CardTitle>
+                <CardDescription>可按维度与复查状态过滤，便于教师与家长共同追踪变化。</CardDescription>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -573,20 +645,6 @@ export default function GrowthPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-function InfoStat({ title, value, icon }: { title: string; value: string; icon?: React.ReactNode }) {
-  return (
-    <Card>
-      <CardContent className="py-5">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-slate-500">{title}</p>
-          {icon}
-        </div>
-        <p className="mt-2 text-lg font-semibold text-slate-800">{value}</p>
-      </CardContent>
-    </Card>
   );
 }
 

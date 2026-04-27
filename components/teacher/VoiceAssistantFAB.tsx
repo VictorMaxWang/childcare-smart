@@ -266,7 +266,7 @@ export default function VoiceAssistantFAB({
       </div>
 
       <Dialog open={Boolean(result)} onOpenChange={(open) => (!open ? onCloseResult() : undefined)}>
-        <DialogContent className="left-0 right-0 top-auto w-full max-w-none translate-x-0 translate-y-0 rounded-t-[28px] rounded-b-none border-x-0 border-b-0 px-0 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-0 sm:right-auto sm:left-[50%] sm:top-[50%] sm:max-w-lg sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-[28px] sm:border">
+        <DialogContent className="left-0 right-0 top-auto max-h-[calc(100dvh-0.5rem)] w-full max-w-none translate-x-0 translate-y-0 overflow-y-auto overscroll-contain rounded-t-[28px] rounded-b-none border-x-0 border-b-0 px-0 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-0 sm:right-auto sm:left-[50%] sm:top-[50%] sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-[28px] sm:border">
           {result ? (
             <div className="overflow-hidden">
               <div className="voice-assistant-sheet-header px-6 py-5">

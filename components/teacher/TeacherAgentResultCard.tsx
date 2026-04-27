@@ -54,7 +54,7 @@ export default function TeacherAgentResultCard({ result }: { result: TeacherAgen
         </Badge>
       </div>
 
-      <div className="rounded-3xl bg-white p-4 ring-1 ring-slate-100">
+      <div className="rounded-lg bg-white p-4 ring-1 ring-slate-100">
         <p className="text-sm font-semibold text-slate-900">标题</p>
         <h3 className="text-lg font-semibold text-slate-900">{result.title}</h3>
         <p className="mt-4 text-sm font-semibold text-slate-900">摘要</p>
@@ -62,7 +62,7 @@ export default function TeacherAgentResultCard({ result }: { result: TeacherAgen
       </div>
 
       {result.consultation ? (
-        <div className="rounded-3xl border border-amber-100 bg-amber-50/70 p-4">
+        <div className="rounded-lg border border-amber-100 bg-amber-50/70 p-4">
           <p className="text-sm font-semibold text-slate-900">高风险会诊结论</p>
           <p className="mt-2 text-sm leading-6 text-slate-700">{result.consultation.summary}</p>
           <p className="mt-2 text-sm leading-6 text-slate-600">{result.consultation.coordinatorSummary.finalConclusion}</p>
@@ -73,7 +73,7 @@ export default function TeacherAgentResultCard({ result }: { result: TeacherAgen
               </Badge>
             ))}
           </div>
-          <div className="mt-4 rounded-2xl border border-white/70 bg-white/80 p-4">
+          <div className="mt-4 rounded-lg border border-white/70 bg-white/80 p-4">
             <p className="text-sm font-semibold text-slate-900">触发原因</p>
             <ul className="mt-2 space-y-1 text-sm text-slate-600">
               {result.consultation.triggerReasons.map((item) => (
@@ -83,7 +83,7 @@ export default function TeacherAgentResultCard({ result }: { result: TeacherAgen
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {result.consultation.agentFindings.map((item) => (
-              <div key={item.agentId} className="rounded-2xl border border-white/70 bg-white/80 p-4">
+              <div key={item.agentId} className="rounded-lg border border-white/70 bg-white/80 p-4">
                 <p className="text-sm font-semibold text-slate-900">{item.title}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-600">{item.riskExplanation}</p>
                 <ul className="mt-3 space-y-1 text-sm text-slate-600">
@@ -94,7 +94,7 @@ export default function TeacherAgentResultCard({ result }: { result: TeacherAgen
               </div>
             ))}
           </div>
-          <div className="mt-4 rounded-2xl border border-white/70 bg-white/80 p-4">
+          <div className="mt-4 rounded-lg border border-white/70 bg-white/80 p-4">
             <p className="text-sm font-semibold text-slate-900">园长决策卡</p>
             <p className="mt-2 text-sm leading-6 text-slate-600">{result.consultation.directorDecisionCard.reason}</p>
             <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-600">
@@ -114,7 +114,7 @@ export default function TeacherAgentResultCard({ result }: { result: TeacherAgen
       ) : null}
 
       {result.highlights.length > 0 ? (
-        <div className="rounded-3xl bg-white p-4 ring-1 ring-slate-100">
+        <div className="rounded-lg bg-white p-4 ring-1 ring-slate-100">
           <p className="text-sm font-semibold text-slate-900">关键点</p>
           <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
             {result.highlights.map((item) => (
@@ -133,7 +133,7 @@ export default function TeacherAgentResultCard({ result }: { result: TeacherAgen
       {result.keyChildren?.length || result.riskTypes?.length ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {result.keyChildren?.length ? (
-            <div className="rounded-3xl bg-white p-4 ring-1 ring-slate-100">
+            <div className="rounded-lg bg-white p-4 ring-1 ring-slate-100">
               <p className="text-sm font-semibold text-slate-900">重点儿童</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {result.keyChildren.map((item) => (
@@ -146,7 +146,7 @@ export default function TeacherAgentResultCard({ result }: { result: TeacherAgen
           ) : null}
 
           {result.riskTypes?.length ? (
-            <div className="rounded-3xl bg-white p-4 ring-1 ring-slate-100">
+            <div className="rounded-lg bg-white p-4 ring-1 ring-slate-100">
               <p className="text-sm font-semibold text-slate-900">主要风险类型</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {result.riskTypes.map((item) => (
@@ -161,11 +161,11 @@ export default function TeacherAgentResultCard({ result }: { result: TeacherAgen
       ) : null}
 
       {result.actionItems.length > 0 ? (
-        <div className="rounded-3xl bg-white p-4 ring-1 ring-slate-100">
+        <div className="rounded-lg bg-white p-4 ring-1 ring-slate-100">
           <p className="text-sm font-semibold text-slate-900">行动列表</p>
           <div className="mt-3 space-y-3">
             {result.actionItems.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+              <div key={item.id} className="rounded-lg border border-slate-100 bg-slate-50/80 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Target className="h-4 w-4 text-indigo-500" />
@@ -182,7 +182,7 @@ export default function TeacherAgentResultCard({ result }: { result: TeacherAgen
       ) : null}
 
       {result.parentMessageDraft ? (
-        <div className="rounded-3xl border border-indigo-100 bg-indigo-50/70 p-4">
+        <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-4">
           <div className="flex items-center gap-2">
             <MessageSquareText className="h-4 w-4 text-indigo-600" />
             <p className="text-sm font-semibold text-slate-900">家长沟通建议稿</p>
@@ -196,7 +196,7 @@ export default function TeacherAgentResultCard({ result }: { result: TeacherAgen
           card={result.interventionCard}
           title="干预卡预览"
           footer={
-            <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
+            <div className="rounded-lg border border-white/70 bg-white/80 p-4">
               <p className="text-sm font-semibold text-slate-900">教师后续跟进草稿</p>
               <p className="mt-2 text-sm leading-6 text-slate-600">{result.interventionCard.teacherFollowupDraft}</p>
             </div>
@@ -205,7 +205,7 @@ export default function TeacherAgentResultCard({ result }: { result: TeacherAgen
       ) : null}
 
       {result.tomorrowObservationPoint ? (
-        <div className="rounded-3xl border border-amber-100 bg-amber-50/70 p-4">
+        <div className="rounded-lg border border-amber-100 bg-amber-50/70 p-4">
           <p className="text-sm font-semibold text-slate-900">下一步建议</p>
           <p className="mt-2 text-sm leading-7 text-slate-700">{result.tomorrowObservationPoint}</p>
         </div>

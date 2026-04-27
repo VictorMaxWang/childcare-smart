@@ -97,7 +97,7 @@ export default function WeeklyReportPreviewCard({
         </div>
 
         {report?.continuityNotes?.[0] ? (
-          <div className="flex items-start gap-3 rounded-3xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <div className="flex items-start gap-3 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
             <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
             <p>延续提醒：{report.continuityNotes[0]}</p>
           </div>
@@ -106,13 +106,13 @@ export default function WeeklyReportPreviewCard({
         {report ? (
           <>
             {error ? (
-              <div className="flex items-start gap-3 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>{error}</p>
               </div>
             ) : null}
 
-            <div className="rounded-3xl border border-indigo-100 bg-indigo-50/60 p-5">
+            <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-5">
               <p
                 className={
                   careMode
@@ -126,7 +126,7 @@ export default function WeeklyReportPreviewCard({
 
             {careMode ? (
               careSection ? (
-                <div className="rounded-3xl border border-slate-100 bg-white p-4">
+                <div className="rounded-lg border border-slate-100 bg-white p-4">
                   <p className="text-base font-semibold text-slate-900">{careSection.title}</p>
                   <p className="mt-3 text-base leading-8 text-slate-700">{careSection.summary}</p>
                   {careSection.items.length > 0 ? (
@@ -147,7 +147,7 @@ export default function WeeklyReportPreviewCard({
                   <div
                     key={section.id}
                     className={cn(
-                      "rounded-3xl border border-slate-100 bg-white p-4",
+                    "rounded-lg border border-slate-100 bg-white p-4",
                       report.sections.length === 3 && section.id === "topHomeAction"
                         ? "md:col-span-2"
                         : ""
@@ -171,7 +171,7 @@ export default function WeeklyReportPreviewCard({
             )}
           </>
         ) : (
-          <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50/70 p-5">
+          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 p-5">
             {loading ? (
               <div className="flex items-center gap-3 text-sm text-slate-600">
                 <RefreshCw className="h-4 w-4 animate-spin text-indigo-500" />
@@ -188,7 +188,7 @@ export default function WeeklyReportPreviewCard({
           </div>
         )}
 
-        <div className="rounded-3xl border border-slate-100 bg-white p-5">
+        <div className="rounded-lg border border-slate-100 bg-white p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-2">
               <Badge variant="secondary">
@@ -220,7 +220,7 @@ export default function WeeklyReportPreviewCard({
         </div>
 
         {!careMode && showRuntimeMeta && report?.disclaimer ? (
-          <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-xs leading-6 text-slate-500">
+          <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3 text-xs leading-6 text-slate-500">
             {report.disclaimer}
           </div>
         ) : null}

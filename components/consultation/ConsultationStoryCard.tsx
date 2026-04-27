@@ -39,7 +39,7 @@ export default function ConsultationStoryCard({
   );
 
   return (
-    <div className={cn("rounded-3xl border border-white/80 bg-white/90 p-4 shadow-sm", className)}>
+    <div className={cn("rounded-lg border border-white/80 bg-white/90 p-4 shadow-sm", className)}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -58,7 +58,7 @@ export default function ConsultationStoryCard({
 
       <div className="mt-4 grid gap-3">
         {viewModel.stages.map((stage, index) => (
-          <div key={stage.key} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+          <div key={stage.key} className="rounded-lg border border-slate-100 bg-slate-50/70 p-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={stage.status === "completed" ? "success" : "outline"}>{index + 1}</Badge>
               <p className="text-sm font-semibold text-slate-900">{stage.shortLabel}</p>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Clock3, Search, Trash2, UserPlus, Users } from "lucide-react";
+import { BookOpenCheck, Clock3, HeartPulse, Search, Trash2, UserPlus, Users, Utensils } from "lucide-react";
 import {
   formatDisplayDate,
   getAgeBandFromBirthDate,
@@ -12,11 +12,13 @@ import {
   type Guardian,
   useApp,
 } from "@/lib/store";
-import AnimatedNumber from "@/components/AnimatedNumber";
 import ScrollReveal from "@/components/ScrollReveal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTableShell } from "@/components/ui/data-table-shell";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { FormField } from "@/components/ui/form-field";
 import EmptyState from "@/components/EmptyState";
 import {
   Dialog,
@@ -27,8 +29,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { MetricCard } from "@/components/ui/metric-card";
+import { StatusTag } from "@/components/ui/status-tag";
 import { Textarea } from "@/components/ui/textarea";
+import { TeacherActionTile, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import { toast } from "sonner";
 
 export default function ChildrenPage() {
@@ -61,6 +65,7 @@ export default function ChildrenPage() {
   const [error, setError] = useState("");
 
   const canManage = currentUser.role !== "家长";
+  const isTeacher = currentUser.role === "教师";
   const todayAttendance = getTodayAttendance();
 
   const attendanceMap = useMemo(() => {
@@ -151,8 +156,8 @@ export default function ChildrenPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
-      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="app-page page-enter">
+      <div className="mb-6 flex flex-col gap-4 rounded-xl border border-indigo-100 bg-linear-to-r from-white via-indigo-50/60 to-sky-50 p-5 shadow-[var(--shadow-card)] lg:flex-row lg:items-start lg:justify-between sm:p-6">
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
             <Users className="h-8 w-8 text-indigo-500" />
@@ -161,7 +166,6 @@ export default function ChildrenPage() {
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
             已升级为“出生日期 + 自动年龄段 + 每日出勤记录”模型，支持到离园统计、缺勤原因和后续周/月报表扩展。
           </p>
-          <div className="section-divider mt-5" />
         </div>
         <Button
           onClick={() => canManage && setOpen(true)}
@@ -174,19 +178,65 @@ export default function ChildrenPage() {
       </div>
 
       <ScrollReveal>
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <SummaryCard title="当前可见幼儿" value={`${visibleChildren.length}位`} />
-        <SummaryCard title="今日出勤" value={`${todayAttendance.filter((item) => item.isPresent).length}位`} />
-        <SummaryCard title="今日缺勤" value={`${todayAttendance.filter((item) => !item.isPresent).length}位`} />
-        <SummaryCard
-          title="机构 / 班级"
-          value={currentUser.className ? `${INSTITUTION_NAME} · ${currentUser.className}` : INSTITUTION_NAME}
-        />
-      </div>
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="当前可见幼儿" value={`${visibleChildren.length}位`} tone="primary" />
+          <MetricCard label="今日出勤" value={`${todayAttendance.filter((item) => item.isPresent).length}位`} tone="success" />
+          <MetricCard label="今日缺勤" value={`${todayAttendance.filter((item) => !item.isPresent).length}位`} tone="warning" />
+          <MetricCard
+            label="机构 / 班级"
+            value={currentUser.className ? `${INSTITUTION_NAME} · ${currentUser.className}` : INSTITUTION_NAME}
+            tone="info"
+          />
+        </div>
       </ScrollReveal>
 
-      <Card className="mb-6">
-        <CardContent className="grid gap-4 py-5 lg:grid-cols-[1.4fr_1fr]">
+      {isTeacher ? (
+        <div className="mb-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <TeacherActionTile
+              href="/health"
+              icon={<HeartPulse className="h-5 w-5" />}
+              title="晨检补录"
+              description="按儿童卡片快速进入今日晨检、异常和待检状态。"
+              tone="sky"
+            />
+            <TeacherActionTile
+              href="/diet"
+              icon={<Utensils className="h-5 w-5" />}
+              title="饮食记录"
+              description="从班级名单进入餐次录入、饮水和过敏拦截。"
+              tone="emerald"
+            />
+            <TeacherActionTile
+              href="/growth"
+              icon={<BookOpenCheck className="h-5 w-5" />}
+              title="成长观察"
+              description="围绕当前班级幼儿补充观察标签和复查动作。"
+              tone="indigo"
+            />
+          </div>
+          <TeacherMiniPanel title="班级名册状态" badge={currentUser.className ?? "当前班级"} tone="sky">
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div>
+                <p className="text-2xl font-semibold text-slate-950">{visibleChildren.length}</p>
+                <p className="mt-1 text-xs text-slate-500">可见幼儿</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-emerald-600">{todayAttendance.filter((item) => item.isPresent).length}</p>
+                <p className="mt-1 text-xs text-slate-500">今日出勤</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-amber-600">{todayAttendance.filter((item) => !item.isPresent).length}</p>
+                <p className="mt-1 text-xs text-slate-500">今日缺勤</p>
+              </div>
+            </div>
+          </TeacherMiniPanel>
+        </div>
+      ) : null}
+
+      <FilterBar
+        className="mb-6"
+        search={
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
@@ -196,6 +246,8 @@ export default function ChildrenPage() {
               placeholder="搜索姓名、监护人、班级、年龄段、出勤状态…"
             />
           </div>
+        }
+        filters={
           <div className="flex flex-wrap gap-2">
             {Object.entries(ageBandStats).map(([label, count]) => (
               <Badge key={label} variant="secondary" className="px-3 py-1 text-xs">
@@ -203,8 +255,8 @@ export default function ChildrenPage() {
               </Badge>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        }
+      />
 
       {filteredChildren.length === 0 ? (
         <EmptyState
@@ -215,24 +267,118 @@ export default function ChildrenPage() {
           onAction={canManage ? () => setOpen(true) : undefined}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          {filteredChildren.map((child) => {
-            const attendance = attendanceMap.get(child.id);
-            return (
-              <ChildArchiveCard
-                key={child.id}
-                child={child}
-                canManage={canManage}
-                attendance={attendance}
-                onDelete={() => setDeleteId(child.id)}
-                onToggleAttendance={() => {
-                  toggleTodayAttendance(child.id);
-                  toast.success(`已切换 ${child.name} 的今日出勤状态`);
-                }}
-              />
-            );
-          })}
-        </div>
+        <>
+          <DataTableShell
+            className="hidden lg:block"
+            title="幼儿档案台账"
+            description="桌面端按管理台账展示，保留出勤、监护人、过敏、身高体重和操作入口。"
+            footer={<span>共 {filteredChildren.length} 条档案</span>}
+          >
+            <table className="w-full min-w-[960px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                <tr>
+                  <th className="px-5 py-3">幼儿</th>
+                  <th className="px-5 py-3">班级 / 年龄</th>
+                  <th className="px-5 py-3">监护人</th>
+                  <th className="px-5 py-3">身高体重</th>
+                  <th className="px-5 py-3">过敏与关注</th>
+                  <th className="px-5 py-3">今日状态</th>
+                  <th className="px-5 py-3 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {filteredChildren.map((child) => {
+                  const attendance = attendanceMap.get(child.id);
+                  const isPresent = attendance?.isPresent ?? false;
+                  return (
+                    <tr key={child.id} className="transition hover:bg-slate-50/80">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-xl">
+                            {child.avatar}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-900">{child.name}</p>
+                            <p className="text-xs text-slate-500">{child.nickname || "无昵称"} · {child.gender}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">
+                        <p>{child.className}</p>
+                        <p className="mt-1 text-xs text-slate-500">{getAgeText(child.birthDate)}</p>
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">
+                        <p>{child.guardians.map((guardian) => `${guardian.name}（${guardian.relation}）`).join("、")}</p>
+                        <p className="mt-1 text-xs text-slate-500">{child.guardians.map((guardian) => guardian.phone).join(" / ")}</p>
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">
+                        {child.heightCm > 0 ? `${child.heightCm} cm` : "--"} / {child.weightKg > 0 ? `${child.weightKg} kg` : "--"}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="max-w-64 space-y-1 text-xs text-slate-600">
+                          <p className="line-clamp-2">过敏：{child.allergies.length > 0 ? child.allergies.join("、") : "暂无"}</p>
+                          <p className="line-clamp-2">关注：{child.specialNotes || "暂无"}</p>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <StatusTag variant={isPresent ? "success" : "neutral"} showDot>
+                          {isPresent ? "今日出勤" : "今日缺勤"}
+                        </StatusTag>
+                        <p className="mt-2 text-xs text-slate-500">
+                          {isPresent
+                            ? `入园 ${attendance?.checkInAt ?? "--"} · 离园 ${attendance?.checkOutAt ?? "--"}`
+                            : `原因：${attendance?.absenceReason || "未登记"}`}
+                        </p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex justify-end gap-2">
+                          {canManage ? (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  toggleTodayAttendance(child.id);
+                                  toast.success(`已切换 ${child.name} 的今日出勤状态`);
+                                }}
+                              >
+                                切换出勤
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => setDeleteId(child.id)}>
+                                删除
+                              </Button>
+                            </>
+                          ) : (
+                            <StatusTag variant="neutral">仅查看</StatusTag>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </DataTableShell>
+
+          <div className="grid grid-cols-1 gap-5 lg:hidden">
+            {filteredChildren.map((child) => {
+              const attendance = attendanceMap.get(child.id);
+              return (
+                <ChildArchiveCard
+                  key={child.id}
+                  child={child}
+                  canManage={canManage}
+                  attendance={attendance}
+                  onDelete={() => setDeleteId(child.id)}
+                  onToggleAttendance={() => {
+                    toggleTodayAttendance(child.id);
+                    toast.success(`已切换 ${child.name} 的今日出勤状态`);
+                  }}
+                />
+              );
+            })}
+          </div>
+        </>
       )}
 
       <Dialog open={open} onOpenChange={(value) => (!value ? (setOpen(false), resetForm()) : setOpen(true))}>
@@ -242,54 +388,59 @@ export default function ChildrenPage() {
             <DialogDescription>使用出生日期自动计算年龄段，无需手填年龄数字。</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>姓名</Label>
-              <Input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>昵称</Label>
+            <FormField label="姓名" required error={error && !form.name.trim() ? "请填写幼儿姓名。" : undefined}>
+              <Input
+                value={form.name}
+                onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                aria-invalid={Boolean(error && !form.name.trim())}
+              />
+            </FormField>
+            <FormField label="昵称" description="可选，用于教师和家长日常识别。">
               <Input value={form.nickname} onChange={(event) => setForm((prev) => ({ ...prev, nickname: event.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>出生日期</Label>
+            </FormField>
+            <FormField
+              label="出生日期"
+              required
+              description={`自动年龄段：${getAgeBandFromBirthDate(form.birthDate)}`}
+              error={error && !form.birthDate ? "请填写出生日期。" : undefined}
+            >
               <Input
                 type="date"
                 value={form.birthDate}
                 onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))}
+                aria-invalid={Boolean(error && !form.birthDate)}
               />
-              <p className="text-xs text-slate-400">自动年龄段：{getAgeBandFromBirthDate(form.birthDate)}</p>
-            </div>
-            <div className="space-y-2">
-              <Label>性别</Label>
+            </FormField>
+            <FormField label="性别">
               <div className="flex gap-2">
                 {(["男", "女"] as Gender[]).map((gender) => (
                   <Button
                     key={gender}
                     type="button"
                     variant={form.gender === gender ? "default" : "outline"}
-                    className="flex-1"
+                    className="min-h-11 flex-1 sm:min-h-10"
                     onClick={() => setForm((prev) => ({ ...prev, gender }))}
                   >
                     {gender}
                   </Button>
                 ))}
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>身高（cm）</Label>
+            </FormField>
+            <FormField label="身高（cm）">
               <Input value={form.heightCm} onChange={(event) => setForm((prev) => ({ ...prev, heightCm: event.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>体重（kg）</Label>
+            </FormField>
+            <FormField label="体重（kg）">
               <Input value={form.weightKg} onChange={(event) => setForm((prev) => ({ ...prev, weightKg: event.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>监护人姓名</Label>
-              <Input value={form.guardianName} onChange={(event) => setForm((prev) => ({ ...prev, guardianName: event.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>关系 / 联系电话</Label>
-              <div className="grid grid-cols-2 gap-2">
+            </FormField>
+            <FormField label="监护人姓名" required error={error && !form.guardianName.trim() ? "请填写至少一位监护人。" : undefined}>
+              <Input
+                value={form.guardianName}
+                onChange={(event) => setForm((prev) => ({ ...prev, guardianName: event.target.value }))}
+                aria-invalid={Boolean(error && !form.guardianName.trim())}
+              />
+            </FormField>
+            <FormField label="关系 / 联系电话" description="电话可后续补充，系统会保留监护人关系。">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Input
                   value={form.guardianRelation}
                   onChange={(event) => setForm((prev) => ({ ...prev, guardianRelation: event.target.value }))}
@@ -299,33 +450,34 @@ export default function ChildrenPage() {
                   onChange={(event) => setForm((prev) => ({ ...prev, guardianPhone: event.target.value }))}
                 />
               </div>
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>过敏信息（逗号分隔）</Label>
+            </FormField>
+            <FormField label="过敏信息（逗号分隔）" className="md:col-span-2">
               <Input
                 value={form.allergies}
                 onChange={(event) => setForm((prev) => ({ ...prev, allergies: event.target.value }))}
                 placeholder="如：牛奶，芒果"
               />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>所属机构 / 班级</Label>
+            </FormField>
+            <FormField label="所属机构 / 班级" className="md:col-span-2">
               <Input
                 value={form.className}
                 onChange={(event) => setForm((prev) => ({ ...prev, className: event.target.value }))}
                 placeholder="如：向阳班"
               />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>特殊关注项</Label>
+            </FormField>
+            <FormField label="特殊关注项" className="md:col-span-2">
               <Textarea
                 value={form.specialNotes}
                 onChange={(event) => setForm((prev) => ({ ...prev, specialNotes: event.target.value }))}
                 placeholder="如：午睡困难、过渡期社交适应等"
               />
-            </div>
+            </FormField>
           </div>
-          {error ? <p className="text-sm text-rose-500">{error}</p> : null}
+          {error ? (
+            <p className="rounded-lg border border-(--danger-border) bg-(--danger-soft) px-3 py-2 text-sm leading-6 text-(--danger-foreground)" role="alert">
+              {error}
+            </p>
+          ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => (setOpen(false), resetForm())}>
               取消
@@ -341,6 +493,10 @@ export default function ChildrenPage() {
             <DialogTitle>确认删除档案</DialogTitle>
             <DialogDescription>删除后会同时清除该幼儿的出勤、饮食、成长与反馈记录，请谨慎操作。</DialogDescription>
           </DialogHeader>
+          <div className="flex items-start gap-3 rounded-lg border border-(--danger-border) bg-(--danger-soft) p-3 text-sm leading-6 text-(--danger-foreground)">
+            <Trash2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <p>这是不可恢复操作。请只在确认档案确实需要移除时继续。</p>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>
               取消
@@ -364,21 +520,6 @@ export default function ChildrenPage() {
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function SummaryCard({ title, value }: { title: string; value: string }) {
-  const parsed = Number(value.replace(/[^\d.-]/g, ""));
-  const suffix = value.replace(/[\d.-]/g, "");
-  return (
-    <Card className="kpi-accent card-hover border-l-4 border-l-indigo-300">
-      <CardContent className="py-5">
-        <p className="text-sm text-slate-500">{title}</p>
-        <p className="mt-2 text-lg font-semibold text-slate-800">
-          {Number.isNaN(parsed) ? value : <AnimatedNumber value={parsed} suffix={suffix} />}
-        </p>
-      </CardContent>
-    </Card>
   );
 }
 

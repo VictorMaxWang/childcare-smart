@@ -79,7 +79,7 @@ export default function ConsultationQaPanel({
       </CardHeader>
 
       <CardContent className="space-y-5">
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="success">真实会诊主链路</Badge>
             <Badge variant="outline">/teacher/high-risk-consultation?trace=debug</Badge>
@@ -112,7 +112,7 @@ export default function ConsultationQaPanel({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
+        <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="warning">固定 5 个演练场景</Badge>
             <span className="text-sm text-amber-900">这些是前端演练，不会发起真实故障注入。</span>
@@ -121,7 +121,7 @@ export default function ConsultationQaPanel({
             {DEBUG_CASES.map((item) => {
               const active = item.value === activeCase;
               return (
-                <div key={item.value} className="rounded-2xl border border-white/80 bg-white/85 p-4">
+                <div key={item.value} className="rounded-lg border border-white/80 bg-white/85 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={active ? "warning" : "secondary"}>{item.label}</Badge>
@@ -148,7 +148,7 @@ export default function ConsultationQaPanel({
         </div>
 
         <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4">
+          <div className="rounded-lg border border-slate-200 bg-white/90 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
               <Activity className="h-4 w-4 text-indigo-500" />
               当前检查对象
@@ -159,7 +159,7 @@ export default function ConsultationQaPanel({
                 : "真实会诊主链路。这里应以真实过程、生成方式、参考资料和最终结果落点为准。"}
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4">
+          <div className="rounded-lg border border-slate-200 bg-white/90 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               固定断言

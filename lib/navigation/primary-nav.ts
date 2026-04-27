@@ -16,6 +16,14 @@ export interface PrimaryNavItem {
   icon: PrimaryNavIconKey;
 }
 
+export type PrimaryNavGroupKey = "workspace" | "records" | "collaboration";
+
+export interface PrimaryNavGroup {
+  key: PrimaryNavGroupKey;
+  label: string;
+  items: PrimaryNavItem[];
+}
+
 const OVERVIEW_ITEM: PrimaryNavItem = { href: "/", label: "数据总览", icon: "overview" };
 const CHILDREN_ITEM: PrimaryNavItem = { href: "/children", label: "幼儿档案", icon: "children" };
 const HEALTH_ITEM: PrimaryNavItem = { href: "/health", label: "晨检与健康", icon: "health" };
@@ -94,10 +102,39 @@ export function buildPrimaryNavItems(role: AccountRole): PrimaryNavItem[] {
   return [...PARENT_NAV_ITEMS];
 }
 
+export function buildPrimaryNavGroups(role: AccountRole): PrimaryNavGroup[] {
+  const items = buildPrimaryNavItems(role);
+  const groups: PrimaryNavGroup[] = [
+    { key: "workspace", label: "工作台", items: [] },
+    { key: "records", label: "业务记录", items: [] },
+    { key: "collaboration", label: "协同入口", items: [] },
+  ];
+  const groupMap = new Map(groups.map((group) => [group.key, group]));
+
+  items.forEach((item) => {
+    const group = groupMap.get(getPrimaryNavGroupKey(item));
+    group?.items.push(item);
+  });
+
+  return groups.filter((group) => group.items.length > 0);
+}
+
 export function isPrimaryNavItemActive(pathname: string, href: string) {
   if (href === "/") {
     return pathname === "/";
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function getPrimaryNavGroupKey(item: PrimaryNavItem): PrimaryNavGroupKey {
+  if (["/children", "/health", "/growth", "/diet"].includes(item.href)) {
+    return "records";
+  }
+
+  if (item.label === "家长端" || item.label === "机构大屏") {
+    return "collaboration";
+  }
+
+  return "workspace";
 }

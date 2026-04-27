@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, Search, Thermometer, Users } from "lucide-react";
+import { Activity, AlertTriangle, BookOpenCheck, CheckCircle2, MessageSquareText, Search, Thermometer, Users, Utensils } from "lucide-react";
 import {
   CartesianGrid,
   Cell,
@@ -19,18 +19,23 @@ import {
 import { useApp } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ChartCard } from "@/components/ui/chart-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { MetricCard } from "@/components/ui/metric-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { StatusTag } from "@/components/ui/status-tag";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PermissionState } from "@/components/ui/state-block";
+import { TeacherActionTile, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import { buildRecentLocalDateRange, getLocalToday, isDateWithinLastDays } from "@/lib/date";
 import { toast } from "sonner";
 
 import { HEALTH_MOOD_OPTIONS, HAND_MOUTH_EYE_OPTIONS, TEMPERATURE_THRESHOLD } from "@/lib/mock/health";
 import { getAgeText } from "@/lib/store";
-import AnimatedNumber from "@/components/AnimatedNumber";
 import ScrollReveal from "@/components/ScrollReveal";
 import EmptyState from "@/components/EmptyState";
 
@@ -204,88 +209,90 @@ export default function HealthPage() {
   
   if (currentUser.role === "家长") {
     return (
-      <div className="flex h-[80vh] items-center justify-center text-muted-foreground">
-        <div className="text-center" role="alert" aria-live="assertive" aria-labelledby="health-denied-title" aria-describedby="health-denied-desc">
-          <AlertTriangle className="mx-auto mb-4 h-12 w-12 text-yellow-500" aria-hidden="true" />
-          <h2 id="health-denied-title" className="text-lg font-semibold">权限不足</h2>
-          <p id="health-denied-desc">家长视图无法操作健康晨检页面，请返回主页或家长专属页。</p>
-        </div>
+      <div className="app-page flex min-h-[70vh] items-center justify-center page-enter">
+        <PermissionState
+          className="w-full max-w-2xl"
+          title="当前账号无法操作晨检"
+          description="家长端可以查看孩子状态和老师反馈，但晨检录入由园所和教师端完成。"
+          action={
+            <Button variant="outline" onClick={() => window.location.assign("/parent")}>
+              返回家长首页
+            </Button>
+          }
+        />
       </div>
     );
   }
 
+  const isTeacher = currentUser.role === "教师";
+
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8 page-enter">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="app-page page-enter">
+      <div className="mb-6 flex flex-col gap-4 rounded-xl border border-sky-100 bg-linear-to-r from-white via-sky-50/70 to-indigo-50/60 p-5 shadow-[var(--shadow-card)] sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
             <Thermometer className="h-8 w-8 text-sky-500" />
             晨检与健康
           </h1>
           <p className="text-muted-foreground mt-1">记录并追踪班级幼儿每日健康体征，及时预警异常情况。</p>
-          <div className="section-divider mt-5" />
         </div>
       </div>
 
       <ScrollReveal>
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="kpi-accent card-hover border-l-4 border-l-blue-300 shadow-sm border-blue-100 bg-blue-50/30 relative overflow-hidden">
-          <div className="absolute right-0 top-0 p-3 opacity-[0.07] pointer-events-none" aria-hidden>
-            <Users className="w-20 h-20" />
-          </div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">可见幼儿</CardTitle>
-            <Users className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold"><AnimatedNumber value={stats.total} suffix="人" /></div>
-          </CardContent>
-        </Card>
-        <Card className="kpi-accent card-hover border-l-4 border-l-green-300 shadow-sm border-green-100 bg-green-50/30 relative overflow-hidden">
-          <div className="absolute right-0 top-0 p-3 opacity-[0.07] pointer-events-none" aria-hidden>
-            <CheckCircle2 className="w-20 h-20" />
-          </div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">今日出勤</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold"><AnimatedNumber value={stats.present} suffix="人" /></div>
-          </CardContent>
-        </Card>
-        <Card className="kpi-accent card-hover border-l-4 border-l-orange-300 shadow-sm border-orange-100 bg-orange-50/30 relative overflow-hidden">
-          <div className="absolute right-0 top-0 p-3 opacity-[0.07] pointer-events-none" aria-hidden>
-            <Activity className="w-20 h-20" />
-          </div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">已晨检</CardTitle>
-            <Activity className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold"><AnimatedNumber value={stats.checked} suffix="人" /></div>
-          </CardContent>
-        </Card>
-        <Card className="kpi-accent card-hover border-l-4 border-l-red-300 shadow-sm border-red-100 bg-red-50/30 relative overflow-hidden">
-          <div className="absolute right-0 top-0 p-3 opacity-[0.07] pointer-events-none" aria-hidden>
-            <AlertTriangle className="w-20 h-20" />
-          </div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">异常告警</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600"><AnimatedNumber value={stats.abnormal} suffix="人" /></div>
-          </CardContent>
-        </Card>
-      </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="可见幼儿" value={`${stats.total}人`} icon={<Users className="h-5 w-5" />} tone="info" />
+          <MetricCard label="今日出勤" value={`${stats.present}人`} icon={<CheckCircle2 className="h-5 w-5" />} tone="success" />
+          <MetricCard label="已晨检" value={`${stats.checked}人`} icon={<Activity className="h-5 w-5" />} tone="primary" />
+          <MetricCard label="异常告警" value={`${stats.abnormal}人`} icon={<AlertTriangle className="h-5 w-5" />} tone="danger" />
+        </div>
       </ScrollReveal>
 
+      {isTeacher ? (
+        <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <TeacherActionTile
+              href="/diet"
+              icon={<Utensils className="h-5 w-5" />}
+              title="同步饮食记录"
+              description="晨检异常或缺勤儿童可在餐次录入时继续标记状态。"
+              tone="emerald"
+            />
+            <TeacherActionTile
+              href="/growth"
+              icon={<BookOpenCheck className="h-5 w-5" />}
+              title="补成长观察"
+              description="把体温、情绪和手口眼异常转成后续观察记录。"
+              tone="indigo"
+            />
+            <TeacherActionTile
+              href="/teacher/agent?action=communication"
+              icon={<MessageSquareText className="h-5 w-5" />}
+              title="生成沟通建议"
+              description="对异常或待检对象生成家长沟通话术和提醒。"
+              tone="amber"
+            />
+          </div>
+          <TeacherMiniPanel title="晨检处理队列" badge={currentUser.className ?? "当前班级"} tone={stats.unchecked > 0 || stats.abnormal > 0 ? "amber" : "emerald"}>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div>
+                <p className="text-2xl font-semibold text-slate-950">{stats.checked}</p>
+                <p className="mt-1 text-xs text-slate-500">已晨检</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-amber-600">{stats.unchecked}</p>
+                <p className="mt-1 text-xs text-slate-500">待晨检</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-rose-600">{stats.abnormal}</p>
+                <p className="mt-1 text-xs text-slate-500">异常</p>
+              </div>
+            </div>
+          </TeacherMiniPanel>
+        </div>
+      ) : null}
+
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>一周体温趋势</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <ChartCard title="一周体温趋势" description="对比平均体温和异常人数，红线为发热预警阈值。" minHeight="20rem">
             <div className="h-65 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={weeklyTemperatureData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
@@ -318,14 +325,9 @@ export default function HealthPage() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
+        </ChartCard>
 
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>情绪分布图</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <ChartCard title="情绪分布图" description="近 7 天情绪趋势和占比，辅助园长识别班级压力。" minHeight="20rem">
             <div className="rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
@@ -409,13 +411,11 @@ export default function HealthPage() {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+        </ChartCard>
       </div>
 
-      <Card className="shadow-sm">
-        <CardHeader className="pb-4">
-          <div className="flex flex-col sm:flex-row justify-between gap-4">
+      <FilterBar
+        search={
             <div className="relative max-w-sm w-full">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -427,6 +427,8 @@ export default function HealthPage() {
                 aria-label="搜索幼儿姓名或乳名"
               />
             </div>
+        }
+        filters={
             <fieldset className="flex gap-2 rounded-md bg-muted p-1">
               <legend className="sr-only">健康晨检筛选条件</legend>
               {[
@@ -452,6 +454,20 @@ export default function HealthPage() {
                 </label>
               ))}
             </fieldset>
+        }
+        className="mt-6"
+      />
+
+      <Card className="mt-4 rounded-lg shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-lg">今日晨检列表</CardTitle>
+              <p className="mt-1 text-sm text-slate-500">点击儿童卡片可查看或补录体温、情绪、手口眼和备注。</p>
+            </div>
+            <StatusTag variant={stats.unchecked > 0 ? "warning" : "success"} showDot>
+              待检 {stats.unchecked} 人
+            </StatusTag>
           </div>
         </CardHeader>
         <CardContent>
@@ -525,7 +541,7 @@ export default function HealthPage() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-106.25">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
               晨检记录 - {childData.find((c) => c.id === selectedChildId)?.name}
@@ -534,32 +550,26 @@ export default function HealthPage() {
               记录由于今天的体温、情绪以及手口眼初步检查状态。
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="temperature" className="text-right">
-                体温 (°C)
-              </Label>
-              <div className="col-span-3">
+          <div className="grid gap-4 py-2">
+            <FormField
+              label="体温 (°C)"
+              htmlFor="temperature"
+              error={parseFloat(temperature) >= TEMPERATURE_THRESHOLD ? `发热预警 (≥${TEMPERATURE_THRESHOLD}°C)` : undefined}
+            >
                 <Input
                   id="temperature"
                   type="number"
                   step="0.1"
                   value={temperature}
                   onChange={(e) => setTemperature(e.target.value)}
-                  className={parseFloat(temperature) >= TEMPERATURE_THRESHOLD ? "border-red-500 text-red-600" : ""}
+                  aria-invalid={parseFloat(temperature) >= TEMPERATURE_THRESHOLD}
+                  className={parseFloat(temperature) >= TEMPERATURE_THRESHOLD ? "text-red-600" : ""}
                 />
-                {parseFloat(temperature) >= TEMPERATURE_THRESHOLD && (
-                  <p className="text-xs text-red-500 mt-1">发热预警 (≥{TEMPERATURE_THRESHOLD}°C)</p>
-                )}
-              </div>
-            </div>
+            </FormField>
             
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="handMouthEye" className="text-right">
-                手口眼
-              </Label>
+            <FormField label="手口眼" htmlFor="handMouthEye">
               <Select value={handMouthEye} onValueChange={(val) => setHandMouthEye(val as "正常" | "异常")}>
-                <SelectTrigger className="col-span-3">
+                <SelectTrigger id="handMouthEye">
                   <SelectValue placeholder="选择状态" />
                 </SelectTrigger>
                 <SelectContent>
@@ -568,14 +578,11 @@ export default function HealthPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </FormField>
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="mood" className="text-right">
-                情绪状态
-              </Label>
+            <FormField label="情绪状态" htmlFor="mood">
               <Select value={mood} onValueChange={setMood}>
-                <SelectTrigger className="col-span-3">
+                <SelectTrigger id="mood">
                   <SelectValue placeholder="选择状态" />
                 </SelectTrigger>
                 <SelectContent>
@@ -584,13 +591,10 @@ export default function HealthPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </FormField>
 
-            <div className="grid grid-cols-4 items-start gap-4">
-              <Label htmlFor="remark" className="text-right mt-2">
-                备注说明
-              </Label>
-              <div className="col-span-3 space-y-2">
+            <FormField label="备注说明" htmlFor="remark" description="可使用模板快速填充，也可以直接补充具体观察。">
+              <div className="space-y-2">
                 <Textarea
                   id="remark"
                   value={remark}
@@ -600,28 +604,28 @@ export default function HealthPage() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="inline-flex items-center rounded-full border border-input px-2.5 py-0.5 text-xs font-semibold transition-colors hover:bg-muted"
+                    className="inline-flex min-h-9 items-center rounded-full border border-input px-3 py-1 text-xs font-semibold transition-colors hover:bg-muted"
                     onClick={() => setRemark(TEMPLATE_REMARKS.NORMAL)}
                   >
                     常规正常
                   </button>
                   <button
                     type="button"
-                    className="inline-flex items-center rounded-full border border-input px-2.5 py-0.5 text-xs font-semibold transition-colors hover:bg-muted"
+                    className="inline-flex min-h-9 items-center rounded-full border border-input px-3 py-1 text-xs font-semibold transition-colors hover:bg-muted"
                     onClick={() => setRemark(TEMPLATE_REMARKS.SLIGHT_COUGH)}
                   >
                     轻微咳嗽
                   </button>
                   <button
                     type="button"
-                    className="inline-flex items-center rounded-full border border-input px-2.5 py-0.5 text-xs font-semibold transition-colors hover:bg-muted"
+                    className="inline-flex min-h-9 items-center rounded-full border border-input px-3 py-1 text-xs font-semibold transition-colors hover:bg-muted"
                     onClick={() => setRemark(TEMPLATE_REMARKS.LOW_FEVER)}
                   >
                     低烧观察
                   </button>
                 </div>
               </div>
-            </div>
+            </FormField>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>

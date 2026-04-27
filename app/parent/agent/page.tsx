@@ -11,6 +11,15 @@ import EmptyState from "@/components/EmptyState";
 import InterventionCardPanel from "@/components/agent/InterventionCardPanel";
 import CareModeToggle from "@/components/parent/CareModeToggle";
 import ParentCareFocusCard from "@/components/parent/ParentCareFocusCard";
+import {
+  ParentActionCard,
+  ParentGentleNotice,
+  ParentHeroCard,
+  ParentTimelineCard,
+  ParentWeeklySignalGrid,
+  type ParentTimelineItem,
+  type ParentWeeklySignal,
+} from "@/components/parent/ParentReviewKit";
 import ParentSpeakButton from "@/components/parent/ParentSpeakButton";
 import ParentTransparencyPanel from "@/components/parent/ParentTransparencyPanel";
 import ParentStructuredFeedbackComposer, {
@@ -880,6 +889,95 @@ export default function ParentAgentPage() {
     );
   }
 
+  const agentChildMeta = `${selectedFeed.child.className} · ${getAgeText(
+    selectedFeed.child.birthDate
+  )} · 出生于 ${formatDisplayDate(selectedFeed.child.birthDate)}`;
+  const agentHasPendingFeedback = !selectedFeed.hasFeedbackToday;
+  const agentHasHealthWarning = baseContext.weeklyHealthChecks.some((item) => item.isAbnormal);
+  const agentStatusLabel = suggestionLoading
+    ? "正在整理建议"
+    : agentHasPendingFeedback
+      ? "待反馈"
+      : "闭环已同步";
+  const agentStatusVariant = suggestionLoading
+    ? "info"
+    : agentHasPendingFeedback
+      ? "warning"
+      : "success";
+  const agentHeroPills = [
+    { label: "今晚任务", value: baseContext.task.durationText, tone: "indigo" as const },
+    { label: "近 7 天饮食", value: `${baseContext.weeklyMeals.length} 条`, tone: "sky" as const },
+    {
+      label: "晨检记录",
+      value: `${baseContext.weeklyHealthChecks.length} 天`,
+      tone: agentHasHealthWarning ? ("amber" as const) : ("emerald" as const),
+    },
+    {
+      label: "最近反馈",
+      value: selectedFeed.latestFeedback
+        ? formatParentFeedbackStatusLabel(selectedFeed.latestFeedback.status)
+        : "待补充",
+      tone: agentHasPendingFeedback ? ("amber" as const) : ("emerald" as const),
+    },
+  ];
+  const agentTimelineItems: ParentTimelineItem[] = [
+    {
+      id: "action",
+      title: "今晚先做",
+      meta: displayInterventionCard?.title ?? baseContext.task.title,
+      description: displayTonightTopAction || "当前建议正在整理中。",
+      tone: "indigo",
+      icon: <Sparkles className="h-4 w-4" />,
+      status: suggestionLoading ? "整理中" : "先执行",
+      statusVariant: suggestionLoading ? "info" : "info",
+    },
+    {
+      id: "feedback",
+      title: "做完反馈",
+      meta: agentHasPendingFeedback ? "今晚还缺一条反馈" : "反馈已进入上下文",
+      description: currentResult?.feedbackPrompt ?? "提交是否执行、孩子反应和补充情况，下一轮建议会继续参考。",
+      tone: agentHasPendingFeedback ? "amber" : "emerald",
+      icon: <Send className="h-4 w-4" />,
+      status: agentHasPendingFeedback ? "待提交" : "已同步",
+      statusVariant: agentHasPendingFeedback ? "warning" : "success",
+    },
+    {
+      id: "teacher",
+      title: "明天老师继续看",
+      meta: displayConsultation ? "已关联会诊/复查上下文" : "教师端继续观察",
+      description: displayTeacherObservation,
+      tone: "sky",
+      icon: <Clock3 className="h-4 w-4" />,
+      status: displayConsultation ? "复查闭环" : "观察点",
+      statusVariant: displayConsultation ? "warning" : "info",
+    },
+  ];
+  const agentWeeklySignals: ParentWeeklySignal[] = [
+    {
+      label: "饮食趋势",
+      value: `${baseContext.weeklyTrend.balancedRate}%`,
+      helper: `蔬菜 ${baseContext.weeklyTrend.vegetableDays} 天 · 蛋白 ${baseContext.weeklyTrend.proteinDays} 天`,
+      tone: "sky",
+    },
+    {
+      label: "补水状态",
+      value: hydrationDisplay?.statusLabel ?? "暂无",
+      helper: hydrationDisplay?.initiativeLabel ?? "待观察",
+      tone: "indigo",
+    },
+    {
+      label: "成长观察",
+      value: `${baseContext.weeklyGrowthRecords.length} 条`,
+      helper: `${baseContext.attentionGrowthRecords.length} 条需继续观察`,
+      tone: baseContext.attentionGrowthRecords.length > 0 ? "amber" : "emerald",
+    },
+    {
+      label: "家庭反馈",
+      value: `${baseContext.weeklyFeedbacks.length} 条`,
+      helper: agentHasPendingFeedback ? "今晚反馈待提交。" : "反馈已进入建议上下文。",
+      tone: agentHasPendingFeedback ? "amber" : "emerald",
+    },
+  ];
   const hasMultipleChildren = parentFeed.length > 1;
   const normalPageActions = (
     <>
@@ -1425,61 +1523,64 @@ export default function ParentAgentPage() {
       <RoleSplitLayout
         main={
           <div className="space-y-6">
-            <SectionCard title="当前儿童信息卡" description="先确认正在查看哪个孩子，再决定今晚先做什么。">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-3xl border border-slate-100 bg-white p-4">
-                  <p className="text-lg font-semibold text-slate-900">{selectedFeed.child.name}</p>
-                  <p className="mt-2 text-sm text-slate-500">
-                    {selectedFeed.child.className} · {getAgeText(selectedFeed.child.birthDate)} · 出生于 {formatDisplayDate(selectedFeed.child.birthDate)}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {selectedFeed.child.allergies.length > 0 ? (
-                      selectedFeed.child.allergies.map((item) => (
-                        <Badge key={item} variant="warning">
-                          过敏：{item}
-                        </Badge>
-                      ))
-                    ) : (
-                      <Badge variant="success">暂无过敏重点</Badge>
-                    )}
-                  </div>
-                </div>
-                <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
-                  <p className="text-sm font-semibold text-slate-900">今晚家庭任务</p>
-                  <p className="mt-2 text-base font-semibold text-slate-900">{displayInterventionCard?.title ?? baseContext.task.title}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{displayTonightTopAction}</p>
-                  <p className="mt-3 text-sm font-medium text-sky-700">{baseContext.task.durationText} · {baseContext.task.tag}</p>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">为什么推荐：{displayWhyNow}</p>
-                </div>
-              </div>
-            </SectionCard>
+            <ParentHeroCard
+              eyebrow="家长 AI 闭环"
+              title={`${selectedFeed.child.name} 今晚怎么做`}
+              description="把 AI 建议、家庭动作、反馈入口和老师明天继续看的内容放在一条主路径里。"
+              childName={selectedFeed.child.name}
+              childMeta={agentChildMeta}
+              allergies={selectedFeed.child.allergies}
+              statusLabel={agentStatusLabel}
+              statusVariant={agentStatusVariant}
+              pills={agentHeroPills}
+              actions={
+                <>
+                  <InlineLinkButton href="#feedback" label="做完后去反馈" variant="premium" />
+                  <InlineLinkButton href={`?child=${selectedFeed.child.id}&intent=query_trend`} label="看近 7 天趋势" />
+                </>
+              }
+            />
 
-            <SectionCard title="最近风险摘要" description="AI 先用真实业务数据找出今晚最值得处理的信号。">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-3xl bg-amber-50 p-4">
-                  <p className="text-xs text-amber-700">近 7 天重点原因</p>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-900">{baseContext.focusReasons[0]}</p>
-                </div>
-                <div className="rounded-3xl bg-sky-50 p-4">
-                  <p className="text-xs text-sky-700">补水状态</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-900">{hydrationDisplay?.statusLabel ?? "暂无"}</p>
-                  <p className="mt-1 text-xs text-sky-800/80">补水主动性：{hydrationDisplay?.initiativeLabel ?? "待观察"}</p>
-                </div>
-                <div className="rounded-3xl bg-white p-4 ring-1 ring-slate-100">
-                  <p className="text-xs text-slate-500">最近家长反馈</p>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-900">
-                    {selectedFeed.latestFeedback
-                      ? formatParentFeedbackStatusLabel(selectedFeed.latestFeedback.status)
-                      : "最近尚未形成反馈"}
-                  </p>
-                </div>
-              </div>
+            <ParentTimelineCard
+              title="今晚闭环顺序"
+              description="先做一件事，再反馈孩子反应，明天老师接着观察同一个重点。"
+              items={agentTimelineItems}
+            />
+
+            <SectionCard title="近 7 天记录摘要" description="趋势只保留家长看得懂的关键指标，完整问答仍在 AI 回复区。">
+              <ParentWeeklySignalGrid items={agentWeeklySignals} />
               <div className="mt-4 flex flex-wrap gap-2">
                 {baseContext.focusReasons.map((item) => (
                   <Badge key={item} variant="secondary">{item}</Badge>
                 ))}
               </div>
             </SectionCard>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <ParentActionCard
+                title="查看完整行动卡"
+                description="看今晚动作、观察点和给家里人的沟通话术。"
+                href="#intervention"
+                actionLabel="查看行动卡"
+                icon={<Sparkles className="h-5 w-5" />}
+              />
+              <ParentActionCard
+                title="直接提交反馈"
+                description="只填做了没有、孩子反应和有没有更好一点。"
+                href="#feedback"
+                actionLabel="去反馈"
+                tone="amber"
+                icon={<Send className="h-5 w-5" />}
+              />
+              <ParentActionCard
+                title="打开成长绘本"
+                description="用更亲和的方式回看今天的成长记录。"
+                href={storybookHref}
+                actionLabel="打开绘本"
+                tone="emerald"
+                icon={<Sparkles className="h-5 w-5" />}
+              />
+            </div>
 
             <SectionCard title="成长行为与影像记录" description="只展示当前孩子的成长观察、餐食图片和影像记录，方便家长提问前先看原始上下文。">
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
@@ -1712,6 +1813,11 @@ export default function ParentAgentPage() {
                 </SectionCard>
               </div>
             ) : null}
+
+            <ParentGentleNotice
+              title="反馈只需要先完成最短三步"
+              description="做了没有、孩子反应、有没有更好一点会优先进入建议闭环；补充语音和备注可以按需要再展开。"
+            />
 
             <div id="feedback">
               <SectionCard title="提交今晚反馈" description="把今晚做了没有、孩子反应和补充情况记下来，下一轮建议会继续参考。">

@@ -94,7 +94,7 @@ export default function ParentTrendResponseCard({
 
   return (
     <div
-      className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm"
+      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
       data-testid="parent-trend-response-card"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -119,25 +119,25 @@ export default function ParentTrendResponseCard({
       </div>
 
       {displayError ? (
-        <div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50/80 p-4 text-sm leading-7 text-rose-800">
+        <div className="mt-4 rounded-xl border border-rose-100 bg-rose-50/80 p-4 text-sm leading-7 text-rose-800">
           {displayError}
         </div>
       ) : null}
 
       {result ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-4">
             <p className="text-xs text-slate-500">趋势结论</p>
             <p className="mt-1 text-base font-semibold text-slate-900">{comparisonText}</p>
           </div>
-          <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-4">
             <p className="text-xs text-slate-500">有效覆盖</p>
             <p className="mt-1 text-base font-semibold text-slate-900">
               {result.dataQuality.observedDays} / {result.windowDays} 天
             </p>
             <p className="mt-1 text-xs text-slate-500">覆盖率 {formatPercent(result.dataQuality.coverageRatio)}</p>
           </div>
-          <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-4">
             <p className="text-xs text-slate-500">主指标</p>
             <p className="mt-1 text-base font-semibold text-slate-900">{result.series[0]?.label ?? "暂无"}</p>
             <p className="mt-1 text-xs text-slate-500">{result.child.name ?? "当前儿童"} · {result.query.resolvedWindowDays} 天视角</p>
@@ -159,12 +159,12 @@ export default function ParentTrendResponseCard({
       {result ? (
         <div className="mt-4 space-y-4">
           {fallbackUsed ? (
-            <div className="rounded-[20px] border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm leading-6 text-emerald-900">
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm leading-6 text-emerald-900">
               当前结果来自演示快照，已明确标记为非实时机构数据，适合演示趋势结构。
             </div>
           ) : null}
 
-          <div className="rounded-2xl bg-indigo-50/70 p-4">
+          <div className="rounded-xl bg-indigo-50/70 p-4">
             <p className="text-sm font-semibold text-slate-900">解释与建议</p>
             <p className="mt-2 text-sm leading-7 text-slate-700">{result.explanation}</p>
           </div>
@@ -177,7 +177,7 @@ export default function ParentTrendResponseCard({
           </div>
 
           {supportingSignals.length > 0 ? (
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+            <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
               <p className="text-sm font-semibold text-slate-900">支持信号</p>
               <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
                 {supportingSignals.map((item, index) => (
@@ -190,7 +190,7 @@ export default function ParentTrendResponseCard({
             </div>
           ) : null}
 
-          <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <div className="rounded-xl border border-slate-100 bg-white p-4">
             <div className="flex items-center gap-2">
               <Info className="h-4 w-4 text-sky-600" />
               <p className="text-sm font-semibold text-slate-900">数据质量与提醒</p>

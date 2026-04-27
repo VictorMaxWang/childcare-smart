@@ -58,7 +58,7 @@ export default function ConsultationStageTimeline({
             <div
               key={stage.key}
               className={cn(
-                "rounded-3xl border p-4 transition-all",
+                "rounded-lg border p-4 transition-all",
                 stage.status === "active"
                   ? "border-sky-200 bg-sky-50/80 shadow-sm"
                   : stage.status === "completed"

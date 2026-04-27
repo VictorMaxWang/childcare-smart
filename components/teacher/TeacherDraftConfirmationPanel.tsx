@@ -192,7 +192,7 @@ export default function TeacherDraftConfirmationPanel({
   if (!sourceDraftId || !seed) {
     return (
       <div className="space-y-4">
-        <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50/60 p-5">
+        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-5">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="warning">演示理解结果</Badge>
             {childName ? <Badge variant="secondary">{childName}</Badge> : null}
@@ -209,7 +209,7 @@ export default function TeacherDraftConfirmationPanel({
                 key={preset.id}
                 type="button"
                 onClick={() => void onCreateMockDraft?.(preset.transcript)}
-                className="rounded-3xl border border-slate-200 bg-white p-4 text-left transition hover:border-indigo-200 hover:bg-indigo-50/40"
+                className="rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-indigo-200 hover:bg-indigo-50/40"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <WandSparkles className="h-4 w-4 text-indigo-500" />
@@ -231,7 +231,7 @@ export default function TeacherDraftConfirmationPanel({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
           {sourceModeLabel ? <Badge variant="info">{sourceModeLabel}</Badge> : null}
           {sourceDraftLabel ? <Badge variant="secondary">{sourceDraftLabel}</Badge> : null}
@@ -247,7 +247,7 @@ export default function TeacherDraftConfirmationPanel({
         </div>
 
         <div className="mt-4 grid gap-3 lg:grid-cols-[1.6fr_1fr]">
-            <div className="rounded-2xl bg-slate-50 px-4 py-3">
+            <div className="rounded-lg bg-slate-50 px-4 py-3">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                 <FileText className="h-4 w-4" />
                 原始内容
@@ -257,7 +257,7 @@ export default function TeacherDraftConfirmationPanel({
               </p>
             </div>
 
-            <div className="rounded-2xl bg-slate-50 px-4 py-3">
+            <div className="rounded-lg bg-slate-50 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">保存方式</p>
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 当前会先写回同一条教师草稿，再尝试同步保存；无论成功、仅本地保留还是保存失败，页面都会明确提示。
@@ -287,13 +287,13 @@ export default function TeacherDraftConfirmationPanel({
       />
 
       {error ? (
-        <div className="rounded-3xl border border-rose-100 bg-rose-50/70 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-lg border border-rose-100 bg-rose-50/70 px-4 py-3 text-sm text-rose-700">
           {error}
         </div>
       ) : null}
 
       {isLoading ? (
-        <div className="rounded-3xl border border-slate-100 bg-white px-4 py-4 text-sm text-slate-500">
+        <div className="rounded-lg border border-slate-100 bg-white px-4 py-4 text-sm text-slate-500">
           草稿确认流正在加载记录...
         </div>
       ) : (

@@ -259,10 +259,10 @@ export function getCaptionIndexForCharIndex(timeline: CaptionTimeline, charIndex
 function getTheme(preset: ParentStoryBookStylePreset) {
   if (preset === "moonlit-cutout") {
     return {
-      page: "bg-[radial-gradient(circle_at_top,_rgba(219,234,254,0.95),_rgba(191,219,254,0.82)_30%,_rgba(224,231,255,0.76)_62%,_rgba(248,250,252,1)_100%)]",
-      panel: "bg-white/82 border-white/70",
+      page: "bg-slate-50",
+      panel: "border-slate-200 bg-white",
       accent: "bg-sky-600 text-white hover:bg-sky-600/90",
-      quiet: "border-sky-200/80 bg-white/80 text-sky-900 hover:bg-sky-50",
+      quiet: "border-sky-200 bg-white text-sky-900 hover:bg-sky-50",
       dot: "bg-sky-600",
       dotIdle: "bg-sky-100",
       chip: "bg-sky-100 text-sky-700",
@@ -271,10 +271,10 @@ function getTheme(preset: ParentStoryBookStylePreset) {
   }
   if (preset === "forest-crayon") {
     return {
-      page: "bg-[radial-gradient(circle_at_top_right,_rgba(220,252,231,0.92),_rgba(187,247,208,0.78)_30%,_rgba(254,249,195,0.66)_58%,_rgba(248,250,252,1)_100%)]",
-      panel: "bg-white/82 border-white/70",
+      page: "bg-slate-50",
+      panel: "border-slate-200 bg-white",
       accent: "bg-emerald-600 text-white hover:bg-emerald-600/90",
-      quiet: "border-emerald-200/80 bg-white/80 text-emerald-900 hover:bg-emerald-50",
+      quiet: "border-emerald-200 bg-white text-emerald-900 hover:bg-emerald-50",
       dot: "bg-emerald-600",
       dotIdle: "bg-emerald-100",
       chip: "bg-emerald-100 text-emerald-700",
@@ -282,10 +282,10 @@ function getTheme(preset: ParentStoryBookStylePreset) {
     };
   }
   return {
-    page: "bg-[radial-gradient(circle_at_top_left,_rgba(255,245,220,0.95),_rgba(254,226,226,0.75)_32%,_rgba(224,242,254,0.9)_68%,_rgba(248,250,252,1)_100%)]",
-    panel: "bg-white/82 border-white/70",
+    page: "bg-slate-50",
+    panel: "border-slate-200 bg-white",
     accent: "bg-amber-500 text-white hover:bg-amber-500/90",
-    quiet: "border-amber-200/80 bg-white/80 text-amber-900 hover:bg-amber-50",
+    quiet: "border-amber-200 bg-white text-amber-900 hover:bg-amber-50",
     dot: "bg-amber-500",
     dotIdle: "bg-amber-100",
     chip: "bg-amber-100 text-amber-700",
@@ -1172,7 +1172,7 @@ export default function StoryBookViewer({
 
   return (
     <div className={cn("min-h-[100svh] px-4 py-4 sm:px-6 sm:py-6", theme.page)}>
-      <div className="mx-auto max-w-3xl space-y-4">
+      <div className="mx-auto max-w-5xl space-y-4">
         <div className="flex items-center justify-between gap-3">
           <Button
             asChild
@@ -1198,9 +1198,9 @@ export default function StoryBookViewer({
           </div>
         </div>
 
-        <Card className={cn("overflow-hidden backdrop-blur-xl", theme.panel)}>
+        <Card className={cn("overflow-hidden rounded-2xl shadow-sm", theme.panel)}>
           {story ? (
-            <div className="space-y-2 border-b border-white/70 bg-white/60 px-4 py-4 sm:px-5">
+            <div className="space-y-2 border-b border-slate-100 bg-slate-50 px-4 py-4 sm:px-5">
               <div className="flex flex-wrap gap-2">
                 {runtimeBanners.map((item) => (
                   <Badge
@@ -1236,7 +1236,7 @@ export default function StoryBookViewer({
               </CardDescription>
             </div>
 
-            <div className="rounded-[30px] border border-white/70 bg-white/68 p-4 sm:p-5">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">
                   {getGenerationModeCopy(generationMode).label}
@@ -1296,10 +1296,10 @@ export default function StoryBookViewer({
                             type="button"
                             onClick={() => onSelectThemeChip(themeLabel)}
                             className={cn(
-                              "rounded-full border px-3 py-2 text-sm transition-all",
+                            "rounded-xl border px-3 py-2 text-sm transition-all",
                               selectedThemeChip === themeLabel
                                 ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                                : "border-white/60 bg-white/75 text-slate-700 hover:bg-white"
+                                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                             )}
                           >
                             {themeLabel}
@@ -1316,7 +1316,7 @@ export default function StoryBookViewer({
                         value={manualTheme}
                         onChange={(event) => onManualThemeChange(event.target.value)}
                         placeholder="例如：表达情绪、独立入睡、勇敢尝试"
-                        className="h-11 rounded-2xl border-white/70 bg-white/88 text-slate-900 placeholder:text-slate-400"
+                        className="h-11 rounded-xl border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
                       />
                     </div>
                   </div>
@@ -1376,7 +1376,7 @@ export default function StoryBookViewer({
                           value={customStylePrompt}
                           onChange={(event) => onCustomStylePromptChange(event.target.value)}
                           placeholder="例如：梦幻3D儿童绘本、柔焦、低饱和、电影级光影、浅景深"
-                          className="h-11 rounded-2xl border-white/70 bg-white/88 text-slate-900 placeholder:text-slate-400"
+                          className="h-11 rounded-xl border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
                         />
                       </div>
                       <div className="space-y-2">
@@ -1387,7 +1387,7 @@ export default function StoryBookViewer({
                           value={customStyleNegativePrompt}
                           onChange={(event) => onCustomStyleNegativePromptChange(event.target.value)}
                           placeholder="例如：不要照片感、不要复杂背景、不要写实人脸、不要过度文字"
-                          className="h-11 rounded-2xl border-white/70 bg-white/88 text-slate-900 placeholder:text-slate-400"
+                          className="h-11 rounded-xl border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
                         />
                       </div>
                     </div>
@@ -1409,10 +1409,10 @@ export default function StoryBookViewer({
                             type="button"
                             onClick={() => onSelectPreset(item.id)}
                             className={cn(
-                              "rounded-2xl border px-3 py-2 text-left text-sm transition-all",
+                              "rounded-xl border px-3 py-2 text-left text-sm transition-all",
                               selected
                                 ? "border-slate-900 bg-white text-slate-950 shadow-sm"
-                                : "border-white/60 bg-white/65 text-slate-600"
+                                : "border-slate-200 bg-white text-slate-600"
                             )}
                           >
                             <div className="font-semibold">{presetCopy.shortLabel}</div>
@@ -1424,13 +1424,13 @@ export default function StoryBookViewer({
                       })}
                     </div>
                   ) : (
-                    <div className="rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm leading-6 text-slate-600">
+                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-600">
                       当前使用自定义风格；预设仅作为切回 preset 时的记忆值，不会混入这次插画 prompt。
                     </div>
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-white/70 bg-white/72 px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
                   <div className="text-sm text-slate-600">
                     {generationHint ? generationHint : "参数调整完成后，点击重新生成应用到整本绘本。"}
                   </div>
@@ -1461,7 +1461,7 @@ export default function StoryBookViewer({
             </div>
 
             {refreshMessage ? (
-              <div className="rounded-3xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-6 text-amber-900">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-6 text-amber-900">
                 {refreshMessage}
               </div>
             ) : null}
@@ -1478,7 +1478,7 @@ export default function StoryBookViewer({
 
             {story ? (
               <div className="grid gap-3 sm:grid-cols-2">
-                <Card className={cn("border-white/70", theme.panel)}>
+                <Card className={cn("rounded-2xl border-slate-200", theme.panel)}>
                   <CardContent className="space-y-3 p-4">
                     <div className="flex flex-wrap gap-2">
                       {modeCopy ? (
@@ -1496,7 +1496,7 @@ export default function StoryBookViewer({
                   </CardContent>
                 </Card>
 
-                <Card className={cn("border-white/70", theme.panel)}>
+                <Card className={cn("rounded-2xl border-slate-200", theme.panel)}>
                   <CardContent className="space-y-3 p-4">
                     <div className="flex flex-wrap gap-2">
                       <Badge variant="outline">
@@ -1968,7 +1968,7 @@ function StoryBookSceneStream({
 
   useEffect(() => {
     startAudioRef.current = startAudio;
-  }, [startAudio]);
+  });
 
   useEffect(() => {
     const handoffSceneIndex = resolveLocalSpeechHandoffSceneIndexHotfix(
@@ -2019,7 +2019,7 @@ function StoryBookSceneStream({
 
   useEffect(() => {
     startScenePlaybackRef.current = startScenePlayback;
-  }, [startScenePlayback]);
+  });
 
   function handlePlayScene(scene: ParentStoryBookScene, index: number) {
     if (playbackSceneIndex === index) {
@@ -2072,7 +2072,7 @@ function StoryBookSceneStream({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 rounded-[28px] border border-white/70 bg-white/70 px-4 py-3 text-sm text-slate-600">
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Badge variant="info">
             <Sparkles className="mr-1.5 h-3.5 w-3.5" />
@@ -2137,10 +2137,10 @@ function StoryBookSceneStream({
               }}
               data-scene-index={index}
               className={cn(
-                "rounded-[34px] border border-white/65 bg-white/84 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] transition-all duration-500 sm:p-5",
+                "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-500 sm:p-5",
                 activeIndex === index
-                  ? "scale-[1.01] shadow-[0_28px_80px_rgba(15,23,42,0.14)]"
-                  : "scale-[0.992] opacity-95"
+                  ? "border-indigo-200 shadow-[0_12px_34px_rgba(79,70,229,0.12)]"
+                  : "opacity-95"
               )}
             >
               <div className="flex items-center justify-between gap-3">
@@ -2207,7 +2207,7 @@ function StoryBookSceneStream({
                 </div>
               </div>
 
-              <div className="relative mt-4 overflow-hidden rounded-[30px] border border-white/80 bg-white shadow-sm">
+              <div className="relative mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="relative aspect-[4/5] w-full sm:aspect-[5/6]">
                   <StoryBookImage
                     src={sceneImageSrc}
@@ -2235,7 +2235,7 @@ function StoryBookSceneStream({
               <div className="mt-4 space-y-4">
                 <p className="text-base leading-8 text-slate-700">{scene.sceneText}</p>
 
-                <div className="rounded-[28px] border border-white/70 bg-white/78 p-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-slate-950">逐页朗读</p>
@@ -2306,7 +2306,7 @@ function StoryBookSceneStream({
                           "rounded-2xl border px-3 py-2 text-sm leading-6 transition-all duration-300",
                           isPlaying && segmentIndex === captionIndex
                             ? "border-transparent bg-slate-900 text-white"
-                            : "border-white/60 bg-white/70 text-slate-600"
+                            : "border-slate-200 bg-white text-slate-600"
                         )}
                       >
                         {segment}
@@ -2344,10 +2344,10 @@ function EmptyStoryState({
         {[0, 1].map((item) => (
           <div
             key={item}
-            className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-sm"
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
           >
             <div className="h-5 w-24 animate-pulse rounded-full bg-slate-200" />
-            <div className="mt-4 aspect-[4/5] animate-pulse rounded-[26px] bg-slate-100" />
+            <div className="mt-4 aspect-[4/5] animate-pulse rounded-2xl bg-slate-100" />
             <div className="mt-4 h-4 w-5/6 animate-pulse rounded-full bg-slate-200" />
             <div className="mt-3 h-4 w-3/4 animate-pulse rounded-full bg-slate-200" />
           </div>
@@ -2381,7 +2381,7 @@ function EmptyStoryState({
   }
 
   return (
-    <Card className="border-white/70 bg-white/78">
+    <Card className="rounded-2xl border-slate-200 bg-white">
       <CardHeader>
         <CardTitle className="text-xl text-slate-950">先设定这本成长绘本</CardTitle>
         <CardDescription className="leading-7 text-slate-600">

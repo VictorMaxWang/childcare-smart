@@ -114,14 +114,14 @@ export default function TraceStepCard({
       {open ? (
         <CardContent className="space-y-4">
           {stage.callout ? (
-            <div className={cn("rounded-2xl border p-4 text-sm leading-6", getCalloutClasses(stage.callout.tone))}>
+            <div className={cn("rounded-lg border p-4 text-sm leading-6", getCalloutClasses(stage.callout.tone))}>
               <p className="font-semibold">{stage.callout.title}</p>
               <p className="mt-1">{stage.callout.description}</p>
             </div>
           ) : null}
 
           {stage.items.length ? (
-            <div className="rounded-2xl border border-white/70 bg-white/85 p-4">
+            <div className="rounded-lg border border-white/70 bg-white/85 p-4">
               <p className="text-sm font-semibold text-slate-900">阶段要点</p>
               <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
                 {stage.items.map((item, index) => (
@@ -132,14 +132,14 @@ export default function TraceStepCard({
           ) : null}
 
           {stage.evidence.length || stage.evidenceItems.length ? (
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+            <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-4">
               <p className="text-sm font-semibold text-slate-900">关键信号</p>
               {evidencePreviewModel.mode === "structured" ? (
                 <div className="mt-3 space-y-3">
                   {evidencePreviewModel.leadItems.map((evidence) => (
                     <div
                       key={evidence.item.id}
-                      className="rounded-2xl border border-slate-100 bg-white/90 p-3"
+                      className="rounded-lg border border-slate-100 bg-white/90 p-3"
                     >
                       <div className="flex flex-wrap gap-2">
                         <Badge variant="info">{evidence.item.sourceLabel}</Badge>
@@ -184,7 +184,7 @@ export default function TraceStepCard({
           {stage.followUpCard ? <FollowUp48hCard data={stage.followUpCard} /> : null}
 
           {!hasStructuredContent ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-600">
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-600">
               {stage.emptyState}
             </div>
           ) : null}
