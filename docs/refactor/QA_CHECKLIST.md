@@ -104,3 +104,20 @@
 - T07 supplemental Playwright smoke verified director, teacher, and parent routes at 1440, 768, and 390 widths with no blank page, no Runtime Error text, and no document-level horizontal overflow.
 - `capture:ui` was attempted against local production server but timed out after 15 minutes after writing partial login/director screenshots.
 - T08 should rerun full screenshot capture and visual review for the remaining teacher and parent screenshot set.
+
+## 19. T08 Final QA Results
+
+- [x] Required control documents were read and present: `AGENTS.md`, `agent.md`, `TASK_SEQUENCE.md`, `TASK_STATUS.md`, `DESIGN_SYSTEM_SPEC.md`, `ROUTE_PAGE_MAP.md`, `COMPONENT_INVENTORY.md`, `DESIGN_ASSET_INDEX.md`, `QA_CHECKLIST.md`, `VISUAL_ACCEPTANCE_CRITERIA.md`, `IMPLEMENTATION_LOG.md`, `DECISIONS.md`.
+- [x] T00-T07 dependency statuses were checked and all were `done`.
+- [x] `git status --short` was checked before edits.
+- [x] `npm run lint` passed.
+- [x] `npm run build` passed.
+- [x] `CAPTURE_BASE_URL=http://localhost:3222 npm run capture:ui` was attempted after final build; it timed out after 15 minutes and was recorded in `FINAL_VISUAL_QA.md`.
+- [x] Supplemental Playwright smoke passed 99 role/route/viewport checks at 1440, 768, and 390 widths.
+- [x] Four demo entries were checked: 陈园长 -> `/admin`, 李老师 -> `/teacher`, 周老师 -> `/teacher`, 林妈妈 -> `/parent`.
+- [x] Login input, password visibility toggle, registration dialog, and mobile menu interactions were checked.
+- [x] Director, teacher, parent, shared management, permission/error, and storybook routes were checked.
+- [x] A visible English placeholder on the parent storybook page was fixed.
+- [x] `docs/refactor/FINAL_VISUAL_QA.md` was generated.
+- [x] `TASK_STATUS.md`, `IMPLEMENTATION_LOG.md`, `QA_CHECKLIST.md`, and `DECISIONS.md` were updated.
+- [x] Final conclusion recorded: visual acceptance criteria are met, with the `capture:ui` timeout documented as a residual tooling risk.

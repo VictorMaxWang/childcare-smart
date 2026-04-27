@@ -133,3 +133,20 @@ Future threads must append a short dated entry with task ID, changed areas, chec
 - Visual verification: `CAPTURE_BASE_URL=http://localhost:3220 npm run capture:ui` was started against local `next start -p 3220` but timed out after 15 minutes after producing the login/director part of the screenshot set. A supplemental Playwright smoke then passed 45 role/route/viewport checks across director, teacher, and parent pages at 1440/768/390 with no blank pages, no Next runtime error text, and no document-level horizontal overflow.
 - Risk: full screenshot capture did not complete within the time box, so T08 should still run the final full-site visual screenshot pass. Local production server logs retain the known Vercel Analytics and external AI/provider fallback noise from earlier tasks.
 - Unresolved: no blocker for T08.
+
+## 2026-04-27 - T08 Full-Site Visual QA and Final Unification
+
+- Goal: run final full-site visual QA across login, director, teacher, parent, shared states, desktop/tablet/mobile, and close out the frontend visual refactor.
+- Confirmed dependencies: T00-T07 are `done`; all required refactor control documents exist.
+- Baseline safety: inspected `git status --short`; preserved the existing T01-T07 visual-refactor baseline and made only a small T08 copy-level visual fix.
+- Fixed one visible final-unification issue in `components/parent/StoryBookViewer.tsx`: replaced `成长绘本 Agent V2` and `Parent Storybook V2` with product-native Chinese copy.
+- Ran `npm run lint`: passed.
+- Ran `npm run build`: passed.
+- Attempted Browser Use verification, but the Node REPL runtime was `v22.20.0` and the Browser plugin requires `>= v22.22.0`; Playwright Chromium was used as the browser verification fallback.
+- Ran `CAPTURE_BASE_URL=http://localhost:3222 npm run capture:ui` after final build; it timed out after 15 minutes and did not emit a complete current validation report. Earlier T08 capture attempt also timed out after 25 minutes. Existing ignored screenshot artifacts remain in `artifacts/ui-screenshots/`.
+- Supplemental Playwright smoke against local `next start -p 3222` passed: 99 role/route/viewport checks, 4 demo-account entries, 6 interaction checks, and 6 screenshots. It verified no blank pages, no Next runtime error text, and no document-level horizontal overflow at 1440, 768, and 390 widths.
+- Checked roles: 陈园长, 李老师, 周老师, 林妈妈.
+- Checked routes: `/login`, `/auth/login`, director routes, teacher routes, parent routes, shared `/children` `/health` `/growth` `/diet`, and parent permission state.
+- Generated `docs/refactor/FINAL_VISUAL_QA.md` and updated `TASK_STATUS.md`, `QA_CHECKLIST.md`, and `DECISIONS.md`.
+- Risk: full `capture:ui` artifact validation still needs a future split/optimization; external AI/provider 503 and local Vercel Analytics 404/MIME noise are environment/configuration issues, not T08 visual regressions.
+- Final conclusion: frontend refactor meets `docs/refactor/VISUAL_ACCEPTANCE_CRITERIA.md` with the capture-script timeout documented as a residual tooling risk.

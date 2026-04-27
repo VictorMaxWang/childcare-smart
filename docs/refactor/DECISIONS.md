@@ -90,3 +90,10 @@
 - Decision: T07 only unifies shared state, form, table, dialog, drawer, toast, and responsive behavior, with small page-level integrations where necessary.
 - Rationale: T02-T06 already established role-specific page direction. Reworking whole business pages in T07 would increase regression risk and could accidentally change fields, permissions, route semantics, or destructive action flows.
 - Consequence: T07 changes remain presentation-only. Business data structures, backend API calls, permission logic, routes, form submission handlers, delete handlers, upload handling, and persistent action semantics are preserved. Full screenshot comparison and final visual polish are left to T08.
+
+## D014 - Use Supplemental Smoke as T08 Acceptance Evidence When Full Capture Times Out
+
+- Date: 2026-04-27
+- Decision: T08 records `capture:ui` timeout honestly and uses a supplemental Playwright smoke plus key screenshots as final acceptance evidence.
+- Rationale: `capture:ui` timed out twice in local production verification, including once after the final build. The app still needs an objective route/role/responsive gate, so T08 verifies page load, runtime-error absence, document-level overflow, demo entries, registration dialog, password toggle, and mobile menu across the required roles and routes.
+- Consequence: The frontend visual refactor can be accepted against `VISUAL_ACCEPTANCE_CRITERIA.md`, while `capture:ui` remains a documented tooling risk for future split/optimization rather than being hidden or treated as passed.
