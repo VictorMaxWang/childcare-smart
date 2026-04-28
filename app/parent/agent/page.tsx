@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { flushSync } from "react-dom";
 import ReactMarkdown from "react-markdown";
-import { BrainCircuit, Clock3, Send, Sparkles } from "lucide-react";
+import { BrainCircuit, CheckCircle2, Clock3, MoonStar, Send, ShieldCheck, Sparkles } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import InterventionCardPanel from "@/components/agent/InterventionCardPanel";
 import CareModeToggle from "@/components/parent/CareModeToggle";
@@ -71,6 +71,7 @@ import { getHydrationDisplayState } from "@/lib/hydration-display";
 import { useCareMode } from "@/lib/care-mode";
 import { buildParentSpeechScript } from "@/lib/voice/browser-tts";
 import { sanitizeParentFacingText } from "@/lib/agent/parent-copy";
+import { cn } from "@/lib/utils";
 import { formatParentFeedbackStatusLabel } from "@/lib/feedback/consumption";
 import {
   buildInterventionTasksFromCard,
@@ -978,6 +979,140 @@ export default function ParentAgentPage() {
       tone: agentHasPendingFeedback ? "amber" : "emerald",
     },
   ];
+  const parentAiParityHero = (
+    <section className="overflow-hidden rounded-[2rem] border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f4f7ff_48%,#fff7ed_100%)] p-4 shadow-[0_24px_70px_rgb(99_102_241_/_0.14)] sm:p-5">
+      <div className="relative overflow-hidden rounded-[1.6rem] bg-[linear-gradient(135deg,#f8fbff_0%,#f5f3ff_55%,#fff7ed_100%)] p-5">
+        <div className="absolute right-3 top-3 hidden h-32 w-44 rounded-[2rem] bg-white/70 shadow-inner sm:block">
+          <div className="absolute right-7 top-5 flex h-16 w-16 items-center justify-center rounded-full bg-[linear-gradient(135deg,#fbcfe8,#c4b5fd)] text-2xl shadow-lg">
+            妈
+          </div>
+          <div className="absolute bottom-5 right-24 flex h-12 w-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,#bae6fd,#a7f3d0)] text-xl shadow-lg">
+            {selectedFeed.child.name.slice(0, 1)}
+          </div>
+          <div className="absolute bottom-6 right-6 rounded-2xl bg-white px-3 py-2 text-xs font-semibold text-indigo-600 shadow-sm">
+            AI
+          </div>
+        </div>
+        <div className="relative max-w-2xl">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="info" className="rounded-full px-3 py-1">AI 助手 · 共育建议</Badge>
+            <Badge variant={agentHasPendingFeedback ? "warning" : "success"} className="rounded-full px-3 py-1">
+              {agentStatusLabel}
+            </Badge>
+          </div>
+          <h2 className="mt-4 text-3xl font-black tracking-normal text-slate-950 sm:text-4xl">
+            晚上好，{currentUser.name}
+          </h2>
+          <p className="mt-3 max-w-xl text-base leading-7 text-slate-600">
+            基于 {selectedFeed.child.name} 近期表现和老师观察，为您整理今晚可执行的共育建议。
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <CareModeToggle careMode={careMode} onChange={setCareMode} variant="compact" />
+            <Button asChild variant="outline" className="min-h-11 rounded-2xl bg-white/80">
+              <Link href={`/parent/agent?child=${selectedFeed.child.id}`}>刷新建议</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-4">
+          <div className="rounded-[1.5rem] border border-white bg-white/92 p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-100 text-lg font-black text-indigo-600">1</span>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-950">今晚推荐这样做</h3>
+                  <p className="mt-1 text-sm text-slate-500">只保留最容易完成的家庭动作。</p>
+                </div>
+              </div>
+              <Link href="#feedback" className="hidden rounded-full bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-600 sm:block">
+                做完去反馈
+              </Link>
+            </div>
+            <div className="mt-4 divide-y divide-slate-100 rounded-2xl border border-slate-100 bg-white">
+              {[
+                { icon: MoonStar, title: displayTonightTopAction, helper: displayWhyNow },
+                { icon: Sparkles, title: "亲子共读 15 分钟", helper: "用孩子熟悉的故事复述今天的开心事。" },
+                { icon: CheckCircle2, title: "给孩子积极反馈", helper: "及时肯定努力，帮助孩子形成稳定体验。" },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.title} className="flex items-start gap-3 p-4">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#ede9fe,#dbeafe)] text-indigo-600">
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold leading-6 text-slate-950">{item.title}</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-500">{item.helper}</p>
+                    </div>
+                    <span className="mt-1 h-5 w-5 rounded-full border-2 border-slate-300" />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-4 rounded-2xl bg-indigo-50 px-4 py-3 text-sm leading-6 text-indigo-700">
+              小贴士：保持轻松愉快的氛围，简单而持续的陪伴最有效。
+            </div>
+          </div>
+
+          <div id="feedback-overview" className="rounded-[1.5rem] border border-white bg-white/92 p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-lg font-black text-emerald-600">2</span>
+              <div>
+                <h3 className="text-xl font-bold text-slate-950">您完成后的反馈</h3>
+                <p className="mt-1 text-sm text-slate-500">您的反馈会帮助老师明天更好地支持 {selectedFeed.child.name}。</p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-4">
+              {["完成得很好", "部分完成", "有一些挑战", "没来得及"].map((item, index) => (
+                <Link
+                  key={item}
+                  href="#feedback"
+                  className={cn(
+                    "rounded-2xl border px-3 py-3 text-center text-sm font-semibold shadow-sm",
+                    index === 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-700"
+                  )}
+                >
+                  {item}
+                </Link>
+              ))}
+            </div>
+            <Link href="#feedback" className="mt-4 flex min-h-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#6366f1,#8b5cf6)] px-4 py-3 font-semibold text-white shadow-lg shadow-indigo-200">
+              提交反馈给老师
+            </Link>
+          </div>
+        </div>
+
+        <aside className="space-y-4">
+          <div className="rounded-[1.5rem] border border-white bg-white/92 p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-lg font-black text-sky-600">3</span>
+              <h3 className="text-lg font-bold text-slate-950">明天老师会继续关注</h3>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {[
+                ["情绪稳定性", "在活动中的情绪变化与调节情况"],
+                ["语言表达", "主动表达想法与交流意愿"],
+                ["同伴互动", "与同伴的合作与互动情况"],
+              ].map(([title, helper]) => (
+                <div key={title} className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+                  <p className="font-semibold text-slate-900">{title}</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-500">{helper}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-[1.5rem] border border-indigo-100 bg-indigo-50/70 p-4">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="mt-0.5 h-5 w-5 text-indigo-600" />
+              <p className="text-sm leading-6 text-indigo-700">隐私保护承诺：我们严格保护孩子的个人信息安全。</p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
   const hasMultipleChildren = parentFeed.length > 1;
   const normalPageActions = (
     <>
@@ -1021,6 +1156,7 @@ export default function ParentAgentPage() {
         badge={`家长 AI 助手 · 当前孩子 ${selectedFeed.child.name}`}
         title="今晚先做一件事，做完再给老师一个最短反馈。"
         description="关怀模式把首屏收敛成大字行动摘要，先让祖辈和低数字熟练度照护者看懂今晚做什么、明天看什么、为什么现在做。"
+        headerVariant="hidden"
         actions={carePageActions}
       >
         <RoleSplitLayout
@@ -1028,6 +1164,8 @@ export default function ParentAgentPage() {
           aside={null}
           main={
             <div className="space-y-6">
+              {parentAiParityHero}
+
               <ParentCareFocusCard
                 badge="关怀模式"
                 title={`今晚先陪 ${selectedFeed.child.name} 做这一件事`}
@@ -1518,11 +1656,14 @@ export default function ParentAgentPage() {
       badge={`家长 AI 助手 · 当前儿童 ${selectedFeed.child.name}`}
       title="把今晚怎么做、做完怎么反馈、明天老师继续看什么，放进同一条 AI 闭环里"
       description="这一版家长助手会把今晚怎么做、做完怎么反馈、以及明天老师继续看什么，串成一条完整主路径。"
+      headerVariant="hidden"
       actions={normalPageActions}
     >
       <RoleSplitLayout
         main={
           <div className="space-y-6">
+            {parentAiParityHero}
+
             <ParentHeroCard
               eyebrow="家长 AI 闭环"
               title={`${selectedFeed.child.name} 今晚怎么做`}

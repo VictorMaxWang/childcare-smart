@@ -9,9 +9,12 @@ import {
   BrainCircuit,
   CalendarDays,
   CheckCircle2,
+  HeartPulse,
   MessageCircleMore,
   MoonStar,
+  Sparkles,
   TrendingUp,
+  Utensils,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import UnifiedIntentEntryCard from "@/components/intent/UnifiedIntentEntryCard";
@@ -20,7 +23,6 @@ import ParentCareFocusCard from "@/components/parent/ParentCareFocusCard";
 import {
   ParentActionCard,
   ParentGentleNotice,
-  ParentHeroCard,
   ParentTimelineCard,
   ParentWeeklySignalGrid,
   type ParentTimelineItem,
@@ -343,24 +345,6 @@ export default function ParentHomePage() {
     : hasHealthWarning
       ? "warning"
       : "success";
-  const heroPills = [
-    { label: "今日饮食", value: `${previewContext.todayMeals.length} 条`, tone: "sky" as const },
-    {
-      label: "今日成长",
-      value: `${feed.todayGrowth.length} 条`,
-      tone: "emerald" as const,
-    },
-    {
-      label: "近 7 天补水",
-      value: viewModel.todaySummary[2]?.value ?? "待观察",
-      tone: "indigo" as const,
-    },
-    {
-      label: "反馈状态",
-      value: hasPendingFeedback ? "待提交" : "已同步",
-      tone: hasPendingFeedback ? ("amber" as const) : ("emerald" as const),
-    },
-  ];
   const todayTimelineItems: ParentTimelineItem[] = [
     {
       id: "health",
@@ -638,6 +622,8 @@ export default function ParentHomePage() {
         badge={`家长首页 · ${TODAY_TEXT}`}
         title={`先看 ${viewModel.child.name} 今晚要做什么`}
         description="关怀模式会把首屏压缩成一件事、一句话和最短主链路，帮助祖辈或低数字熟练度照护者更快看懂。"
+        headerVariant="hidden"
+        className="max-w-[84rem]"
         actions={headerActions}
       >
         <RoleSplitLayout
@@ -781,28 +767,137 @@ export default function ParentHomePage() {
       badge={`家长首页 · ${TODAY_TEXT}`}
       title={`先看 ${viewModel.child.name} 今天的状态，再决定今晚怎么做`}
       description="首页只保留今天最需要处理的信息：孩子状态、AI 提醒、今晚任务、AI 干预卡预览、待反馈事项和 7 天趋势入口。"
+      headerVariant="hidden"
+      className="max-w-[84rem]"
       actions={headerActions}
     >
       <RoleSplitLayout
         main={
           <div className="space-y-6">
-            <ParentHeroCard
-              eyebrow="今日照护摘要"
-              title={`${viewModel.child.name} 今天的状态`}
-              description="先确认孩子今天在园状态，再看今晚只需要完成的一件家庭动作。所有信息仍来自当前孩子的真实记录。"
-              childName={viewModel.child.name}
-              childMeta={childMeta}
-              allergies={viewModel.child.allergies}
-              statusLabel={parentStatusLabel}
-              statusVariant={parentStatusVariant}
-              pills={heroPills}
-              actions={
-                <>
-                  <InlineLinkButton href={agentHref} label="看今晚怎么做" variant="premium" />
-                  <InlineLinkButton href={`${agentHref}#feedback`} label="做完去反馈" />
-                </>
-              }
-            />
+            <section className="overflow-hidden rounded-[2rem] border border-sky-100 bg-[linear-gradient(150deg,#fff7ed_0%,#f0f9ff_44%,#f5f3ff_100%)] p-4 shadow-[0_22px_64px_rgb(14_165_233_/_0.14)] sm:p-5">
+              <div className="grid gap-4">
+                <div className="rounded-[1.75rem] border border-white/82 bg-white/84 p-4 shadow-sm sm:p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.2rem] bg-[linear-gradient(135deg,#7dd3fc,#a7f3d0)] text-2xl font-bold text-white shadow-[0_16px_36px_rgb(14_165_233_/_0.25)] sm:h-16 sm:w-16">
+                        {viewModel.child.name.slice(0, 1)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="info" className="rounded-full px-3 py-1">
+                            {TODAY_TEXT}
+                          </Badge>
+                          <Badge variant={parentStatusVariant}>{parentStatusLabel}</Badge>
+                        </div>
+                        <h1 className="mt-2 text-xl font-semibold leading-tight text-slate-950 sm:mt-3 sm:text-3xl">
+                          {viewModel.child.name} 的今日状态
+                        </h1>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{childMeta}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {viewModel.child.allergies.length > 0 ? (
+                            viewModel.child.allergies.map((item) => (
+                              <Badge key={item} variant="warning">
+                                过敏：{item}
+                              </Badge>
+                            ))
+                          ) : (
+                            <Badge variant="success">暂无过敏重点</Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <CareModeToggle careMode={careMode} onChange={setCareMode} variant="compact" />
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-5 gap-2 sm:mt-5 sm:gap-3">
+                    {[
+                      {
+                        label: "晨检",
+                        value: latestHealthCheck ? `${latestHealthCheck.temperature.toFixed(1)}°C` : "暂无",
+                        icon: <HeartPulse className="h-5 w-5" />,
+                        tone: latestHealthCheck?.isAbnormal ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700",
+                      },
+                      {
+                        label: "饮食",
+                        value: latestMeal ? `${latestMeal.nutritionScore} 分` : "暂无",
+                        icon: <Utensils className="h-5 w-5" />,
+                        tone: "bg-sky-50 text-sky-700",
+                      },
+                      {
+                        label: "成长",
+                        value: `${feed.todayGrowth.length} 条`,
+                        icon: <BookOpenText className="h-5 w-5" />,
+                        tone: "bg-violet-50 text-violet-700",
+                      },
+                      {
+                        label: "反馈",
+                        value: hasPendingFeedback ? "待提交" : "已同步",
+                        icon: <MessageCircleMore className="h-5 w-5" />,
+                        tone: hasPendingFeedback ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700",
+                      },
+                      {
+                        label: "趋势",
+                        value: `${previewContext.weeklyMeals.length} 条`,
+                        icon: <TrendingUp className="h-5 w-5" />,
+                        tone: "bg-indigo-50 text-indigo-700",
+                      },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-2xl border border-white/82 bg-white/78 p-2 text-center shadow-sm sm:p-3">
+                        <div className={`mx-auto flex h-9 w-9 items-center justify-center rounded-2xl sm:h-10 sm:w-10 ${item.tone}`}>
+                          {item.icon}
+                        </div>
+                        <p className="mt-1 text-[11px] text-slate-500 sm:mt-2 sm:text-xs">{item.label}</p>
+                        <p className="mt-0.5 text-xs font-semibold text-slate-950 sm:mt-1 sm:text-sm">{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:flex sm:flex-wrap">
+                    <Button asChild variant="premium" className="min-h-11 rounded-2xl">
+                      <Link href={agentHref}>看今晚怎么做</Link>
+                    </Button>
+                    <Button asChild variant="outline" className="min-h-11 rounded-2xl">
+                      <Link href={`${agentHref}#feedback`}>做完去反馈</Link>
+                    </Button>
+                    <Button asChild variant="outline" className="col-span-2 hidden min-h-11 rounded-2xl sm:inline-flex">
+                      <Link href={storybookHref}>打开成长绘本</Link>
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-[1.75rem] border border-white/82 bg-white/76 p-5 shadow-sm xl:hidden">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+                        <Sparkles className="h-5 w-5" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <p className="text-base font-semibold text-slate-950">AI 今晚建议</p>
+                        <p className="mt-1 text-xs text-slate-500">只保留一件可执行的家庭动作</p>
+                      </div>
+                    </div>
+                    <ParentSpeakButton text={reminderSpeechText} label="播报" />
+                  </div>
+                  <div className="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50/68 p-4">
+                    <p className="text-base font-semibold leading-7 text-slate-950">
+                      {previewResult?.title ?? viewModel.aiReminder.title}
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-slate-600">
+                      {previewResult?.whyNow ?? displayWhyRecommended}
+                    </p>
+                  </div>
+                  <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
+                    <div className="flex items-start gap-3">
+                      <MoonStar className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" />
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950">{displayTonightTaskTitle}</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{displayTonightTaskDescription}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
 
             <ParentTimelineCard
               title="今天先看这 4 件事"

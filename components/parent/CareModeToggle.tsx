@@ -7,13 +7,45 @@ interface CareModeToggleProps {
   careMode: boolean;
   onChange: (nextValue: boolean) => void;
   className?: string;
+  variant?: "card" | "compact";
 }
 
 export default function CareModeToggle({
   careMode,
   onChange,
   className,
+  variant = "card",
 }: CareModeToggleProps) {
+  if (variant === "compact") {
+    return (
+      <div
+        className={cn(
+          "inline-grid grid-cols-2 rounded-full border border-slate-200 bg-white/82 p-1 shadow-sm",
+          className
+        )}
+      >
+        <Button
+          type="button"
+          variant={careMode ? "ghost" : "premium"}
+          className="min-h-9 rounded-full px-3 text-sm"
+          aria-pressed={!careMode}
+          onClick={() => onChange(false)}
+        >
+          普通
+        </Button>
+        <Button
+          type="button"
+          variant={careMode ? "premium" : "ghost"}
+          className="min-h-9 rounded-full px-3 text-sm"
+          aria-pressed={careMode}
+          onClick={() => onChange(true)}
+        >
+          关怀
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(

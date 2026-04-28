@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardCheck, ShieldAlert, Workflow } from "lucide-react";
+import {
+  BarChart3,
+  BrainCircuit,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock3,
+  ShieldAlert,
+  TrendingUp,
+  Workflow,
+} from "lucide-react";
 import AdminQualityMetricsPanel from "@/components/admin/AdminQualityMetricsPanel";
 import RiskPriorityBoard from "@/components/admin/RiskPriorityBoard";
 import EmptyState from "@/components/EmptyState";
@@ -196,6 +205,8 @@ export default function AdminHomePage() {
       badge={`园长首页 · ${INSTITUTION_NAME} · ${TODAY_TEXT}`}
       title="先看机构优先级，再决定今天最该推动什么"
       description="首页保留今日优先级、重点风险、待处理事项和周报预览，帮助园长快速进入决策和派单闭环。"
+      headerVariant="hidden"
+      className="max-w-[86rem]"
       actions={
         <>
           <InlineLinkButton href="/admin/agent" label="进入园长 AI 助手" variant="premium" />
@@ -206,6 +217,144 @@ export default function AdminHomePage() {
       <RoleSplitLayout
         main={
           <div className="space-y-6">
+            <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#f8fbff_0%,#eef2ff_46%,#ecfeff_100%)] p-4 shadow-[0_20px_60px_rgb(79_70_229_/_0.10)] sm:p-5">
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_260px]">
+                <div className="min-w-0">
+                  <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="info" className="rounded-full px-3 py-1">
+                          {INSTITUTION_NAME}
+                        </Badge>
+                        <Badge variant="secondary" className="rounded-full px-3 py-1">
+                          {TODAY_TEXT}
+                        </Badge>
+                      </div>
+                      <h1 className="mt-4 max-w-[22rem] text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl 2xl:max-w-none">
+                        今日园所运营看板
+                      </h1>
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                        先看风险和待办，再进入 AI 助手派单、复盘和周报闭环。
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <InlineLinkButton href="/admin/agent" label="AI 助手" variant="premium" />
+                      <InlineLinkButton href="/admin/agent?action=weekly-report" label="运营周报" />
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {displayHome.heroStats.map((item, index) => {
+                      const Icon = index === 0 ? ShieldAlert : index === 1 ? BarChart3 : index === 2 ? CheckCircle2 : TrendingUp;
+                      const toneClass =
+                        index === 0
+                          ? "from-amber-50 to-white text-amber-700"
+                          : index === 1
+                            ? "from-sky-50 to-white text-sky-700"
+                            : index === 2
+                              ? "from-emerald-50 to-white text-emerald-700"
+                              : "from-indigo-50 to-white text-indigo-700";
+                      return (
+                        <div
+                          key={item.label}
+                          className="rounded-2xl border border-white/80 bg-white/82 p-4 shadow-[0_12px_32px_rgb(15_23_42_/_0.06)]"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs font-medium text-slate-500">{item.label}</p>
+                            <span className={`flex h-9 w-9 items-center justify-center rounded-xl bg-linear-to-br ${toneClass}`}>
+                              <Icon className="h-4 w-4" aria-hidden="true" />
+                            </span>
+                          </div>
+                          <p className="mt-3 text-3xl font-semibold leading-tight text-slate-950">{item.value}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/80 bg-white/78 p-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+                      <BrainCircuit className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-950">闭环状态</p>
+                      <p className="mt-1 text-xs text-slate-500">{displayHome.actionEntrySummary}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {[
+                      { label: "风险儿童", value: `${displayHome.riskChildren.length} 人` },
+                      { label: "待派单", value: `${displayHome.pendingDispatches.length} 项` },
+                      { label: "待处理", value: `${displayHome.pendingItems.length} 条` },
+                    ].map((item) => (
+                      <div key={item.label} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                        <span className="text-xs text-slate-500">{item.label}</span>
+                        <span className="text-sm font-semibold text-slate-950">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.72fr)]">
+              <SectionCard
+                title="今日建议动作"
+                description="按机构风险、家园反馈和会诊线索收敛为首屏处理清单。"
+                actions={<Badge variant="warning">优先处理</Badge>}
+                className="bg-white/95"
+              >
+                <div className="space-y-3">
+                  {displayHome.priorityTopItems.slice(0, 3).map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-950">{item.targetName}</p>
+                          <p className="mt-2 text-sm leading-6 text-slate-600">{item.reason}</p>
+                        </div>
+                        <PriorityLevelBadge level={item.priorityLevel} />
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                        <span className="rounded-full bg-white px-2.5 py-1">负责人：{item.recommendedOwner.label}</span>
+                        <span className="rounded-full bg-white px-2.5 py-1">
+                          时限：{formatAdminDateTimeLabel(item.recommendedDeadline)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                title="待派单任务"
+                description="把需要园长推动的事项压缩成右侧工作清单。"
+                actions={<Badge variant={dispatchAvailable ? "success" : "outline"}>{dispatchStatusMessage}</Badge>}
+                className="bg-white/95"
+              >
+                <div className="space-y-3">
+                  {displayHome.pendingDispatches.length > 0 ? (
+                    displayHome.pendingDispatches.slice(0, 3).map((event) => (
+                      <div key={event.id} className="rounded-2xl border border-slate-100 bg-white p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-semibold text-slate-950">{event.title}</p>
+                          <EventStatusBadge status={event.status} />
+                        </div>
+                        <p className="mt-2 flex items-center gap-2 text-xs leading-5 text-slate-500">
+                          <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                          {formatAdminDateTimeLabel(event.recommendedDeadline)}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                      当前还没有已经创建的派单，建议先从 AI 助手生成动作。
+                    </div>
+                  )}
+                </div>
+              </SectionCard>
+            </div>
+
             <UnifiedIntentEntryCard
               roleHint="admin"
               sourcePage="/admin"

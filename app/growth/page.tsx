@@ -189,19 +189,201 @@ export default function GrowthPage() {
   }
 
   return (
-    <div className="app-page page-enter">
-      <div className="mb-6 rounded-xl border border-rose-100 bg-linear-to-r from-white via-rose-50/50 to-indigo-50/60 p-5 shadow-[var(--shadow-card)] sm:p-6">
-        <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
-          <BookHeart className="h-8 w-8 text-rose-500" />
-          成长与行为记录
-        </h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-          支持记录握笔、独立进食、语言表达、社交互动、情绪表现、精细动作、大动作、睡眠情况、如厕情况。
-          每条记录都包含时间、记录人角色、观察标签、描述和是否需要关注。
-        </p>
-      </div>
+    <div className="app-page max-w-[86rem] page-enter">
+      {isTeacher ? (
+        <section className="mb-5 overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_45%,#fff1f2_100%)] p-4 shadow-[0_22px_64px_rgb(99_102_241_/_0.12)] sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="info" className="rounded-full px-3 py-1">{currentUser.className ?? "当前班级"}</Badge>
+                <Badge variant={pendingRecords.length > 0 ? "warning" : "success"} className="rounded-full px-3 py-1">待复查 {pendingRecords.length} 条</Badge>
+              </div>
+              <h1 className="mt-4 flex items-center gap-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                <BookHeart className="h-7 w-7 text-indigo-500" />
+                成长与行为记录
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                按时间线记录孩子的成长点滴与行为表现，科学观察，用心陪伴。
+              </p>
+            </div>
+            <Button type="button" variant="premium" className="min-h-11 rounded-2xl" onClick={() => setShowFormOnMobile((prev) => !prev)}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              新增记录
+            </Button>
+          </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_1fr]">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: "今日记录", value: `${timelineRecords.filter((record) => normalizeLocalDate(record.createdAt) === normalizeLocalDate(new Date().toISOString())).length}条`, icon: Clock3, tone: "bg-indigo-50 text-indigo-700" },
+              { label: "记录幼儿", value: `${new Set(timelineRecords.map((record) => record.childId)).size}名`, icon: Workflow, tone: "bg-sky-50 text-sky-700" },
+              { label: "图文记录", value: `${timelineRecords.length}条`, icon: BookHeart, tone: "bg-rose-50 text-rose-700" },
+              { label: "观察标签", value: `${categoryChartData.reduce((sum, item) => sum + item.value, 0)}次`, icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-700" },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.label} className="rounded-2xl border border-white/82 bg-white/88 p-4 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-slate-500">{item.label}</p>
+                    <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${item.tone}`}>
+                      <Icon className="h-4 w-4" />
+                    </span>
+                  </div>
+                  <p className="mt-3 text-2xl font-semibold text-slate-950 sm:text-3xl">{item.value}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                {["全部记录", "行为观察", "语言表达", "社交互动", "精细动作", "情绪发展"].map((item, index) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`rounded-full px-4 py-2 text-sm font-medium transition ${index === 0 || filterValue === item ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20" : "bg-slate-50 text-slate-600 ring-1 ring-slate-100"}`}
+                    onClick={() => setFilterValue(index === 0 ? "全部" : item)}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+              <Button type="button" variant="outline" className="rounded-2xl" onClick={() => setShowFormOnMobile((prev) => !prev)}>
+                更多筛选
+              </Button>
+            </div>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="space-y-4">
+                {timelineRecords.slice(0, 4).map((record) => {
+                  const child = visibleChildren.find((item) => item.id === record.childId);
+                  return (
+                    <article key={`teacher-growth-feature-${record.id}`} className="grid gap-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-4 md:grid-cols-[76px_1fr_190px] md:items-center">
+                      <div className="text-sm text-slate-500">
+                        <p className="font-semibold text-slate-950">{formatShortDate(record.createdAt)}</p>
+                        <p className="mt-1">{new Date(record.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</p>
+                      </div>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl shadow-sm">{child?.gender === "男" ? "👦" : "👧"}</span>
+                          <p className="font-semibold text-slate-950">{child?.name ?? "未识别幼儿"}</p>
+                          <Badge variant="info" className="rounded-full px-3 py-1">{record.category}</Badge>
+                          {record.needsAttention ? <Badge variant="warning" className="rounded-full px-3 py-1">需关注</Badge> : null}
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-slate-600">{record.description}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {record.tags.slice(0, 3).map((tag) => (
+                            <Badge key={tag} variant="secondary" className="rounded-full px-3 py-1">{tag}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-white p-4 text-sm text-slate-500">
+                        <p className="font-semibold text-slate-950">{record.reviewStatus ?? "已完成"}</p>
+                        <p className="mt-2 line-clamp-3">{record.followUpAction ?? "继续观察并记录变化。"}</p>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+
+              <aside className="space-y-4">
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <p className="text-sm font-semibold text-slate-950">记录数据概览</p>
+                  <div className="mt-4 space-y-3">
+                    {categoryChartData.slice(0, 5).map((item) => (
+                      <div key={item.name} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                        <span className="text-slate-600">{item.name}</span>
+                        <strong className="text-slate-950">{item.value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+                  <p className="text-sm font-semibold text-indigo-900">移动端节奏</p>
+                  <p className="mt-2 text-sm leading-6 text-indigo-800">
+                    先筛选维度，再看图文观察卡，必要时展开新增记录表单补录。
+                  </p>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </section>
+      ) : (
+      <section className="mb-5 overflow-hidden rounded-2xl border border-rose-100 bg-[linear-gradient(135deg,#fff1f2_0%,#f8fbff_48%,#eef2ff_100%)] p-4 shadow-[0_20px_60px_rgb(244_63_94_/_0.10)] sm:p-5">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="info" className="rounded-full px-3 py-1">
+                    {isTeacher ? currentUser.className ?? "当前班级" : "成长行为"}
+                  </Badge>
+                  <Badge variant={pendingRecords.length > 0 ? "warning" : "success"} className="rounded-full px-3 py-1">
+                    待复查 {pendingRecords.length} 条
+                  </Badge>
+                </div>
+                <h1 className="mt-4 flex items-center gap-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                  <BookHeart className="h-7 w-7 text-rose-500" />
+                  成长记录与复查看板
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  先看观察维度、复查压力和近期时间线，再展开表单补充新的成长行为记录。
+                </p>
+              </div>
+              <Button type="button" variant="premium" className="min-h-11 rounded-2xl" onClick={() => setShowFormOnMobile((prev) => !prev)}>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                新增观察
+              </Button>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                { label: "观察记录", value: `${filteredRecords.length}条`, icon: BookHeart, tone: "bg-rose-50 text-rose-700" },
+                { label: "待复查", value: `${pendingRecords.length}条`, icon: CalendarClock, tone: "bg-amber-50 text-amber-700" },
+                { label: "已完成", value: `${completedRecords.length}条`, icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-700" },
+                { label: "观察维度", value: `${categoryChartData.length}类`, icon: Workflow, tone: "bg-indigo-50 text-indigo-700" },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.label} className="rounded-2xl border border-white/82 bg-white/84 p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-slate-500">{item.label}</p>
+                      <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${item.tone}`}>
+                        <Icon className="h-4 w-4" aria-hidden="true" />
+                      </span>
+                    </div>
+                    <p className="mt-3 text-3xl font-semibold leading-tight text-slate-950">{item.value}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/82 bg-white/78 p-4 shadow-sm">
+            <p className="text-sm font-semibold text-slate-950">近期关注</p>
+            <div className="mt-4 space-y-3">
+              {timelineRecords.slice(0, 3).map((record) => {
+                const child = visibleChildren.find((item) => item.id === record.childId);
+                return (
+                  <div key={`growth-focus-${record.id}`} className="rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-slate-950">{child?.name ?? "未识别幼儿"}</span>
+                      <Badge variant={record.reviewStatus === "待复查" ? "warning" : "secondary"}>{record.reviewStatus ?? "已完成"}</Badge>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{record.description}</p>
+                  </div>
+                );
+              })}
+              {timelineRecords.length === 0 ? (
+                <p className="text-sm leading-6 text-slate-500">当前筛选下暂无成长记录。</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_1fr]">
         <div className="space-y-3 xl:sticky xl:top-24 xl:h-fit">
           <Button
             type="button"
@@ -216,7 +398,7 @@ export default function GrowthPage() {
             <ChevronDown className={`h-4 w-4 transition-transform ${showFormOnMobile ? "rotate-180" : ""}`} />
           </Button>
 
-        <Card className={`h-fit overflow-hidden rounded-lg border-t-2 border-t-indigo-500 ${showFormOnMobile ? "block" : "hidden xl:block"}`}>
+        <Card className={`h-fit overflow-hidden rounded-2xl border-indigo-100 shadow-sm ${showFormOnMobile ? "block" : "hidden xl:block"}`}>
           <CardHeader>
             <CardTitle className="text-lg">新增观察记录</CardTitle>
             <CardDescription>家长和教师均可补充观察，机构管理员可做复盘。</CardDescription>

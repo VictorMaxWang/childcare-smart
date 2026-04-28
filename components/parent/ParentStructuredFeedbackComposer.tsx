@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import ParentVoiceNoteInput from "@/components/parent/ParentVoiceNoteInput";
 import { cn } from "@/lib/utils";
+import { CheckCircle2, Heart, Moon, ShieldCheck } from "lucide-react";
 
 type ExecutionCountOption = 1 | 2 | 3;
 
@@ -229,6 +230,76 @@ export default function ParentStructuredFeedbackComposer({
 
   return (
     <div className="space-y-4">
+      <div className="overflow-hidden rounded-[1.6rem] border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_52%,#fff7ed_100%)] p-4 shadow-[0_18px_52px_rgb(99_102_241_/_0.12)]">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#dbeafe,#ede9fe)] text-xl font-black text-indigo-600">
+              童
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="truncate text-lg font-bold text-slate-950">今晚家庭干预卡</p>
+                <Badge variant={executionStatus ? "success" : "warning"} className="rounded-full">
+                  {executionStatus ? "填写中" : "待反馈"}
+                </Badge>
+              </div>
+              <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">
+                {interventionCard?.title ?? "先完成今晚建议，再把孩子反应告诉老师。"}
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="flex items-center justify-end gap-1 text-xs text-slate-400">
+              <ShieldCheck className="h-3.5 w-3.5 text-indigo-500" />
+              隐私安全
+            </div>
+            <p className="mt-2 text-sm font-semibold text-indigo-600">今日 21:00</p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/70 p-3">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-sm">
+              <Moon className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-slate-950">给家长的沟通话术</p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                {feedbackPrompt ?? interventionCard?.tonightHomeAction ?? "先定义今晚只做 1 个核心动作，再约定明早回传 2 到 3 个观察点。"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {[
+            { label: "心情", icon: Heart, active: childReaction === "improved" || childReaction === "accepted" },
+            { label: "睡眠", icon: Moon, active: improvementStatus === "slight_improvement" || improvementStatus === "clear_improvement" },
+            { label: "食欲", icon: CheckCircle2, active: executionStatus === "completed" },
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <div key={item.label} className="rounded-2xl border border-slate-100 bg-white px-3 py-3">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "flex h-9 w-9 items-center justify-center rounded-full",
+                      item.active ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 text-slate-400"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{item.label}</p>
+                    <p className="text-xs text-slate-400">{item.active ? "已选择" : "待选择"}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         {!careMode ? (
           <div className="flex flex-wrap gap-2">

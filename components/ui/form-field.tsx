@@ -22,17 +22,21 @@ function FormField({
   ...props
 }: FormFieldProps) {
   return (
-    <div className={cn("min-w-0 space-y-2", className)} {...props}>
+    <div className={cn("min-w-0 space-y-2.5", className)} {...props}>
       {label ? (
-        <Label htmlFor={htmlFor} className="flex min-w-0 items-center gap-1.5">
+        <Label htmlFor={htmlFor} className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-slate-700">
           <span className="min-w-0 break-words">{label}</span>
-          {required ? <span className="text-(--danger)" aria-hidden="true">*</span> : null}
+          {required ? (
+            <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[11px] leading-none text-rose-600" aria-hidden="true">
+              必填
+            </span>
+          ) : null}
         </Label>
       ) : null}
       {children}
-      {description && !error ? <p className="text-xs leading-5 text-(--text-tertiary)">{description}</p> : null}
+      {description && !error ? <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">{description}</p> : null}
       {error ? (
-        <p className="text-xs leading-5 text-(--danger-foreground)" role="alert" aria-live="polite">
+        <p className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700" role="alert" aria-live="polite">
           {error}
         </p>
       ) : null}

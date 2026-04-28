@@ -6,11 +6,14 @@ import {
   ArrowRight,
   Baby,
   Building2,
-  CheckCircle2,
   ClipboardList,
+  Database,
   Eye,
   EyeOff,
+  Fingerprint,
+  KeyRound,
   LockKeyhole,
+  RadioTower,
   ShieldCheck,
   Sparkles,
   TriangleAlert,
@@ -44,10 +47,11 @@ const PLATFORM_FEATURES = [
   { title: "数据安全", description: "权限与隐私可控", icon: ShieldCheck },
 ];
 
-const SECURITY_NOTES = [
-  "数据分角色隔离",
-  "示例账号免密码体验",
-  "普通账号独立保存",
+const SECURITY_METRICS = [
+  { label: "访问校验", value: "实时", icon: Fingerprint },
+  { label: "角色权限", value: "3 类", icon: KeyRound },
+  { label: "数据流转", value: "闭环", icon: RadioTower },
+  { label: "本地演示", value: "可追溯", icon: Database },
 ];
 
 function getRoleBadgeRole(role: AccountRole): RoleBadgeRole {
@@ -82,6 +86,58 @@ function PasswordToggleButton({
     >
       {visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
     </IconButton>
+  );
+}
+
+function LoginSecurityVisual() {
+  return (
+    <div className="relative min-h-[24rem] overflow-hidden rounded-[2rem] border border-white/80 bg-[radial-gradient(circle_at_24%_18%,rgb(221_214_254_/_0.86),transparent_34%),radial-gradient(circle_at_80%_22%,rgb(153_246_228_/_0.58),transparent_33%),linear-gradient(150deg,#ffffff_0%,#eff6ff_54%,#f5f3ff_100%)] p-5 shadow-[0_28px_76px_rgb(79_70_229_/_0.18)]">
+      <div className="absolute -right-14 -top-16 h-44 w-44 rounded-full bg-cyan-200/40 blur-2xl" />
+      <div className="absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-indigo-300/32 blur-2xl" />
+
+      <div className="relative flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-500">Secure access</p>
+          <p className="mt-2 text-2xl font-bold leading-tight text-slate-950">智慧托育身份中台</p>
+        </div>
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/84 text-indigo-600 shadow-[0_12px_30px_rgb(99_102_241_/_0.18)]">
+          <ShieldCheck className="h-6 w-6" aria-hidden="true" />
+        </div>
+      </div>
+
+      <div className="relative mx-auto mt-9 h-44 w-44">
+        <div className="absolute inset-0 rounded-[2rem] bg-[linear-gradient(145deg,#8b5cf6,#22d3ee)] shadow-[0_26px_60px_rgb(99_102_241_/_0.34)]" />
+        <div className="absolute inset-4 rounded-[1.55rem] bg-white/92 shadow-inner" />
+        <div className="absolute inset-11 rounded-full bg-[radial-gradient(circle,#eef2ff_0%,#ffffff_58%)] shadow-[inset_0_0_0_1px_rgb(99_102_241_/_0.12)]" />
+        <div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-indigo-600 text-white shadow-[0_18px_38px_rgb(79_70_229_/_0.36)]">
+          <Fingerprint className="h-8 w-8" aria-hidden="true" />
+        </div>
+        <span className="absolute -left-5 top-8 rounded-2xl border border-white/80 bg-white/92 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-sm">
+          园长端
+        </span>
+        <span className="absolute -right-6 top-20 rounded-2xl border border-white/80 bg-white/92 px-3 py-2 text-xs font-semibold text-sky-700 shadow-sm">
+          教师端
+        </span>
+        <span className="absolute bottom-2 left-8 rounded-2xl border border-white/80 bg-white/92 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-sm">
+          家长端
+        </span>
+      </div>
+
+      <div className="relative mt-8 grid grid-cols-2 gap-3">
+        {SECURITY_METRICS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <div key={item.label} className="rounded-2xl border border-white/82 bg-white/78 p-3 shadow-sm backdrop-blur">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">{item.label}</p>
+                <Icon className="h-4 w-4 text-indigo-500" aria-hidden="true" />
+              </div>
+              <p className="mt-1 text-lg font-bold text-slate-950">{item.value}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -233,8 +289,8 @@ export default function LoginPage() {
     <div className="relative min-h-[100dvh] overflow-hidden bg-[linear-gradient(180deg,#F8FAFC_0%,#F4F7FF_52%,#F8FAFC_100%)] px-4 py-5 page-enter sm:px-6 lg:px-8 lg:py-8">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-60 bg-[radial-gradient(ellipse_at_top_left,rgb(99_102_241_/_0.14),transparent_48%),radial-gradient(ellipse_at_top_right,rgb(20_184_166_/_0.13),transparent_44%)]" />
 
-      <div className="relative mx-auto grid max-w-7xl gap-5 lg:min-h-[calc(100dvh-4rem)] lg:grid-cols-[minmax(0,1.12fr)_minmax(420px,0.88fr)]">
-        <section className="order-2 flex min-w-0 flex-col justify-between overflow-hidden rounded-2xl border border-white/70 bg-white/72 p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.10)] backdrop-blur-xl sm:p-7 lg:order-1 lg:p-8">
+      <div className="relative mx-auto grid max-w-7xl gap-5 lg:min-h-[calc(100dvh-4rem)] lg:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.78fr)]">
+        <section className="order-2 flex min-w-0 flex-col justify-between overflow-hidden rounded-[2rem] border border-white/76 bg-white/70 p-5 shadow-[0_22px_70px_rgb(79_70_229_/_0.12)] backdrop-blur-xl sm:p-7 lg:order-1 lg:p-8">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
@@ -251,7 +307,7 @@ export default function LoginPage() {
               </StatusTag>
             </div>
 
-            <div className="mt-9 grid gap-7 xl:grid-cols-[minmax(0,0.96fr)_minmax(300px,0.74fr)] xl:items-center">
+            <div className="mt-8 grid gap-7 xl:grid-cols-[minmax(0,0.9fr)_minmax(320px,0.82fr)] xl:items-center">
               <div className="min-w-0">
                 <h1 className="max-w-2xl text-3xl font-bold leading-tight tracking-normal text-(--text-primary) sm:text-4xl lg:text-[2.7rem]">
                   让园所记录、教师协作与家长反馈更顺畅
@@ -280,35 +336,7 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-(--border) bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)] p-4 shadow-[var(--shadow-card)]">
-                <div className="rounded-xl border border-(--border-subtle) bg-white p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-medium text-(--text-tertiary)">今日入口状态</p>
-                      <p className="mt-1 text-xl font-bold text-(--text-primary)">4 个角色入口可用</p>
-                    </div>
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-(--support-teal-soft) text-(--support-teal)">
-                      <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                  </div>
-                  <div className="mt-4 space-y-2">
-                    {SECURITY_NOTES.map((note) => (
-                      <div key={note} className="flex items-center gap-2 text-xs text-(--text-secondary)">
-                        <span className="h-1.5 w-1.5 rounded-full bg-(--primary)" aria-hidden="true" />
-                        {note}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  {["园长端", "教师端", "家长端"].map((item) => (
-                    <div key={item} className="rounded-lg bg-(--panel-subtle) px-3 py-3 text-center">
-                      <p className="text-xs font-semibold text-(--text-secondary)">{item}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <LoginSecurityVisual />
             </div>
 
             <div className="mt-8 rounded-2xl border border-(--border) bg-white/84 p-4 shadow-[var(--shadow-card)] sm:p-5">
@@ -323,7 +351,7 @@ export default function LoginPage() {
                 <StatusTag variant="neutral">体验数据不会影响真实账号</StatusTag>
               </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {demoAccounts.map((account) => {
                   const isLoading = demoLoadingId === account.id;
                   const roleLabel = getDemoRoleLabel(account.role);
@@ -335,7 +363,7 @@ export default function LoginPage() {
                       disabled={demoLoadingId !== null}
                       aria-busy={isLoading || undefined}
                       className={cn(
-                        "group min-h-28 rounded-xl border border-(--border) bg-white p-4 text-left shadow-[var(--shadow-card)] transition duration-200 hover:-translate-y-0.5 hover:border-(--primary) hover:shadow-[var(--shadow-card-hover)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60",
+                        "group min-h-28 rounded-2xl border border-(--border) bg-white p-4 text-left shadow-[var(--shadow-card)] transition duration-200 hover:-translate-y-0.5 hover:border-(--primary) hover:shadow-[var(--shadow-card-hover)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60",
                         isLoading && "border-(--primary) bg-(--primary-soft)"
                       )}
                     >
@@ -376,7 +404,7 @@ export default function LoginPage() {
         </section>
 
         <section className="order-1 flex min-w-0 items-center justify-center lg:order-2">
-          <Card className="w-full max-w-[30rem] rounded-2xl border-white/80 bg-white/88 shadow-[0_22px_70px_rgb(15_23_42_/_0.14)] backdrop-blur-xl">
+          <Card className="w-full max-w-[29rem] rounded-[1.75rem] border-white/80 bg-white/90 shadow-[0_26px_76px_rgb(15_23_42_/_0.16)] backdrop-blur-xl">
             <CardHeader className="space-y-5 pb-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 items-center gap-3">

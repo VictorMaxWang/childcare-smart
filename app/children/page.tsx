@@ -12,7 +12,6 @@ import {
   type Guardian,
   useApp,
 } from "@/lib/store";
-import ScrollReveal from "@/components/ScrollReveal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +28,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MetricCard } from "@/components/ui/metric-card";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Textarea } from "@/components/ui/textarea";
 import { TeacherActionTile, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
@@ -156,39 +154,78 @@ export default function ChildrenPage() {
   }
 
   return (
-    <div className="app-page page-enter">
-      <div className="mb-6 flex flex-col gap-4 rounded-xl border border-indigo-100 bg-linear-to-r from-white via-indigo-50/60 to-sky-50 p-5 shadow-[var(--shadow-card)] lg:flex-row lg:items-start lg:justify-between sm:p-6">
-        <div>
-          <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
-            <Users className="h-8 w-8 text-indigo-500" />
-            儿童档案
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-            已升级为“出生日期 + 自动年龄段 + 每日出勤记录”模型，支持到离园统计、缺勤原因和后续周/月报表扩展。
-          </p>
-        </div>
-        <Button
-          onClick={() => canManage && setOpen(true)}
-          disabled={!canManage}
-          className="gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <UserPlus className="h-4 w-4" />
-          {canManage ? "新增幼儿档案" : "家长端仅可查看"}
-        </Button>
-      </div>
+    <div className="app-page max-w-[86rem] page-enter">
+      <section className="mb-5 overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#f8fbff_0%,#eef2ff_48%,#ecfeff_100%)] p-4 shadow-[0_20px_60px_rgb(79_70_229_/_0.10)] sm:p-5">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="info" className="rounded-full px-3 py-1">
+                    {currentUser.role === "教师" ? currentUser.className ?? "当前班级" : INSTITUTION_NAME}
+                  </Badge>
+                  <Badge variant="secondary" className="rounded-full px-3 py-1">
+                    {currentUser.role === "教师" ? "班级名册" : "全园档案"}
+                  </Badge>
+                </div>
+                <h1 className="mt-4 flex items-center gap-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                  <Users className="h-7 w-7 text-indigo-500" />
+                  儿童档案管理
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  按出勤、年龄段、过敏和监护人信息快速扫描，桌面端看台账，移动端看儿童卡片。
+                </p>
+              </div>
+              <Button
+                onClick={() => canManage && setOpen(true)}
+                disabled={!canManage}
+                variant="premium"
+                className="min-h-11 rounded-2xl"
+              >
+                <UserPlus className="mr-2 h-4 w-4" />
+                {canManage ? "新增幼儿档案" : "家长端仅可查看"}
+              </Button>
+            </div>
 
-      <ScrollReveal>
-        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="当前可见幼儿" value={`${visibleChildren.length}位`} tone="primary" />
-          <MetricCard label="今日出勤" value={`${todayAttendance.filter((item) => item.isPresent).length}位`} tone="success" />
-          <MetricCard label="今日缺勤" value={`${todayAttendance.filter((item) => !item.isPresent).length}位`} tone="warning" />
-          <MetricCard
-            label="机构 / 班级"
-            value={currentUser.className ? `${INSTITUTION_NAME} · ${currentUser.className}` : INSTITUTION_NAME}
-            tone="info"
-          />
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                { label: "可见幼儿", value: `${visibleChildren.length}位`, bar: "bg-indigo-400" },
+                { label: "今日出勤", value: `${todayAttendance.filter((item) => item.isPresent).length}位`, bar: "bg-emerald-400" },
+                { label: "今日缺勤", value: `${todayAttendance.filter((item) => !item.isPresent).length}位`, bar: "bg-amber-400" },
+                { label: "年龄段", value: `${Object.keys(ageBandStats).length}组`, bar: "bg-sky-400" },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-white/82 bg-white/84 p-4 shadow-sm">
+                  <p className="text-xs text-slate-500">{item.label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-950">{item.value}</p>
+                  <span className={`mt-3 inline-flex h-1.5 w-12 rounded-full ${item.bar}`} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/82 bg-white/78 p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+                <Clock3 className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-950">名册洞察</p>
+                <p className="mt-1 text-xs text-slate-500">{currentUser.role === "教师" ? "教师端工作顺序" : "园长端管理视角"}</p>
+              </div>
+            </div>
+            <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+              <p>{currentUser.role === "教师" ? "优先补齐缺勤、晨检和饮食记录。" : "优先看出勤覆盖、过敏提示和监护人信息完整度。"}</p>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(ageBandStats).slice(0, 4).map(([label, count]) => (
+                  <Badge key={label} variant="secondary">
+                    {label}：{count}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
-      </ScrollReveal>
+      </section>
 
       {isTeacher ? (
         <div className="mb-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
