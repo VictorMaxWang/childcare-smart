@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -8,9 +9,13 @@ import {
   Bot,
   BrainCircuit,
   CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
   ClipboardList,
   Clock3,
   FileText,
+  Filter,
+  Lightbulb,
   MessageSquareText,
   Mic,
   ScanSearch,
@@ -885,7 +890,123 @@ export default function TeacherAgentPage() {
         main={
           <div className="space-y-6">
             {isCommunicationMode ? (
-              <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#f8fbff_0%,#f5f3ff_48%,#eefbff_100%)] p-4 shadow-[0_24px_70px_rgb(99_102_241_/_0.13)] sm:p-5">
+              <>
+              <section className="mx-auto max-w-[62rem] overflow-hidden rounded-[1.65rem] border border-[#e0e7f5] bg-white/96 p-5 shadow-[0_22px_60px_rgb(70_88_140_/_0.08)] sm:p-7">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-4">
+                      <Link href="/teacher" className="flex h-11 w-11 items-center justify-center rounded-full border border-[#dfe6f3] bg-white text-[#1b2745] shadow-sm">
+                        <ChevronLeft className="h-6 w-6" />
+                      </Link>
+                      <div>
+                        <h1 className="text-3xl font-bold leading-tight text-[#101a35]">家园沟通</h1>
+                        <button type="button" className="mt-4 inline-flex items-center gap-2 text-lg font-bold text-[#172345]">
+                          {classContext.className}
+                          <ChevronDown className="h-5 w-5 text-[#6e7894]" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <Button type="button" variant="ghost" className="rounded-full text-base font-bold text-violet-600" onClick={() => void runWorkflow("communication")} disabled={isLoading}>
+                    <ClipboardList className="mr-2 h-5 w-5" />
+                    沟通指南
+                  </Button>
+                </div>
+
+                <div className="mt-6 grid grid-cols-4 overflow-hidden rounded-[1.25rem] border border-[#dfe7f4] bg-white px-4 py-5 shadow-[0_12px_32px_rgb(70_88_140_/_0.045)]">
+                  {[
+                    { label: "待回复", value: waitingCommunicationCount, icon: <MessageSquareText className="h-7 w-7" />, tone: "bg-violet-50 text-violet-600", badge: "3" },
+                    { label: "待处理", value: classContext.pendingReviews.length || 1, icon: <Clock3 className="h-7 w-7" />, tone: "bg-orange-50 text-orange-500" },
+                    { label: "已处理", value: Math.max(handledCommunicationCount, 27), icon: <CheckCircle2 className="h-7 w-7" />, tone: "bg-emerald-50 text-emerald-500" },
+                    { label: "沟通总数", value: Math.max(handledCommunicationCount + waitingCommunicationCount, 32), icon: <UsersRound className="h-7 w-7" />, tone: "bg-blue-50 text-blue-500" },
+                  ].map((item, index) => (
+                    <div key={item.label} className={`relative flex flex-col items-center justify-center gap-1 text-center sm:flex-row sm:gap-3 sm:text-left ${index > 0 ? "border-l border-[#e8edf6]" : ""}`}>
+                      <span className={`relative flex h-14 w-14 items-center justify-center rounded-full ${item.tone}`}>
+                        {item.icon}
+                        {item.badge ? <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">{item.badge}</span> : null}
+                      </span>
+                      <span>
+                        <span className="block text-2xl font-bold leading-none text-[#111b34] sm:text-3xl">{item.value}</span>
+                        <span className="mt-1 block text-xs font-semibold text-[#687493] sm:mt-2 sm:text-sm">{item.label}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 flex items-center justify-between border-b border-[#e7edf6]">
+                  <div className="flex gap-10">
+                    {["待回复 (3)", "沟通记录", "我发起的"].map((tab, index) => (
+                      <button key={tab} type="button" className={`pb-4 text-xl font-bold ${index === 0 ? "border-b-4 border-violet-600 text-violet-600" : "text-[#6f7a96]"}`}>
+                        {tab}
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" className="mb-3 inline-flex items-center gap-2 text-base font-semibold text-[#6f7a96]">
+                    筛选
+                    <Filter className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-4">
+                  {[
+                    ["张阳的妈妈", "张阳　3岁2个月", "老师您好，最近发现张阳午睡时容易出汗，是不是穿得有点多了？谢谢~", "待回复", "10分钟前", "👩🏻"],
+                    ["刘睿的爸爸", "刘睿　3岁4个月", "老师，孩子今天回来说明在幼儿园搭了很高的积木塔，表现棒棒的，辛苦老师啦！", "待回复", "25分钟前", "👨🏻"],
+                    ["许安的妈妈", "许安　3岁3个月", "老师好，许安明天需要带美术作品回家吗？", "待处理", "1小时前", "👩"],
+                  ].map(([name, child, content, status, time, avatar], index) => (
+                    <article key={name} className="rounded-[1.35rem] border border-[#e0e7f5] bg-white px-4 py-4 shadow-[0_12px_32px_rgb(70_88_140_/_0.045)] sm:px-6">
+                      <div className="grid grid-cols-[auto_1fr_auto] gap-4">
+                        <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-[#f2f5fb] text-4xl">
+                          {avatar}
+                          <span className="absolute right-0 top-0 h-3.5 w-3.5 rounded-full bg-red-500 ring-2 ring-white" />
+                        </span>
+                        <div className="min-w-0">
+                          <h2 className="truncate text-2xl font-bold text-[#16213f]">{name}</h2>
+                          <p className="mt-1 text-base font-semibold text-[#7a86a4]">{child}</p>
+                        </div>
+                        <div className="text-right">
+                          <span className="rounded-full bg-orange-50 px-3 py-1 text-sm font-bold text-orange-500">{status}</span>
+                          <p className="mt-3 text-base font-semibold text-[#8a96b2]">{time}</p>
+                        </div>
+                      </div>
+                      <p className="mt-4 rounded-[0.9rem] bg-[#f3f6fb] px-4 py-3 text-base font-medium leading-7 text-[#53617f]">{content}</p>
+                      <div className="mt-4 grid grid-cols-[1fr_1fr_auto] gap-3">
+                        <Button type="button" variant="outline" className="h-12 rounded-full border-violet-100 text-base font-bold text-violet-600" onClick={() => void runWorkflow("communication")} disabled={isLoading}>
+                          <MessageSquareText className="mr-2 h-5 w-5" />
+                          {index === 2 ? "标记已处理" : "回复家长"}
+                        </Button>
+                        <Button type="button" variant="outline" className="h-12 rounded-full border-blue-100 bg-blue-50/40 text-base font-bold text-blue-500" onClick={() => void runWorkflow("communication")} disabled={isLoading}>
+                          <Lightbulb className="mr-2 h-5 w-5" />
+                          沟通建议
+                        </Button>
+                        <Button type="button" variant="outline" size="icon" className="h-12 w-12 rounded-full">
+                          <ChevronDown className="h-5 w-5" />
+                        </Button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="mt-5 rounded-[1.25rem] border border-violet-100 bg-[linear-gradient(135deg,#ffffff_0%,#f5f3ff_60%,#eef6ff_100%)] p-5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold text-[#16213f]">AI 沟通建议</h2>
+                    <Button type="button" variant="ghost" className="rounded-full font-bold text-violet-600" onClick={() => void runWorkflow("communication")} disabled={isLoading}>
+                      换一换
+                    </Button>
+                  </div>
+                  <div className="mt-4 rounded-[0.9rem] border border-violet-100 bg-white/82 p-4">
+                    <p className="text-sm font-bold text-violet-600">就“孩子午睡出汗”给家长的回复建议</p>
+                    <p className="mt-2 text-base font-medium leading-7 text-[#53617f]">
+                      {currentResult?.summary ?? "您好，感谢您对孩子的关注！午睡出汗可能与室温或穿着有关，我们会注意调整环境，建议您给孩子穿透气的衣物并随身带一件薄外套。如有其他情况，欢迎您随时告诉我～"}
+                    </p>
+                  </div>
+                </div>
+
+                <Button type="button" variant="premium" className="mt-6 h-14 w-full rounded-[1rem] text-lg font-bold" onClick={() => void runWorkflow("communication")} disabled={isLoading}>
+                  <Send className="mr-2 h-5 w-5" />
+                  发送消息
+                </Button>
+              </section>
+              <section className="hidden">
                 <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)_280px]">
                   <aside className="rounded-2xl border border-white/80 bg-white/86 p-4 shadow-sm">
                     <div className="flex items-center justify-between gap-3">
@@ -1041,9 +1162,35 @@ export default function TeacherAgentPage() {
                   </aside>
                 </div>
               </section>
+              </>
             ) : (
               <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f5f3ff_44%,#eff6ff_100%)] p-4 shadow-[0_24px_70px_rgb(99_102_241_/_0.12)] sm:p-5">
-                <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_300px]">
+                <div className="grid gap-4 2xl:grid-cols-[176px_minmax(0,1fr)_300px]">
+                  <aside className="hidden rounded-2xl border border-white/80 bg-white/88 p-3 shadow-sm 2xl:block">
+                    <div className="space-y-1 text-sm font-semibold text-[#53617f]">
+                      {[
+                        ["首页概览", "/teacher"],
+                        ["数据与记录", "/teacher"],
+                        ["幼儿档案", "/children"],
+                        ["晨检与健康", "/health"],
+                        ["成长行为", "/growth"],
+                        ["饮食记录", "/diet"],
+                        ["家长沟通", "/teacher/agent?action=communication"],
+                        ["AI 助手", "/teacher/agent"],
+                        ["待办任务", "/teacher/agent?action=weekly-summary"],
+                        ["设置中心", "/teacher"],
+                      ].map(([label, href]) => (
+                        <Link
+                          key={label}
+                          href={href}
+                          className={`flex h-10 items-center justify-between rounded-xl px-3 ${label === "AI 助手" ? "bg-violet-100 text-violet-700" : "hover:bg-slate-50"}`}
+                        >
+                          <span>{label}</span>
+                          {label === "待办任务" ? <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">12</span> : null}
+                        </Link>
+                      ))}
+                    </div>
+                  </aside>
                   <div>
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">

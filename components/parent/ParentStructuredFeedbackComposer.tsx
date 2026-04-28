@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import ParentVoiceNoteInput from "@/components/parent/ParentVoiceNoteInput";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, Heart, Moon, ShieldCheck } from "lucide-react";
+import { Camera, CheckCircle2, ClipboardList, Heart, Moon, ShieldCheck, Utensils } from "lucide-react";
 
 type ExecutionCountOption = 1 | 2 | 3;
 
@@ -167,6 +167,39 @@ export default function ParentStructuredFeedbackComposer({
     interventionCard?.reviewIn48h ??
     "提交后会继续带入 48 小时复查上下文。";
   const optionButtonClassName = getOptionButtonClassName(careMode);
+  const pixelMoodOptions: Array<{
+    label: string;
+    value: ParentFeedbackChildReaction;
+    face: string;
+  }> = [
+    { label: "不太好", value: "resisted", face: "☹" },
+    { label: "一般", value: "neutral", face: "◔" },
+    { label: "还可以", value: "accepted", face: "☺" },
+    { label: "开心", value: "improved", face: "☻" },
+    { label: "非常开心", value: "improved", face: "●" },
+  ];
+  const pixelSleepOptions: Array<{
+    label: string;
+    value: ParentFeedbackImprovementStatus;
+    face: string;
+  }> = [
+    { label: "很差", value: "no_change", face: "☹" },
+    { label: "一般", value: "no_change", face: "◔" },
+    { label: "还行", value: "slight_improvement", face: "☺" },
+    { label: "较好", value: "slight_improvement", face: "☽" },
+    { label: "非常好", value: "clear_improvement", face: "○" },
+  ];
+  const pixelAppetiteOptions: Array<{
+    label: string;
+    value: ParentFeedbackExecutionStatus;
+    face: string;
+  }> = [
+    { label: "很差", value: "not_started", face: "☹" },
+    { label: "一般", value: "partial", face: "◔" },
+    { label: "正常", value: "completed", face: "☺" },
+    { label: "较好", value: "completed", face: "☻" },
+    { label: "非常好", value: "completed", face: "●" },
+  ];
 
   function handleNotesChange(nextValue: string) {
     setNotes(nextValue);
@@ -226,6 +259,321 @@ export default function ParentStructuredFeedbackComposer({
     setBarriers([]);
     setNotes("");
     setShowDetails(false);
+  }
+
+  if (typeof childId === "string") {
+    return (
+      <div className="space-y-5">
+        <section className="overflow-hidden rounded-[28px] border border-violet-100 bg-white p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] sm:p-6">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-4">
+              <div
+                className="h-20 w-20 shrink-0 overflow-hidden rounded-full bg-cover bg-center bg-no-repeat shadow-inner"
+                aria-hidden="true"
+                style={{
+                  backgroundImage: "url('/pixel-replica/parent/parent-feedback-avatar.png')",
+                }}
+              />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-2xl font-black tracking-normal text-slate-950">
+                    小宇
+                  </h3>
+                  <Badge variant="info" className="rounded-full px-3 py-1">小一班</Badge>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <p className="text-xl font-bold text-slate-950">今晚家庭干预卡</p>
+                  <Badge variant={executionStatus ? "success" : "warning"} className="rounded-full px-3 py-1">
+                    {executionStatus ? "填写中" : "待反馈"}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+            <div className="text-left sm:text-right">
+              <div className="flex items-center gap-1 text-sm font-semibold text-violet-600 sm:justify-end">
+                <ShieldCheck className="h-4 w-4" />
+                隐私安全
+              </div>
+              <p className="mt-3 text-sm text-slate-500">截止时间</p>
+              <p className="mt-1 text-xl font-black text-violet-600">今日 21:00</p>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-[20px] border border-violet-100 bg-violet-50/70 p-4">
+            <div className="flex items-start gap-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-violet-600 shadow-sm">
+                <ClipboardList className="h-6 w-6" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-base font-semibold leading-7 text-slate-700">
+                  给家长的沟通话术要先定义今晚只做 1 个核心动作，再约定明早回传 2 到 3 个观察点。
+                </p>
+                <p className="mt-2 text-sm leading-6 text-violet-600">{feedbackPrompt ?? interventionCard?.tonightHomeAction ?? reviewLabel}</p>
+              </div>
+              <span className="hidden items-center gap-1 text-sm font-semibold text-violet-600 sm:flex">
+                查看详情
+                <span aria-hidden="true">›</span>
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] sm:p-6">
+          <div className="flex items-center gap-2">
+            <h3 className="text-xl font-black tracking-normal text-slate-950">今晚完成情况</h3>
+            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs text-slate-400">?</span>
+          </div>
+          <div className="mt-5 grid grid-cols-3 gap-3">
+            {EXECUTION_STATUS_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  setExecutionStatus(option.value);
+                  setExecutionCount((current) =>
+                    option.value === "not_started" ? undefined : current ?? 1
+                  );
+                }}
+                className={cn(
+                  "flex min-h-14 items-center justify-center rounded-[18px] border px-3 text-base font-bold transition",
+                  executionStatus === option.value
+                    ? "border-violet-500 bg-white text-violet-600 shadow-[0_12px_28px_rgb(124_58_237_/_0.16)]"
+                    : "border-slate-200 bg-white text-slate-700"
+                )}
+              >
+                {option.label === "已做" ? "已完成" : option.label}
+                {executionStatus === option.value ? (
+                  <CheckCircle2 className="ml-2 h-5 w-5 text-violet-500" />
+                ) : null}
+              </button>
+            ))}
+          </div>
+          {executionStatus && executionStatus !== "not_started" ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {EXECUTION_COUNT_OPTIONS.map((option) => (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={executionCount === option.value ? "premium" : "outline"}
+                  className="rounded-full"
+                  onClick={() => setExecutionCount(option.value)}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+        </section>
+
+        <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] sm:p-6">
+          <h3 className="text-xl font-black tracking-normal text-slate-950">孩子今晚状态</h3>
+          <div className="mt-6 space-y-5">
+            <div className="grid grid-cols-[82px_minmax(0,1fr)] items-center gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-50 text-violet-600">
+                  <Heart className="h-5 w-5" />
+                </span>
+                <span className="font-bold text-slate-950">心情</span>
+              </div>
+              <div className="grid grid-cols-5 gap-2">
+                {pixelMoodOptions.map((option, index) => {
+                  const selected = childReaction === option.value && (option.value !== "improved" || index === 4);
+                  return (
+                    <button
+                      key={`${option.label}-${index}`}
+                      type="button"
+                      onClick={() => setChildReaction(option.value)}
+                      className="text-center"
+                    >
+                      <span
+                        className={cn(
+                          "mx-auto flex h-11 w-11 items-center justify-center rounded-full border text-lg font-black",
+                          selected
+                            ? "border-violet-500 bg-violet-500 text-white shadow-[0_8px_20px_rgb(124_58_237_/_0.2)]"
+                            : "border-slate-200 bg-white text-slate-400"
+                        )}
+                      >
+                        {option.face}
+                      </span>
+                      <span className="mt-2 block text-xs text-slate-500">{option.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="h-px bg-slate-100" />
+
+            <div className="grid grid-cols-[82px_minmax(0,1fr)] items-center gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-50 text-sky-600">
+                  <Moon className="h-5 w-5" />
+                </span>
+                <span className="font-bold text-slate-950">睡眠</span>
+              </div>
+              <div className="grid grid-cols-5 gap-2">
+                {pixelSleepOptions.map((option, index) => {
+                  const selected =
+                    improvementStatus === option.value &&
+                    (option.value !== "slight_improvement" || index === 3) &&
+                    (option.value !== "no_change" || index === 1);
+                  return (
+                    <button
+                      key={`${option.label}-${index}`}
+                      type="button"
+                      onClick={() => setImprovementStatus(option.value)}
+                      className="text-center"
+                    >
+                      <span
+                        className={cn(
+                          "mx-auto flex h-11 w-11 items-center justify-center rounded-full border text-lg font-black",
+                          selected
+                            ? "border-blue-500 bg-blue-500 text-white shadow-[0_8px_20px_rgb(59_130_246_/_0.2)]"
+                            : "border-slate-200 bg-white text-slate-400"
+                        )}
+                      >
+                        {option.face}
+                      </span>
+                      <span className="mt-2 block text-xs text-slate-500">{option.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="h-px bg-slate-100" />
+
+            <div className="grid grid-cols-[82px_minmax(0,1fr)] items-center gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                  <Utensils className="h-5 w-5" />
+                </span>
+                <span className="font-bold text-slate-950">食欲</span>
+              </div>
+              <div className="grid grid-cols-5 gap-2">
+                {pixelAppetiteOptions.map((option, index) => {
+                  const selected =
+                    executionStatus === option.value &&
+                    (option.value !== "completed" || index === 2);
+                  return (
+                    <button
+                      key={`${option.label}-${index}`}
+                      type="button"
+                      onClick={() => {
+                        setExecutionStatus(option.value);
+                        setExecutionCount(option.value === "not_started" ? undefined : 1);
+                      }}
+                      className="text-center"
+                    >
+                      <span
+                        className={cn(
+                          "mx-auto flex h-11 w-11 items-center justify-center rounded-full border text-lg font-black",
+                          selected
+                            ? "border-emerald-500 bg-emerald-500 text-white shadow-[0_8px_20px_rgb(16_185_129_/_0.2)]"
+                            : "border-slate-200 bg-white text-slate-400"
+                        )}
+                      >
+                        {option.face}
+                      </span>
+                      <span className="mt-2 block text-xs text-slate-500">{option.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] sm:p-6">
+          <h3 className="text-xl font-black tracking-normal text-slate-950">观察到的情况 <span className="text-base font-normal text-slate-400">（可多选）</span></h3>
+          <div className="mt-5 flex flex-wrap gap-3">
+            {["主动参与", "注意力较好", "需要提醒", "情绪稳定", "有求助行为", "按步骤完成", "其他"].map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setBarriers((current) => toggleBarrier(current, option))}
+                className={cn(
+                  "rounded-[16px] border px-5 py-3 text-base font-semibold transition",
+                  barriers.includes(option)
+                    ? "border-violet-500 bg-violet-50 text-violet-600"
+                    : "border-slate-200 bg-white text-slate-500"
+                )}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] sm:p-6">
+          <h3 className="text-xl font-black tracking-normal text-slate-950">补充说明 <span className="text-base font-normal text-slate-400">（选填）</span></h3>
+          <div className="mt-4 rounded-[18px] border border-slate-200 bg-white p-4">
+            <Textarea
+              value={notes}
+              onChange={(event) => handleNotesChange(event.target.value)}
+              placeholder="可以描述孩子的表现、遇到的困难或其他想告诉老师的内容..."
+              className="min-h-28 resize-none border-0 bg-transparent p-0 text-base shadow-none focus-visible:ring-0"
+              maxLength={200}
+            />
+            <p className="mt-2 text-right text-sm text-slate-400">{notes.length}/200</p>
+          </div>
+          <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h4 className="text-lg font-bold text-slate-950">上传照片/视频 <span className="text-base font-normal text-slate-400">（选填）</span></h4>
+              <p className="mt-1 text-sm leading-6 text-slate-500">有助于老师更好地了解孩子的情况</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                className="flex h-16 w-36 items-center justify-center gap-2 rounded-[18px] border border-violet-200 bg-violet-50 text-base font-bold text-violet-600"
+                disabled
+              >
+                <Camera className="h-5 w-5" />
+                添加
+              </button>
+              <span className="text-base text-slate-400">0/3</span>
+            </div>
+          </div>
+        </section>
+
+        <div className="sticky bottom-4 z-10">
+          <Button
+            type="button"
+            className="h-16 w-full rounded-[28px] bg-[linear-gradient(135deg,#5b46ff,#7c3aed)] text-xl font-black text-white shadow-[0_18px_44px_rgb(91_70_255_/_0.28)]"
+            onClick={() => void handleSubmit()}
+            disabled={!interventionCard || submitting}
+            loading={submitting}
+          >
+            提交反馈
+          </Button>
+        </div>
+
+        {onSnoozeReminder ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full"
+            onClick={onSnoozeReminder}
+          >
+            稍后提醒
+          </Button>
+        ) : null}
+
+        {composerMessage ? (
+          <p
+            className={cn(
+              "rounded-[18px] border px-4 py-3 text-sm leading-6",
+              validationMessage
+                ? "border-(--danger-border) bg-(--danger-soft) text-(--danger-foreground)"
+                : "border-(--info-border) bg-(--info-soft) text-(--info-foreground)"
+            )}
+            role={validationMessage ? "alert" : "status"}
+          >
+            {composerMessage}
+          </p>
+        ) : null}
+      </div>
+    );
   }
 
   return (

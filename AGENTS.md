@@ -391,3 +391,40 @@ Before finishing, each refactor thread must:
 - Production UI must not depend on these PNG design images as page bodies.
 
 <!-- END FRONTEND VISUAL REFACTOR RULES -->
+
+<!-- BEGIN PIXEL REPLICA MODE -->
+
+# SmartChildcare Pixel Replica Mode
+
+Updated: 2026-04-28
+
+The current frontend phase is Pixel Replica Mode. The governing document is:
+
+`docs/pixel-replica/agent.md`
+
+Every pixel-replica thread must read that file before changing code.
+
+The fixed original GPT Image 2 design source directory is:
+
+`C:\Users\12804\Desktop\childcare-smart源代码\前端重构`
+
+This directory is a sibling of the project repository, not a directory inside `childcare-smart`.
+
+Pixel Replica Mode changes the frontend priority order:
+
+- Visual match to the design images is the highest priority.
+- Layout, colors, cards, navigation, tables, buttons, dialogs, illustration, and responsive behavior should match the target references as closely as possible.
+- Visual-only frontend modules, mock/display-only data, and cropped design assets are allowed when they improve visual fidelity and do not create real backend side effects.
+- Core interactive areas should still be implemented with HTML/CSS where feasible.
+- Full-page static screenshot backgrounds are not allowed.
+- Login, routes, demo accounts, role permissions, and backend API protocols must not be broken.
+
+Parallel work must follow:
+
+- `docs/pixel-replica/PARALLEL_TASKS.md`
+- `docs/pixel-replica/FILE_OWNERSHIP.md`
+- `docs/pixel-replica/DESIGN_TO_ROUTE_MAP.md`
+
+Each subthread must capture screenshots, compare against the selected design references, assign a visual closeness score, and continue rework if the score is below the threshold in `docs/pixel-replica/PIXEL_ACCEPTANCE_CRITERIA.md`.
+
+<!-- END PIXEL REPLICA MODE -->

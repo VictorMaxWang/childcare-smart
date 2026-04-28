@@ -5,7 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Baby,
+  Bell,
   BookHeart,
+  Bot,
+  ClipboardList,
+  FileText,
   House,
   LogOut,
   Menu,
@@ -36,6 +40,11 @@ const ICON_MAP: Record<PrimaryNavIconKey, LucideIcon> = {
   diet: Salad,
   parent: Baby,
   screen: Monitor,
+  ai: Bot,
+  consultation: ClipboardList,
+  file: FileText,
+  feedback: Bell,
+  storybook: BookHeart,
 };
 
 const ROLE_BADGE_MAP: Record<AccountRole, RoleBadgeRole> = {
@@ -58,7 +67,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
   const panelRef = useRef<HTMLElement>(null);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const wasOpenRef = useRef(false);
-  const navGroups = buildPrimaryNavGroups(currentUser.role);
+  const navGroups = buildPrimaryNavGroups(currentUser.role, { childId: currentUser.childIds?.[0] ?? "c-1" });
 
   const close = () => setOpen(false);
 
@@ -123,7 +132,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-100 bg-white text-slate-600 shadow-[0_10px_28px_rgb(79_70_229_/_0.10)] transition hover:bg-indigo-50 hover:text-indigo-600"
+        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-100 bg-white text-slate-700 shadow-[0_12px_30px_rgb(79_70_229_/_0.12)] transition hover:bg-indigo-50 hover:text-indigo-700"
         aria-label={open ? "关闭导航菜单" : "打开导航菜单"}
         aria-expanded={open}
         aria-controls="mobile-nav-panel"
@@ -145,27 +154,27 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
         id="mobile-nav-panel"
         aria-label="移动端主导航"
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-dvh w-[23rem] max-w-[calc(100vw-0.75rem)] flex-col overflow-hidden rounded-r-[28px] border-r border-indigo-100 bg-slate-50 shadow-[0_28px_80px_rgb(15_23_42_/_0.20)] transition-transform duration-300 ease-out",
+          "fixed left-0 top-0 z-50 flex h-dvh w-[23rem] max-w-[calc(100vw-0.75rem)] flex-col overflow-hidden rounded-r-[30px] border-r border-indigo-100 bg-[#f7f9ff] shadow-[0_28px_80px_rgb(15_23_42_/_0.20)] transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="relative overflow-hidden border-b border-indigo-100 bg-[linear-gradient(135deg,#eef2ff_0%,#ffffff_58%,#ecfeff_100%)] px-5 py-5 pr-14">
+        <div className="relative overflow-hidden border-b border-indigo-100 bg-[linear-gradient(135deg,#eef2ff_0%,#ffffff_58%,#e9fbff_100%)] px-5 py-5 pr-14">
           <Link href="/" className="relative flex items-center gap-3 font-bold text-slate-950" onClick={close}>
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-[0_14px_34px_rgb(79_70_229_/_0.16)]">
-              <Baby className="h-5 w-5" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#6656ff,#27c8bd)] text-white shadow-[0_14px_34px_rgb(79_70_229_/_0.18)]">
+              <ShieldCheck className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <span className="block truncate text-sm">普惠托育智慧平台</span>
-              <span className="mt-1 block truncate text-xs font-medium text-(--text-helper)">
+              <span className="block truncate text-base">智慧托育平台</span>
+              <span className="mt-1 block truncate text-xs font-semibold text-(--text-helper)">
                 {ROLE_LABEL_MAP[currentUser.role]} · {currentUser.name}
               </span>
             </div>
           </Link>
-          <div className="relative mt-4 rounded-2xl border border-white/80 bg-white/70 p-3 shadow-sm">
+          <div className="relative mt-4 rounded-3xl border border-white/90 bg-white/76 p-4 shadow-[0_16px_34px_rgb(99_102_241_/_0.10)]">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold text-indigo-600">移动工作台</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{currentUser.className ?? "今日任务"}</p>
+                <p className="text-xs font-bold text-indigo-600">移动工作台</p>
+                <p className="mt-1 text-sm font-bold text-slate-900">{currentUser.className ?? "今日任务"}</p>
               </div>
               <RoleBadge role={ROLE_BADGE_MAP[currentUser.role]} label={ROLE_LABEL_MAP[currentUser.role]} />
             </div>
@@ -173,7 +182,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
           <button
             type="button"
             onClick={close}
-            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/80 text-slate-500 shadow-sm transition hover:bg-indigo-50 hover:text-indigo-600"
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/85 text-slate-500 shadow-sm transition hover:bg-indigo-50 hover:text-indigo-700"
             aria-label="关闭菜单"
           >
             <X className="h-5 w-5" />
@@ -184,7 +193,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
           <div className="space-y-5">
             {navGroups.map((group, groupIndex) => (
               <div key={group.key}>
-                <p className="px-3 text-xs font-semibold text-slate-400">{group.label}</p>
+                <p className="px-3 text-xs font-bold text-slate-400">{group.label}</p>
                 <div className="mt-2 space-y-1">
                   {group.items.map((item, itemIndex) => (
                     <MobileNavLink
@@ -202,9 +211,9 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
         </div>
 
         <div className="border-t border-indigo-100 bg-white px-5 py-4 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] md:pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-          <div className="mb-4 rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_100%)] p-3 shadow-sm">
+          <div className="mb-4 rounded-3xl border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_100%)] p-3 shadow-sm">
             <div className="flex items-center gap-3">
-              <span className="text-xl" aria-hidden="true">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xl" aria-hidden="true">
                 {currentUser.avatar}
               </span>
               <div className="min-w-0 flex-1">
@@ -222,7 +231,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
               close();
               void onLogout();
             }}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-indigo-50 hover:text-indigo-600"
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-indigo-50 hover:text-indigo-700"
           >
             <LogOut className="h-4 w-4" />
             退出登录
@@ -258,9 +267,9 @@ const MobileNavLink = forwardRef<
       onClick={onClick}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex min-h-12 items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-all",
+        "flex min-h-12 items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-bold transition-all",
         active
-          ? "bg-white text-indigo-600 shadow-[0_12px_30px_rgb(79_70_229_/_0.12),inset_4px_0_0_rgb(99_102_241)]"
+          ? "bg-white text-indigo-700 shadow-[0_12px_30px_rgb(79_70_229_/_0.13),inset_4px_0_0_rgb(99_102_241)]"
           : "text-slate-600 hover:bg-white hover:text-slate-950 hover:shadow-sm"
       )}
     >

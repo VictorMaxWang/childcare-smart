@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
-import { AlertTriangle, ArrowLeft, FileText, ShieldAlert, Sparkles, Stethoscope, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ClipboardList, FileText, Home, MessageCircle, Settings, ShieldAlert, Sparkles, Stethoscope, Upload } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { TeacherContextStrip, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import {
@@ -249,7 +249,32 @@ export default function TeacherHealthFileBridgePage() {
       <RoleSplitLayout
         main={
           <div className="space-y-6">
-            <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_46%,#f5f3ff_100%)] p-4 shadow-[0_24px_70px_rgb(99_102_241_/_0.13)] sm:p-5">
+            <section className="relative overflow-hidden rounded-[1.35rem] border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_46%,#f5f3ff_100%)] p-4 shadow-[0_24px_70px_rgb(99_102_241_/_0.13)] sm:p-5 xl:pl-[7.5rem]">
+              <aside className="absolute bottom-5 left-5 top-5 hidden w-20 flex-col items-center justify-between rounded-[1.1rem] border border-[#e0e7f5] bg-white/92 py-4 shadow-[0_16px_38px_rgb(70_88_140_/_0.07)] xl:flex">
+                <div className="space-y-4">
+                  {[
+                    [Home, "工作台", "/teacher/home", false],
+                    [FileText, "幼儿档案", "/children", false],
+                    [ClipboardList, "每日记录", "/growth", false],
+                    [ShieldAlert, "健康管理", "/teacher/health-file-bridge", true],
+                    [MessageCircle, "消息中心", "/teacher/agent?action=communication", false],
+                    [Settings, "设置中心", "/teacher", false],
+                  ].map(([Icon, label, href, active]) => {
+                    const NavIcon = Icon as typeof Home;
+                    return (
+                      <Link
+                        key={label as string}
+                        href={href as string}
+                        className={`relative flex h-14 w-14 items-center justify-center rounded-[0.9rem] ${active ? "bg-violet-100 text-violet-600" : "text-[#687493] hover:bg-slate-50"}`}
+                        aria-label={label as string}
+                      >
+                        <NavIcon className="h-5 w-5" />
+                        {label === "消息中心" ? <span className="absolute right-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">2</span> : null}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </aside>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">

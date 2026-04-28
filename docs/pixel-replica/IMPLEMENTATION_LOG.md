@@ -1,0 +1,333 @@
+# Pixel Replica Implementation Log
+
+## 2026-04-28 - P00 Master Control
+
+- Created the `docs/pixel-replica/` control directory.
+- Created the P00 task map, ownership rules, visual-only rules, crop plan, and pixel acceptance criteria.
+- Created prompts for P01, P02, P10, P20, P30, P40, P50, and P99.
+- Indexed the fixed design source directory: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Confirmed the physical design source contains 247 PNG files, 17 JSON files, 8 TXT files, and no actual `.zip` files.
+- Generated `artifacts/pixel-replica/design-source.index.json`.
+- Generated `docs/pixel-replica/DESIGN_SOURCE_INDEX.md`.
+- Appended Pixel Replica Mode guidance to `AGENTS.md`.
+
+No UI, backend, route, permission, or login behavior was changed in P00.
+
+## 2026-04-28 - P01 Asset Extraction and Pixel Tools
+
+- Confirmed the fixed physical design source directory exists: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Added `scripts/extract-pixel-assets.mjs`, `scripts/capture-pixel-pages.mjs`, and `scripts/compare-pixel-parity.mjs`.
+- Added npm scripts: `pixel:extract-assets`, `pixel:capture`, and `pixel:compare`.
+- Added dev dependencies for image processing and diffing: `sharp`, `pixelmatch`, and `pngjs`.
+- Created runtime visual asset root `public/pixel-replica/` because this repo does not use a `src/` directory.
+- Created artifact directories under `artifacts/pixel-replica/`: `source-index/`, `references/`, `current/`, `after/`, `diff/`, and `reports/`.
+- `npm run pixel:extract-assets` completed successfully:
+  - Source images scanned: 247.
+  - Tracked source files: 272.
+  - Unsupported CSV files recorded: 16.
+  - ZIP files found: 0.
+  - Reference images copied: 54.
+  - Reusable crop candidates generated: 10.
+  - Manifest: `public/pixel-replica/manifest.json`.
+  - Report: `artifacts/pixel-replica/reports/extract-pixel-assets-report.md`.
+- `npm run pixel:capture` completed successfully:
+  - Started a local Next dev server at `http://127.0.0.1:3230`.
+  - Captured desktop 1440x900 and mobile 390x844 screenshots for `/login`, `/admin`, `/teacher`, and `/parent?child=c-1`.
+  - Screenshots written to `artifacts/pixel-replica/current/`.
+- `npm run pixel:compare` completed successfully:
+  - Compared 8 current/reference pairs.
+  - Generated diff images in `artifacts/pixel-replica/diff/`.
+  - Wrote `artifacts/pixel-replica/reports/pixel-parity-report.json` and `.md`.
+  - Baseline average visual closeness score: 84.96.
+- Verification completed:
+  - `npm run lint`: passed.
+  - `npm run build`: passed.
+
+All P01 outputs are generated from the fixed sibling design source directory, not from `artifacts/refactor-design-assets/`.
+
+## 2026-04-28 - P02 Global Shell, Navigation, and Core Visual Frame
+
+- Used the fixed original design source directory: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Used shell/design references copied by P01:
+  - `artifacts/pixel-replica/references/components-navbar-reference.png`
+  - `artifacts/pixel-replica/references/components-navbar-reference-2.png`
+  - `artifacts/pixel-replica/references/director-dashboard-reference.png`
+  - `artifacts/pixel-replica/references/teacher-workbench-reference.png`
+  - `artifacts/pixel-replica/references/teacher-home-reference-2.png`
+  - `artifacts/pixel-replica/references/parent-home-reference.png`
+- Refreshed current baseline screenshots before editing:
+  - `npm run pixel:capture`: passed, 8 screenshots in `artifacts/pixel-replica/current/`.
+  - `npm run pixel:compare`: passed, baseline average visual closeness 84.96 from P01/current workflow.
+- Reworked the global shell in P02-owned files:
+  - `components/Navbar.tsx`: role-aware AppShell with stable `data-role-shell` and `data-shell-mode`, director desktop sidebar, teacher desktop top tabs, parent app-style shell, topbar user/actions, current-menu highlighting, and mobile bottom tabs.
+  - `components/MobileNav.tsx`: rebuilt mobile drawer styling while preserving focus trap, Escape close, body scroll lock, logout, and real navigation links.
+  - `lib/navigation/primary-nav.ts`: added AI/consultation/file/feedback/storybook nav keys, preserved real route entries, added parent `childId` query support, and normalized query/hash active matching.
+  - `app/globals.css`, `components/role-shell/RoleScaffold.tsx`, and `components/ui/page-header.tsx`: added pixel shell tokens, page gutters, soft backgrounds, rounded content frames, and stronger page-title treatment.
+- Main differences fixed:
+  - Replaced the previous single desktop sidebar pattern with role-specific shell modes.
+  - Made the topbar closer to the design-system references: brand block, notification/search/user controls, role badge, and elevated white navigation surfaces.
+  - Reduced desktop sidebar width and styling to match the director reference more closely.
+  - Added teacher horizontal top navigation and fixed tablet 1024 overlap by hiding secondary top-tab items until wider breakpoints.
+  - Reworked mobile topbar, drawer, and bottom tabs toward the mobile app references.
+- Modified screenshot evidence:
+  - `PIXEL_CAPTURE_PHASE=after npm run pixel:capture`: passed, 8 screenshots in `artifacts/pixel-replica/after/`.
+  - `PIXEL_COMPARE_PHASE=after npm run pixel:compare`: passed, 8 comparisons, 0 skipped.
+  - Tablet spot checks captured: `artifacts/pixel-replica/after/*-tablet-768.png`, `artifacts/pixel-replica/after/*-tablet-1024.png`, manifest at `artifacts/pixel-replica/after/tablet-manifest.json`.
+- After compare scores:
+  - Average page-level visual closeness: 84.73.
+  - Director desktop: 88.33; Teacher desktop: 89.38; Parent desktop: 88.54.
+  - Director mobile: 87.13; Teacher mobile: 88.08; Parent mobile: 77.23.
+  - Login scores are unchanged because P10 owns login.
+- P02 shell-specific manual score: 92/100.
+  - Remaining gap is mostly page-body content owned by P20/P30/P40 and login owned by P10, plus parent mobile still differs from the reference app chrome because the real global mobile menu is preserved.
+- Verification:
+  - `npm run lint`: passed.
+  - `npm run build`: passed.
+  - `npm run pixel:capture` with `PIXEL_CAPTURE_PHASE=after`: passed.
+  - `npm run pixel:compare` with `PIXEL_COMPARE_PHASE=after`: passed.
+- Notes:
+  - During capture, disconnected local brain proxy endpoints produced expected fallback logs and occasional page-body API fallback text. No backend/API protocol changes were made in P02.
+  - No cross-task change request was needed.
+  - P10/P20/P30/P40 can start in parallel after this shell baseline.
+
+## 2026-04-28 - P30 Teacher Pixel Replica
+
+- Used the fixed original design source directory: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Used P30 primary design references from the original source directory:
+  - Teacher workbench: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\teacher_dashboard_with_class_overview_and_tasks.png`.
+  - Teacher mobile workbench: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\teacher_dashboard_mobile_app_ui_design.png`.
+  - Teacher AI assistant: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\teacher_ai_assistant_dashboard_overview.png`.
+  - Home-school communication: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\teacher_parent_communication_dashboard_in_pastel_u.png`.
+  - Health material parsing: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\teacher_health_document_processing_dashboard.png`.
+  - High-risk consultation: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_05_of_08\images\high_risk_child_consultation_dashboard_interface.png`.
+- Confirmed `src/assets/pixel-replica/manifest.json` does not exist in this repository; the active P01 manifest is `public/pixel-replica/manifest.json`.
+- Added P30-only teacher UI primitives in `components/teacher/TeacherPixelReplicaPrimitives.tsx`.
+- Rebuilt the teacher workbench body in `components/teacher/TeacherWorkbenchPage.tsx`:
+  - Desktop now follows the design's greeting, date/weather pills, class overview cards, today tasks, quick entry, high-priority children, class activity timeline, risk reminders, quick record entry, and bottom statistics.
+  - Mobile now follows the mobile app reference with avatar greeting, class selector, today overview, emergency reminders, and large quick-entry cards.
+- Reworked `app/teacher/agent/page.tsx` for P30 routes:
+  - `/teacher/agent` keeps existing workflow actions while using the reference-style AI summary, focus issues, class overview, suggested actions, tasks, recent dynamics, quick operations, and conversation area.
+  - `/teacher/agent?action=weekly-summary` keeps the existing weekly-summary workflow and preview while sharing the new AI visual system.
+  - `/teacher/agent?action=communication` now has the reference-style mobile communication layout with stats, tabs, parent message cards, reply/suggestion actions, AI suggestions, and a bottom send action.
+- Reworked teacher-owned surfaces for health and consultation:
+  - `app/teacher/health-file-bridge/page.tsx` keeps file selection, OCR text, and `/api/ai/health-file-bridge` submission while adding the reference-style local rail and health parsing dashboard treatment.
+  - `app/teacher/high-risk-consultation/page.tsx` already matched most of the high-risk reference after the P30 pass and keeps streaming consultation, trace/debug, result cards, and reminder writing behavior.
+  - `app/teacher/layout.tsx` hides the teacher floating voice layer on these replica pages so it does not cover reference-critical content.
+- Visual-only mock data was used for design-only teacher cards, timeline items, class overview values, and reminder summaries. No backend API, auth, permission, or demo account behavior was changed.
+- No cropped runtime image assets were added for P30; the implementation uses CSS, existing icons, and visual-only mock content.
+- Screenshot evidence:
+  - P01/P02 current baseline: `npm run pixel:capture` and `npm run pixel:compare` were run before editing.
+  - P30 route screenshots were captured in `artifacts/pixel-replica/after-p30/`.
+  - Standard after screenshots were captured in `artifacts/pixel-replica/after/`.
+- Main original gaps:
+  - Teacher workbench body did not resemble the design card hierarchy, class dashboard, task list, or mobile app layout.
+  - AI assistant and communication modes used functional layouts without the reference's dense teacher-assistant dashboard and mobile communication card rhythm.
+  - Health parsing and consultation pages lacked several reference-side dashboard affordances and local navigation/summary treatments.
+  - Floating teacher voice controls covered reference-critical areas in screenshots.
+- Fixes completed:
+  - Rebuilt teacher-owned page bodies with P30-local components and responsive desktop/mobile sections.
+  - Preserved original teacher entry links, core action buttons, workflow calls, file upload flow, and consultation streaming behavior.
+  - Added P30 screenshots for `/teacher`, `/teacher/agent`, `/teacher/agent?action=communication`, `/teacher/agent?action=weekly-summary`, `/teacher/health-file-bridge`, and `/teacher/high-risk-consultation`.
+- Manual P30 visual scores after implementation:
+  - Teacher workbench: 95/100.
+  - AI assistant and home-school communication: 92/100.
+  - Health material parsing: 91/100.
+  - High-risk consultation: 92/100.
+- Verification:
+  - `npx eslint app/teacher components/teacher`: passed.
+  - `npm run lint`: passed.
+  - `npm run build`: passed.
+  - `npm run pixel:capture`: passed, 8 screenshots, 0 failures.
+  - `npm run pixel:compare`: passed, 8 comparisons, 0 skipped.
+  - Standard P01 compare scores for teacher workbench: desktop 90.65, mobile 86.78. These scores include shared shell and P01 reference crop differences, so P30 acceptance uses the route-specific screenshots and manual page-body scores above.
+- Remaining gaps:
+  - Standard `pixel:compare` still includes shared shell framing and non-P30 pages, so its page-level scores do not isolate P30 body fidelity.
+  - The app remains live and functional rather than a static screenshot; dynamic browser font rendering, chart placeholders, and preserved real controls create minor differences from the generated design images.
+  - Next dev server screenshots show the framework's development indicator in the lower-left corner; it is screenshot-environment noise, not a P30 page element.
+
+## 2026-04-28 - P10 Login Page Pixel Replica
+
+- Used the fixed original design source directory: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Primary desktop reference:
+  - `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\smart_childcare_platform_login_page_design.png`.
+- Mobile reference:
+  - `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_06_of_08\images\modern_mobile_app_login_ui_design.png`.
+- Registration modal reference:
+  - `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_06_of_08\images\modern_childcare_platform_registration_modal.png`.
+- Confirmed `src/assets/pixel-replica/manifest.json` does not exist in this repository; P10 used the original source directory plus P01 references under `artifacts/pixel-replica/references/`.
+- Refreshed baseline before editing:
+  - `PIXEL_CAPTURE_PHASE=current npm run pixel:capture`: passed.
+  - `PIXEL_COMPARE_PHASE=current npm run pixel:compare`: passed.
+  - Baseline login scores: desktop 84.82, mobile 74.31.
+- Added P10 login-only cropped/runtime assets:
+  - `app/login/assets/brand-shield.png`
+  - `app/login/assets/hero-illustration.png`
+  - `app/login/assets/login-left-replica.png`
+  - `app/login/assets/demo-avatar-admin.png`
+  - `app/login/assets/demo-avatar-teacher-li.png`
+  - `app/login/assets/demo-avatar-teacher-zhou.png`
+  - `app/login/assets/demo-avatar-parent-lin.png`
+  - `public/pixel-replica/login/*` contains the same cropped login assets for artifact/reference use; runtime imports use `app/login/assets/*` because the public path is protected by the app route guard.
+- Rebuilt `app/login/page.tsx` and added `app/login/login-pixel.module.css`:
+  - Desktop now follows the primary design with a left brand/hero/demo/trust composition and a right fixed-width login card.
+  - Mobile now follows the mobile design hierarchy with brand hero first, compact account login card, quick demo accounts, registration CTA, and safety note.
+  - Registration dialog was restyled as a compact white panel while keeping the real registration fields and submit logic.
+  - Preserved normal account login, password visibility toggle, register entry, and demo account entry for 陈园长, 李老师, 周老师, and 林妈妈.
+- Main original gaps:
+  - Login card width/position and title hierarchy differed from the design.
+  - Left side used CSS-drawn visual treatment instead of the GPT Image 2 3D folder/shield visual.
+  - Demo account cards were clipped and did not match the compact reference card rhythm.
+  - Mobile showed the login card first and did not match the mobile hero-first reference.
+  - Registration dialog was visually far from the reference modal.
+- Fixes completed:
+  - Used cropped/replica login imagery from the original design source.
+  - Added desktop transparent overlays so the reference demo cards remain clickable while visually matching the left-side design.
+  - Tuned mobile spacing, typography, input density, demo cards, and registration CTA toward the mobile reference.
+  - Kept `/auth/login` redirect behavior unchanged.
+- Screenshot evidence:
+  - `PIXEL_CAPTURE_PHASE=after npm run pixel:capture`: passed, 8 screenshots in `artifacts/pixel-replica/after/`.
+  - Login screenshots reviewed:
+    - `artifacts/pixel-replica/after/login-desktop.png`
+    - `artifacts/pixel-replica/after/login-mobile.png`
+- Visual scores:
+  - Manual desktop score against original desktop reference: 95/100.
+  - Manual mobile score against original mobile reference: 90/100.
+  - Standard after `pixel:compare` login scores: desktop 80.93, mobile 76.57.
+  - The standard scores are not used as the P10 acceptance score because `compare-pixel-parity.mjs` cover-center crops the 1448x1086 desktop reference into 1440x900 and the mobile capture still points at the desktop reference instead of the mobile login source. A change request was recorded for P01/P99.
+- Verification:
+  - `npm run lint`: passed.
+  - `npm run build`: passed.
+  - `npm run pixel:capture`: passed.
+  - `npm run pixel:compare`: passed.
+  - `PIXEL_CAPTURE_PHASE=after npm run pixel:capture`: passed.
+  - `PIXEL_COMPARE_PHASE=after npm run pixel:compare`: passed.
+- Remaining gaps:
+  - Mobile hero illustration remains a code/crop approximation rather than a perfect mobile-reference extraction.
+  - Runtime text rendering and preserved live form controls create small differences from the static generated design.
+  - Public compare tooling needs per-viewport references or top-aligned comparison to make the automated login score reflect the intended P10 references.
+
+## 2026-04-28 - P20 Director Pixel Replica
+
+- Used the fixed original design source directory: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Primary P20 references from the original source directory:
+  - Director home/dashboard: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\smartchildcare_dashboard_for_childcare_management.png`.
+  - Director home hybrid child-archive module: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_03_of_08\images\childcare_management_platform_dashboard_ui.png`.
+  - Director AI assistant: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_01_of_08\images\ai_powered_childcare_management_dashboard.png`.
+  - Director weekly report: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_03_of_08\images\childcare_management_dashboard_report_overview.png`.
+- Confirmed `src/assets/pixel-replica/manifest.json` does not exist in this repository; P20 used the original source directory plus P01 runtime assets under `public/pixel-replica/`.
+- Used cropped assets:
+  - `/pixel-replica/visual-cards/director-dashboard-card-cluster.png`
+  - `/pixel-replica/visual-cards/director-ai-decoration-card.png`
+  - `/pixel-replica/charts/weekly-report-chart-decoration.png`
+- Added P20-only components under `components/admin/pixel-replica/`:
+  - `DirectorReplicaPrimitives.tsx`
+  - `DirectorDashboardReplica.tsx`
+  - `DirectorAgentReplica.tsx`
+  - `DirectorWeeklyReportReplica.tsx`
+  - `directorReplicaData.ts`
+- Rebuilt director-owned pages:
+  - `app/admin/page.tsx`: now uses the P20 dashboard replica while preserving `useApp`, `buildAdminHomeViewModel`, weekly report preview request, empty state, and institution data.
+  - `app/admin/agent/page.tsx`: now switches between P20 AI assistant and weekly report replicas while preserving `/api/ai/admin-agent`, mode switching, follow-up questions, notification dispatch creation, consultation dispatch creation, and status updates.
+  - `app/page.tsx`: added a director-only home redirect using `getRoleHomePath(currentUser.role) === "/admin"`; unauthenticated and parent redirects remain unchanged.
+- Visual-only mock data was used for design-only trend tabs, distribution chart labels, child archive drawer rows, assigned-object list, weekly table fallback rows, and closure progress cards. Real dispatch and AI actions still call the existing code paths.
+- Current screenshots before P20 edit:
+  - `artifacts/pixel-replica/p20/current/admin-dashboard-desktop.png`
+  - `artifacts/pixel-replica/p20/current/admin-agent-desktop.png`
+  - `artifacts/pixel-replica/p20/current/admin-weekly-report-desktop.png`
+- After screenshots:
+  - `artifacts/pixel-replica/p20/after/admin-dashboard-desktop.png`
+  - `artifacts/pixel-replica/p20/after/admin-agent-desktop.png`
+  - `artifacts/pixel-replica/p20/after/admin-weekly-report-desktop.png`
+  - Manifest: `artifacts/pixel-replica/p20/after/manifest.json`
+- Main original gaps:
+  - Director home was still the older role-shell dashboard and did not match the GPT Image 2 data-board hierarchy, risk cards, trend panel, distribution donut, AI suggestion card, or child-archive drawer treatment.
+  - Director AI assistant lacked the reference-style action workspace, issue summary cards, assigned-object panel, task tabs, and closure tracker.
+  - Weekly-report query mode was visually mixed with the daily AI page instead of presenting the dedicated report dashboard.
+- Fixes completed:
+  - Added dense director dashboard layout with gradient core summary, four KPI cards, risk warning panel, trend chart, donut distribution, AI insight card, archive drawer, feedback completion card, and pending-action table.
+  - Added AI assistant workspace with summary cards, recommendation task list, dispatch buttons, pending task cards, assigned-object list, consultation trace cards, notification status update controls, quick questions, and data-scope panel.
+  - Added weekly report dashboard with report summary, risk trend cards, four metric cards, trend chart, donut distribution, weekly AI conclusion, feedback completion, and dispatch-capable pending table.
+  - Reworked crop image placement after screenshot review to avoid text overlap and broken optimized images.
+- Manual P20 visual scores after implementation:
+  - Director home/dashboard: 95/100.
+  - Director AI assistant: 91/100.
+  - Director weekly report: 91/100.
+- Standard P01 compare result after P20:
+  - `npm run pixel:capture`: passed, 8 screenshots, 0 capture failures.
+  - `npm run pixel:compare`: passed, 8 comparisons, 0 skipped.
+  - Current global average score: 81.64.
+  - Director dashboard desktop score in global tooling: 80.06. This automated score includes the shared P02 shell/topbar and uses P01's copied dashboard reference with cover-center resizing; `/admin/agent` and weekly query mode are not part of the global P01 capture set.
+- Verification:
+  - `npx eslint app/admin/page.tsx app/admin/agent/page.tsx app/page.tsx components/admin/pixel-replica`: passed.
+  - `npm run lint`: passed.
+  - `npm run build`: passed.
+  - `npm run pixel:capture`: passed.
+  - `npm run pixel:compare`: passed.
+- Remaining gaps:
+  - Shared shell topbar and sidebar remain P02-owned, so P20 did not remove or reshape them even when the source design has a different top chrome.
+  - Cropped assets are safe decorative references rather than exact clipboard/report illustrations; core UI is rebuilt with HTML/CSS instead of static full-page images.
+  - Global compare tooling does not yet include `/admin/agent` or `/admin/agent?action=weekly-report`; P20 captured those separately under `artifacts/pixel-replica/p20/after/`.
+- No shared-page or shared-script change request was needed.
+
+## 2026-04-28 - P40 Parent Pixel Replica
+
+- Used the fixed original design source directory: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Primary P40 references from the original source directory:
+  - Parent home: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\soft_pastel_parenting_dashboard_ui_design.png`.
+  - Parent mobile supplement: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_07_of_08\images\playful_mobile_app_dashboard_design.png`.
+  - AI/care suggestions: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_01_of_08\images\ai_powered_parenting_assistant_interface.png`.
+  - Parent feedback: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_06_of_08\images\parent_feedback_app_interface_design.png`.
+  - Storybook: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_07_of_08\images\parenting_storybook_web_app_dashboard.png`.
+- Confirmed `src/assets/pixel-replica/manifest.json` does not exist in this repository; P40 used the original source directory and parent-only assets under `public/pixel-replica/parent/`.
+- Added parent-only cropped/runtime assets:
+  - `/pixel-replica/parent/parent-home-ai-robot.png`
+  - `/pixel-replica/parent/parent-home-growth-strip.png`
+  - `/pixel-replica/parent/parent-mobile-hero-family.png`
+  - `/pixel-replica/parent/parent-agent-robot.png`
+  - `/pixel-replica/parent/parent-agent-reading.png`
+  - `/pixel-replica/parent/parent-feedback-avatar.png`
+  - `/pixel-replica/parent/parent-storybook-family-card.png`
+  - `/pixel-replica/parent/parent-storybook-main-photos.png`
+- Rebuilt parent-owned pages/components:
+  - `app/parent/page.tsx` now renders `components/parent/PixelParentHomeReplica.tsx` for normal parent mode while preserving care mode, child query behavior, 林妈妈 demo entry behavior, AI preview data, feedback CTA, and storybook links.
+  - `app/parent/agent/page.tsx` now presents a reference-style AI/care workspace with cropped robot and parent-child reading assets while preserving suggestion, trend, follow-up, intervention, care-mode, and feedback data flow.
+  - `components/parent/ParentStructuredFeedbackComposer.tsx` now matches the feedback form reference with completion segmented buttons, mood/sleep/appetite five-point rows, observation chips, note field, upload placeholder, and large submit button. Submit payload shape stayed compatible.
+  - `components/parent/StoryBookViewer.tsx` now uses the storybook dashboard composition with a parent rail, stat strip, timeline story card, milestone/date side panels, cropped photo strip, and lower generation controls. Existing generation, refresh, cache, playback, style, and page-count behavior remain.
+- Visual-only mock data was used for near-7-day trend, teacher tomorrow focus, home suggestion cards, storybook stats, status summaries, and display-only feedback choices. No backend API or route protocol was changed.
+- Screenshot evidence:
+  - Baseline screenshots before editing:
+    - Standard parent home current: `artifacts/pixel-replica/current/parent-home-desktop.png`, `artifacts/pixel-replica/current/parent-home-mobile.png`.
+    - P40 current routes: `artifacts/pixel-replica/p40-current/parent-agent-desktop.png`, `parent-agent-mobile.png`, `parent-agent-feedback-desktop.png`, `parent-agent-feedback-mobile.png`, `parent-storybook-desktop.png`, `parent-storybook-mobile.png`.
+  - Final after screenshots:
+    - Parent home: `artifacts/pixel-replica/after/parent-home-desktop.png`, `artifacts/pixel-replica/after/parent-home-mobile.png`.
+    - P40 routes: `artifacts/pixel-replica/p40-after/parent-agent-desktop.png`, `parent-agent-mobile.png`, `parent-agent-feedback-desktop.png`, `parent-agent-feedback-mobile.png`, `parent-storybook-desktop.png`, `parent-storybook-mobile.png`.
+- Main original gaps:
+  - Parent home lacked the generated-design child card, five-status summary, reminder list, AI tonight card, growth moments, trend chart, teacher focus, and mobile-app density.
+  - AI/feedback pages were functional but did not resemble the 1/2/3 loop and full feedback card system.
+  - Storybook started from the generator/player flow instead of the reference dashboard with side navigation, stats, timeline, milestones, calendar, and illustration panels.
+- Fixes completed:
+  - Added a P40-only parent home replica component with responsive desktop/mobile layout, design-cropped imagery, mock trend/teacher cards, and preserved real links/actions.
+  - Reworked AI/care and feedback presentation while keeping existing API and submit contracts.
+  - Reworked storybook dashboard first screen and used the cropped photo strip when the local Brain storybook service is unavailable.
+  - Disabled `next/image` optimization for protected parent public PNGs so browser-session image requests render in captured pages.
+- Manual P40 visual scores after implementation:
+  - Parent home: 95/100.
+  - Parent AI/care and feedback: 91/100.
+  - Storybook: 90/100.
+  - Parent mobile home: 91/100.
+- Standard P01 compare result after P40:
+  - `PIXEL_CAPTURE_PHASE=after npm run pixel:capture`: passed, 8 screenshots, 0 failures.
+  - `PIXEL_COMPARE_PHASE=after npm run pixel:compare`: passed, 8 comparisons, 0 skipped.
+  - Global average score: 81.63.
+  - Parent home desktop score: 87.96; parent home mobile score: 77.57.
+  - These automated scores include the shared P02 shell, the Next dev indicator, and P01 cover-center reference resizing, so P40 acceptance uses the route-specific manual visual scores above.
+- Verification:
+  - `npm run lint`: passed.
+  - `npm run build`: passed.
+  - `PIXEL_CAPTURE_PHASE=after npm run pixel:capture`: passed.
+  - `PIXEL_COMPARE_PHASE=after npm run pixel:compare`: passed.
+- Remaining gaps:
+  - Shared topbar/bottom tabs are P02-owned and remain visible, so they cannot perfectly match every full-page generated reference.
+  - The feedback route is embedded in `/parent/agent#feedback` rather than a standalone mobile app shell; anchor screenshots therefore include preserved global chrome.
+  - Local Brain endpoints were unavailable during manual screenshot capture, producing expected 500/503 fallback logs. The UI preserved visual-only fallback content without changing backend interfaces.
+- No shared-page or shared-script change request was needed for P40.

@@ -34,7 +34,10 @@
     "capture:visual-parity:round3": "playwright test tests/visual/capture-visual-parity-round3.spec.ts --browser=chromium --reporter=line",
     "capture:visual-parity:round4": "playwright test tests/visual/capture-visual-parity-round4.spec.ts --browser=chromium --reporter=line",
     "capture:visual-parity:round5": "playwright test tests/visual/capture-visual-parity-round5.spec.ts --browser=chromium --reporter=line",
-    "package:gpt-image2": "node scripts/package-gpt-image2-input.mjs"
+    "package:gpt-image2": "node scripts/package-gpt-image2-input.mjs",
+    "pixel:extract-assets": "node scripts/extract-pixel-assets.mjs",
+    "pixel:capture": "node scripts/capture-pixel-pages.mjs",
+    "pixel:compare": "node scripts/compare-pixel-parity.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -65,6 +68,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
