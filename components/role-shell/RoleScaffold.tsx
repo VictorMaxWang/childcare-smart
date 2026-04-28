@@ -15,16 +15,35 @@ export function RolePageShell({
   description,
   actions,
   children,
+  headerVariant = "default",
+  className,
+  contentClassName,
 }: {
   badge: string;
   title: string;
   description: string;
   actions?: ReactNode;
   children: ReactNode;
+  headerVariant?: "default" | "compact" | "hidden";
+  className?: string;
+  contentClassName?: string;
 }) {
+  if (headerVariant === "hidden") {
+    return (
+      <div className={cn("app-page page-enter", className)}>
+        <div className={contentClassName}>{children}</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="app-page page-enter">
-      <div className="rounded-xl border border-(--border) bg-linear-to-r from-white via-indigo-50/60 to-sky-50 p-5 shadow-[var(--shadow-card)] backdrop-blur-sm sm:p-6">
+    <div className={cn("app-page page-enter", className)}>
+      <div
+        className={cn(
+          "rounded-xl border border-(--border) bg-linear-to-r from-white via-indigo-50/60 to-sky-50 shadow-[var(--shadow-card)] backdrop-blur-sm",
+          headerVariant === "compact" ? "p-4 sm:p-5" : "p-5 sm:p-6"
+        )}
+      >
         <PageHeader
           eyebrow={
             <Badge variant="info" className="px-3 py-1 text-xs">
@@ -36,7 +55,7 @@ export function RolePageShell({
           actions={actions}
         />
       </div>
-      <div className="mt-6">{children}</div>
+      <div className={cn("mt-6", contentClassName)}>{children}</div>
     </div>
   );
 }

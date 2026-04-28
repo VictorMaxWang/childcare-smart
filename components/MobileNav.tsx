@@ -123,7 +123,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-11 w-11 items-center justify-center rounded-lg border border-(--border) bg-white text-(--text-secondary) shadow-[var(--shadow-card)] transition hover:bg-(--hover-surface) hover:text-(--text-primary)"
+        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-100 bg-white text-slate-600 shadow-[0_10px_28px_rgb(79_70_229_/_0.10)] transition hover:bg-indigo-50 hover:text-indigo-600"
         aria-label={open ? "关闭导航菜单" : "打开导航菜单"}
         aria-expanded={open}
         aria-controls="mobile-nav-panel"
@@ -133,7 +133,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
 
       <div
         className={cn(
-          "fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm transition-opacity duration-200",
+          "fixed inset-0 z-40 bg-slate-950/48 backdrop-blur-md transition-opacity duration-200",
           open ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={close}
@@ -145,13 +145,13 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
         id="mobile-nav-panel"
         aria-label="移动端主导航"
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-dvh w-[22rem] max-w-[calc(100vw-1rem)] flex-col border-r border-(--border) bg-white shadow-[var(--shadow-dialog)] transition-transform duration-300 ease-out",
+          "fixed left-0 top-0 z-50 flex h-dvh w-[23rem] max-w-[calc(100vw-0.75rem)] flex-col overflow-hidden rounded-r-[28px] border-r border-indigo-100 bg-slate-50 shadow-[0_28px_80px_rgb(15_23_42_/_0.20)] transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="border-b border-(--border-subtle) px-5 py-4 pr-14">
-          <Link href="/" className="flex items-center gap-3 font-bold text-(--text-primary)" onClick={close}>
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-(--primary-soft) text-(--primary)">
+        <div className="relative overflow-hidden border-b border-indigo-100 bg-[linear-gradient(135deg,#eef2ff_0%,#ffffff_58%,#ecfeff_100%)] px-5 py-5 pr-14">
+          <Link href="/" className="relative flex items-center gap-3 font-bold text-slate-950" onClick={close}>
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-[0_14px_34px_rgb(79_70_229_/_0.16)]">
               <Baby className="h-5 w-5" />
             </div>
             <div className="min-w-0">
@@ -161,10 +161,19 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
               </span>
             </div>
           </Link>
+          <div className="relative mt-4 rounded-2xl border border-white/80 bg-white/70 p-3 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-indigo-600">移动工作台</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">{currentUser.className ?? "今日任务"}</p>
+              </div>
+              <RoleBadge role={ROLE_BADGE_MAP[currentUser.role]} label={ROLE_LABEL_MAP[currentUser.role]} />
+            </div>
+          </div>
           <button
             type="button"
             onClick={close}
-            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-md text-(--text-tertiary) transition hover:bg-(--secondary) hover:text-(--text-primary)"
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/80 text-slate-500 shadow-sm transition hover:bg-indigo-50 hover:text-indigo-600"
             aria-label="关闭菜单"
           >
             <X className="h-5 w-5" />
@@ -175,7 +184,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
           <div className="space-y-5">
             {navGroups.map((group, groupIndex) => (
               <div key={group.key}>
-                <p className="px-3 text-xs font-semibold text-(--text-helper)">{group.label}</p>
+                <p className="px-3 text-xs font-semibold text-slate-400">{group.label}</p>
                 <div className="mt-2 space-y-1">
                   {group.items.map((item, itemIndex) => (
                     <MobileNavLink
@@ -192,8 +201,8 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
           </div>
         </div>
 
-        <div className="border-t border-(--border-subtle) px-5 py-4">
-          <div className="mb-4 rounded-lg border border-(--border) bg-(--panel-subtle) p-3">
+        <div className="border-t border-indigo-100 bg-white px-5 py-4 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] md:pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+          <div className="mb-4 rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_100%)] p-3 shadow-sm">
             <div className="flex items-center gap-3">
               <span className="text-xl" aria-hidden="true">
                 {currentUser.avatar}
@@ -213,7 +222,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
               close();
               void onLogout();
             }}
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-(--border) bg-white px-4 py-2.5 text-sm font-medium text-(--text-secondary) shadow-[var(--shadow-card)] transition hover:bg-(--hover-surface) hover:text-(--text-primary)"
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-indigo-50 hover:text-indigo-600"
           >
             <LogOut className="h-4 w-4" />
             退出登录
@@ -249,16 +258,16 @@ const MobileNavLink = forwardRef<
       onClick={onClick}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+        "flex min-h-12 items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-all",
         active
-          ? "bg-(--primary-soft) text-(--primary-soft-foreground) shadow-[inset_3px_0_0_var(--primary)]"
-          : "text-(--text-secondary) hover:bg-(--hover-surface) hover:text-(--text-primary)"
+          ? "bg-white text-indigo-600 shadow-[0_12px_30px_rgb(79_70_229_/_0.12),inset_4px_0_0_rgb(99_102_241)]"
+          : "text-slate-600 hover:bg-white hover:text-slate-950 hover:shadow-sm"
       )}
     >
       <span
         className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
-          active ? "bg-white text-(--primary)" : "bg-(--panel-subtle) text-(--text-tertiary)"
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl",
+          active ? "bg-indigo-50 text-indigo-600" : "bg-white text-slate-400"
         )}
       >
         <Icon className="h-4 w-4" aria-hidden="true" />

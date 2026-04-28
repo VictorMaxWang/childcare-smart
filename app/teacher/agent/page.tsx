@@ -2,7 +2,23 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
-import { BellRing, BrainCircuit, FileText, MessageSquareText, Mic, ScanSearch, ShieldAlert, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  BellRing,
+  Bot,
+  BrainCircuit,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  FileText,
+  MessageSquareText,
+  Mic,
+  ScanSearch,
+  Send,
+  ShieldAlert,
+  Sparkles,
+  UsersRound,
+} from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import TeacherDraftConfirmationPanel from "@/components/teacher/TeacherDraftConfirmationPanel";
 import TeacherAgentHistoryList, { type TeacherAgentHistoryListItem } from "@/components/teacher/TeacherAgentHistoryList";
@@ -780,6 +796,76 @@ export default function TeacherAgentPage() {
     );
   }
 
+  const isCommunicationMode = preloadAction === "communication";
+  const waitingCommunicationCount = Math.max(
+    1,
+    Math.min(
+      6,
+      classContext.visibleChildren.length - classContext.weeklyFeedbacks.length + classContext.todayAbnormalChildren.length
+    )
+  );
+  const handledCommunicationCount = Math.max(0, classContext.weeklyFeedbacks.length);
+  const pendingTaskCount =
+    classContext.todayAbnormalChildren.length +
+    classContext.uncheckedMorningChecks.length +
+    classContext.pendingReviews.length +
+    sortedTeacherDrafts.length;
+  const focusIssueCards = [
+    {
+      label: "晨检异常",
+      value: `${classContext.todayAbnormalChildren.length}`,
+      tone: "bg-rose-50 text-rose-700",
+      icon: ShieldAlert,
+    },
+    {
+      label: "饮食/晨检待补",
+      value: `${classContext.uncheckedMorningChecks.length}`,
+      tone: "bg-amber-50 text-amber-700",
+      icon: Clock3,
+    },
+    {
+      label: "家园沟通待处理",
+      value: `${waitingCommunicationCount}`,
+      tone: "bg-emerald-50 text-emerald-700",
+      icon: MessageSquareText,
+    },
+    {
+      label: "成长记录补录",
+      value: `${classContext.pendingReviews.length}`,
+      tone: "bg-sky-50 text-sky-700",
+      icon: ClipboardList,
+    },
+  ];
+  const aiActionCards = [
+    {
+      title: "关注晨检异常幼儿",
+      detail:
+        classContext.todayAbnormalChildren[0]
+          ? `${classContext.todayAbnormalChildren[0].child.name} 今日晨检异常，优先复测并同步家长。`
+          : "今日暂无高风险晨检，可保持复查节奏。",
+      priority: classContext.todayAbnormalChildren.length > 0 ? "高优先级" : "低优先级",
+      tone: "rose",
+    },
+    {
+      title: "补齐待复查记录",
+      detail:
+        classContext.pendingReviews[0]
+          ? `${classContext.pendingReviews[0].child.name} 仍有待复查观察，建议补一条跟进记录。`
+          : "当前复查压力较低，适合整理班级周总结。",
+      priority: classContext.pendingReviews.length > 0 ? "中优先级" : "低优先级",
+      tone: "amber",
+    },
+    {
+      title: "与家长沟通今日事项",
+      detail:
+        activeChildContext?.child.name
+          ? `围绕 ${activeChildContext.child.name} 的在园表现生成可直接发送的话术。`
+          : "选择重点儿童后生成沟通建议。",
+      priority: "中优先级",
+      tone: "indigo",
+    },
+  ];
+
   return (
     <RolePageShell
       badge={`教师 AI 助手 · ${currentUser.className ?? "当前班级"}`}
@@ -791,10 +877,354 @@ export default function TeacherAgentPage() {
           <InlineLinkButton href="/teacher/agent" label="刷新教师 AI 助手" variant="premium" />
         </>
       }
+      headerVariant="hidden"
+      className="max-w-[86rem]"
     >
       <RoleSplitLayout
+        stacked
         main={
           <div className="space-y-6">
+            {isCommunicationMode ? (
+              <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#f8fbff_0%,#f5f3ff_48%,#eefbff_100%)] p-4 shadow-[0_24px_70px_rgb(99_102_241_/_0.13)] sm:p-5">
+                <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)_280px]">
+                  <aside className="rounded-2xl border border-white/80 bg-white/86 p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <Badge variant="info" className="rounded-full px-3 py-1">家园沟通</Badge>
+                        <h1 className="mt-3 text-2xl font-semibold leading-tight text-slate-950">沟通消息中心</h1>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{classContext.className} · 待回复 {waitingCommunicationCount}</p>
+                      </div>
+                      <Button type="button" size="icon" variant="outline" className="rounded-2xl" onClick={() => void runWorkflow("communication")} disabled={isLoading}>
+                        <MessageSquareText className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="mt-5 grid grid-cols-2 gap-2">
+                      {[
+                        { label: "待回复", value: waitingCommunicationCount, tone: "text-rose-600" },
+                        { label: "待处理", value: classContext.pendingReviews.length, tone: "text-amber-600" },
+                        { label: "已处理", value: handledCommunicationCount, tone: "text-emerald-600" },
+                        { label: "沟通总数", value: handledCommunicationCount + waitingCommunicationCount, tone: "text-sky-600" },
+                      ].map((item) => (
+                        <div key={item.label} className="rounded-2xl bg-slate-50 px-3 py-3">
+                          <p className={`text-2xl font-semibold ${item.tone}`}>{item.value}</p>
+                          <p className="mt-1 text-xs text-slate-500">{item.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-5 space-y-2">
+                      {(activeChildContext?.recentFeedbacks.length ? activeChildContext.recentFeedbacks : classContext.weeklyFeedbacks)
+                        .slice(0, 5)
+                        .map((feedback) => {
+                          const child = classContext.visibleChildren.find((item) => item.id === feedback.childId);
+                          return (
+                            <button
+                              key={feedback.id}
+                              type="button"
+                              className="w-full rounded-2xl border border-slate-100 bg-white px-3 py-3 text-left transition hover:border-indigo-200 hover:bg-indigo-50/50"
+                              onClick={() => child?.id && handleSelectChild(child.id)}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm font-semibold text-slate-950">{child?.name ?? "家长反馈"}</p>
+                                <span className="text-xs text-slate-400">{feedback.date}</span>
+                              </div>
+                              <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{feedback.content || feedback.notes || "等待老师回复。"}</p>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </aside>
+
+                  <div className="rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-indigo-100 text-indigo-700">
+                            <UsersRound className="h-7 w-7" />
+                          </div>
+                          <div>
+                            <h2 className="text-xl font-semibold text-slate-950">{activeChildContext?.child.name ?? classContext.className}</h2>
+                            <p className="mt-1 text-sm text-slate-500">
+                              {activeChildContext ? `${activeChildContext.child.className} · 家长沟通对象` : `${classContext.visibleChildren.length} 名幼儿`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-4 grid gap-2 sm:grid-cols-4">
+                          {[
+                            { label: "今日在园", value: `${classContext.presentChildren.length}` },
+                            { label: "健康状态", value: classContext.todayAbnormalChildren.length > 0 ? "需关注" : "稳定" },
+                            { label: "今日表现", value: classContext.pendingReviews.length > 0 ? "待复查" : "正常" },
+                            { label: "饮食情况", value: "待同步" },
+                          ].map((item) => (
+                            <div key={item.label} className="rounded-2xl bg-slate-50 px-3 py-3">
+                              <p className="text-xs text-slate-500">{item.label}</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-900">{item.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <Button type="button" variant="premium" className="rounded-2xl" onClick={() => void runWorkflow("communication")} disabled={isLoading}>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        生成沟通建议
+                      </Button>
+                    </div>
+
+                    <div className="mt-5 space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="h-9 w-9 shrink-0 rounded-full bg-indigo-100" />
+                        <div className="max-w-[72%] rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+                          老师，今天孩子的状态需要注意什么？我晚上应该怎么配合？
+                        </div>
+                      </div>
+                      <div className="flex items-start justify-end gap-3">
+                        <div className="max-w-[78%] rounded-2xl bg-indigo-100 px-4 py-3 text-sm leading-6 text-indigo-900">
+                          {currentResult?.summary ??
+                            `今天会继续关注 ${activeChildContext?.child.name ?? "重点幼儿"} 的晨检、饮食和情绪表现，离园前会同步今晚观察点。`}
+                        </div>
+                        <div className="h-9 w-9 shrink-0 rounded-full bg-indigo-600" />
+                      </div>
+                      <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-slate-950">快捷回复</p>
+                          <Badge variant="info">AI 建议</Badge>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                          {activeChildContext?.todayAbnormalChecks.length
+                            ? "建议先说明今日晨检异常、园内处理和今晚复查点。"
+                            : "建议同步今日在园表现，并请家长明早反馈睡眠与入园状态。"}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                        <div className="flex flex-wrap gap-2">
+                          {["常用回复", "作息建议", "健康提示", "营养建议"].map((item) => (
+                            <Badge key={item} variant="secondary" className="rounded-full px-3 py-1">{item}</Badge>
+                          ))}
+                        </div>
+                        <div className="mt-3 flex items-center gap-2 rounded-2xl border border-indigo-100 bg-slate-50 px-3 py-2 text-sm text-slate-400">
+                          输入消息，Enter 发送
+                          <Button type="button" size="icon" variant="premium" className="ml-auto h-9 w-9 rounded-xl" onClick={() => void runWorkflow("communication")} disabled={isLoading}>
+                            <Send className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <aside className="space-y-4">
+                    <div className="rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-slate-950">AI 沟通建议</p>
+                        <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={() => void runWorkflow("communication")} disabled={isLoading}>换一换</Button>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        先感谢家长反馈，再说明老师已关注的在园证据，最后给出今晚可执行的小任务。
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
+                      <p className="text-sm font-semibold text-slate-950">快捷沟通</p>
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        {[
+                          ["通知公告", BellRing],
+                          ["成长记录", ClipboardList],
+                          ["今日表现", Sparkles],
+                          ["健康提示", ShieldAlert],
+                        ].map(([label, Icon]) => {
+                          const QuickIcon = Icon as typeof BellRing;
+                          return (
+                            <button key={label as string} type="button" className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 text-center text-xs font-medium text-slate-600">
+                              <QuickIcon className="mx-auto mb-2 h-4 w-4 text-indigo-500" />
+                              {label as string}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </aside>
+                </div>
+              </section>
+            ) : (
+              <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f5f3ff_44%,#eff6ff_100%)] p-4 shadow-[0_24px_70px_rgb(99_102_241_/_0.12)] sm:p-5">
+                <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_300px]">
+                  <div>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="info" className="rounded-full px-3 py-1">教师 AI 助手</Badge>
+                          <Badge variant="outline" className="rounded-full px-3 py-1">{classContext.className}</Badge>
+                        </div>
+                        <h1 className="mt-4 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">教师 AI 助手</h1>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                          基于班级数据生成可执行的教师处理建议，辅助把观察、沟通与支持每一位幼儿的成长。
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" className="rounded-2xl" onClick={() => void runWorkflow("weekly-summary")} disabled={isLoading}>导出本页简报</Button>
+                        <Button type="button" variant="premium" className="rounded-2xl" onClick={() => void runWorkflow("follow-up")} disabled={isLoading}>
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          生成今日建议
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.9fr)_minmax(0,0.95fr)]">
+                      <div className="rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-indigo-700">AI 智能总结</p>
+                          <span className="text-xs text-slate-400">AI 生成于 08:25</span>
+                        </div>
+                        <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-7 text-slate-600">
+                          {classContext.className} 今日出勤率稳定，晨检异常 {classContext.todayAbnormalChildren.length} 人，待复查 {classContext.pendingReviews.length} 项。建议先处理异常与补录，再完成家园沟通。
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Badge variant={classContext.todayAbnormalChildren.length > 0 ? "warning" : "success"} className="rounded-full px-3 py-1">
+                            {classContext.todayAbnormalChildren.length > 0 ? `晨检异常 ${classContext.todayAbnormalChildren.length} 人` : "整体平稳"}
+                          </Badge>
+                          <Badge variant="info" className="rounded-full px-3 py-1">家长沟通 {waitingCommunicationCount} 条</Badge>
+                          <Badge variant="secondary" className="rounded-full px-3 py-1">补录待完成 {classContext.pendingReviews.length} 项</Badge>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
+                        <p className="text-sm font-semibold text-slate-950">识别出的重点问题</p>
+                        <p className="mt-1 text-xs text-slate-500">共发现 {focusIssueCards.length} 个问题</p>
+                        <div className="mt-4 space-y-3">
+                          {focusIssueCards.map((item) => {
+                            const Icon = item.icon;
+                            return (
+                              <div key={item.label} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2">
+                                <div className="flex items-center gap-3">
+                                  <span className={`flex h-8 w-8 items-center justify-center rounded-xl ${item.tone}`}>
+                                    <Icon className="h-4 w-4" />
+                                  </span>
+                                  <span className="text-sm text-slate-600">{item.label}</span>
+                                </div>
+                                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">{item.value}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-slate-950">班级概览</p>
+                          <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={() => setScope("class")}>详细 <ArrowRight className="ml-1 h-3.5 w-3.5" /></Button>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-3">
+                          {[
+                            ["出勤人数", `${classContext.presentChildren.length}人`, UsersRound, "bg-indigo-50 text-indigo-700"],
+                            ["晨检异常人数", `${classContext.todayAbnormalChildren.length}人`, ShieldAlert, "bg-rose-50 text-rose-700"],
+                            ["体温异常人数", `${classContext.todayAbnormalChildren.filter((item) => item.record.temperature >= 37.3).length}人`, CheckCircle2, "bg-amber-50 text-amber-700"],
+                            ["饮食待同步", `${classContext.uncheckedMorningChecks.length}人`, ClipboardList, "bg-emerald-50 text-emerald-700"],
+                          ].map(([label, value, Icon, tone]) => {
+                            const MetricIcon = Icon as typeof UsersRound;
+                            return (
+                              <div key={label as string} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                                <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${tone as string}`}>
+                                  <MetricIcon className="h-4 w-4" />
+                                </span>
+                                <p className="mt-3 text-xs text-slate-500">{label as string}</p>
+                                <p className="mt-1 text-xl font-semibold text-slate-950">{value as string}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                      <div className="rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-slate-950">建议动作 / 处理方案</p>
+                          <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={() => void runWorkflow("follow-up")} disabled={isLoading}>查看更多建议</Button>
+                        </div>
+                        <div className="mt-4 space-y-3">
+                          {aiActionCards.map((item) => (
+                            <div key={item.title} className="flex items-start justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-3">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-950">{item.title}</p>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">{item.detail}</p>
+                              </div>
+                              <Badge variant={item.tone === "rose" ? "warning" : item.tone === "amber" ? "secondary" : "info"}>{item.priority}</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-slate-950">待派发任务</p>
+                          <Badge variant="outline">{pendingTaskCount}</Badge>
+                        </div>
+                        <div className="mt-4 space-y-3">
+                          {[
+                            ["晨检异常跟进", `${classContext.todayAbnormalChildren.length}人`, "健康照护", "08:00"],
+                            ["饮食异常观察", `${classContext.uncheckedMorningChecks.length}人`, "营养照护", "08:05"],
+                            ["家长沟通", `${waitingCommunicationCount}条`, "家园沟通", "08:10"],
+                            ["成长记录补录", `${classContext.pendingReviews.length}项`, "成长记录", "08:15"],
+                          ].map(([title, count, tag, time]) => (
+                            <div key={title as string} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl bg-slate-50 px-3 py-2 text-sm">
+                              <span className="h-3.5 w-3.5 rounded border border-indigo-200 bg-white" />
+                              <div className="min-w-0">
+                                <p className="truncate font-medium text-slate-800">{title as string}（{count as string}）</p>
+                                <p className="mt-0.5 text-xs text-indigo-500">{tag as string}</p>
+                              </div>
+                              <span className="text-xs text-slate-400">{time as string}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <Button type="button" variant="premium" className="mt-4 w-full rounded-2xl" onClick={() => void runWorkflow("follow-up")} disabled={isLoading}>一键派发给辅助</Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <aside className="space-y-4">
+                    <div className="rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
+                      <p className="text-sm font-semibold text-slate-950">常用快捷操作</p>
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        {[
+                          ["发送通知", BellRing, "/teacher/agent?action=communication"],
+                          ["成长记录", ClipboardList, "/growth"],
+                          ["晨检记录", CheckCircle2, "/health"],
+                          ["饮食记录", FileText, "/diet"],
+                          ["消毒记录", Sparkles, "/teacher"],
+                          ["家长沟通", MessageSquareText, "/teacher/agent?action=communication"],
+                        ].map(([label, Icon, href]) => {
+                          const QuickIcon = Icon as typeof BellRing;
+                          return (
+                            <a key={label as string} href={href as string} className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 text-center text-xs font-medium text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50">
+                              <QuickIcon className="mx-auto mb-2 h-4 w-4 text-indigo-500" />
+                              {label as string}
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <Bot className="h-5 w-5 text-indigo-500" />
+                        <p className="text-sm font-semibold text-slate-950">与 AI 助手对话</p>
+                      </div>
+                      <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+                        您好，{currentUser.name}，可以询问班级情况或获取处理建议。
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {["今日体温异常的幼儿有哪些？", "最近 7 天饮食偏少的幼儿是谁？", "本周未补录成长记录的幼儿有哪些？"].map((question) => (
+                          <button key={question} type="button" className="w-full rounded-2xl border border-slate-100 bg-white px-3 py-2 text-left text-xs leading-5 text-slate-500" onClick={() => void runWorkflow("follow-up")} disabled={isLoading}>
+                            {question}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="mt-3 flex items-center gap-2 rounded-2xl border border-indigo-100 bg-white px-3 py-2 text-xs text-slate-400">
+                        请输入您的问题...
+                        <Button type="button" size="icon" variant="premium" className="ml-auto h-9 w-9 rounded-xl" onClick={() => void runWorkflow("follow-up")} disabled={isLoading}>
+                          <Send className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </aside>
+                </div>
+              </section>
+            )}
+
             <TeacherContextStrip
               items={[
                 { label: "当前班级", value: classContext.className, tone: "indigo" },

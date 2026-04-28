@@ -65,6 +65,22 @@ function takeUnique(items: string[], limit: number) {
   return result;
 }
 
+function normalizeGeneratedActionText(action: unknown) {
+  if (typeof action === "string") {
+    const normalized = action.trim();
+    return normalized.includes("[object Object]") ? "" : normalized;
+  }
+  if (!action || typeof action !== "object") return "";
+
+  const record = action as Record<string, unknown>;
+  for (const key of ["action", "summary", "title", "description", "text"]) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+
+  return "";
+}
+
 function mergeMemoryMeta(contexts: Array<MemoryContextEnvelope | null | undefined>): MemoryContextMeta | undefined {
   const normalized = contexts.filter((item): item is MemoryContextEnvelope => Boolean(item));
   if (normalized.length === 0) return undefined;
@@ -650,12 +666,18 @@ export function buildAdminDailyPriorityResult(params: {
   context: AdminAgentContext;
   suggestion: AiSuggestionResponse;
 }): AdminAgentResult {
+  const firstActionText =
+    normalizeGeneratedActionText(params.suggestion.actions[0]) ||
+    params.context.actionItems[0]?.action ||
+    params.context.priorityTopItems[0]?.recommendedAction ||
+    "";
+
   return {
     title: "今日机构优先事项",
     summary: params.suggestion.summary || params.context.highlights[0] || "已完成今日机构优先级判断。",
     assistantAnswer:
-      params.suggestion.actions[0]
-        ? `${params.suggestion.summary} 当前最值得先推动的动作是：${params.suggestion.actions[0]}`
+      firstActionText
+        ? `${params.suggestion.summary} 当前最值得先推动的动作是：${firstActionText}`
         : params.suggestion.summary,
     institutionScope: params.context.institutionScope,
     priorityTopItems: params.context.priorityTopItems.slice(0, 3),

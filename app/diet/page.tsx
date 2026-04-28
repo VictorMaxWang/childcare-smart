@@ -4,12 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   AlertTriangle,
-  BookHeart,
   Camera,
   ChefHat,
+  CheckCircle2,
   HeartPulse,
   Loader2,
-  MessageSquareText,
   Plus,
   Salad,
   ShieldAlert,
@@ -38,10 +37,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
-import { MetricCard } from "@/components/ui/metric-card";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TeacherActionTile, TeacherContextStrip, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import { getLocalToday } from "@/lib/date";
 import { getHydrationDisplayState } from "@/lib/hydration-display";
 import { cn } from "@/lib/utils";
@@ -432,71 +429,245 @@ export default function DietPage() {
   }
 
   return (
-    <div className="app-page page-enter">
-      <div className="mb-6 rounded-xl border border-emerald-100 bg-linear-to-r from-white via-emerald-50/60 to-indigo-50/60 p-5 shadow-[var(--shadow-card)] sm:p-6">
-        <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
-          <Salad className="h-8 w-8 text-emerald-500" />
-          饮食记录
-        </h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-          流程已升级为：先批量录入出勤幼儿，再做例外排除与过敏拦截，最后对个别幼儿进行单独调整。
-        </p>
-      </div>
-
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="今日出勤幼儿" value={`${presentChildren.length}人`} tone="success" />
-        <MetricCard label="今日餐食记录" value={`${todayVisibleMealRecords.length}条`} tone="primary" />
-        <MetricCard label="已覆盖幼儿" value={`${todayRecordedChildCount}人`} tone="info" />
-        <MetricCard label="过敏拦截预览" value={`${bulkPreviewSummary.blocked.length}人`} tone={bulkPreviewSummary.blocked.length > 0 ? "warning" : "neutral"} />
-      </div>
-
+    <div className="app-page max-w-[86rem] page-enter">
       {isTeacher ? (
-        <div className="mb-6 space-y-4">
-          <TeacherContextStrip
-            items={[
-              { label: "出勤幼儿", value: `${presentChildren.length}人`, tone: "emerald" },
-              { label: "覆盖幼儿", value: `${todayRecordedChildCount}/${Math.max(presentChildren.length, 1)}`, tone: "indigo" },
-              { label: "当前对象", value: selectedChild?.name ?? "未选择", tone: "sky" },
-              { label: "过敏拦截", value: `${bulkPreviewSummary.blocked.length}人`, tone: bulkPreviewSummary.blocked.length > 0 ? "amber" : "emerald" },
-            ]}
-          />
-          <div className="grid gap-3 md:grid-cols-3">
-            <TeacherActionTile
-              href="/health"
-              icon={<HeartPulse className="h-5 w-5" />}
-              title="先看晨检"
-              description="核对体温、精神状态和异常提醒。"
-              tone="rose"
-            />
-            <TeacherActionTile
-              href="/growth"
-              icon={<BookHeart className="h-5 w-5" />}
-              title="补成长记录"
-              description="把拒食、饮水少等表现转成观察记录。"
-              tone="amber"
-            />
-            <TeacherActionTile
-              href="/teacher/agent?action=communication"
-              icon={<MessageSquareText className="h-5 w-5" />}
-              title="家园沟通"
-              description="生成饮食反馈和今晚观察建议。"
-              tone="indigo"
-              highlight
-            />
-          </div>
-          <TeacherMiniPanel
-            title="餐次处理提示"
-            badge={bulkFoods.length > 0 ? `${bulkFoods.length}项待批量应用` : "可先准备餐单"}
-            tone={bulkPreviewSummary.blocked.length > 0 ? "amber" : "emerald"}
-          >
-            <div className="grid gap-3 text-sm leading-6 text-slate-600 md:grid-cols-3">
-              <p className="rounded-lg bg-white/80 px-3 py-2">先录入本餐公共餐单，再确认过敏拦截与手动排除。</p>
-              <p className="rounded-lg bg-white/80 px-3 py-2">批量确认前会预览适用、拦截和排除名单。</p>
-              <p className="rounded-lg bg-white/80 px-3 py-2">单个幼儿仍可在下方餐次卡片里调整进食、饮水和备注。</p>
+        <section className="mb-5 overflow-hidden rounded-2xl border border-emerald-100 bg-[linear-gradient(135deg,#ecfdf5_0%,#ffffff_48%,#f5f3ff_100%)] p-4 shadow-[0_22px_64px_rgb(16_185_129_/_0.12)] sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="success" className="rounded-full px-3 py-1">{currentUser.className ?? "当前班级"}</Badge>
+                <Badge variant={bulkPreviewSummary.blocked.length > 0 ? "warning" : "secondary"} className="rounded-full px-3 py-1">
+                  过敏拦截 {bulkPreviewSummary.blocked.length} 人
+                </Badge>
+              </div>
+              <h1 className="mt-4 flex items-center gap-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                <Salad className="h-7 w-7 text-emerald-500" />
+                饮食记录
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                按餐次批量确认儿童进食、饮水与过敏情况，移动端优先处理当前餐次。
+              </p>
             </div>
-          </TeacherMiniPanel>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" className="rounded-2xl" onClick={addBulkFood}>
+                <Plus className="mr-2 h-4 w-4" />
+                添加食物
+              </Button>
+              <Button type="button" variant="premium" className="rounded-2xl" onClick={applyBulkTemplate}>
+                批量确认
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-white/80 bg-white/88 p-2 shadow-sm">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {["全部时段", ...MEAL_TYPES].map((meal) => (
+                <button
+                  key={meal}
+                  type="button"
+                  onClick={() => meal !== "全部时段" && setBulkMeal(meal as MealType)}
+                  className={cn(
+                    "rounded-2xl px-3 py-3 text-sm font-semibold transition",
+                    (meal === "全部时段" && !bulkMeal) || bulkMeal === meal
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-slate-50 text-slate-600 hover:bg-emerald-50"
+                  )}
+                >
+                  {meal}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                  <span>已选择 <strong className="text-slate-950">{bulkPreviewSummary.applicable.length}</strong> 项</span>
+                  <span>已确认 <strong className="text-indigo-600">{todayRecordedChildCount}</strong> / {presentChildren.length}</span>
+                  <button type="button" className="font-medium text-indigo-600" onClick={() => setBulkExcludedChildIds([])}>清空选择</button>
+                </div>
+                <Button type="button" variant="premium" className="rounded-2xl" onClick={applyBulkTemplate}>批量确认</Button>
+              </div>
+              <div className="mt-4 overflow-hidden rounded-2xl border border-slate-100">
+                <div className="hidden grid-cols-[44px_1.2fr_1fr_1fr_1fr_120px] bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500 md:grid">
+                  <span />
+                  <span>儿童姓名</span>
+                  <span>餐食类型</span>
+                  <span>进食情况</span>
+                  <span>过敏食物</span>
+                  <span>操作</span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {presentChildren.slice(0, 8).map((child) => {
+                    const record = todayVisibleMealRecords.find((item) => item.childId === child.id && item.meal === bulkMeal);
+                    const blocked = bulkPreviewSummary.blocked.some((item) => item.childId === child.id);
+                    return (
+                      <div key={`teacher-diet-row-${child.id}`} className="grid gap-3 px-4 py-3 md:grid-cols-[44px_1.2fr_1fr_1fr_1fr_120px] md:items-center">
+                        <input
+                          type="checkbox"
+                          checked={!bulkExcludedChildIds.includes(child.id)}
+                          onChange={() => toggleExcludeChild(child.id)}
+                          className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                          aria-label={`选择 ${child.name}`}
+                        />
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-lg">{child.gender === "男" ? "👦" : "👧"}</span>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-950">{child.name}</p>
+                            <p className="text-xs text-slate-500">{getAgeText(child.birthDate)}</p>
+                          </div>
+                        </div>
+                        <span className="text-sm text-slate-600">{bulkMeal}</span>
+                        <Badge variant={record ? "success" : "outline"} className="w-fit">{record ? record.intakeLevel : "待确认"}</Badge>
+                        <Badge variant={blocked ? "destructive" : "secondary"} className="w-fit">{blocked ? "过敏拦截" : "-"}</Badge>
+                        <Button type="button" variant="ghost" size="sm" className="w-fit rounded-full" onClick={() => setSelectedChildId(child.id)}>编辑</Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <aside className="space-y-4">
+              <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
+                <p className="text-sm font-semibold text-slate-950">当前餐次准备</p>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  {MEAL_TYPES.map((meal) => (
+                    <button
+                      key={meal}
+                      type="button"
+                      onClick={() => setBulkMeal(meal)}
+                      className={cn(
+                        "rounded-2xl border px-3 py-3 text-sm font-semibold transition",
+                        bulkMeal === meal
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm"
+                          : "border-slate-100 bg-slate-50 text-slate-600 hover:bg-white"
+                      )}
+                    >
+                      {meal}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-4 space-y-2 text-sm text-slate-600">
+                  <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                    <span>待应用食物</span>
+                    <strong className="text-slate-950">{bulkFoods.length} 项</strong>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                    <span>营养均分</span>
+                    <strong className="text-emerald-700">{overallScore || 0}</strong>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                    <span>补水状态</span>
+                    <strong className={hydrationDisplay.tone === "success" ? "text-emerald-700" : hydrationDisplay.tone === "info" ? "text-sky-700" : "text-amber-700"}>
+                      {hydrationDisplay.statusLabel}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+                <p className="text-sm font-semibold text-emerald-800">移动端优先</p>
+                <p className="mt-2 text-sm leading-6 text-emerald-700">
+                  先确认当前餐次，再处理过敏拦截和个别调整，最后提交批量记录。
+                </p>
+              </div>
+            </aside>
+          </div>
+        </section>
+      ) : (
+      <section className="mb-5 overflow-hidden rounded-2xl border border-emerald-100 bg-[linear-gradient(135deg,#ecfdf5_0%,#f8fbff_52%,#eef2ff_100%)] p-4 shadow-[0_20px_60px_rgb(16_185_129_/_0.10)] sm:p-5">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="success" className="rounded-full px-3 py-1">
+                    {isTeacher ? currentUser.className ?? "当前班级" : "全园饮食"}
+                  </Badge>
+                  <Badge variant={bulkPreviewSummary.blocked.length > 0 ? "warning" : "secondary"} className="rounded-full px-3 py-1">
+                    过敏拦截 {bulkPreviewSummary.blocked.length} 人
+                  </Badge>
+                </div>
+                <h1 className="mt-4 flex items-center gap-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                  <Salad className="h-7 w-7 text-emerald-500" />
+                  饮食记录工作台
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  先看餐次覆盖和过敏拦截，再批量录入餐单，最后对单个幼儿做饮水与营养调整。
+                </p>
+              </div>
+              <Button type="button" variant="premium" className="min-h-11 rounded-2xl" onClick={applyBulkTemplate}>
+                执行批量录入
+              </Button>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                { label: "今日出勤", value: `${presentChildren.length}人`, icon: HeartPulse, tone: "bg-emerald-50 text-emerald-700" },
+                { label: "餐食记录", value: `${todayVisibleMealRecords.length}条`, icon: ChefHat, tone: "bg-indigo-50 text-indigo-700" },
+                { label: "覆盖幼儿", value: `${todayRecordedChildCount}人`, icon: CheckCircle2, tone: "bg-sky-50 text-sky-700" },
+                { label: "营养均分", value: `${overallScore || 0}`, icon: Sparkles, tone: "bg-amber-50 text-amber-700" },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.label} className="rounded-2xl border border-white/82 bg-white/84 p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-slate-500">{item.label}</p>
+                      <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${item.tone}`}>
+                        <Icon className="h-4 w-4" aria-hidden="true" />
+                      </span>
+                    </div>
+                    <p className="mt-3 text-3xl font-semibold leading-tight text-slate-950">{item.value}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/82 bg-white/78 p-4 shadow-sm">
+            <p className="text-sm font-semibold text-slate-950">当前餐次准备</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {MEAL_TYPES.map((meal) => (
+                <button
+                  key={meal}
+                  type="button"
+                  onClick={() => setBulkMeal(meal)}
+                  className={cn(
+                    "rounded-2xl border px-3 py-3 text-sm font-semibold transition",
+                    bulkMeal === meal
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm"
+                      : "border-slate-100 bg-slate-50 text-slate-600 hover:bg-white"
+                  )}
+                >
+                  {meal}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 space-y-2 text-sm text-slate-600">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                <span>待应用食物</span>
+                <strong className="text-slate-950">{bulkFoods.length} 项</strong>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                <span>补水状态</span>
+                <strong
+                  className={
+                    hydrationDisplay.tone === "success"
+                      ? "text-emerald-700"
+                      : hydrationDisplay.tone === "info"
+                        ? "text-sky-700"
+                        : "text-amber-700"
+                  }
+                >
+                  {hydrationDisplay.statusLabel}
+                </strong>
+              </div>
+            </div>
+          </div>
         </div>
-      ) : null}
+      </section>
+      )}
 
       <Card className="mb-6 rounded-lg border-emerald-100 bg-linear-to-r from-emerald-50 to-white">
         <CardHeader>

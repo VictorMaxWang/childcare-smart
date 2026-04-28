@@ -150,3 +150,35 @@ Future threads must append a short dated entry with task ID, changed areas, chec
 - Generated `docs/refactor/FINAL_VISUAL_QA.md` and updated `TASK_STATUS.md`, `QA_CHECKLIST.md`, and `DECISIONS.md`.
 - Risk: full `capture:ui` artifact validation still needs a future split/optimization; external AI/provider 503 and local Vercel Analytics 404/MIME noise are environment/configuration issues, not T08 visual regressions.
 - Final conclusion: frontend refactor meets `docs/refactor/VISUAL_ACCEPTANCE_CRITERIA.md` with the capture-script timeout documented as a residual tooling risk.
+
+## 2026-04-27 - Visual Parity Pass Round 1
+
+- Scope: first-priority visual parity pass for `/login`, `/admin`, `/teacher`, and `/parent`.
+- Added lightweight key-page capture via `npm run capture:visual-parity`, writing desktop/mobile screenshots to `artifacts/visual-parity/current` and `artifacts/visual-parity/after`.
+- Reworked the four first screens toward the selected GPT Image 2 references: login split security visual, director compact dashboard, teacher class workbench, and parent pastel child-card flow.
+- Preserved demo-account entry points, routes, permissions, business data, AI/weekly-report previews, and existing operation links.
+
+## 2026-04-28 - Visual Parity Pass Round 2
+
+- Scope: second visual parity pass for `/admin/agent`, `/admin/agent?action=weekly-report`, `/children`, `/health`, `/diet`, and `/growth`.
+- Added `npm run capture:visual-parity:round2` for director/teacher desktop and mobile screenshots under `artifacts/visual-parity/round2/`.
+- Reworked the six page first screens into denser AI/report/list/health/meal/growth workbenches while preserving shared routes, permissions, forms, dialogs, and existing business data.
+- Fixed AI daily result text fallback so object-shaped generated actions do not render as `[object Object]`.
+
+## 2026-04-28 - Visual Parity Pass Round 3
+
+- Scope: teacher-side parity pass for `/teacher/agent`, `/teacher/agent?action=communication`, teacher `/health`, `/diet`, `/growth`, `/teacher/health-file-bridge`, and `/teacher/high-risk-consultation`.
+- Added `npm run capture:visual-parity:round3` with desktop/mobile screenshots under `artifacts/visual-parity/round3/`.
+- Reworked teacher AI, communication, morning check, meal, growth, health-file parsing, and high-risk consultation first screens toward the selected GPT Image 2 references without changing routes, APIs, permissions, or core operations.
+
+## 2026-04-28 - Visual Parity Pass Round 4
+
+- Scope: parent feedback, parent AI/care suggestions, storybook, and parent/teacher/director mobile and tablet parity.
+- Added `npm run capture:visual-parity:round4` for parent desktop/mobile, teacher mobile, and director tablet/mobile screenshots under `artifacts/visual-parity/round4/`.
+- Reworked parent AI, structured feedback, storybook dashboard, and role-aware mobile bottom tabs while preserving routes, permissions, demo accounts, and existing data flows.
+
+## 2026-04-28 - Visual Parity Pass Round 5
+
+- Scope: common table, filter, form, detail, dialog, drawer, empty, error, permission, and loading/skeleton states.
+- Added `npm run capture:visual-parity:round5` and the internal `/visual-parity/states` QA route for stable state screenshots under `artifacts/visual-parity/round5/`.
+- Reworked shared UI state surfaces and representative business states while preserving routes, permissions, demo accounts, APIs, and existing data flows.

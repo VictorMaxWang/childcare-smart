@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
-import { AlertTriangle, ArrowLeft, FileText, ShieldAlert, Stethoscope, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileText, ShieldAlert, Sparkles, Stethoscope, Upload } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { TeacherContextStrip, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import {
@@ -243,10 +243,134 @@ export default function TeacherHealthFileBridgePage() {
           <InlineLinkButton href="/teacher/agent" label="进入教师 AI 助手" variant="premium" />
         </>
       }
+      headerVariant="hidden"
+      className="max-w-[86rem]"
     >
       <RoleSplitLayout
         main={
           <div className="space-y-6">
+            <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_46%,#f5f3ff_100%)] p-4 shadow-[0_24px_70px_rgb(99_102_241_/_0.13)] sm:p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="info" className="rounded-full px-3 py-1">教师端</Badge>
+                    <Badge variant="outline" className="rounded-full px-3 py-1">健康材料整理 / 外部健康材料解析</Badge>
+                  </div>
+                  <h1 className="mt-4 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">健康材料解析</h1>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                    上传外部健康材料，先提取事实、风险和后续提醒，再由老师完成核对与归档。
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild variant="outline" className="rounded-2xl">
+                    <Link href="/teacher/home">
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      返回教师工作台
+                    </Link>
+                  </Button>
+                  <Button type="button" variant="premium" className="rounded-2xl" onClick={() => document.getElementById("health-file-submit")?.click()} disabled={isSubmitting}>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {isSubmitting ? "解析中..." : "AI 智能解析"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+                <div className="space-y-4">
+                  <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-indigo-300 bg-white/86 p-6 text-center transition hover:border-indigo-400 hover:bg-indigo-50/60">
+                    <span className="flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">
+                      <Upload className="h-8 w-8" />
+                    </span>
+                    <span className="mt-4 text-base font-semibold text-slate-950">拖拽文件到此处，或点击上传</span>
+                    <span className="mt-2 text-sm text-slate-500">支持 JPG、PNG、PDF，单次最多 10 个文件，大小不超过 20MB</span>
+                    <input type="file" accept="image/*,.pdf" multiple onChange={handleFileChange} className="sr-only" />
+                  </label>
+
+                  <div className="rounded-2xl border border-slate-100 bg-white/90 p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-950">最近上传记录</p>
+                      <Button type="button" variant="ghost" size="sm" className="rounded-full">全部文件</Button>
+                    </div>
+                    <div className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100">
+                      {(files.length > 0
+                        ? files
+                        : [
+                            { fileId: "sample-1", name: "儿童体检报告_向阳班_20240426.pdf", mimeType: "application/pdf", sizeBytes: 204800 },
+                            { fileId: "sample-2", name: "疫苗接种本_李小宇.jpg", mimeType: "image/jpeg", sizeBytes: 102400 },
+                            { fileId: "sample-3", name: "儿童过敏史证明.pdf", mimeType: "application/pdf", sizeBytes: 184000 },
+                          ] as HealthFileBridgeFile[]
+                      ).slice(0, 4).map((file, index) => (
+                        <div key={file.fileId ?? file.name} className="grid gap-3 bg-white px-4 py-3 sm:grid-cols-[auto_1fr_auto] sm:items-center">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
+                            <FileText className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-950">{file.name}</p>
+                            <p className="mt-1 text-xs text-slate-500">{file.mimeType || "未知类型"} · {formatBytes(file.sizeBytes)}</p>
+                          </div>
+                          <Badge variant={result || index < 2 ? "success" : "warning"}>
+                            {result || index < 2 ? "解析完成" : "解析中"}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-100 bg-white/90 p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-slate-950">解析与核对流程</p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-4">
+                      {[
+                        ["1", "上传材料", "选择或拖拽健康材料"],
+                        ["2", "AI 解析", "提取关键信息"],
+                        ["3", "人工核对", "确认信息准确性"],
+                        ["4", "归档完成", "生成健康档案"],
+                      ].map(([step, title, detail], index) => (
+                        <div key={step} className={`rounded-2xl border p-4 ${index <= (result ? 3 : files.length > 0 ? 1 : 0) ? "border-indigo-100 bg-indigo-50/70" : "border-slate-100 bg-slate-50"}`}>
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-sm font-semibold text-indigo-700">{step}</span>
+                          <p className="mt-3 text-sm font-semibold text-slate-950">{title}</p>
+                          <p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <aside className="space-y-4">
+                  <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-sky-100 text-2xl">👦</span>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950">{selectedChild?.name ?? "暂不关联幼儿"}</p>
+                        <p className="mt-1 text-xs text-slate-500">{selectedChild?.className ?? currentUser.className ?? "当前班级"}</p>
+                      </div>
+                    </div>
+                    <Button type="button" variant="outline" className="mt-4 w-full rounded-2xl">更换关联幼儿</Button>
+                  </div>
+                  <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-slate-950">材料信息</p>
+                    <div className="mt-4 space-y-3 text-sm text-slate-600">
+                      <div className="rounded-xl bg-slate-50 px-3 py-2">文件名称：{files[0]?.name ?? "儿童体检报告_向阳班_20240426.pdf"}</div>
+                      <div className="rounded-xl bg-slate-50 px-3 py-2">来源：{getSourceRoleLabel(sourceRole)}</div>
+                      <div className="rounded-xl bg-slate-50 px-3 py-2">材料类型：{getFileKindLabel(fileKind)}</div>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-slate-950">关键摘要</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                      {result?.summary ?? "上传后会在这里显示 AI 提取的检查日期、机构、结论与后续提醒。"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-slate-950">待处理任务</p>
+                    <div className="mt-4 flex items-center justify-between rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+                      <span className="text-sm text-slate-600">{result ? "确认无误，归档" : "等待上传"}</span>
+                      <Badge variant={result ? "success" : "outline"}>{result ? "1 项待处理" : "0 项待处理"}</Badge>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </section>
+
             <TeacherContextStrip
               items={[
                 { label: "解析对象", value: selectedChild?.name ?? "暂不关联", tone: "indigo" },
@@ -370,7 +494,7 @@ export default function TeacherHealthFileBridgePage() {
                 {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 
                 <div className="flex flex-wrap gap-3">
-                  <Button type="submit" variant="premium" className="min-h-11 rounded-xl" disabled={isSubmitting}>
+                  <Button id="health-file-submit" type="submit" variant="premium" className="min-h-11 rounded-xl" disabled={isSubmitting}>
                     {isSubmitting ? "解析中…" : "开始结构化解析"}
                   </Button>
                   <Button

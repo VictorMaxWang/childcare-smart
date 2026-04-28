@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Activity, AlertTriangle, BookOpenCheck, CheckCircle2, MessageSquareText, Search, Thermometer, Users, Utensils } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, MessageSquareText, Search, Thermometer, Users, Utensils } from "lucide-react";
 import {
   CartesianGrid,
   Cell,
@@ -24,19 +24,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
-import { MetricCard } from "@/components/ui/metric-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { PermissionState } from "@/components/ui/state-block";
-import { TeacherActionTile, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import { buildRecentLocalDateRange, getLocalToday, isDateWithinLastDays } from "@/lib/date";
 import { toast } from "sonner";
 
 import { HEALTH_MOOD_OPTIONS, HAND_MOUTH_EYE_OPTIONS, TEMPERATURE_THRESHOLD } from "@/lib/mock/health";
 import { getAgeText } from "@/lib/store";
-import ScrollReveal from "@/components/ScrollReveal";
 import EmptyState from "@/components/EmptyState";
 
 const TEMPLATE_REMARKS = {
@@ -227,69 +224,249 @@ export default function HealthPage() {
   const isTeacher = currentUser.role === "教师";
 
   return (
-    <div className="app-page page-enter">
-      <div className="mb-6 flex flex-col gap-4 rounded-xl border border-sky-100 bg-linear-to-r from-white via-sky-50/70 to-indigo-50/60 p-5 shadow-[var(--shadow-card)] sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <div>
-          <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-800">
-            <Thermometer className="h-8 w-8 text-sky-500" />
-            晨检与健康
-          </h1>
-          <p className="text-muted-foreground mt-1">记录并追踪班级幼儿每日健康体征，及时预警异常情况。</p>
-        </div>
-      </div>
-
-      <ScrollReveal>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="可见幼儿" value={`${stats.total}人`} icon={<Users className="h-5 w-5" />} tone="info" />
-          <MetricCard label="今日出勤" value={`${stats.present}人`} icon={<CheckCircle2 className="h-5 w-5" />} tone="success" />
-          <MetricCard label="已晨检" value={`${stats.checked}人`} icon={<Activity className="h-5 w-5" />} tone="primary" />
-          <MetricCard label="异常告警" value={`${stats.abnormal}人`} icon={<AlertTriangle className="h-5 w-5" />} tone="danger" />
-        </div>
-      </ScrollReveal>
-
+    <div className="app-page max-w-[86rem] page-enter">
       {isTeacher ? (
-        <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <TeacherActionTile
-              href="/diet"
-              icon={<Utensils className="h-5 w-5" />}
-              title="同步饮食记录"
-              description="晨检异常或缺勤儿童可在餐次录入时继续标记状态。"
-              tone="emerald"
-            />
-            <TeacherActionTile
-              href="/growth"
-              icon={<BookOpenCheck className="h-5 w-5" />}
-              title="补成长观察"
-              description="把体温、情绪和手口眼异常转成后续观察记录。"
-              tone="indigo"
-            />
-            <TeacherActionTile
-              href="/teacher/agent?action=communication"
-              icon={<MessageSquareText className="h-5 w-5" />}
-              title="生成沟通建议"
-              description="对异常或待检对象生成家长沟通话术和提醒。"
-              tone="amber"
-            />
-          </div>
-          <TeacherMiniPanel title="晨检处理队列" badge={currentUser.className ?? "当前班级"} tone={stats.unchecked > 0 || stats.abnormal > 0 ? "amber" : "emerald"}>
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div>
-                <p className="text-2xl font-semibold text-slate-950">{stats.checked}</p>
-                <p className="mt-1 text-xs text-slate-500">已晨检</p>
-              </div>
-              <div>
-                <p className="text-2xl font-semibold text-amber-600">{stats.unchecked}</p>
-                <p className="mt-1 text-xs text-slate-500">待晨检</p>
-              </div>
-              <div>
-                <p className="text-2xl font-semibold text-rose-600">{stats.abnormal}</p>
-                <p className="mt-1 text-xs text-slate-500">异常</p>
+        <section className="mb-5 overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_45%,#eef2ff_100%)] p-4 shadow-[0_22px_64px_rgb(99_102_241_/_0.12)] sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-3xl ring-1 ring-indigo-100">👩‍🏫</div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="info" className="rounded-full px-3 py-1">{currentUser.className ?? "当前班级"} · {stats.total}名幼儿</Badge>
+                  <Badge variant={stats.abnormal > 0 ? "warning" : "success"} className="rounded-full px-3 py-1">
+                    {stats.abnormal > 0 ? "有异常需处理" : "今日稳定"}
+                  </Badge>
+                </div>
+                <h1 className="mt-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                  早上好，{currentUser.name}
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  记录晨检与健康状况，守护孩子每一天的健康成长。
+                </p>
               </div>
             </div>
-          </TeacherMiniPanel>
+            <Button type="button" variant="outline" className="min-h-11 rounded-2xl" onClick={() => setFilterStatus("unchecked")}>
+              今日 {new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "long" })}
+            </Button>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {[
+                { label: "应到人数", value: `${stats.total}人`, helper: `在园 ${stats.present}人`, icon: Users, tone: "bg-indigo-50 text-indigo-700" },
+                { label: "已完成", value: `${stats.checked}人`, helper: `${stats.present ? Math.round((stats.checked / stats.present) * 100) : 0}%`, icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-700" },
+                { label: "异常", value: `${stats.abnormal}人`, helper: `${stats.present ? Math.round((stats.abnormal / stats.present) * 100) : 0}%`, icon: AlertTriangle, tone: "bg-rose-50 text-rose-700" },
+                { label: "未完成", value: `${stats.unchecked}人`, helper: "需补录", icon: Activity, tone: "bg-slate-100 text-slate-600" },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.label}
+                    type="button"
+                    className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4 text-left transition hover:border-indigo-200 hover:bg-indigo-50"
+                    onClick={() => setFilterStatus(item.label === "异常" ? "abnormal" : item.label === "未完成" ? "unchecked" : "all")}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs text-slate-500">{item.label}</p>
+                        <p className="mt-2 text-2xl font-semibold text-slate-950">{item.value}</p>
+                        <p className="mt-1 text-xs text-slate-500">{item.helper}</p>
+                      </div>
+                      <span className={`flex h-10 w-10 items-center justify-center rounded-2xl ${item.tone}`}>
+                        <Icon className="h-5 w-5" />
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: "快速录入", detail: "批量晨检", icon: Users, action: () => setFilterStatus("unchecked") },
+              { label: "体温登记", detail: "批量录入", icon: Thermometer, action: () => setFilterStatus("unchecked") },
+              { label: "健康小贴士", detail: "今日建议", icon: Activity, action: () => window.location.assign("/teacher/agent?action=communication") },
+              { label: "导出记录", detail: "今日晨报", icon: CheckCircle2, action: () => setFilterStatus("all") },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <button key={item.label} type="button" className="rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200" onClick={item.action}>
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-950">{item.label}</p>
+                      <p className="mt-1 text-xs text-slate-500">{item.detail}</p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: "all", label: `全部 ${stats.present}` },
+                  { value: "unchecked", label: `未完成 ${stats.unchecked}` },
+                  { value: "abnormal", label: `异常 ${stats.abnormal}` },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    className={`rounded-full px-4 py-2 text-sm font-medium transition ${filterStatus === item.value ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20" : "bg-slate-50 text-slate-600 ring-1 ring-slate-100"}`}
+                    onClick={() => setFilterStatus(item.value as typeof filterStatus)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <Button type="button" variant="outline" className="rounded-2xl" onClick={() => setFilterStatus("unchecked")}>
+                筛选
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {filteredChildren.slice(0, 6).map((child) => {
+                const isChecked = Boolean(child.health);
+                const isAbnormal = child.health?.isAbnormal;
+                return (
+                  <button
+                    key={`teacher-health-${child.id}`}
+                    type="button"
+                    onClick={() => handleOpenDialog(child.id)}
+                    className={`w-full rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 ${
+                      isAbnormal ? "border-rose-200 bg-rose-50/70" : "border-slate-100 bg-slate-50/70"
+                    }`}
+                  >
+                    <div className="grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-center">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-2xl shadow-sm">
+                          {child.gender === "男" ? "👦" : "👧"}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-950">{child.name}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {isChecked ? `体温 ${child.health!.temperature.toFixed(1)}°C` : "未录入体温"}
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className={`text-sm font-semibold ${isAbnormal ? "text-rose-600" : isChecked ? "text-emerald-600" : "text-slate-500"}`}>
+                          {isAbnormal ? "发热 / 需关注" : isChecked ? "无异常" : "待晨检"}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {isChecked ? `${child.health!.mood}，${child.health!.handMouthEye}` : "暂无记录"}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 sm:justify-end">
+                        <span className="text-sm text-slate-400">{isChecked ? "08:25" : "未完成"}</span>
+                        <Badge variant={isAbnormal ? "destructive" : isChecked ? "success" : "outline"}>
+                          {isChecked ? "已完成" : "去录入"}
+                        </Badge>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {stats.abnormal > 0 ? (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                  <div>
+                    <p className="font-semibold text-slate-950">异常提醒</p>
+                    <p className="mt-1 text-sm text-slate-600">当前 {stats.abnormal} 人需关注，请优先复核并同步家长。</p>
+                  </div>
+                </div>
+                <Button type="button" variant="outline" className="rounded-2xl" onClick={() => setFilterStatus("abnormal")}>去查看</Button>
+              </div>
+            </div>
+          ) : null}
+        </section>
+      ) : (
+      <section className="mb-5 overflow-hidden rounded-2xl border border-sky-100 bg-[linear-gradient(135deg,#eff6ff_0%,#f8fbff_50%,#eef2ff_100%)] p-4 shadow-[0_20px_60px_rgb(14_165_233_/_0.10)] sm:p-5">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_310px]">
+          <div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="info" className="rounded-full px-3 py-1">
+                    {isTeacher ? currentUser.className ?? "当前班级" : "全园健康"}
+                  </Badge>
+                  <Badge variant={stats.abnormal > 0 ? "warning" : "success"} className="rounded-full px-3 py-1">
+                    {stats.abnormal > 0 ? "有异常需处理" : "今日稳定"}
+                  </Badge>
+                </div>
+                <h1 className="mt-4 flex items-center gap-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                  <Thermometer className="h-7 w-7 text-sky-500" />
+                  晨检健康工作台
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  先处理待检与异常，再查看体温趋势和情绪分布，移动端优先呈现儿童状态卡。
+                </p>
+              </div>
+              <Button type="button" variant="premium" className="min-h-11 rounded-2xl" onClick={() => setFilterStatus(stats.unchecked > 0 ? "unchecked" : "abnormal")}>
+                查看优先队列
+              </Button>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+              {[
+                { label: "可见幼儿", value: `${stats.total}人`, icon: Users, tone: "bg-sky-50 text-sky-700" },
+                { label: "今日出勤", value: `${stats.present}人`, icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-700" },
+                { label: "已晨检", value: `${stats.checked}人`, icon: Activity, tone: "bg-indigo-50 text-indigo-700" },
+                { label: "异常告警", value: `${stats.abnormal}人`, icon: AlertTriangle, tone: "bg-rose-50 text-rose-700" },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.label} className="rounded-2xl border border-white/82 bg-white/84 p-3 shadow-sm sm:p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-slate-500">{item.label}</p>
+                      <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${item.tone}`}>
+                        <Icon className="h-4 w-4" aria-hidden="true" />
+                      </span>
+                    </div>
+                    <p className="mt-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">{item.value}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/82 bg-white/78 p-4 shadow-sm">
+            <p className="text-sm font-semibold text-slate-950">处理顺序</p>
+            <div className="mt-4 space-y-3">
+              {[
+                { label: "待晨检", value: stats.unchecked, tone: "bg-amber-50 text-amber-700" },
+                { label: "异常复核", value: stats.abnormal, tone: "bg-rose-50 text-rose-700" },
+                { label: "趋势复盘", value: moodDistributionData.reduce((sum, item) => sum + item.value, 0), tone: "bg-indigo-50 text-indigo-700" },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3">
+                  <span className="text-sm text-slate-600">{item.label}</span>
+                  <span className={`rounded-full px-3 py-1 text-sm font-semibold ${item.tone}`}>{item.value}</span>
+                </div>
+              ))}
+            </div>
+            {isTeacher ? (
+              <div className="mt-4 grid gap-2">
+                <Button type="button" variant="outline" className="justify-start rounded-2xl" onClick={() => window.location.assign("/diet")}>
+                  <Utensils className="mr-2 h-4 w-4" /> 同步饮食记录
+                </Button>
+                <Button type="button" variant="outline" className="justify-start rounded-2xl" onClick={() => window.location.assign("/teacher/agent?action=communication")}>
+                  <MessageSquareText className="mr-2 h-4 w-4" /> 生成沟通建议
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </div>
-      ) : null}
+      </section>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <ChartCard title="一周体温趋势" description="对比平均体温和异常人数，红线为发热预警阈值。" minHeight="20rem">

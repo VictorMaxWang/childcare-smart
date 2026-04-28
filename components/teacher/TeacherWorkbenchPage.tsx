@@ -4,13 +4,16 @@ import {
   AlertTriangle,
   BookOpenCheck,
   BrainCircuit,
+  CalendarDays,
   ClipboardCheck,
+  Clock3,
   FileText,
   HeartPulse,
   MessageSquareText,
   PencilLine,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
   Utensils,
   UsersRound,
 } from "lucide-react";
@@ -25,10 +28,10 @@ import {
 } from "@/components/role-shell/RoleScaffold";
 import {
   TeacherActionTile,
-  TeacherContextStrip,
   TeacherMiniPanel,
   TeacherTaskRow,
 } from "@/components/teacher/TeacherOperationKit";
+import { Badge } from "@/components/ui/badge";
 import { buildTeacherHomeViewModel } from "@/lib/view-models/role-home";
 import { useApp } from "@/lib/store";
 
@@ -83,6 +86,8 @@ export default function TeacherWorkbenchPage() {
       badge={`教师工作台 · ${currentUser.className ?? "当前班级"} · ${TODAY_TEXT}`}
       title="今日班级运营"
       description="班级状态、晨检补录、复查跟进和家园沟通集中在一页处理，优先露出老师每天最常用的入口。"
+      headerVariant="hidden"
+      className="max-w-[86rem]"
       actions={
         <>
           <InlineLinkButton href="/teacher/high-risk-consultation" label="发起高风险会诊" variant="premium" />
@@ -94,7 +99,120 @@ export default function TeacherWorkbenchPage() {
       <RoleSplitLayout
         main={
           <div className="flex flex-col gap-6">
-            <TeacherContextStrip items={teacherStats} />
+            <section className="grid gap-4 lg:grid-cols-[minmax(0,0.86fr)_minmax(320px,0.62fr)]">
+              <div className="overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#eef2ff_0%,#ffffff_48%,#ecfeff_100%)] p-5 shadow-[0_20px_60px_rgb(79_70_229_/_0.10)]">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="info" className="rounded-full px-3 py-1">
+                        {currentUser.className ?? "当前班级"}
+                      </Badge>
+                      <Badge variant="secondary" className="rounded-full px-3 py-1">
+                        {TODAY_TEXT}
+                      </Badge>
+                    </div>
+                    <h1 className="mt-4 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                      早上好，{currentUser.name}
+                    </h1>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                      先确认班级状态，再处理晨检、复查和家园沟通。
+                    </p>
+                  </div>
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-[0_16px_36px_rgb(79_70_229_/_0.28)]">
+                    <UsersRound className="h-6 w-6" aria-hidden="true" />
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {teacherStats.map((item) => (
+                    <div key={item.label} className="rounded-2xl border border-white/80 bg-white/84 p-4 shadow-sm">
+                      <p className="text-xs font-medium text-slate-500">{item.label}</p>
+                      <p className="mt-2 text-2xl font-semibold leading-tight text-slate-950">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <TeacherActionTile
+                    href="/health"
+                    icon={<HeartPulse className="h-5 w-5" />}
+                    title="晨检录入"
+                    description="补齐体温、情绪和手口眼记录。"
+                    tone="sky"
+                  />
+                  <TeacherActionTile
+                    href="/diet"
+                    icon={<Utensils className="h-5 w-5" />}
+                    title="饮食记录"
+                    description="录入餐次、饮水和过敏提示。"
+                    tone="emerald"
+                  />
+                  <TeacherActionTile
+                    href="/growth"
+                    icon={<BookOpenCheck className="h-5 w-5" />}
+                    title="成长记录"
+                    description="记录观察标签和复查动作。"
+                    tone="indigo"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-[0_18px_48px_rgb(15_23_42_/_0.08)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-semibold text-slate-950">今日待办</p>
+                    <p className="mt-1 text-sm text-slate-500">按老师早间工作顺序排列</p>
+                  </div>
+                  <Badge variant={viewModel.todayAbnormalChildren.length > 0 ? "warning" : "success"}>
+                    {viewModel.todayAbnormalChildren.length > 0 ? "需关注" : "稳定"}
+                  </Badge>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {[
+                    {
+                      title: "晨检异常",
+                      value: `${viewModel.todayAbnormalChildren.length} 人`,
+                      icon: <AlertTriangle className="h-4 w-4" />,
+                      tone: "bg-rose-50 text-rose-700",
+                    },
+                    {
+                      title: "待晨检",
+                      value: `${viewModel.uncheckedMorningChecks.length} 人`,
+                      icon: <Clock3 className="h-4 w-4" />,
+                      tone: "bg-amber-50 text-amber-700",
+                    },
+                    {
+                      title: "待复查",
+                      value: `${viewModel.pendingReviews.length} 项`,
+                      icon: <CalendarDays className="h-4 w-4" />,
+                      tone: "bg-sky-50 text-sky-700",
+                    },
+                    {
+                      title: "需沟通",
+                      value: `${viewModel.parentsToCommunicate.length} 人`,
+                      icon: <MessageSquareText className="h-4 w-4" />,
+                      tone: "bg-indigo-50 text-indigo-700",
+                    },
+                  ].map((item) => (
+                    <div key={item.title} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${item.tone}`}>
+                          {item.icon}
+                        </span>
+                        <span className="text-sm font-medium text-slate-700">{item.title}</span>
+                      </div>
+                      <span className="text-base font-semibold text-slate-950">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4">
+                  <div className="flex items-start gap-3">
+                    <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" aria-hidden="true" />
+                    <p className="text-sm leading-6 text-slate-700">{viewModel.communicationPreview}</p>
+                  </div>
+                </div>
+              </div>
+            </section>
 
             <SectionCard title="今日优先处理" description="异常、未检和复查对象会按当前班级数据自动收拢。">
               <div className="grid gap-4 xl:grid-cols-3">

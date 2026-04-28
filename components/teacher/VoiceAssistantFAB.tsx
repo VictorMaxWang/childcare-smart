@@ -169,7 +169,7 @@ export default function VoiceAssistantFAB({
 
   return (
     <>
-      <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-50 flex max-w-[min(16rem,calc(100vw-2rem))] flex-col items-end gap-3 sm:right-6">
+      <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+6.75rem)] right-4 z-50 flex max-w-[min(16rem,calc(100vw-2rem))] flex-col items-end gap-3 sm:right-6 lg:bottom-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="pointer-events-auto max-w-full rounded-[26px] border border-white/70 bg-white/88 px-4 py-3 shadow-[0_16px_48px_rgba(15,23,42,0.14)] backdrop-blur-xl">
           <div className="flex items-center gap-2">
             <Badge

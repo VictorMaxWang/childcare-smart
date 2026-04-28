@@ -3,7 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { BrainCircuit, Camera, CheckCircle2, Clock3, Mic, ShieldAlert, Sparkles } from "lucide-react";
+import {
+  BrainCircuit,
+  Camera,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  MessageSquareText,
+  Mic,
+  ShieldAlert,
+  Sparkles,
+  UsersRound,
+} from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import InterventionCardPanel from "@/components/agent/InterventionCardPanel";
 import ConsultationQaPanel from "@/components/consultation/ConsultationQaPanel";
@@ -537,10 +548,200 @@ export default function TeacherHighRiskConsultationPage() {
           <InlineLinkButton href="/teacher/agent" label="进入教师 AI 助手" variant="premium" />
         </>
       }
+      headerVariant="hidden"
+      className="max-w-[86rem]"
     >
       <RoleSplitLayout
+        stacked
         main={
           <div className="space-y-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
+            <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_48%,#fff1f2_100%)] p-4 shadow-[0_24px_70px_rgb(99_102_241_/_0.13)] sm:p-5">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+                <div>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="info" className="rounded-full px-3 py-1">教师工作台</Badge>
+                        <Badge variant="warning" className="rounded-full px-3 py-1">高风险</Badge>
+                      </div>
+                      <h1 className="mt-4 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">高风险儿童一键会诊</h1>
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                        按长期画像、最近会诊、当前建议分阶段流式展示，适合移动端录屏。
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild type="button" variant="outline" className="rounded-2xl">
+                        <Link href="/teacher">返回教师工作台</Link>
+                      </Button>
+                      <Button type="button" variant="premium" className="rounded-2xl" onClick={() => setShowSetupSections(true)}>
+                        发起会诊 / 邀请专家
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-950">会诊流程</p>
+                      <Badge variant={isStreaming ? "info" : result ? "success" : "outline"}>
+                        {isStreaming ? "进行中" : result ? "已完成" : "待启动"}
+                      </Badge>
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                      {[
+                        ["1", "发起会诊"],
+                        ["2", "专家响应"],
+                        ["3", "方案讨论"],
+                        ["4", "生成建议"],
+                      ].map(([step, label], index) => (
+                        <div key={step} className="relative rounded-2xl bg-slate-50 px-4 py-3">
+                          <span className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${index === 0 || result ? "bg-indigo-600 text-white" : "bg-white text-slate-400 ring-1 ring-slate-200"}`}>
+                            {step}
+                          </span>
+                          <p className="mt-3 text-sm font-semibold text-slate-900">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                    {[
+                      { label: "待处理会诊", value: `${autoContext.pendingReviewNotes.length + autoContext.morningCheckAlerts.length}`, tone: "bg-sky-50 text-sky-700", icon: ClipboardList },
+                      { label: "在会诊中", value: isStreaming ? "1" : result ? "0" : "0", tone: "bg-indigo-50 text-indigo-700", icon: UsersRound },
+                      { label: "本周完成会诊", value: `${Math.max(1, autoContext.growthObservationNotes.length)}`, tone: "bg-emerald-50 text-emerald-700", icon: CheckCircle2 },
+                      { label: "高风险儿童", value: "1", tone: "bg-rose-50 text-rose-700", icon: ShieldAlert },
+                      { label: "未回复家长消息", value: `${autoContext.parentFeedbackNotes.length}`, tone: "bg-emerald-50 text-emerald-700", icon: MessageSquareText },
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <div key={item.label} className="rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs text-slate-500">{item.label}</p>
+                              <p className="mt-2 text-2xl font-semibold text-slate-950">{item.value}</p>
+                              <p className="mt-1 text-xs text-slate-500">较昨日 {item.label === "高风险儿童" ? "+0" : "-1"}</p>
+                            </div>
+                            <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${item.tone}`}>
+                              <Icon className="h-5 w-5" />
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="premium" size="sm" className="rounded-full">全部</Button>
+                        <Button type="button" variant="outline" size="sm" className="rounded-full">待处理</Button>
+                        <Button type="button" variant="outline" size="sm" className="rounded-full">进行中</Button>
+                        <Button type="button" variant="outline" size="sm" className="rounded-full">已完成</Button>
+                      </div>
+                      {traceHeaderActions}
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+                      <div className="rounded-2xl border border-rose-100 bg-rose-50/60 p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="destructive">高风险</Badge>
+                          <h2 className="text-lg font-semibold text-slate-950">{classContext.className} · 儿童姓名</h2>
+                          <Badge variant="outline">{selectedChild.className}</Badge>
+                        </div>
+                        <p className="mt-2 text-sm text-slate-600">{getAgeText(selectedChild.birthDate)} · 出生于 {formatDisplayDate(selectedChild.birthDate)}</p>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {autoContext.focusReasons.slice(0, 4).map((item) => (
+                            <Badge key={item} variant="warning" className="rounded-full px-3 py-1">{item}</Badge>
+                          ))}
+                        </div>
+                        <div className="mt-4 rounded-2xl border border-rose-100 bg-white/75 p-4">
+                          <p className="text-sm font-semibold text-slate-950">风险概览</p>
+                          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            {[
+                              ["成长观察", autoContext.growthObservationNotes.length],
+                              ["行为发展", autoContext.classSignals.length],
+                              ["健康状况", autoContext.morningCheckAlerts.length],
+                              ["家庭反馈", autoContext.parentFeedbackNotes.length],
+                            ].map(([label, value]) => (
+                              <div key={label as string} className="rounded-xl bg-slate-50 px-3 py-2 text-center">
+                                <p className="text-lg font-semibold text-slate-950">{value as number}</p>
+                                <p className="text-xs text-slate-500">{label as string}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                          <Button type="button" variant="outline" className="rounded-2xl">查看完整档案</Button>
+                          <Button type="button" variant="premium" className="rounded-2xl" onClick={() => setShowSetupSections(true)}>编辑风险信息</Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-semibold text-slate-950">会议参与人员</p>
+                            <Badge variant="info">4/6</Badge>
+                          </div>
+                          <div className="mt-4 space-y-3">
+                            {[
+                              [currentUser.name, "发起人"],
+                              ["张医生", "专家"],
+                              ["王老师", "专家"],
+                              ["刘老师", "专家"],
+                            ].map(([name, role]) => (
+                              <div key={name} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                                <span className="text-sm font-medium text-slate-800">{name}</span>
+                                <Badge variant="secondary">{role}</Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4">
+                          <p className="text-sm font-semibold text-indigo-900">AI 助诊建议</p>
+                          <ul className="mt-3 space-y-2 text-sm leading-6 text-indigo-800">
+                            <li>建议关注睡眠质量与排尿规律的关联；</li>
+                            <li>可结合行为观察量表，重点评估情绪调节能力；</li>
+                            <li>建议家园协同，记录睡前饮水与如厕情况。</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <aside className="space-y-4">
+                  <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-slate-950">下一步行动</p>
+                    <div className="mt-4 space-y-3">
+                      {[
+                        ["家长沟通与知情同意", "进行中", "去沟通"],
+                        ["建议检查与评估", "待执行", "去执行"],
+                        ["制定干预计划", "待安排", "去安排"],
+                        ["跟踪观察与复盘", "待安排", "去跟踪"],
+                      ].map(([title, status, action]) => (
+                        <div key={title} className="grid grid-cols-[1fr_auto] gap-3 rounded-2xl bg-slate-50 px-3 py-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-950">{title}</p>
+                            <p className="mt-1 text-xs text-slate-500">{status}</p>
+                          </div>
+                          <Button type="button" variant="outline" size="sm" className="rounded-full">{action}</Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-slate-950">会议讨论与记录</p>
+                    <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+                      <div className="rounded-2xl bg-slate-50 p-3">{currentUser.name}：发起会诊，近期出现持续关注信号。</div>
+                      <div className="rounded-2xl bg-slate-50 p-3">张医生：建议先排除躯体不适，再看行为观察。</div>
+                      <div className="flex items-center gap-2 rounded-2xl border border-indigo-100 bg-white px-3 py-2 text-slate-400">
+                        输入讨论内容，按 Enter 发送
+                        <Button type="button" size="sm" variant="premium" className="ml-auto rounded-xl">发送</Button>
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </section>
+
             <TeacherContextStrip
               items={[
                 { label: "会诊对象", value: selectedChild.name, tone: "rose" },

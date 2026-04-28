@@ -102,6 +102,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const pageDescription = currentUser.className
     ? `${roleMeta.description} · ${currentUser.className}`
     : roleMeta.description;
+  const bottomNavItems = buildMobileBottomNavItems(roleMeta.badgeRole, currentUser.childIds?.[0]);
 
   async function handleLogout() {
     await logout();
@@ -164,11 +165,95 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="min-h-[calc(100vh-64px)] overflow-x-hidden bg-(--app-background)">
+        <main className="min-h-[calc(100vh-64px)] overflow-x-hidden bg-(--app-background) pb-[calc(env(safe-area-inset-bottom)+5.75rem)] lg:pb-0">
           {children}
         </main>
+        <MobileBottomTabBar items={bottomNavItems} pathname={pathname} />
       </div>
     </div>
+  );
+}
+
+type MobileBottomTabItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  match: (pathname: string) => boolean;
+  highlight?: boolean;
+};
+
+function buildMobileBottomNavItems(role: RoleBadgeRole, childId = "c-1"): MobileBottomTabItem[] {
+  if (role === "parent") {
+    const childQuery = `child=${encodeURIComponent(childId)}`;
+    return [
+      { href: `/parent?${childQuery}`, label: "首页", icon: House, match: (pathname) => pathname === "/parent" },
+      { href: `/parent/agent?${childQuery}`, label: "建议", icon: Sparkles, match: (pathname) => pathname.startsWith("/parent/agent") },
+      { href: `/parent/agent?${childQuery}#feedback`, label: "反馈", icon: Monitor, match: () => false },
+      { href: `/parent/storybook?${childQuery}`, label: "绘本", icon: BookHeart, match: (pathname) => pathname.startsWith("/parent/storybook") },
+      { href: `/parent?${childQuery}&care=1`, label: "关怀", icon: Baby, match: () => false, highlight: true },
+    ];
+  }
+
+  if (role === "teacher") {
+    return [
+      { href: "/teacher", label: "工作台", icon: House, match: (pathname) => pathname === "/teacher" || pathname === "/teacher/home" },
+      { href: "/health", label: "晨检", icon: ShieldCheck, match: (pathname) => pathname === "/health" },
+      { href: "/diet", label: "饮食", icon: Salad, match: (pathname) => pathname === "/diet" },
+      { href: "/growth", label: "成长", icon: BookHeart, match: (pathname) => pathname === "/growth" },
+      { href: "/teacher/agent", label: "AI", icon: Sparkles, match: (pathname) => pathname.startsWith("/teacher/agent"), highlight: true },
+    ];
+  }
+
+  return [
+    { href: "/admin", label: "首页", icon: House, match: (pathname) => pathname === "/admin" },
+    { href: "/admin/agent", label: "AI", icon: Sparkles, match: (pathname) => pathname.startsWith("/admin/agent"), highlight: true },
+    { href: "/admin/agent?action=weekly-report", label: "周报", icon: Monitor, match: () => false },
+    { href: "/children", label: "儿童", icon: Users, match: (pathname) => pathname === "/children" },
+    { href: "/health", label: "健康", icon: ShieldCheck, match: (pathname) => pathname === "/health" },
+  ];
+}
+
+function MobileBottomTabBar({ items, pathname }: { items: MobileBottomTabItem[]; pathname: string }) {
+  return (
+    <nav
+      className="fixed inset-x-3 bottom-3 z-40 rounded-[1.6rem] border border-white/80 bg-white/92 px-2 py-2 shadow-[0_18px_52px_rgb(15_23_42_/_0.18)] backdrop-blur-xl lg:hidden"
+      aria-label="移动端快捷导航"
+    >
+      <div className="grid grid-cols-5 gap-1">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const active = item.match(pathname);
+          return (
+            <Link
+              key={`${item.href}-${item.label}`}
+              href={item.href}
+              className={cn(
+                "flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-semibold transition",
+                active
+                  ? "bg-indigo-50 text-indigo-600"
+                  : item.highlight
+                    ? "text-indigo-600"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-full",
+                  item.highlight
+                    ? "bg-[linear-gradient(135deg,#6366f1,#8b5cf6)] text-white shadow-lg shadow-indigo-200"
+                    : active
+                      ? "bg-white text-indigo-600 shadow-sm"
+                      : "bg-slate-50 text-slate-500"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+              </span>
+              <span className="max-w-full truncate">{item.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 

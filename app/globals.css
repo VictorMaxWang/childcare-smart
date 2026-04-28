@@ -225,8 +225,8 @@ body {
 }
 
 :where(th) {
-  background: var(--panel-subtle);
-  color: var(--text-tertiary);
+  background: linear-gradient(180deg, #f8fbff 0%, #f1f5ff 100%);
+  color: #64748b;
   font-weight: var(--font-weight-semibold);
 }
 
@@ -271,6 +271,19 @@ body {
 
 .app-table-scroll > table {
   width: 100%;
+}
+
+.app-table-scroll table thead th {
+  border-bottom: 1px solid rgb(224 231 255 / 0.9);
+}
+
+.app-table-scroll table tbody tr {
+  transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.app-table-scroll table tbody tr:hover {
+  background: rgb(248 250 252 / 0.92);
+  box-shadow: inset 3px 0 0 rgb(99 102 241 / 0.6);
 }
 
 .focus-ring {

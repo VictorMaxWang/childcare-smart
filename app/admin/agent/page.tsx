@@ -4,11 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
+  ArrowUpRight,
+  BarChart3,
   BrainCircuit,
+  CheckCircle2,
   ClipboardList,
   FileText,
+  MessageSquareText,
   RefreshCw,
+  ShieldAlert,
   Sparkles,
+  UsersRound,
 } from "lucide-react";
 import RiskPriorityBoard from "@/components/admin/RiskPriorityBoard";
 import EmptyState from "@/components/EmptyState";
@@ -404,45 +410,117 @@ export default function AdminAgentPage() {
         badge={`园长 AI 助手 · ${INSTITUTION_NAME}`}
         title="园长周报工作区"
         description="只保留本周总结、周报追问和周报落地动作，不再混入日常优先级、历史记录和通知侧栏。"
+        headerVariant="hidden"
+        className="max-w-[86rem]"
         actions={<InlineLinkButton href="/admin" label="返回园长首页" />}
       >
         <RoleSplitLayout
           main={
             <div className="space-y-6">
-              <div className="rounded-xl border border-indigo-100 bg-linear-to-r from-indigo-50 via-white to-sky-50 p-6 shadow-sm">
-                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0 space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="info">周报工作区</Badge>
-                      <Badge variant="outline">{INSTITUTION_NAME}</Badge>
-                      <Badge variant={dispatchAvailable ? "success" : "outline"}>
-                        {safeDispatchStatusMessage}
-                      </Badge>
+              <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#eef2ff_0%,#f8fbff_46%,#ecfeff_100%)] p-4 shadow-[0_22px_64px_rgb(79_70_229_/_0.12)] sm:p-5">
+                <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_260px]">
+                  <div>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="info" className="rounded-full px-3 py-1">周报工作区</Badge>
+                          <Badge variant="outline" className="rounded-full px-3 py-1">{INSTITUTION_NAME}</Badge>
+                          <Badge variant={dispatchAvailable ? "success" : "outline"} className="rounded-full px-3 py-1">
+                            {safeDispatchStatusMessage}
+                          </Badge>
+                        </div>
+                        <h1 className="mt-4 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                          本周运营报表
+                        </h1>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                          用一屏收口出勤、风险、反馈和下周动作，让园长直接进入复盘和派单。
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Button type="button" variant="outline" onClick={() => switchMode("daily")}>
+                          切回日常
+                        </Button>
+                        <Button type="button" variant="premium" onClick={rerunCurrentMode} disabled={loading}>
+                          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                          重新生成
+                        </Button>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-lg font-semibold text-slate-900">本周运营周报</p>
-                      <p className="mt-2 max-w-3xl whitespace-normal break-words text-sm leading-6 text-slate-600">
-                        当前页面只保留周报总结、周报追问、下周动作和必要的返回日常入口，方便园长直接讲清本周闭环与下周承接。
-                      </p>
-                    </div>
+
                     {requestError ? (
-                      <div className="flex items-start gap-3 rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      <div className="mt-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                         <p>{requestError}</p>
                       </div>
                     ) : null}
+
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                      {[
+                        {
+                          label: "到园基线",
+                          value: scope ? `${scope.todayPresentCount}/${scope.visibleChildren}` : "--",
+                          icon: UsersRound,
+                          tone: "bg-emerald-50 text-emerald-700",
+                        },
+                        {
+                          label: "风险儿童",
+                          value: scope ? `${scope.riskChildrenCount}` : "--",
+                          icon: ShieldAlert,
+                          tone: "bg-amber-50 text-amber-700",
+                        },
+                        {
+                          label: "反馈完成率",
+                          value: scope ? `${scope.feedbackCompletionRate}%` : "--",
+                          icon: CheckCircle2,
+                          tone: "bg-sky-50 text-sky-700",
+                        },
+                        {
+                          label: "待承接动作",
+                          value: scope ? `${scope.pendingDispatchCount}` : "--",
+                          icon: ClipboardList,
+                          tone: "bg-indigo-50 text-indigo-700",
+                        },
+                      ].map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <div key={item.label} className="rounded-2xl border border-white/82 bg-white/84 p-4 shadow-sm">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-xs text-slate-500">{item.label}</p>
+                              <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${item.tone}`}>
+                                <Icon className="h-4 w-4" aria-hidden="true" />
+                              </span>
+                            </div>
+                            <p className="mt-3 text-3xl font-semibold leading-tight text-slate-950">{item.value}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2 xl:max-w-sm xl:justify-end">
-                    <Button type="button" variant="outline" onClick={() => switchMode("daily")}>
-                      切回日常模式
-                    </Button>
-                    <Button type="button" variant="premium" onClick={rerunCurrentMode} disabled={loading}>
-                      <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                      重新生成周报
-                    </Button>
+
+                  <div className="rounded-2xl border border-white/82 bg-white/78 p-4 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+                        <BarChart3 className="h-5 w-5" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950">周报状态</p>
+                        <p className="mt-1 text-xs text-slate-500">{displayResult ? getResultSourceLabel(displayResult.source) : "等待生成"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                        动作数：{displayResult?.actionItems.length ?? 0}
+                      </div>
+                      <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                        通知事件：{notificationEvents.length}
+                      </div>
+                      <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                        风险儿童：{displayResult?.riskChildren.length ?? 0}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </section>
 
               {scope ? (
                 <MetricGrid
@@ -719,6 +797,8 @@ export default function AdminAgentPage() {
       badge={`园长 AI 助手 · ${INSTITUTION_NAME}`}
       title={modeConfig.title}
       description={modeConfig.description}
+      headerVariant="hidden"
+      className="max-w-[86rem]"
       actions={
         <>
           <InlineLinkButton href="/admin" label="返回园长首页" />
@@ -733,6 +813,109 @@ export default function AdminAgentPage() {
       <RoleSplitLayout
         main={
           <div className="space-y-6">
+            <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#f8fbff_0%,#f4f0ff_48%,#ecfeff_100%)] p-4 shadow-[0_22px_64px_rgb(79_70_229_/_0.12)] sm:p-5">
+              <div className="grid gap-4 2xl:grid-cols-[280px_minmax(0,1fr)_260px]">
+                <div className="rounded-2xl border border-white/82 bg-white/80 p-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+                      <BrainCircuit className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-950">园长 AI 助手</p>
+                      <p className="mt-1 text-xs text-slate-500">{INSTITUTION_NAME}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <Button type="button" variant="premium" className="rounded-2xl" onClick={rerunCurrentMode} disabled={loading}>
+                      日常优先级
+                    </Button>
+                    <Button type="button" variant="outline" className="rounded-2xl" onClick={() => switchMode("weekly")}>
+                      周报模式
+                    </Button>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {quickQuestions.slice(0, 3).map((question) => (
+                      <button
+                        key={question}
+                        type="button"
+                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2 text-left text-xs leading-5 text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50"
+                        onClick={() => void runWorkflow("question-follow-up", { question, label: question })}
+                        disabled={loading}
+                      >
+                        <span>{question}</span>
+                        <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/82 bg-white/84 p-5 shadow-sm">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="info" className="rounded-full px-3 py-1">日常工作区</Badge>
+                        <Badge variant={dispatchAvailable ? "success" : "outline"} className="rounded-full px-3 py-1">
+                          {dispatchAvailable ? "支持派单" : safeDispatchStatusMessage}
+                        </Badge>
+                      </div>
+                      <h1 className="mt-4 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                        从识别问题到派单闭环
+                      </h1>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {displayResult?.assistantAnswer ?? modeConfig.description}
+                      </p>
+                    </div>
+                    <Button type="button" variant="premium" onClick={rerunCurrentMode} disabled={loading} className="shrink-0 rounded-2xl">
+                      <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                      重新生成
+                    </Button>
+                  </div>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {[
+                      { label: "重点事项", value: `${displayResult?.priorityTopItems.length ?? 0}`, icon: ClipboardList, tone: "bg-amber-50 text-amber-700" },
+                      { label: "风险儿童", value: `${displayResult?.riskChildren.length ?? 0}`, icon: ShieldAlert, tone: "bg-rose-50 text-rose-700" },
+                      { label: "家园薄弱点", value: `${displayResult?.feedbackRiskItems.length ?? 0}`, icon: MessageSquareText, tone: "bg-sky-50 text-sky-700" },
+                      { label: "行动建议", value: `${displayResult?.actionItems.length ?? 0}`, icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-700" },
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <div key={item.label} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                          <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${item.tone}`}>
+                            <Icon className="h-4 w-4" aria-hidden="true" />
+                          </div>
+                          <p className="mt-3 text-xs text-slate-500">{item.label}</p>
+                          <p className="mt-1 text-2xl font-semibold text-slate-950">{item.value}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/82 bg-white/78 p-4 shadow-sm">
+                  <p className="text-sm font-semibold text-slate-950">上下文与闭环</p>
+                  <div className="mt-4 space-y-3 text-sm text-slate-600">
+                    <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                      <span>可见幼儿</span>
+                      <strong className="text-slate-950">{scope?.visibleChildren ?? visibleChildren.length}</strong>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                      <span>已有派单</span>
+                      <strong className="text-slate-950">{notificationEvents.length}</strong>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                      <span>历史回答</span>
+                      <strong className="text-slate-950">{history.length}</strong>
+                    </div>
+                  </div>
+                  {requestError ? (
+                    <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
+                      {requestError}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+
             {isWeeklyMode ? (
               <div className="rounded-xl border border-indigo-100 bg-linear-to-r from-indigo-50 via-white to-sky-50 p-6 shadow-sm">
                 <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">

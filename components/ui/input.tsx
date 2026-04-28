@@ -9,7 +9,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <input
         type={type}
         className={cn(
-          "flex h-11 min-h-11 w-full rounded-md border border-(--input) bg-(--input-background) px-3 py-2 text-sm text-(--text-primary) shadow-xs ring-offset-background transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-(--text-helper) hover:border-(--input-hover) focus-visible:border-(--primary) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2 aria-invalid:border-(--danger) aria-invalid:ring-(--danger) disabled:cursor-not-allowed disabled:bg-(--secondary) disabled:text-(--text-disabled) disabled:opacity-80 sm:h-10 sm:min-h-10",
+          "flex h-12 min-h-12 w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-2.5 text-sm text-(--text-primary) shadow-[0_8px_24px_rgb(15_23_42_/_0.04)] ring-offset-background transition-all file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-400 hover:border-indigo-200 hover:bg-white focus-visible:border-indigo-400 focus-visible:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-100 aria-invalid:border-rose-300 aria-invalid:bg-rose-50/50 aria-invalid:ring-rose-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-(--text-disabled) disabled:opacity-80 sm:h-11 sm:min-h-11",
           className
         )}
         ref={ref}

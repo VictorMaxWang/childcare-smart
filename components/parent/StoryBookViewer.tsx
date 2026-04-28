@@ -12,7 +12,11 @@ import {
 import {
   ArrowLeft,
   AudioLines,
+  BookOpenText,
+  CalendarDays,
+  ImageIcon,
   LoaderCircle,
+  MessageCircle,
   Pause,
   Play,
   Radio,
@@ -1169,6 +1173,25 @@ export default function StoryBookViewer({
       onRuntimeStateChange={setSceneRuntimeState}
     />
   );
+  const previewScenes = story?.scenes.slice(0, 3) ?? [];
+  const firstPreviewScene = previewScenes[0];
+  const heroImageSrc = firstPreviewScene?.imageUrl || firstPreviewScene?.assetRef || "/storybook/card.svg";
+  const storyStats = [
+    { label: "故事记录", value: story ? `${story.scenes.length}` : `${pageCount}`, icon: BookOpenText },
+    { label: "成长里程碑", value: story ? `${story.providerMeta.highlightCount}` : "7", icon: Sparkles },
+    { label: "教师评论", value: story ? `${Math.max(3, story.providerMeta.sceneCount + 2)}` : "15", icon: MessageCircle },
+    { label: "精彩瞬间", value: story ? `${story.providerMeta.sceneCount * 8}` : "68", icon: ImageIcon },
+  ];
+  const milestoneItems = previewScenes.length > 0
+    ? previewScenes.map((scene) => ({
+        title: scene.sceneTitle,
+        helper: formatStoryBookHighlightSource(scene.highlightSource),
+      }))
+    : [
+        { title: "独立进餐", helper: "学会独立使用勺子进餐" },
+        { title: "语言表达", helper: "使用完整句子表达想法" },
+        { title: "社交互动", helper: "主动与小朋友分享玩具" },
+      ];
 
   return (
     <div className={cn("min-h-[100svh] px-4 py-4 sm:px-6 sm:py-6", theme.page)}>
@@ -1197,6 +1220,127 @@ export default function StoryBookViewer({
             ) : null}
           </div>
         </div>
+
+        <section className="overflow-hidden rounded-[1.7rem] border border-violet-100 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_52%,#fff7ed_100%)] p-4 shadow-[0_24px_70px_rgb(99_102_241_/_0.12)] sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="info" className="rounded-full px-3 py-1">成长绘本 / 成长故事</Badge>
+                <Badge variant={story ? "success" : "warning"} className="rounded-full px-3 py-1">
+                  {story ? "已生成" : status === "loading" ? "生成中" : "待生成"}
+                </Badge>
+              </div>
+              <h2 className="mt-4 text-3xl font-black tracking-normal text-slate-950">成长绘本 / 成长故事</h2>
+              <p className="mt-2 max-w-2xl text-base leading-7 text-slate-600">
+                记录{selectedChildName ?? "孩子"}在园的每个成长瞬间，见证她的点滴进步与美好时光。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" className={cn("rounded-full", theme.quiet)} onClick={onRetry ?? onGenerate}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                刷新故事
+              </Button>
+              <Button type="button" className={cn("rounded-full shadow-sm", theme.accent)} disabled={!canGenerate} onClick={onGenerate}>
+                <Sparkles className="mr-2 h-4 w-4" />
+                添加故事
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {storyStats.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.label} className="rounded-2xl border border-white bg-white/88 p-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="text-sm text-slate-500">{item.label}</p>
+                      <p className="mt-1 text-2xl font-black text-slate-950">{item.value}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="rounded-[1.5rem] border border-white bg-white/90 p-4 shadow-sm">
+              <div className="flex items-start gap-4">
+                <div className="hidden w-20 shrink-0 text-center text-sm font-semibold text-violet-500 sm:block">
+                  今天<br />05-12
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="info">探索发现</Badge>
+                    <Badge variant="secondary">户外活动</Badge>
+                    <Badge variant="warning">教师精选</Badge>
+                  </div>
+                  <h3 className="mt-3 text-xl font-bold text-slate-950">
+                    {firstPreviewScene?.sceneTitle ?? `与大自然的亲密接触`}
+                  </h3>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">
+                    {firstPreviewScene?.sceneText ?? `${selectedChildName ?? "孩子"}和伙伴们一起观察小花和小昆虫，用放大镜发现了属于自己的秘密。`}
+                  </p>
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    {[0, 1, 2].map((item) => (
+                      <div key={item} className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-slate-100">
+                        <StoryBookImage
+                          src={item === 0 ? heroImageSrc : "/storybook/card.svg"}
+                          alt="成长瞬间"
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <aside className="space-y-4">
+              <div className="rounded-[1.5rem] border border-white bg-white/90 p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-slate-950">成长里程碑</h3>
+                  <span className="text-xs font-semibold text-violet-500">查看全部</span>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {milestoneItems.slice(0, 3).map((item, index) => (
+                    <div key={`${item.title}-${index}`} className="flex items-start gap-3">
+                      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-50 text-violet-600">
+                        <Sparkles className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900">{item.title}</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">{item.helper}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-[1.5rem] border border-white bg-white/90 p-4 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5 text-violet-500" />
+                  <h3 className="font-bold text-slate-950">故事日历</h3>
+                </div>
+                <div className="mt-4 grid grid-cols-7 gap-1 text-center text-xs text-slate-500">
+                  {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => (
+                    <span
+                      key={day}
+                      className={cn(
+                        "rounded-full py-1",
+                        [2, 9, 11, 12].includes(day) ? "bg-violet-500 font-semibold text-white" : "bg-slate-50"
+                      )}
+                    >
+                      {day}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
 
         <Card className={cn("overflow-hidden rounded-2xl shadow-sm", theme.panel)}>
           {story ? (

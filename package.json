@@ -29,6 +29,11 @@
     "release:status": "node ./scripts/release-status.mjs",
     "release:ready": "node ./scripts/release-ready.mjs",
     "capture:ui": "playwright test tests/visual/capture-ui-screenshots.spec.ts --browser=chromium --reporter=line",
+    "capture:visual-parity": "playwright test tests/visual/capture-visual-parity-key-pages.spec.ts --browser=chromium --reporter=line",
+    "capture:visual-parity:round2": "playwright test tests/visual/capture-visual-parity-round2.spec.ts --browser=chromium --reporter=line",
+    "capture:visual-parity:round3": "playwright test tests/visual/capture-visual-parity-round3.spec.ts --browser=chromium --reporter=line",
+    "capture:visual-parity:round4": "playwright test tests/visual/capture-visual-parity-round4.spec.ts --browser=chromium --reporter=line",
+    "capture:visual-parity:round5": "playwright test tests/visual/capture-visual-parity-round5.spec.ts --browser=chromium --reporter=line",
     "package:gpt-image2": "node scripts/package-gpt-image2-input.mjs"
   },
   "dependencies": {
