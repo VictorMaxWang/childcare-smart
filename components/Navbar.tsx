@@ -5,19 +5,26 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Baby,
+  Bell,
   BookHeart,
+  Bot,
+  ChevronDown,
   ChevronRight,
+  FileText,
+  Home,
   House,
   LogOut,
+  MessageCircle,
   Monitor,
   Salad,
+  Search,
   ShieldCheck,
   Sparkles,
+  Stethoscope,
   Users,
   type LucideIcon,
 } from "lucide-react";
 import MobileNav from "@/components/MobileNav";
-import { Button } from "@/components/ui/button";
 import { RoleBadge, type RoleBadgeRole } from "@/components/ui/role-badge";
 import type { AccountRole } from "@/lib/auth/accounts";
 import {
@@ -32,7 +39,7 @@ import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 const ICON_MAP: Record<PrimaryNavIconKey, LucideIcon> = {
-  overview: House,
+  overview: Monitor,
   "role-home": House,
   children: Users,
   health: ShieldCheck,
@@ -40,34 +47,62 @@ const ICON_MAP: Record<PrimaryNavIconKey, LucideIcon> = {
   diet: Salad,
   parent: Baby,
   screen: Monitor,
+  ai: Bot,
+  consultation: Stethoscope,
+  file: FileText,
+  feedback: MessageCircle,
+  storybook: BookHeart,
 };
+
+type ShellRole = "director" | "teacher" | "parent";
+type ShellMode = "sidebar" | "top-tabs" | "mobile-app";
 
 const ROLE_META: Record<
   AccountRole,
   {
     shellLabel: string;
     badgeRole: RoleBadgeRole;
+    shellRole: ShellRole;
+    shellMode: ShellMode;
     description: string;
+    shortDescription: string;
+    navCue: string;
     accentClassName: string;
+    heroToneClassName: string;
   }
 > = {
   机构管理员: {
     shellLabel: "园长端",
     badgeRole: "director",
+    shellRole: "director",
+    shellMode: "sidebar",
     description: "全园运营、风险优先级与数据决策",
-    accentClassName: "border-indigo-100 bg-indigo-50 text-indigo-700",
+    shortDescription: "春芽智慧托育中心",
+    navCue: "全园运营",
+    accentClassName: "border-indigo-200 bg-indigo-50 text-indigo-700",
+    heroToneClassName: "from-indigo-50 via-white to-sky-50",
   },
   教师: {
     shellLabel: "教师端",
     badgeRole: "teacher",
+    shellRole: "teacher",
+    shellMode: "top-tabs",
     description: "班级任务、每日记录与家园沟通",
-    accentClassName: "border-violet-100 bg-violet-50 text-violet-700",
+    shortDescription: "向阳班工作台",
+    navCue: "教师工作台",
+    accentClassName: "border-violet-200 bg-violet-50 text-violet-700",
+    heroToneClassName: "from-violet-50 via-white to-cyan-50",
   },
   家长: {
     shellLabel: "家长端",
     badgeRole: "parent",
+    shellRole: "parent",
+    shellMode: "mobile-app",
     description: "孩子状态、成长回看与反馈闭环",
-    accentClassName: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    shortDescription: "普惠托育智慧管理平台",
+    navCue: "孩子状态",
+    accentClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    heroToneClassName: "from-emerald-50 via-white to-violet-50",
   },
 };
 
@@ -92,17 +127,16 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { currentUser, logout } = useApp();
+  const childId = currentUser.childIds?.[0] ?? "c-1";
 
   const hideShell = pathname === "/login" || pathname.startsWith("/auth/login");
-  const navItems = buildPrimaryNavItems(currentUser.role);
-  const navGroups = buildPrimaryNavGroups(currentUser.role);
+  const navOptions = { childId };
+  const navItems = buildPrimaryNavItems(currentUser.role, navOptions);
+  const navGroups = buildPrimaryNavGroups(currentUser.role, navOptions);
   const roleMeta = ROLE_META[currentUser.role];
   const activeItem = findActiveNavItem(pathname, navItems);
   const pageTitle = resolvePageTitle(pathname, activeItem);
-  const pageDescription = currentUser.className
-    ? `${roleMeta.description} · ${currentUser.className}`
-    : roleMeta.description;
-  const bottomNavItems = buildMobileBottomNavItems(roleMeta.badgeRole, currentUser.childIds?.[0]);
+  const bottomNavItems = buildMobileBottomNavItems(roleMeta.badgeRole, childId);
 
   async function handleLogout() {
     await logout();
@@ -115,57 +149,39 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-(--app-background) text-(--foreground)">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r border-(--border) bg-white/95 shadow-[8px_0_28px_rgb(15_23_42_/_0.04)] backdrop-blur-xl lg:flex">
-        <SidebarBrand roleMeta={roleMeta} />
-        <SidebarNav pathname={pathname} navGroups={navGroups} />
-        <SidebarUserCard currentUser={currentUser} roleMeta={roleMeta} onLogout={handleLogout} />
-      </aside>
+    <div
+      className="pixel-app-shell min-h-screen text-(--foreground)"
+      data-role-shell={roleMeta.shellRole}
+      data-shell-mode={roleMeta.shellMode}
+    >
+      <ShellTopbar
+        activeItem={activeItem}
+        currentUser={currentUser}
+        navItems={navItems}
+        onLogout={handleLogout}
+        pageTitle={pageTitle}
+        pathname={pathname}
+        roleMeta={roleMeta}
+      />
 
-      <div className="lg:pl-72">
-        <header className="sticky top-0 z-30 border-b border-(--border) bg-white/90 backdrop-blur-xl">
-          <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-            <div className="flex min-w-0 items-center gap-3">
-              <MobileNav onLogout={handleLogout} />
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-xs font-medium text-(--text-tertiary)">
-                  <span>智慧托育平台</span>
-                  <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span className="truncate">{roleMeta.shellLabel}</span>
-                </div>
-                <h1 className="mt-0.5 truncate text-lg font-semibold leading-tight text-(--text-primary) sm:text-xl">
-                  {pageTitle}
-                </h1>
-              </div>
-            </div>
+      {roleMeta.shellMode === "sidebar" ? (
+        <DesktopSidebar
+          currentUser={currentUser}
+          navGroups={navGroups}
+          onLogout={handleLogout}
+          pathname={pathname}
+          roleMeta={roleMeta}
+        />
+      ) : null}
 
-            <div className="hidden min-w-0 items-center gap-3 sm:flex">
-              <div className="hidden max-w-80 truncate text-right text-sm text-(--text-tertiary) xl:block">
-                {pageDescription}
-              </div>
-              <RoleBadge role={roleMeta.badgeRole} label={roleMeta.shellLabel} />
-              <div className="flex items-center gap-2 rounded-lg border border-(--border) bg-white px-3 py-2 shadow-[var(--shadow-card)]">
-                <span className="text-lg" aria-hidden="true">
-                  {currentUser.avatar}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold leading-none text-(--text-primary)">
-                    {currentUser.name}
-                  </p>
-                  <p className="mt-1 truncate text-xs text-(--text-helper)">
-                    {currentUser.className ?? currentUser.role}
-                  </p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm" onClick={handleLogout} className="gap-1.5">
-                <LogOut className="h-4 w-4" aria-hidden="true" />
-                退出
-              </Button>
-            </div>
-          </div>
-        </header>
-
-        <main className="min-h-[calc(100vh-64px)] overflow-x-hidden bg-(--app-background) pb-[calc(env(safe-area-inset-bottom)+5.75rem)] lg:pb-0">
+      <div
+        className={cn(
+          "pixel-shell-stage",
+          roleMeta.shellMode === "sidebar" ? "lg:pl-[196px]" : "lg:pl-0",
+          roleMeta.shellMode === "mobile-app" && "parent-app-stage"
+        )}
+      >
+        <main className="pixel-app-main min-h-[calc(100vh-86px)] overflow-x-hidden pb-[calc(env(safe-area-inset-bottom)+5.9rem)] sm:min-h-[calc(100vh-72px)] lg:min-h-[calc(100vh-80px)] lg:pb-0">
           {children}
         </main>
         <MobileBottomTabBar items={bottomNavItems} pathname={pathname} />
@@ -174,115 +190,217 @@ export default function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-type MobileBottomTabItem = {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  match: (pathname: string) => boolean;
-  highlight?: boolean;
+type CurrentShellUser = {
+  avatar: string;
+  name: string;
+  role: AccountRole;
+  className?: string;
+  childIds?: string[];
 };
 
-function buildMobileBottomNavItems(role: RoleBadgeRole, childId = "c-1"): MobileBottomTabItem[] {
-  if (role === "parent") {
-    const childQuery = `child=${encodeURIComponent(childId)}`;
-    return [
-      { href: `/parent?${childQuery}`, label: "首页", icon: House, match: (pathname) => pathname === "/parent" },
-      { href: `/parent/agent?${childQuery}`, label: "建议", icon: Sparkles, match: (pathname) => pathname.startsWith("/parent/agent") },
-      { href: `/parent/agent?${childQuery}#feedback`, label: "反馈", icon: Monitor, match: () => false },
-      { href: `/parent/storybook?${childQuery}`, label: "绘本", icon: BookHeart, match: (pathname) => pathname.startsWith("/parent/storybook") },
-      { href: `/parent?${childQuery}&care=1`, label: "关怀", icon: Baby, match: () => false, highlight: true },
-    ];
-  }
+function ShellTopbar({
+  activeItem,
+  currentUser,
+  navItems,
+  onLogout,
+  pageTitle,
+  pathname,
+  roleMeta,
+}: {
+  activeItem?: PrimaryNavItem;
+  currentUser: CurrentShellUser;
+  navItems: PrimaryNavItem[];
+  onLogout: () => void;
+  pageTitle: string;
+  pathname: string;
+  roleMeta: (typeof ROLE_META)[AccountRole];
+}) {
+  const topNavItems = roleMeta.shellMode === "top-tabs" ? navItems.slice(0, 7) : navItems.slice(0, 5);
 
-  if (role === "teacher") {
-    return [
-      { href: "/teacher", label: "工作台", icon: House, match: (pathname) => pathname === "/teacher" || pathname === "/teacher/home" },
-      { href: "/health", label: "晨检", icon: ShieldCheck, match: (pathname) => pathname === "/health" },
-      { href: "/diet", label: "饮食", icon: Salad, match: (pathname) => pathname === "/diet" },
-      { href: "/growth", label: "成长", icon: BookHeart, match: (pathname) => pathname === "/growth" },
-      { href: "/teacher/agent", label: "AI", icon: Sparkles, match: (pathname) => pathname.startsWith("/teacher/agent"), highlight: true },
-    ];
-  }
+  return (
+    <header className="pixel-topbar sticky top-0 z-50 border-b border-slate-200/80 bg-white/94 shadow-[0_1px_0_rgb(15_23_42_/_0.03),0_10px_34px_rgb(79_70_229_/_0.06)] backdrop-blur-xl">
+      <div className="flex min-h-[86px] items-center justify-between gap-3 px-4 sm:min-h-[72px] sm:px-6 lg:min-h-20 lg:px-8">
+        <div className="flex min-w-0 shrink-0 items-center gap-3">
+          <MobileNav onLogout={onLogout} />
+          <Link href="/" className="hidden min-w-0 shrink-0 items-center gap-3 sm:flex">
+            <BrandMark compact={roleMeta.shellMode === "sidebar"} />
+            <div className="min-w-0">
+              <p className="truncate text-base font-bold leading-tight text-slate-950 lg:text-lg">智慧托育平台</p>
+              <p className="mt-0.5 truncate text-xs font-medium text-slate-500">普惠托育智慧管理平台</p>
+            </div>
+          </Link>
+          <Link href="/" className="flex min-w-0 items-center gap-2 sm:hidden">
+            <BrandMark compact />
+            <div className="min-w-0">
+              <p className="truncate text-base font-bold leading-tight text-slate-950">智慧托育平台</p>
+              <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">{roleMeta.shortDescription}</p>
+            </div>
+          </Link>
+        </div>
 
-  return [
-    { href: "/admin", label: "首页", icon: House, match: (pathname) => pathname === "/admin" },
-    { href: "/admin/agent", label: "AI", icon: Sparkles, match: (pathname) => pathname.startsWith("/admin/agent"), highlight: true },
-    { href: "/admin/agent?action=weekly-report", label: "周报", icon: Monitor, match: () => false },
-    { href: "/children", label: "儿童", icon: Users, match: (pathname) => pathname === "/children" },
-    { href: "/health", label: "健康", icon: ShieldCheck, match: (pathname) => pathname === "/health" },
-  ];
+        {roleMeta.shellMode === "top-tabs" ? (
+          <DesktopTopTabs items={topNavItems} pathname={pathname} />
+        ) : roleMeta.shellMode === "mobile-app" ? (
+          <ParentDesktopPills items={topNavItems} pathname={pathname} />
+        ) : (
+          <div className="hidden min-w-0 items-center gap-2 text-sm font-medium text-slate-500 xl:flex">
+            <span>{roleMeta.navCue}</span>
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            <span className="truncate text-slate-900">{activeItem?.label ?? pageTitle}</span>
+          </div>
+        )}
+
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-[0_10px_24px_rgb(15_23_42_/_0.08)] ring-1 ring-slate-200/80 sm:hidden"
+            aria-label="通知"
+          >
+            <Bell className="h-5 w-5" aria-hidden="true" />
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+              3
+            </span>
+          </button>
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-[0_10px_24px_rgb(15_23_42_/_0.08)] ring-1 ring-slate-200/80 sm:hidden"
+            aria-label="消息"
+          >
+            <MessageCircle className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <ShellIconButton label="搜索">
+            <Search className="h-4 w-4" aria-hidden="true" />
+          </ShellIconButton>
+          <ShellIconButton label="通知" badge="6">
+            <Bell className="h-4 w-4" aria-hidden="true" />
+          </ShellIconButton>
+          <div className="hidden items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-[0_10px_26px_rgb(15_23_42_/_0.07)] sm:flex">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-50 to-cyan-50 text-lg">
+              {currentUser.avatar}
+            </span>
+            <div className="hidden min-w-0 xl:block">
+              <p className="truncate text-sm font-semibold leading-tight text-slate-950">{currentUser.name}</p>
+              <p className="mt-0.5 truncate text-xs text-slate-500">{currentUser.className ?? currentUser.role}</p>
+            </div>
+            <ChevronDown className="hidden h-4 w-4 text-slate-400 xl:block" aria-hidden="true" />
+          </div>
+          <div className="hidden sm:block">
+            <RoleBadge role={roleMeta.badgeRole} label={roleMeta.shellLabel} />
+          </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="hidden min-h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 sm:flex"
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            退出
+          </button>
+        </div>
+      </div>
+    </header>
+  );
 }
 
-function MobileBottomTabBar({ items, pathname }: { items: MobileBottomTabItem[]; pathname: string }) {
+function DesktopTopTabs({ items, pathname }: { items: PrimaryNavItem[]; pathname: string }) {
   return (
-    <nav
-      className="fixed inset-x-3 bottom-3 z-40 rounded-[1.6rem] border border-white/80 bg-white/92 px-2 py-2 shadow-[0_18px_52px_rgb(15_23_42_/_0.18)] backdrop-blur-xl lg:hidden"
-      aria-label="移动端快捷导航"
-    >
-      <div className="grid grid-cols-5 gap-1">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const active = item.match(pathname);
-          return (
-            <Link
-              key={`${item.href}-${item.label}`}
-              href={item.href}
-              className={cn(
-                "flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-semibold transition",
-                active
-                  ? "bg-indigo-50 text-indigo-600"
-                  : item.highlight
-                    ? "text-indigo-600"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-              )}
-            >
-              <span
-                className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-full",
-                  item.highlight
-                    ? "bg-[linear-gradient(135deg,#6366f1,#8b5cf6)] text-white shadow-lg shadow-indigo-200"
-                    : active
-                      ? "bg-white text-indigo-600 shadow-sm"
-                      : "bg-slate-50 text-slate-500"
-                )}
-              >
-                <Icon className="h-4 w-4" />
-              </span>
-              <span className="max-w-full truncate">{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
+    <nav aria-label="桌面主导航" className="hidden min-w-0 flex-1 items-center justify-center gap-1 px-3 lg:flex">
+      {items.map((item, index) => {
+        const Icon = ICON_MAP[item.icon];
+        const active = isPrimaryNavItemActive(pathname, item.href);
+
+        return (
+          <Link
+            key={`${item.href}-${item.label}`}
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "min-h-11 items-center gap-2 rounded-2xl px-3 text-sm font-semibold transition xl:px-4",
+              index > 3 ? "hidden xl:flex" : "flex",
+              active
+                ? "bg-indigo-50 text-indigo-700 shadow-[inset_0_-3px_0_rgb(99_102_241)]"
+                : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+            )}
+          >
+            <Icon className="h-4 w-4" aria-hidden="true" />
+            <span className="truncate">{item.label}</span>
+          </Link>
+        );
+      })}
     </nav>
   );
 }
 
-function SidebarBrand({
+function ParentDesktopPills({ items, pathname }: { items: PrimaryNavItem[]; pathname: string }) {
+  return (
+    <nav aria-label="家长端快捷导航" className="hidden min-w-0 flex-1 justify-center gap-2 px-4 lg:flex">
+      {items.map((item) => {
+        const Icon = ICON_MAP[item.icon];
+        const active = isPrimaryNavItemActive(pathname, item.href);
+
+        return (
+          <Link
+            key={`${item.href}-${item.label}`}
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "flex min-h-11 items-center gap-2 rounded-2xl border px-4 text-sm font-semibold shadow-sm transition",
+              active
+                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                : "border-transparent bg-white/70 text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-950"
+            )}
+          >
+            <Icon className="h-4 w-4" aria-hidden="true" />
+            <span className="truncate">{item.label}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+function DesktopSidebar({
+  currentUser,
+  navGroups,
+  onLogout,
+  pathname,
   roleMeta,
 }: {
+  currentUser: CurrentShellUser;
+  navGroups: PrimaryNavGroup[];
+  onLogout: () => void;
+  pathname: string;
   roleMeta: (typeof ROLE_META)[AccountRole];
 }) {
   return (
-    <div className="border-b border-(--border-subtle) px-5 py-5">
-      <Link href="/" className="group flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-(--primary-soft) text-(--primary) shadow-[var(--shadow-card)] transition-transform duration-200 group-hover:-translate-y-0.5">
-          <Baby className="h-6 w-6" aria-hidden="true" />
+    <aside className="pixel-sidebar fixed bottom-0 left-0 top-[80px] z-40 hidden w-[196px] flex-col border-r border-slate-200/80 bg-white/92 shadow-[12px_0_36px_rgb(15_23_42_/_0.05)] backdrop-blur-xl lg:flex">
+      <div className="flex-1 overflow-y-auto px-5 py-6">
+        <div className={cn("mb-6 rounded-2xl border px-4 py-3 text-xs font-semibold", roleMeta.accentClassName)}>
+          {roleMeta.description}
         </div>
-        <div className="min-w-0">
-          <p className="truncate text-base font-bold leading-tight text-(--text-primary)">普惠托育智慧平台</p>
-          <p className="mt-1 truncate text-xs text-(--text-tertiary)">托育机构运营管理后台</p>
-        </div>
-      </Link>
-      <div
-        className={cn(
-          "mt-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium",
-          roleMeta.accentClassName
-        )}
-      >
-        <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-        {roleMeta.description}
+        <SidebarNav pathname={pathname} navGroups={navGroups} />
       </div>
-    </div>
+      <div className="border-t border-slate-100 p-4">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-lg shadow-sm">
+              {currentUser.avatar}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-950">{currentUser.name}</p>
+              <p className="mt-0.5 truncate text-xs text-slate-500">{currentUser.className ?? currentUser.role}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="mt-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-indigo-50 hover:text-indigo-700"
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            退出登录
+          </button>
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -294,11 +412,11 @@ function SidebarNav({
   navGroups: PrimaryNavGroup[];
 }) {
   return (
-    <nav aria-label="主导航" className="flex-1 space-y-5 overflow-y-auto px-4 py-5">
+    <nav aria-label="主导航" className="space-y-5">
       {navGroups.map((group) => (
         <div key={group.key}>
-          <p className="px-3 text-xs font-semibold text-(--text-helper)">{group.label}</p>
-          <div className="mt-2 space-y-1">
+          <p className="px-2 text-xs font-semibold text-slate-400">{group.label}</p>
+          <div className="mt-2 space-y-1.5">
             {group.items.map((item) => (
               <SidebarNavLink key={`${item.href}-${item.label}`} item={item} pathname={pathname} />
             ))}
@@ -318,16 +436,16 @@ function SidebarNavLink({ item, pathname }: { item: PrimaryNavItem; pathname: st
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group relative flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+        "group flex min-h-12 items-center gap-2.5 rounded-2xl px-3 text-sm font-semibold transition-all",
         active
-          ? "bg-(--primary-soft) text-(--primary-soft-foreground) shadow-[inset_3px_0_0_var(--primary)]"
-          : "text-(--text-secondary) hover:bg-(--hover-surface) hover:text-(--text-primary)"
+          ? "bg-[linear-gradient(135deg,#6557ff,#7c3aed)] text-white shadow-[0_14px_30px_rgb(99_102_241_/_0.24)]"
+          : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
       )}
     >
       <span
         className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors",
-          active ? "bg-white text-(--primary)" : "bg-(--panel-subtle) text-(--text-tertiary) group-hover:text-(--primary)"
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors",
+          active ? "bg-white/18 text-white" : "bg-slate-100 text-slate-500 group-hover:bg-white group-hover:text-indigo-600"
         )}
       >
         <Icon className="h-4 w-4" aria-hidden="true" />
@@ -337,38 +455,117 @@ function SidebarNavLink({ item, pathname }: { item: PrimaryNavItem; pathname: st
   );
 }
 
-function SidebarUserCard({
-  currentUser,
-  roleMeta,
-  onLogout,
-}: {
-  currentUser: { avatar: string; name: string; role: AccountRole; className?: string };
-  roleMeta: (typeof ROLE_META)[AccountRole];
-  onLogout: () => void;
-}) {
+type MobileBottomTabItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  match: (pathname: string) => boolean;
+  highlight?: boolean;
+};
+
+function buildMobileBottomNavItems(role: RoleBadgeRole, childId = "c-1"): MobileBottomTabItem[] {
+  const childQuery = `child=${encodeURIComponent(childId)}`;
+
+  if (role === "parent") {
+    return [
+      { href: `/parent?${childQuery}`, label: "首页", icon: Home, match: (pathname) => pathname === "/parent" },
+      { href: `/parent/agent?${childQuery}`, label: "建议", icon: Sparkles, match: (pathname) => pathname.startsWith("/parent/agent"), highlight: true },
+      { href: `/parent/agent?${childQuery}#feedback`, label: "反馈", icon: MessageCircle, match: () => false },
+      { href: `/parent/storybook?${childQuery}`, label: "绘本", icon: BookHeart, match: (pathname) => pathname.startsWith("/parent/storybook") },
+      { href: `/parent?${childQuery}&care=1`, label: "关怀", icon: Baby, match: () => false },
+    ];
+  }
+
+  if (role === "teacher") {
+    return [
+      { href: "/teacher", label: "工作台", icon: House, match: (pathname) => pathname === "/teacher" || pathname === "/teacher/home" },
+      { href: "/health", label: "晨检", icon: ShieldCheck, match: (pathname) => pathname === "/health" },
+      { href: "/diet", label: "饮食", icon: Salad, match: (pathname) => pathname === "/diet" },
+      { href: "/growth", label: "成长", icon: BookHeart, match: (pathname) => pathname === "/growth" },
+      { href: "/teacher/agent", label: "AI", icon: Sparkles, match: (pathname) => pathname.startsWith("/teacher/agent"), highlight: true },
+    ];
+  }
+
+  return [
+    { href: "/admin", label: "首页", icon: House, match: (pathname) => pathname === "/admin" },
+    { href: "/admin/agent", label: "AI", icon: Sparkles, match: (pathname) => pathname.startsWith("/admin/agent"), highlight: true },
+    { href: "/admin/agent?action=weekly-report", label: "周报", icon: Monitor, match: (pathname) => pathname.startsWith("/admin/agent") },
+    { href: "/children", label: "儿童", icon: Users, match: (pathname) => pathname === "/children" },
+    { href: "/health", label: "健康", icon: ShieldCheck, match: (pathname) => pathname === "/health" },
+  ];
+}
+
+function MobileBottomTabBar({ items, pathname }: { items: MobileBottomTabItem[]; pathname: string }) {
   return (
-    <div className="border-t border-(--border-subtle) p-4">
-      <div className="rounded-lg border border-(--border) bg-(--panel-subtle) p-4 shadow-[var(--shadow-card)]">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-xl shadow-[var(--shadow-card)]">
-            <span aria-hidden="true">{currentUser.avatar}</span>
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <p className="truncate text-sm font-semibold text-(--text-primary)">{currentUser.name}</p>
-              <RoleBadge role={roleMeta.badgeRole} label={roleMeta.shellLabel} />
-            </div>
-            <p className="mt-1 truncate text-xs text-(--text-tertiary)">
-              {currentUser.className ?? currentUser.role}
-            </p>
-          </div>
-        </div>
-        <Button variant="outline" size="sm" onClick={onLogout} className="mt-4 w-full gap-2">
-          <LogOut className="h-4 w-4" aria-hidden="true" />
-          退出登录
-        </Button>
+    <nav
+      className="pixel-bottom-tabs fixed inset-x-3 bottom-3 z-40 rounded-[1.65rem] border border-white/85 bg-white/94 px-2 py-2 shadow-[0_18px_52px_rgb(15_23_42_/_0.18)] backdrop-blur-xl lg:hidden"
+      aria-label="移动端快捷导航"
+    >
+      <div className="grid grid-cols-5 gap-1">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const active = item.match(pathname);
+          return (
+            <Link
+              key={`${item.href}-${item.label}`}
+              href={item.href}
+              className={cn(
+                "flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-bold transition",
+                active
+                  ? "text-indigo-700"
+                  : item.highlight
+                    ? "text-indigo-600"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-2xl transition",
+                  item.highlight
+                    ? "bg-[linear-gradient(135deg,#6757ff,#8b5cf6)] text-white shadow-[0_10px_24px_rgb(99_102_241_/_0.26)]"
+                    : active
+                      ? "bg-indigo-50 text-indigo-700 shadow-sm"
+                      : "bg-slate-50 text-slate-500"
+                )}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span className="max-w-full truncate">{item.label}</span>
+            </Link>
+          );
+        })}
       </div>
-    </div>
+    </nav>
+  );
+}
+
+function ShellIconButton({ badge, children, label }: { badge?: string; children: ReactNode; label: string }) {
+  return (
+    <button
+      type="button"
+      className="relative hidden h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 sm:flex"
+      aria-label={label}
+    >
+      {children}
+      {badge ? (
+        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+          {badge}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function BrandMark({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#6656ff,#7c5cff_56%,#26c7bd)] text-white shadow-[0_14px_36px_rgb(99_102_241_/_0.25)]",
+        compact ? "h-11 w-11" : "h-12 w-12"
+      )}
+    >
+      <ShieldCheck className={compact ? "h-5 w-5" : "h-6 w-6"} aria-hidden="true" />
+    </span>
   );
 }
 

@@ -1,19 +1,18 @@
 "use client";
 
+import Image, { type StaticImageData } from "next/image";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowRight,
   Baby,
+  BarChart3,
   Building2,
-  ClipboardList,
-  Database,
+  CheckCircle2,
+  ChevronRight,
   Eye,
   EyeOff,
-  Fingerprint,
-  KeyRound,
+  FlaskConical,
   LockKeyhole,
-  RadioTower,
   ShieldCheck,
   Sparkles,
   TriangleAlert,
@@ -24,46 +23,62 @@ import { getDefaultLandingPath, type AccountRole } from "@/lib/auth/accounts";
 import { type Gender, useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
-import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
-import { RoleBadge, type RoleBadgeRole } from "@/components/ui/role-badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { StatusTag } from "@/components/ui/status-tag";
+import brandShield from "./assets/brand-shield.png";
+import demoAvatarAdmin from "./assets/demo-avatar-admin.png";
+import demoAvatarParentLin from "./assets/demo-avatar-parent-lin.png";
+import demoAvatarTeacherLi from "./assets/demo-avatar-teacher-li.png";
+import demoAvatarTeacherZhou from "./assets/demo-avatar-teacher-zhou.png";
+import heroIllustration from "./assets/hero-illustration.png";
+import loginLeftReplica from "./assets/login-left-replica.png";
+import styles from "./login-pixel.module.css";
 
 const PLATFORM_FEATURES = [
-  { title: "园所数字化", description: "记录与管理更清晰", icon: ClipboardList },
-  { title: "教师协作", description: "日常任务更顺畅", icon: UsersRound },
-  { title: "家长反馈", description: "沟通闭环更安心", icon: Baby },
-  { title: "数据安全", description: "权限与隐私可控", icon: ShieldCheck },
+  { title: "园所数字化", description: "全面记录与管理", icon: Sparkles },
+  { title: "教师高效协作", description: "工作流转更顺畅", icon: UsersRound },
+  { title: "家长便捷反馈", description: "沟通透明更安心", icon: ShieldCheck },
+  { title: "数据驱动决策", description: "科学分析有洞察", icon: BarChart3 },
 ];
 
-const SECURITY_METRICS = [
-  { label: "访问校验", value: "实时", icon: Fingerprint },
-  { label: "角色权限", value: "3 类", icon: KeyRound },
-  { label: "数据流转", value: "闭环", icon: RadioTower },
-  { label: "本地演示", value: "可追溯", icon: Database },
+const TRUST_ITEMS = [
+  { title: "数据安全保障", description: "多重备份与加密保护", icon: ShieldCheck },
+  { title: "权限精细管控", description: "角色权限分级管理", icon: Building2 },
+  { title: "合规运营可靠", description: "符合行业合规要求", icon: CheckCircle2 },
 ];
 
-function getRoleBadgeRole(role: AccountRole): RoleBadgeRole {
-  if (role === "教师") return "teacher";
-  if (role === "家长") return "parent";
-  return "director";
-}
+const DEMO_AVATAR_BY_ID: Record<string, StaticImageData> = {
+  "u-admin": demoAvatarAdmin,
+  "u-teacher": demoAvatarTeacherLi,
+  "u-teacher2": demoAvatarTeacherZhou,
+  "u-parent": demoAvatarParentLin,
+};
+
+const DEMO_DESCRIPTION_BY_ID: Record<string, string> = {
+  "u-admin": "园所管理者，全局掌控园所运营与数据",
+  "u-teacher": "记录儿童成长，协作完成日常教学任务",
+  "u-teacher2": "班级事务协同，课程完排与家园沟通",
+  "u-parent": "查看孩子成长，接收通知与反馈互动",
+};
 
 function getDemoRoleLabel(role: AccountRole) {
-  if (role === "教师") return "教师端";
-  if (role === "家长") return "家长端";
-  return "园长端";
+  if (role === "教师") return "教师";
+  if (role === "家长") return "家长";
+  return "园长";
+}
+
+function getDemoRoleTone(role: AccountRole) {
+  if (role === "教师") return styles.demoBadgeTeacher;
+  if (role === "家长") return styles.demoBadgeParent;
+  return "";
 }
 
 function PasswordToggleButton({
@@ -76,69 +91,20 @@ function PasswordToggleButton({
   disabled?: boolean;
 }) {
   return (
-    <IconButton
+    <button
       type="button"
-      variant="ghost"
-      label={visible ? "隐藏密码" : "显示密码"}
+      className={styles.passwordToggle}
+      aria-label={visible ? "隐藏密码" : "显示密码"}
       onClick={onToggle}
       disabled={disabled}
-      className="absolute right-1.5 top-1/2 h-9 w-9 -translate-y-1/2 rounded-md text-(--text-tertiary) hover:bg-(--primary-soft) hover:text-(--primary)"
     >
-      {visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-    </IconButton>
+      {visible ? <EyeOff aria-hidden="true" size={20} /> : <Eye aria-hidden="true" size={20} />}
+    </button>
   );
 }
 
-function LoginSecurityVisual() {
-  return (
-    <div className="relative min-h-[24rem] overflow-hidden rounded-[2rem] border border-white/80 bg-[radial-gradient(circle_at_24%_18%,rgb(221_214_254_/_0.86),transparent_34%),radial-gradient(circle_at_80%_22%,rgb(153_246_228_/_0.58),transparent_33%),linear-gradient(150deg,#ffffff_0%,#eff6ff_54%,#f5f3ff_100%)] p-5 shadow-[0_28px_76px_rgb(79_70_229_/_0.18)]">
-      <div className="absolute -right-14 -top-16 h-44 w-44 rounded-full bg-cyan-200/40 blur-2xl" />
-      <div className="absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-indigo-300/32 blur-2xl" />
-
-      <div className="relative flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-500">Secure access</p>
-          <p className="mt-2 text-2xl font-bold leading-tight text-slate-950">智慧托育身份中台</p>
-        </div>
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/84 text-indigo-600 shadow-[0_12px_30px_rgb(99_102_241_/_0.18)]">
-          <ShieldCheck className="h-6 w-6" aria-hidden="true" />
-        </div>
-      </div>
-
-      <div className="relative mx-auto mt-9 h-44 w-44">
-        <div className="absolute inset-0 rounded-[2rem] bg-[linear-gradient(145deg,#8b5cf6,#22d3ee)] shadow-[0_26px_60px_rgb(99_102_241_/_0.34)]" />
-        <div className="absolute inset-4 rounded-[1.55rem] bg-white/92 shadow-inner" />
-        <div className="absolute inset-11 rounded-full bg-[radial-gradient(circle,#eef2ff_0%,#ffffff_58%)] shadow-[inset_0_0_0_1px_rgb(99_102_241_/_0.12)]" />
-        <div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-indigo-600 text-white shadow-[0_18px_38px_rgb(79_70_229_/_0.36)]">
-          <Fingerprint className="h-8 w-8" aria-hidden="true" />
-        </div>
-        <span className="absolute -left-5 top-8 rounded-2xl border border-white/80 bg-white/92 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-sm">
-          园长端
-        </span>
-        <span className="absolute -right-6 top-20 rounded-2xl border border-white/80 bg-white/92 px-3 py-2 text-xs font-semibold text-sky-700 shadow-sm">
-          教师端
-        </span>
-        <span className="absolute bottom-2 left-8 rounded-2xl border border-white/80 bg-white/92 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-sm">
-          家长端
-        </span>
-      </div>
-
-      <div className="relative mt-8 grid grid-cols-2 gap-3">
-        {SECURITY_METRICS.map((item) => {
-          const Icon = item.icon;
-          return (
-            <div key={item.label} className="rounded-2xl border border-white/82 bg-white/78 p-3 shadow-sm backdrop-blur">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-slate-500">{item.label}</p>
-                <Icon className="h-4 w-4 text-indigo-500" aria-hidden="true" />
-              </div>
-              <p className="mt-1 text-lg font-bold text-slate-950">{item.value}</p>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+function startsOnMobileViewport() {
+  return typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches;
 }
 
 export default function LoginPage() {
@@ -146,12 +112,14 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const { demoAccounts, login, loginWithDemo, register, isAuthenticated, authLoading, currentUser } = useApp();
 
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState(() => (startsOnMobileViewport() ? "" : "demo-user"));
+  const [password, setPassword] = useState(() => (startsOnMobileViewport() ? "" : "sample-password"));
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(() => !startsOnMobileViewport());
   const [demoLoadingId, setDemoLoadingId] = useState<string | null>(null);
+  const [rememberLogin, setRememberLogin] = useState(true);
+  const [agreementAccepted, setAgreementAccepted] = useState(true);
 
   const [registerOpen, setRegisterOpen] = useState(false);
   const [registerMessage, setRegisterMessage] = useState("");
@@ -262,16 +230,17 @@ export default function LoginPage() {
       confirmPassword,
       role: registerRole,
       className: registerRole === "教师" ? teacherClassName.trim() || "新注册班" : undefined,
-      child: registerRole === "家长"
-        ? {
-            name: childName.trim(),
-            birthDate: childBirthDate,
-            gender: childGender,
-            heightCm: childHeightCm.trim() ? Number(childHeightCm) : undefined,
-            weightKg: childWeightKg.trim() ? Number(childWeightKg) : undefined,
-            guardianPhone: guardianPhone.trim() || undefined,
-          }
-        : undefined,
+      child:
+        registerRole === "家长"
+          ? {
+              name: childName.trim(),
+              birthDate: childBirthDate,
+              gender: childGender,
+              heightCm: childHeightCm.trim() ? Number(childHeightCm) : undefined,
+              weightKg: childWeightKg.trim() ? Number(childWeightKg) : undefined,
+              guardianPhone: guardianPhone.trim() || undefined,
+            }
+          : undefined,
     });
 
     setRegisterLoading(false);
@@ -286,217 +255,278 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-[100dvh] overflow-hidden bg-[linear-gradient(180deg,#F8FAFC_0%,#F4F7FF_52%,#F8FAFC_100%)] px-4 py-5 page-enter sm:px-6 lg:px-8 lg:py-8">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-60 bg-[radial-gradient(ellipse_at_top_left,rgb(99_102_241_/_0.14),transparent_48%),radial-gradient(ellipse_at_top_right,rgb(20_184_166_/_0.13),transparent_44%)]" />
+    <div className={styles.page}>
+      <main className={styles.shell}>
+        <section className={styles.leftColumn} aria-label="智慧托育平台介绍与示例账号入口">
+          <Image
+            src={loginLeftReplica}
+            alt=""
+            width={840}
+            height={1086}
+            className={styles.leftReplica}
+            priority
+            unoptimized
+          />
 
-      <div className="relative mx-auto grid max-w-7xl gap-5 lg:min-h-[calc(100dvh-4rem)] lg:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.78fr)]">
-        <section className="order-2 flex min-w-0 flex-col justify-between overflow-hidden rounded-[2rem] border border-white/76 bg-white/70 p-5 shadow-[0_22px_70px_rgb(79_70_229_/_0.12)] backdrop-blur-xl sm:p-7 lg:order-1 lg:p-8">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--primary),var(--support-teal))] text-white shadow-[0_12px_30px_rgb(99_102_241_/_0.24)]">
-                  <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-lg font-bold leading-tight text-(--text-primary)">智慧托育平台</p>
-                  <p className="mt-1 text-xs leading-5 text-(--text-tertiary)">普惠托育智慧管理平台</p>
-                </div>
+          <div className={styles.heroBlock}>
+            <div className={styles.brand}>
+              <Image
+                src={brandShield}
+                alt=""
+                width={52}
+                height={56}
+                className={styles.brandIcon}
+                priority
+                unoptimized
+              />
+              <div>
+                <p className={styles.brandTitle}>智慧托育平台</p>
+                <p className={styles.brandSub}>普惠托育管理平台</p>
               </div>
-              <StatusTag variant="info" showDot>
-                登录入口
-              </StatusTag>
             </div>
 
-            <div className="mt-8 grid gap-7 xl:grid-cols-[minmax(0,0.9fr)_minmax(320px,0.82fr)] xl:items-center">
-              <div className="min-w-0">
-                <h1 className="max-w-2xl text-3xl font-bold leading-tight tracking-normal text-(--text-primary) sm:text-4xl lg:text-[2.7rem]">
-                  让园所记录、教师协作与家长反馈更顺畅
-                </h1>
-                <p className="mt-4 max-w-xl text-sm leading-7 text-(--text-tertiary) sm:text-base">
-                  统一承载园长端、教师端和家长端入口，支持普通账号登录注册，也支持示例账号快速体验核心流程。
-                </p>
-
-                <div className="mt-7 grid gap-3 sm:grid-cols-2">
-                  {PLATFORM_FEATURES.map((feature) => {
-                    const Icon = feature.icon;
-                    return (
-                      <div key={feature.title} className="rounded-xl border border-(--border) bg-white/82 p-4 shadow-[var(--shadow-card)]">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-(--primary-soft) text-(--primary)">
-                            <Icon className="h-4 w-4" aria-hidden="true" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-(--text-primary)">{feature.title}</p>
-                            <p className="mt-1 text-xs leading-5 text-(--text-tertiary)">{feature.description}</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <LoginSecurityVisual />
+            <div className={styles.heroCopy}>
+              <h1 className={styles.heroTitle}>
+                让园所记录、教师协作
+                <br />
+                与家长反馈<span className={styles.accentText}>更顺畅</span>
+              </h1>
+              <p className={styles.heroLead}>支持园所数字化管理，教师高效协作，家长便捷反馈，全面提升托育服务质量与运营效率。</p>
             </div>
 
-            <div className="mt-8 rounded-2xl border border-(--border) bg-white/84 p-4 shadow-[var(--shadow-card)] sm:p-5">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div className={styles.heroImageFrame} aria-hidden="true">
+              <Image
+                src={heroIllustration}
+                alt=""
+                width={415}
+                height={380}
+                className={styles.heroImage}
+                priority
+                unoptimized
+                sizes="(max-width: 900px) 320px, 420px"
+              />
+            </div>
+            <span className={cn(styles.orb, styles.orbOne)} aria-hidden="true" />
+            <span className={cn(styles.orb, styles.orbTwo)} aria-hidden="true" />
+
+            <div className={styles.featureGrid}>
+              {PLATFORM_FEATURES.map((feature) => {
+                const Icon = feature.icon;
+                return (
+                  <div key={feature.title} className={styles.featureItem}>
+                    <div className={styles.featureIconBox}>
+                      <Icon aria-hidden="true" size={24} strokeWidth={2.3} />
+                    </div>
+                    <p className={styles.featureTitle}>{feature.title}</p>
+                    <p className={styles.featureDesc}>{feature.description}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <section className={styles.quickPanel} aria-label="示例账号快速进入">
+            <div className={styles.quickHeader}>
+              <div className={styles.quickTitleGroup}>
+                <div className={styles.quickIcon}>
+                  <FlaskConical aria-hidden="true" size={22} />
+                </div>
                 <div>
-                  <p className="flex items-center gap-2 text-sm font-semibold text-(--text-primary)">
-                    <Sparkles className="h-4 w-4 text-(--primary)" aria-hidden="true" />
-                    示例账号快速进入
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-(--text-tertiary)">无需输入密码，点击角色卡即可进入对应页面。</p>
+                  <h2 className={styles.quickTitle}>快速体验</h2>
+                  <p className={styles.quickSubtitle}>无需注册，点击即可进入对应角色体验核心功能。</p>
                 </div>
-                <StatusTag variant="neutral">体验数据不会影响真实账号</StatusTag>
               </div>
+              <span className={styles.quickNote}>体验数据不会影响真实账号</span>
+            </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {demoAccounts.map((account) => {
-                  const isLoading = demoLoadingId === account.id;
-                  const roleLabel = getDemoRoleLabel(account.role);
-                  return (
-                    <button
-                      key={account.id}
-                      type="button"
-                      onClick={() => handleDemoLogin(account.id, account.role)}
-                      disabled={demoLoadingId !== null}
-                      aria-busy={isLoading || undefined}
-                      className={cn(
-                        "group min-h-28 rounded-2xl border border-(--border) bg-white p-4 text-left shadow-[var(--shadow-card)] transition duration-200 hover:-translate-y-0.5 hover:border-(--primary) hover:shadow-[var(--shadow-card-hover)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60",
-                        isLoading && "border-(--primary) bg-(--primary-soft)"
-                      )}
-                    >
-                      <div className="flex h-full flex-col justify-between gap-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-(--panel-subtle) text-xl shadow-inner">
-                              {account.avatar}
-                            </span>
-                            <div className="min-w-0">
-                              <p className="truncate text-base font-semibold text-(--text-primary)">{account.name}</p>
-                              <p className="mt-1 text-xs text-(--text-tertiary)">{roleLabel}</p>
-                            </div>
-                          </div>
-                          <RoleBadge role={getRoleBadgeRole(account.role)} label={account.role} />
+            <div className={styles.demoGrid}>
+              {demoAccounts.map((account) => {
+                const isLoading = demoLoadingId === account.id;
+                const roleLabel = getDemoRoleLabel(account.role);
+                const avatarSrc = DEMO_AVATAR_BY_ID[account.id];
+                return (
+                  <button
+                    key={account.id}
+                    type="button"
+                    onClick={() => handleDemoLogin(account.id, account.role)}
+                    disabled={demoLoadingId !== null}
+                    aria-busy={isLoading || undefined}
+                    className={styles.demoCard}
+                  >
+                    <div>
+                      <div className={styles.demoTop}>
+                        <div className={styles.demoAvatar}>
+                          {avatarSrc ? (
+                            <Image src={avatarSrc} alt="" width={62} height={62} unoptimized />
+                          ) : (
+                            <span aria-hidden="true">{account.avatar}</span>
+                          )}
                         </div>
-                        <div className="flex items-end justify-between gap-3">
-                          <p className="line-clamp-2 text-xs leading-5 text-(--text-tertiary)">
-                            {account.description}
-                          </p>
-                          <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-(--primary)">
-                            {isLoading ? "进入中..." : "进入"}
-                            <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" aria-hidden="true" />
-                          </span>
+                        <div>
+                          <div className={styles.demoNameRow}>
+                            <p className={styles.demoName}>{account.name}</p>
+                            <span className={cn(styles.demoBadge, getDemoRoleTone(account.role))}>{roleLabel}</span>
+                          </div>
                         </div>
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
+                      <p className={styles.demoDescription}>{DEMO_DESCRIPTION_BY_ID[account.id] ?? account.description}</p>
+                    </div>
+                    <span className={styles.demoAction}>
+                      {isLoading ? "进入中..." : "进入体验"}
+                      <ChevronRight aria-hidden="true" size={16} />
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          </div>
+          </section>
 
-          <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-(--border-subtle) pt-4 text-xs text-(--text-helper)">
-            <span>建议使用 Chrome / Edge 浏览器</span>
-            <span>角色权限与登录后落点保持当前系统逻辑</span>
-          </div>
-        </section>
+          <section className={styles.mobileSignup} aria-label="机构账号注册入口">
+            <div className={styles.mobileSignupIcon}>
+              <Building2 aria-hidden="true" size={30} />
+            </div>
+            <div>
+              <h2 className={styles.mobileSignupTitle}>还没有机构账号？</h2>
+              <p className={styles.mobileSignupDesc}>适用于托育机构、幼儿园等组织用户</p>
+            </div>
+            <button type="button" className={styles.mobileRegisterButton} onClick={() => setRegisterOpen(true)}>
+              注册机构 / 申请开通
+              <ChevronRight aria-hidden="true" size={18} />
+            </button>
+          </section>
 
-        <section className="order-1 flex min-w-0 items-center justify-center lg:order-2">
-          <Card className="w-full max-w-[29rem] rounded-[1.75rem] border-white/80 bg-white/90 shadow-[0_26px_76px_rgb(15_23_42_/_0.16)] backdrop-blur-xl">
-            <CardHeader className="space-y-5 pb-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-(--primary-soft) text-(--primary)">
-                    <Baby className="h-6 w-6" aria-hidden="true" />
+          <div className={styles.trustFooter} aria-label="平台保障">
+            {TRUST_ITEMS.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.title} className={styles.trustItem}>
+                  <div className={styles.trustIcon}>
+                    <Icon aria-hidden="true" size={28} />
                   </div>
-                  <div className="min-w-0">
-                    <CardTitle className="text-2xl">账号登录</CardTitle>
-                    <CardDescription className="mt-1 leading-6">普通账号可注册登录，示例账号可免密码直接进入。</CardDescription>
+                  <div>
+                    <p className={styles.trustTitle}>{item.title}</p>
+                    <p className={styles.trustDesc}>{item.description}</p>
                   </div>
                 </div>
-                <StatusTag variant="success">安全连接</StatusTag>
+              );
+            })}
+          </div>
+          <p className={styles.copyright}>智慧托育平台 v2.0.0　｜　客服支持：400-888-2020（工作日 9:00-18:00）　｜　推荐使用 Chrome / Edge 浏览器</p>
+        </section>
+
+        <section className={styles.authWrap} aria-label="账号登录">
+          <div className={styles.authCard}>
+            <div className={styles.authHeader}>
+              <div className={styles.authIcon}>
+                <Baby aria-hidden="true" size={36} strokeWidth={2.2} />
               </div>
-              <div className="section-divider" />
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <FormField label="普通账号" htmlFor="username" required>
-                  <div className="relative">
-                    <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-(--text-helper)" aria-hidden="true" />
-                    <Input
-                      id="username"
-                      value={username}
-                      onChange={(event) => setUsername(event.target.value)}
-                      placeholder="请输入账号"
-                      autoComplete="username"
-                      className="h-11 rounded-lg bg-white pl-10"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                </FormField>
+              <div>
+                <h2 className={styles.authTitle}>
+                  <span className={styles.desktopTitleText}>登录与演示入口</span>
+                  <span className={styles.mobileTitleText}>账号登录</span>
+                </h2>
+                <p className={styles.authSubtitle}>普通账号可注册登录，示例账号可免密直接进入。</p>
+              </div>
+              <span className={styles.mobileSecurityPill}>
+                <ShieldCheck aria-hidden="true" size={13} />
+                数据安全 · 隐私保护
+              </span>
+            </div>
 
-                <FormField label="密码" htmlFor="password" required>
-                  <div className="relative">
-                    <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-(--text-helper)" aria-hidden="true" />
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder="请输入密码"
-                      autoComplete="current-password"
-                      required
-                      disabled={loading}
-                      className="h-11 rounded-lg bg-white pl-10 pr-12"
-                    />
-                    <PasswordToggleButton
-                      visible={showPassword}
-                      onToggle={() => setShowPassword((prev) => !prev)}
-                      disabled={loading}
-                    />
-                  </div>
-                </FormField>
+            <div className={styles.authDivider} />
 
-                {message ? (
-                  <div
-                    role="alert"
-                    aria-live="polite"
-                    className="flex items-start gap-2 rounded-lg border border-(--danger-border) bg-(--danger-soft) px-3 py-2.5 text-sm leading-6 text-(--danger-foreground)"
-                  >
-                    <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                    <span>{message}</span>
-                  </div>
-                ) : null}
+            <form onSubmit={handleSubmit}>
+              <p className={styles.formSectionTitle}>普通账号登录</p>
 
-                <div className="grid gap-3 pt-1">
-                  <Button type="submit" variant="primary" size="lg" className="w-full rounded-lg" loading={loading}>
-                    普通账号登录
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="w-full rounded-lg"
-                    onClick={() => setRegisterOpen(true)}
+              <div className={styles.formField}>
+                <label className={styles.fieldLabel} htmlFor="username">
+                  普通账号
+                </label>
+                <div className={styles.inputWrap}>
+                  <UserRound className={styles.inputIcon} aria-hidden="true" />
+                  <input
+                    id="username"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    placeholder="账号 / 手机号"
+                    autoComplete="username"
+                    className={styles.textInput}
+                    required
                     disabled={loading}
-                  >
-                    <Building2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                    注册账号
-                  </Button>
+                  />
                 </div>
-              </form>
-
-              <div className="rounded-xl border border-(--border-subtle) bg-(--panel-subtle) px-4 py-3">
-                <p className="text-xs font-medium text-(--text-secondary)">需要快速体验？</p>
-                <p className="mt-1 text-xs leading-5 text-(--text-tertiary)">下方示例账号入口会直达对应角色页面，且不展示任何密码。</p>
               </div>
-            </CardContent>
-          </Card>
+
+              <div className={styles.formField}>
+                <label className={styles.fieldLabel} htmlFor="password">
+                  密码
+                </label>
+                <div className={styles.inputWrap}>
+                  <LockKeyhole className={styles.inputIcon} aria-hidden="true" />
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="密码"
+                    autoComplete="current-password"
+                    required
+                    disabled={loading}
+                    className={styles.textInput}
+                  />
+                  <PasswordToggleButton
+                    visible={showPassword}
+                    onToggle={() => setShowPassword((prev) => !prev)}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              <div className={styles.formTools}>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={rememberLogin}
+                    onChange={(event) => setRememberLogin(event.target.checked)}
+                  />
+                  记住登录
+                </label>
+                <button type="button" className={styles.forgotButton}>
+                  忘记密码？
+                </button>
+              </div>
+
+              {message ? (
+                <div role="alert" aria-live="polite" className={styles.alert}>
+                  <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>{message}</span>
+                </div>
+              ) : null}
+
+              <button type="submit" className={styles.primaryButton} disabled={loading}>
+                {loading ? "登录中..." : "登录"}
+              </button>
+
+              <label className={cn(styles.checkboxLabel, styles.agreement)}>
+                <input
+                  type="checkbox"
+                  checked={agreementAccepted}
+                  onChange={(event) => setAgreementAccepted(event.target.checked)}
+                />
+                <span>
+                  我已阅读并同意 <a href="#">《用户服务协议》</a> 和 <a href="#">《隐私政策》</a>
+                </span>
+              </label>
+
+              <div className={styles.registerDivider}>还没有账号？</div>
+              <button type="button" className={styles.registerButton} onClick={() => setRegisterOpen(true)}>
+                <Building2 aria-hidden="true" size={22} />
+                注册机构 / 申请开通
+              </button>
+            </form>
+          </div>
         </section>
-      </div>
+      </main>
 
       <Dialog
         open={registerOpen}
@@ -505,23 +535,16 @@ export default function LoginPage() {
           if (!open) resetRegisterForm();
         }}
       >
-        <DialogContent className="max-w-[46rem] p-0">
-          <form onSubmit={handleRegisterSubmit}>
-            <DialogHeader className="border-b border-(--border-subtle) px-5 pb-4 pt-5 text-left sm:px-6">
-              <div className="flex items-start gap-3 pr-8">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-(--primary-soft) text-(--primary)">
-                  <Building2 className="h-5 w-5" aria-hidden="true" />
-                </div>
-                <div className="min-w-0">
-                  <DialogTitle>注册普通账号</DialogTitle>
-                  <DialogDescription className="mt-1">
-                    普通账号走独立数据流，注册后按角色进入系统并保存自己的数据。
-                  </DialogDescription>
-                </div>
-              </div>
+        <DialogContent className={styles.registerDialog}>
+          <form onSubmit={handleRegisterSubmit} className={styles.registerForm}>
+            <DialogHeader className={styles.registerHeader}>
+              <DialogTitle className={styles.registerTitle}>注册新机构</DialogTitle>
+              <DialogDescription className={styles.registerDescription}>
+                创建机构管理员账号，开启智慧托育之旅。
+              </DialogDescription>
             </DialogHeader>
 
-            <div className="grid max-h-[min(68dvh,34rem)] gap-4 overflow-y-auto px-5 py-5 md:grid-cols-2 sm:px-6">
+            <div className={styles.registerFields}>
               <FormField label="账号" htmlFor="register-username" required>
                 <Input
                   id="register-username"
@@ -529,7 +552,7 @@ export default function LoginPage() {
                   onChange={(event) => setRegisterUsername(event.target.value)}
                   placeholder="请输入用户名 / 账号"
                   autoComplete="username"
-                  className="h-11"
+                  className={styles.registerInput}
                   disabled={registerLoading}
                 />
               </FormField>
@@ -540,7 +563,7 @@ export default function LoginPage() {
                   onValueChange={(value) => setRegisterRole(value as AccountRole)}
                   disabled={registerLoading}
                 >
-                  <SelectTrigger id="register-role" className="h-11">
+                  <SelectTrigger id="register-role" className={styles.registerInput}>
                     <SelectValue placeholder="请选择角色" />
                   </SelectTrigger>
                   <SelectContent>
@@ -552,15 +575,15 @@ export default function LoginPage() {
               </FormField>
 
               <FormField label="密码" htmlFor="register-password" required>
-                <div className="relative">
+                <div className={styles.inputWrap}>
                   <Input
                     id="register-password"
                     type={showRegisterPassword ? "text" : "password"}
                     value={registerPassword}
                     onChange={(event) => setRegisterPassword(event.target.value)}
                     autoComplete="new-password"
-                    placeholder="请输入密码"
-                    className="h-11 pr-12"
+                    placeholder="请设置登录密码"
+                    className={cn(styles.registerInput, "pr-12")}
                     disabled={registerLoading}
                   />
                   <PasswordToggleButton
@@ -572,15 +595,15 @@ export default function LoginPage() {
               </FormField>
 
               <FormField label="确认密码" htmlFor="register-confirm-password" required>
-                <div className="relative">
+                <div className={styles.inputWrap}>
                   <Input
                     id="register-confirm-password"
                     type={showConfirmPassword ? "text" : "password"}
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     autoComplete="new-password"
-                    placeholder="请再次输入密码"
-                    className="h-11 pr-12"
+                    placeholder="请再次输入登录密码"
+                    className={cn(styles.registerInput, "pr-12")}
                     disabled={registerLoading}
                   />
                   <PasswordToggleButton
@@ -592,13 +615,13 @@ export default function LoginPage() {
               </FormField>
 
               {registerRole === "教师" ? (
-                <FormField label="班级名称" htmlFor="teacher-class-name" className="md:col-span-2">
+                <FormField label="班级名称" htmlFor="teacher-class-name" className={styles.registerFieldWide}>
                   <Input
                     id="teacher-class-name"
                     value={teacherClassName}
                     onChange={(event) => setTeacherClassName(event.target.value)}
                     placeholder="请输入教师所属班级"
-                    className="h-11"
+                    className={styles.registerInput}
                     disabled={registerLoading}
                   />
                 </FormField>
@@ -612,7 +635,7 @@ export default function LoginPage() {
                       value={childName}
                       onChange={(event) => setChildName(event.target.value)}
                       placeholder="请输入孩子姓名"
-                      className="h-11"
+                      className={styles.registerInput}
                       disabled={registerLoading}
                     />
                   </FormField>
@@ -623,7 +646,7 @@ export default function LoginPage() {
                       type="date"
                       value={childBirthDate}
                       onChange={(event) => setChildBirthDate(event.target.value)}
-                      className="h-11"
+                      className={styles.registerInput}
                       disabled={registerLoading}
                     />
                   </FormField>
@@ -634,7 +657,7 @@ export default function LoginPage() {
                       onValueChange={(value) => setChildGender(value as Gender)}
                       disabled={registerLoading}
                     >
-                      <SelectTrigger id="child-gender" className="h-11">
+                      <SelectTrigger id="child-gender" className={styles.registerInput}>
                         <SelectValue placeholder="请选择性别" />
                       </SelectTrigger>
                       <SelectContent>
@@ -650,7 +673,7 @@ export default function LoginPage() {
                       value={guardianPhone}
                       onChange={(event) => setGuardianPhone(event.target.value)}
                       placeholder="可选"
-                      className="h-11"
+                      className={styles.registerInput}
                       disabled={registerLoading}
                     />
                   </FormField>
@@ -663,7 +686,7 @@ export default function LoginPage() {
                       value={childHeightCm}
                       onChange={(event) => setChildHeightCm(event.target.value)}
                       placeholder="可选"
-                      className="h-11"
+                      className={styles.registerInput}
                       disabled={registerLoading}
                     />
                   </FormField>
@@ -677,7 +700,7 @@ export default function LoginPage() {
                       value={childWeightKg}
                       onChange={(event) => setChildWeightKg(event.target.value)}
                       placeholder="可选"
-                      className="h-11"
+                      className={styles.registerInput}
                       disabled={registerLoading}
                     />
                   </FormField>
@@ -685,35 +708,29 @@ export default function LoginPage() {
               ) : null}
             </div>
 
-            <div className="border-t border-(--border-subtle) px-5 py-4 sm:px-6">
-              {registerMessage ? (
-                <div
-                  role="alert"
-                  aria-live="polite"
-                  className="mb-4 flex items-start gap-2 rounded-lg border border-(--danger-border) bg-(--danger-soft) px-3 py-2.5 text-sm leading-6 text-(--danger-foreground)"
-                >
-                  <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span>{registerMessage}</span>
-                </div>
-              ) : null}
-
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={registerLoading}
-                  onClick={() => {
-                    setRegisterOpen(false);
-                    resetRegisterForm();
-                  }}
-                >
-                  取消
-                </Button>
-                <Button type="submit" variant="primary" loading={registerLoading}>
-                  注册并进入系统
-                </Button>
-              </DialogFooter>
+            <div className={styles.registerFooter}>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={registerLoading}
+                onClick={() => {
+                  setRegisterOpen(false);
+                  resetRegisterForm();
+                }}
+              >
+                返回登录
+              </Button>
+              <Button type="submit" variant="primary" loading={registerLoading}>
+                提交注册
+              </Button>
             </div>
+
+            {registerMessage ? (
+              <div role="alert" aria-live="polite" className={cn(styles.alert, "mx-6 mb-5")}>
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>{registerMessage}</span>
+              </div>
+            ) : null}
           </form>
         </DialogContent>
       </Dialog>

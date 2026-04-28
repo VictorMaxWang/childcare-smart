@@ -8,6 +8,15 @@
   --background: #f8fafc;
   --foreground: #0f172a;
   --app-background: #f8fafc;
+  --pixel-shell-background: #f5f8ff;
+  --pixel-shell-surface: #ffffff;
+  --pixel-shell-soft: #eef5ff;
+  --pixel-shell-line: #dfe7f5;
+  --pixel-shell-brand: #6255f6;
+  --pixel-shell-brand-2: #874cf6;
+  --pixel-shell-cyan: #21c6c1;
+  --pixel-shell-green: #22c55e;
+  --pixel-shell-amber: #f59e0b;
   --section: #f1f5f9;
   --panel: #ffffff;
   --panel-subtle: #f8fafc;
@@ -164,8 +173,7 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
-  background:
-    linear-gradient(180deg, rgb(248 250 252 / 0.98) 0%, rgb(246 249 255 / 0.98) 44%, rgb(248 250 252 / 1) 100%);
+  background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 46%, #f8fbff 100%);
   color: var(--foreground);
   font-family: var(--font-geist-sans);
   font-size: 14px;
@@ -236,7 +244,7 @@ body {
 
 .app-page {
   width: 100%;
-  max-width: 80rem;
+  max-width: 82rem;
   margin-inline: auto;
   padding: 1.5rem var(--space-page-x-mobile) 2rem;
 }
@@ -255,10 +263,111 @@ body {
 }
 
 .app-surface {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border: 1px solid rgb(223 231 245 / 0.95);
+  border-radius: 1.15rem;
   background: var(--panel);
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 16px 44px rgb(79 70 229 / 0.07);
+}
+
+.pixel-app-shell {
+  --pixel-page-gutter: clamp(1rem, 2.4vw, 2rem);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.98) 0%, rgb(245 249 255 / 0.98) 42%, rgb(250 252 255 / 1) 100%);
+}
+
+.pixel-app-main {
+  background:
+    linear-gradient(90deg, rgb(240 246 255 / 0.72) 0%, rgb(255 255 255 / 0.36) 28%, rgb(238 252 253 / 0.45) 100%),
+    linear-gradient(180deg, #f8fbff 0%, #f3f7ff 100%);
+}
+
+.pixel-topbar {
+  isolation: isolate;
+}
+
+.pixel-sidebar {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.96) 0%, rgb(250 252 255 / 0.96) 100%);
+}
+
+.pixel-shell-stage {
+  min-height: calc(100vh - 86px);
+}
+
+.pixel-app-shell .app-page {
+  max-width: min(100%, 88rem);
+  padding-inline: var(--pixel-page-gutter);
+  padding-top: clamp(1rem, 2vw, 1.75rem);
+}
+
+.pixel-app-shell[data-shell-mode="sidebar"] .app-page {
+  max-width: min(100%, 78rem);
+}
+
+.pixel-app-shell[data-shell-mode="top-tabs"] .app-page {
+  max-width: min(100%, 91rem);
+}
+
+.pixel-app-shell[data-shell-mode="mobile-app"] .app-page {
+  max-width: min(100%, 74rem);
+}
+
+.pixel-app-shell .app-page > :first-child:is(.rounded-xl, .rounded-lg) {
+  border-color: rgb(219 229 244 / 0.95);
+  border-radius: 1.6rem;
+  box-shadow: 0 18px 52px rgb(79 70 229 / 0.08);
+}
+
+.pixel-page-hero {
+  position: relative;
+}
+
+.pixel-page-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto 1.5rem 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(99 102 241 / 0.24), transparent);
+  pointer-events: none;
+}
+
+.pixel-content-frame {
+  min-width: 0;
+}
+
+.pixel-app-shell [class*="rounded-lg"][class*="border"],
+.pixel-app-shell [class*="rounded-xl"][class*="border"] {
+  border-color: rgb(223 231 245 / 0.95);
+}
+
+.pixel-app-shell [class*="shadow-\\[var\\(--shadow-card\\)\\]"] {
+  box-shadow: 0 12px 34px rgb(15 23 42 / 0.06);
+}
+
+@media (min-width: 1024px) {
+  .pixel-shell-stage {
+    min-height: calc(100vh - 80px);
+  }
+}
+
+@media (max-width: 1023px) {
+  .pixel-app-shell {
+    background: #f6f9ff;
+  }
+
+  .pixel-app-main {
+    background:
+      linear-gradient(180deg, #f9fbff 0%, #f1f6ff 42%, #f8fbff 100%);
+  }
+
+  .pixel-app-shell .app-page {
+    padding-inline: 1rem;
+    padding-top: 1.5rem;
+  }
+
+  .pixel-app-shell[data-role-shell="parent"] .app-page {
+    padding-inline: 0.875rem;
+  }
 }
 
 .app-table-scroll {

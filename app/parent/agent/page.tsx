@@ -982,16 +982,15 @@ export default function ParentAgentPage() {
   const parentAiParityHero = (
     <section className="overflow-hidden rounded-[2rem] border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f4f7ff_48%,#fff7ed_100%)] p-4 shadow-[0_24px_70px_rgb(99_102_241_/_0.14)] sm:p-5">
       <div className="relative overflow-hidden rounded-[1.6rem] bg-[linear-gradient(135deg,#f8fbff_0%,#f5f3ff_55%,#fff7ed_100%)] p-5">
-        <div className="absolute right-3 top-3 hidden h-32 w-44 rounded-[2rem] bg-white/70 shadow-inner sm:block">
-          <div className="absolute right-7 top-5 flex h-16 w-16 items-center justify-center rounded-full bg-[linear-gradient(135deg,#fbcfe8,#c4b5fd)] text-2xl shadow-lg">
-            妈
-          </div>
-          <div className="absolute bottom-5 right-24 flex h-12 w-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,#bae6fd,#a7f3d0)] text-xl shadow-lg">
-            {selectedFeed.child.name.slice(0, 1)}
-          </div>
-          <div className="absolute bottom-6 right-6 rounded-2xl bg-white px-3 py-2 text-xs font-semibold text-indigo-600 shadow-sm">
-            AI
-          </div>
+        <div className="absolute right-3 top-3 hidden h-36 w-52 overflow-hidden rounded-[2rem] bg-white/70 shadow-inner sm:block">
+          <Image
+            src="/pixel-replica/parent/parent-agent-robot.png"
+            alt=""
+            fill
+            unoptimized
+            className="object-contain object-right-top"
+            sizes="208px"
+          />
         </div>
         <div className="relative max-w-2xl">
           <div className="flex flex-wrap items-center gap-2">
@@ -1033,9 +1032,9 @@ export default function ParentAgentPage() {
             <div className="mt-4 divide-y divide-slate-100 rounded-2xl border border-slate-100 bg-white">
               {[
                 { icon: MoonStar, title: displayTonightTopAction, helper: displayWhyNow },
-                { icon: Sparkles, title: "亲子共读 15 分钟", helper: "用孩子熟悉的故事复述今天的开心事。" },
+                { icon: Sparkles, title: "亲子共读 10-15 分钟", helper: "睡前不看屏幕，用孩子熟悉的故事复述今天的开心事。" },
                 { icon: CheckCircle2, title: "给孩子积极反馈", helper: "及时肯定努力，帮助孩子形成稳定体验。" },
-              ].map((item) => {
+              ].map((item, index) => {
                 const Icon = item.icon;
                 return (
                   <div key={item.title} className="flex items-start gap-3 p-4">
@@ -1046,6 +1045,18 @@ export default function ParentAgentPage() {
                       <p className="font-semibold leading-6 text-slate-950">{item.title}</p>
                       <p className="mt-1 text-sm leading-6 text-slate-500">{item.helper}</p>
                     </div>
+                    {index === 1 ? (
+                      <span className="relative hidden h-16 w-28 shrink-0 overflow-hidden rounded-2xl bg-slate-50 sm:block">
+                        <Image
+                          src="/pixel-replica/parent/parent-agent-reading.png"
+                          alt=""
+                          fill
+                          unoptimized
+                          className="object-cover"
+                          sizes="112px"
+                        />
+                      </span>
+                    ) : null}
                     <span className="mt-1 h-5 w-5 rounded-full border-2 border-slate-300" />
                   </div>
                 );

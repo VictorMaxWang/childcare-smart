@@ -8,7 +8,12 @@ export type PrimaryNavIconKey =
   | "growth"
   | "diet"
   | "parent"
-  | "screen";
+  | "screen"
+  | "ai"
+  | "consultation"
+  | "file"
+  | "feedback"
+  | "storybook";
 
 export interface PrimaryNavItem {
   href: string;
@@ -24,6 +29,12 @@ export interface PrimaryNavGroup {
   items: PrimaryNavItem[];
 }
 
+export interface PrimaryNavOptions {
+  childId?: string;
+}
+
+const DEFAULT_PARENT_CHILD_ID = "c-1";
+
 const OVERVIEW_ITEM: PrimaryNavItem = { href: "/", label: "数据总览", icon: "overview" };
 const CHILDREN_ITEM: PrimaryNavItem = { href: "/children", label: "幼儿档案", icon: "children" };
 const HEALTH_ITEM: PrimaryNavItem = { href: "/health", label: "晨检与健康", icon: "health" };
@@ -36,41 +47,93 @@ const INSTITUTION_SCREEN_ITEM: PrimaryNavItem = {
   icon: "screen",
 };
 const ADMIN_HOME_ITEM: PrimaryNavItem = { href: "/admin", label: "园所首页", icon: "role-home" };
+const ADMIN_AGENT_ITEM: PrimaryNavItem = { href: "/admin/agent", label: "AI 助手", icon: "ai" };
+const ADMIN_WEEKLY_ITEM: PrimaryNavItem = {
+  href: "/admin/agent?action=weekly-report",
+  label: "周报分析",
+  icon: "screen",
+};
 const TEACHER_HOME_ITEM: PrimaryNavItem = {
   href: "/teacher",
   label: "教师工作台",
   icon: "role-home",
 };
-const PARENT_HOME_ITEM: PrimaryNavItem = {
-  href: "/parent",
-  label: "家长首页",
-  icon: "parent",
+const TEACHER_AGENT_ITEM: PrimaryNavItem = { href: "/teacher/agent", label: "AI 助手", icon: "ai" };
+const TEACHER_CONSULTATION_ITEM: PrimaryNavItem = {
+  href: "/teacher/high-risk-consultation",
+  label: "风险会诊",
+  icon: "consultation",
+};
+const TEACHER_HEALTH_FILE_ITEM: PrimaryNavItem = {
+  href: "/teacher/health-file-bridge",
+  label: "健康材料",
+  icon: "file",
 };
 
+function parentPath(path: string, childId = DEFAULT_PARENT_CHILD_ID) {
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}child=${encodeURIComponent(childId)}`;
+}
+
+function buildParentHomeItem(childId?: string): PrimaryNavItem {
+  return {
+    href: parentPath("/parent", childId),
+    label: "家长首页",
+    icon: "parent",
+  };
+}
+
+function buildParentAgentItem(childId?: string): PrimaryNavItem {
+  return {
+    href: parentPath("/parent/agent", childId),
+    label: "AI 建议",
+    icon: "ai",
+  };
+}
+
+function buildParentFeedbackItem(childId?: string): PrimaryNavItem {
+  return {
+    href: `${parentPath("/parent/agent", childId)}#feedback`,
+    label: "家园反馈",
+    icon: "feedback",
+  };
+}
+
+function buildParentStorybookItem(childId?: string): PrimaryNavItem {
+  return {
+    href: parentPath("/parent/storybook", childId),
+    label: "成长绘本",
+    icon: "storybook",
+  };
+}
+
 const ADMIN_NAV_ITEMS: PrimaryNavItem[] = [
-  OVERVIEW_ITEM,
   ADMIN_HOME_ITEM,
+  ADMIN_AGENT_ITEM,
+  ADMIN_WEEKLY_ITEM,
   CHILDREN_ITEM,
   HEALTH_ITEM,
   GROWTH_ITEM,
   DIET_ITEM,
   PARENT_ITEM,
   INSTITUTION_SCREEN_ITEM,
+  OVERVIEW_ITEM,
 ];
 
 const TEACHER_NAV_ITEMS: PrimaryNavItem[] = [
-  OVERVIEW_ITEM,
   TEACHER_HOME_ITEM,
+  TEACHER_AGENT_ITEM,
+  TEACHER_CONSULTATION_ITEM,
+  TEACHER_HEALTH_FILE_ITEM,
   CHILDREN_ITEM,
   HEALTH_ITEM,
   GROWTH_ITEM,
   DIET_ITEM,
   PARENT_ITEM,
+  OVERVIEW_ITEM,
 ];
 
-const PARENT_NAV_ITEMS: PrimaryNavItem[] = [PARENT_HOME_ITEM];
-
-export function getRoleStandaloneHomeItem(role: AccountRole): PrimaryNavItem | null {
+export function getRoleStandaloneHomeItem(role: AccountRole, options: PrimaryNavOptions = {}): PrimaryNavItem | null {
   const roleHomePath = getRoleHomePath(role);
 
   if (roleHomePath === "/admin") {
@@ -82,13 +145,13 @@ export function getRoleStandaloneHomeItem(role: AccountRole): PrimaryNavItem | n
   }
 
   if (roleHomePath === "/parent") {
-    return PARENT_HOME_ITEM;
+    return buildParentHomeItem(options.childId);
   }
 
   return null;
 }
 
-export function buildPrimaryNavItems(role: AccountRole): PrimaryNavItem[] {
+export function buildPrimaryNavItems(role: AccountRole, options: PrimaryNavOptions = {}): PrimaryNavItem[] {
   const roleHomePath = getRoleHomePath(role);
 
   if (roleHomePath === "/admin") {
@@ -99,11 +162,16 @@ export function buildPrimaryNavItems(role: AccountRole): PrimaryNavItem[] {
     return [...TEACHER_NAV_ITEMS];
   }
 
-  return [...PARENT_NAV_ITEMS];
+  return [
+    buildParentHomeItem(options.childId),
+    buildParentAgentItem(options.childId),
+    buildParentFeedbackItem(options.childId),
+    buildParentStorybookItem(options.childId),
+  ];
 }
 
-export function buildPrimaryNavGroups(role: AccountRole): PrimaryNavGroup[] {
-  const items = buildPrimaryNavItems(role);
+export function buildPrimaryNavGroups(role: AccountRole, options: PrimaryNavOptions = {}): PrimaryNavGroup[] {
+  const items = buildPrimaryNavItems(role, options);
   const groups: PrimaryNavGroup[] = [
     { key: "workspace", label: "工作台", items: [] },
     { key: "records", label: "业务记录", items: [] },
@@ -120,21 +188,40 @@ export function buildPrimaryNavGroups(role: AccountRole): PrimaryNavGroup[] {
 }
 
 export function isPrimaryNavItemActive(pathname: string, href: string) {
-  if (href === "/") {
-    return pathname === "/";
+  const normalizedPathname = stripUrlPath(pathname);
+  const normalizedHref = stripUrlPath(href);
+
+  if (normalizedHref === "/") {
+    return normalizedPathname === "/";
   }
 
-  return pathname === href || pathname.startsWith(`${href}/`);
+  return normalizedPathname === normalizedHref || normalizedPathname.startsWith(`${normalizedHref}/`);
 }
 
 function getPrimaryNavGroupKey(item: PrimaryNavItem): PrimaryNavGroupKey {
-  if (["/children", "/health", "/growth", "/diet"].includes(item.href)) {
+  const path = stripUrlPath(item.href);
+
+  if (["/children", "/health", "/growth", "/diet"].includes(path)) {
     return "records";
   }
 
-  if (item.label === "家长端" || item.label === "机构大屏") {
+  if (
+    item.label === "家长端" ||
+    item.label === "机构大屏" ||
+    path.startsWith("/parent") ||
+    path.includes("agent") ||
+    path.includes("consultation") ||
+    path.includes("health-file")
+  ) {
     return "collaboration";
   }
 
   return "workspace";
+}
+
+function stripUrlPath(value: string) {
+  const raw = value || "/";
+  const withoutHash = raw.split("#")[0] ?? raw;
+  const withoutQuery = withoutHash.split("?")[0] ?? withoutHash;
+  return withoutQuery || "/";
 }

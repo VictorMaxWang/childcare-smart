@@ -1175,7 +1175,6 @@ export default function StoryBookViewer({
   );
   const previewScenes = story?.scenes.slice(0, 3) ?? [];
   const firstPreviewScene = previewScenes[0];
-  const heroImageSrc = firstPreviewScene?.imageUrl || firstPreviewScene?.assetRef || "/storybook/card.svg";
   const storyStats = [
     { label: "故事记录", value: story ? `${story.scenes.length}` : `${pageCount}`, icon: BookOpenText },
     { label: "成长里程碑", value: story ? `${story.providerMeta.highlightCount}` : "7", icon: Sparkles },
@@ -1195,7 +1194,60 @@ export default function StoryBookViewer({
 
   return (
     <div className={cn("min-h-[100svh] px-4 py-4 sm:px-6 sm:py-6", theme.page)}>
-      <div className="mx-auto max-w-5xl space-y-4">
+      <div className="mx-auto flex max-w-[1320px] gap-6">
+        <aside className="sticky top-4 hidden h-[calc(100svh-2rem)] w-52 shrink-0 flex-col justify-between rounded-[28px] border border-slate-100 bg-white/86 p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] backdrop-blur xl:flex">
+          <div>
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-600 text-white">
+                <BookOpenText className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-lg font-black text-slate-950">智慧托育平台</p>
+                <p className="text-xs text-slate-500">家长端</p>
+              </div>
+            </div>
+            <nav className="mt-8 space-y-2 text-sm font-semibold text-slate-500">
+              {[
+                ["家园沟通", MessageCircle],
+                ["成长档案", CalendarDays],
+                ["成长绘本", BookOpenText],
+                ["健康管理", Sparkles],
+                ["营养餐谱", ImageIcon],
+                ["日常提醒", Radio],
+              ].map(([label, Icon]) => {
+                const IconComponent = Icon as typeof BookOpenText;
+                const active = label === "成长绘本";
+                return (
+                  <a
+                    key={label as string}
+                    href={active ? undefined : parentHref}
+                    className={cn(
+                      "flex items-center gap-3 rounded-2xl px-3 py-3 transition",
+                      active ? "bg-violet-50 text-violet-600" : "hover:bg-slate-50"
+                    )}
+                  >
+                    <IconComponent className="h-4 w-4" />
+                    {label as string}
+                  </a>
+                );
+              })}
+            </nav>
+          </div>
+          <div className="overflow-hidden rounded-[22px] bg-amber-50 p-4">
+            <p className="text-base font-black text-amber-700">成长小贴士</p>
+            <p className="mt-2 text-xs leading-5 text-amber-800">
+              记录点滴，见证成长。每一次进步，都值得被发现与珍藏。
+            </p>
+            <div className="relative mt-4 aspect-[4/3] overflow-hidden rounded-2xl bg-amber-100">
+              <StoryBookImage
+                src="/pixel-replica/parent/parent-storybook-family-card.png"
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            </div>
+          </div>
+        </aside>
+        <div className="min-w-0 flex-1 space-y-4">
         <div className="flex items-center justify-between gap-3">
           <Button
             asChild
@@ -1284,16 +1336,12 @@ export default function StoryBookViewer({
                   <p className="mt-2 text-sm leading-7 text-slate-600">
                     {firstPreviewScene?.sceneText ?? `${selectedChildName ?? "孩子"}和伙伴们一起观察小花和小昆虫，用放大镜发现了属于自己的秘密。`}
                   </p>
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    {[0, 1, 2].map((item) => (
-                      <div key={item} className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-slate-100">
-                        <StoryBookImage
-                          src={item === 0 ? heroImageSrc : "/storybook/card.svg"}
-                          alt="成长瞬间"
-                          className="absolute inset-0 h-full w-full object-cover"
-                        />
-                      </div>
-                    ))}
+                  <div className="relative mt-4 aspect-[455/147] overflow-hidden rounded-2xl bg-slate-100">
+                    <StoryBookImage
+                      src="/pixel-replica/parent/parent-storybook-main-photos.png"
+                      alt="成长瞬间"
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
                   </div>
                 </div>
               </div>
@@ -1680,6 +1728,7 @@ export default function StoryBookViewer({
             ) : null}
           </CardContent>
         </Card>
+        </div>
       </div>
     </div>
   );

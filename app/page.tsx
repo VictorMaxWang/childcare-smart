@@ -24,6 +24,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { getRoleHomePath } from "@/lib/auth/accounts";
 import type { WeeklyReportResponse, WeeklyReportSnapshot } from "@/lib/ai/types";
 import { getLocalToday, isDateWithinLastDays, shiftLocalDate } from "@/lib/date";
 import type { AdminBoardData } from "@/lib/store";
@@ -115,6 +116,12 @@ export default function RootOverviewPage() {
   useEffect(() => {
     if (!authLoading && isAuthenticated && currentUser.role === "家长") {
       router.replace("/parent");
+    }
+  }, [authLoading, currentUser.role, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && getRoleHomePath(currentUser.role) === "/admin") {
+      router.replace("/admin");
     }
   }, [authLoading, currentUser.role, isAuthenticated, router]);
 

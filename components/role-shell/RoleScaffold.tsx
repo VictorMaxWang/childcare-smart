@@ -31,7 +31,7 @@ export function RolePageShell({
   if (headerVariant === "hidden") {
     return (
       <div className={cn("app-page page-enter", className)}>
-        <div className={contentClassName}>{children}</div>
+        <div className={cn("pixel-content-frame", contentClassName)}>{children}</div>
       </div>
     );
   }
@@ -40,13 +40,13 @@ export function RolePageShell({
     <div className={cn("app-page page-enter", className)}>
       <div
         className={cn(
-          "rounded-xl border border-(--border) bg-linear-to-r from-white via-indigo-50/60 to-sky-50 shadow-[var(--shadow-card)] backdrop-blur-sm",
+          "pixel-page-hero overflow-hidden rounded-[1.55rem] border border-[#dfe7f5] bg-[linear-gradient(135deg,#ffffff_0%,#eef4ff_48%,#ecfeff_100%)] shadow-[0_18px_52px_rgb(79_70_229_/_0.09)] backdrop-blur-sm",
           headerVariant === "compact" ? "p-4 sm:p-5" : "p-5 sm:p-6"
         )}
       >
         <PageHeader
           eyebrow={
-            <Badge variant="info" className="px-3 py-1 text-xs">
+            <Badge variant="info" className="rounded-full border border-sky-100 bg-white/80 px-3 py-1 text-xs font-bold text-sky-700 shadow-sm">
               {badge}
             </Badge>
           }
@@ -55,7 +55,7 @@ export function RolePageShell({
           actions={actions}
         />
       </div>
-      <div className={cn("mt-6", contentClassName)}>{children}</div>
+      <div className={cn("pixel-content-frame mt-6", contentClassName)}>{children}</div>
     </div>
   );
 }
@@ -74,7 +74,7 @@ export function RoleSplitLayout({
   return (
     <div
       className={cn(
-        "grid gap-6",
+        "grid gap-5 lg:gap-6",
         stacked || !hasAside
           ? "grid-cols-1"
           : "lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]"
@@ -97,7 +97,7 @@ export function MetricGrid({
         <Card
           key={item.label}
           className={cn(
-            "min-h-31 overflow-hidden rounded-lg border-(--border) border-l-4 bg-white shadow-[var(--shadow-card)]",
+            "min-h-31 overflow-hidden rounded-2xl border-[#dfe7f5] border-l-4 bg-white/94 shadow-[0_14px_34px_rgb(15_23_42_/_0.06)]",
             toneClassMap[item.tone ?? "indigo"]
           )}
         >
@@ -125,7 +125,7 @@ export function SectionCard({
   className?: string;
 }) {
   return (
-    <Card className={cn("rounded-lg border-(--border) shadow-[var(--shadow-card)]", className)}>
+    <Card className={cn("rounded-2xl border-[#dfe7f5] bg-white/94 shadow-[0_14px_34px_rgb(15_23_42_/_0.06)]", className)}>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle className="text-lg text-(--text-primary)">{title}</CardTitle>

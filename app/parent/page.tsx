@@ -30,6 +30,11 @@ import {
 } from "@/components/parent/ParentReviewKit";
 import ParentSpeakButton from "@/components/parent/ParentSpeakButton";
 import ParentTransparencyPanel from "@/components/parent/ParentTransparencyPanel";
+import PixelParentHomeReplica, {
+  type ParentPixelGrowthImage,
+  type ParentPixelReminderItem,
+  type ParentPixelStatusItem,
+} from "@/components/parent/PixelParentHomeReplica";
 import WeeklyReportPreviewCard from "@/components/weekly-report/WeeklyReportPreviewCard";
 import {
   InlineLinkButton,
@@ -757,6 +762,104 @@ export default function ParentHomePage() {
             </div>
           }
           aside={null}
+        />
+      </RolePageShell>
+    );
+  }
+
+  const pixelStatusItems: ParentPixelStatusItem[] = [
+    {
+      id: "arrival",
+      label: "入园",
+      value: "08:26",
+      helper: "正常入园",
+      tone: "blue",
+    },
+    {
+      id: "temp",
+      label: "体温",
+      value: latestHealthCheck ? `${latestHealthCheck.temperature.toFixed(1)}°C` : "36.5°C",
+      helper: latestHealthCheck?.isAbnormal ? "需关注" : "正常",
+      tone: latestHealthCheck?.isAbnormal ? "orange" : "green",
+    },
+    {
+      id: "meal",
+      label: "饮食",
+      value: latestMeal ? `${latestMeal.nutritionScore}分` : "早餐+午餐",
+      helper: latestMeal?.allergyReaction ? "有过敏提示" : "进食良好",
+      tone: latestMeal?.allergyReaction ? "orange" : "orange",
+    },
+    {
+      id: "nap",
+      label: "午睡",
+      value: "12:40-14:30",
+      helper: "睡眠安稳",
+      tone: "violet",
+    },
+    {
+      id: "activity",
+      label: "活动",
+      value: "户外+益智",
+      helper: "积极参与",
+      tone: "sky",
+    },
+  ];
+  const pixelReminders: ParentPixelReminderItem[] = [
+    {
+      id: "teacher",
+      time: "10:15",
+      author: "林老师",
+      content: `${feed.child.name}今天天气餐吃得很棒，光盘了！`,
+      unread: true,
+    },
+    {
+      id: "care",
+      time: "09:20",
+      author: "保健老师",
+      content: "今日户外活动时间较长，注意补充水分哦～",
+    },
+  ];
+  const pixelGrowthImages: ParentPixelGrowthImage[] = viewModel.mediaGallery
+    .slice(0, 4)
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      src: item.thumbnailUrl,
+    }));
+
+  if (!careMode) {
+    return (
+      <RolePageShell
+        badge={`家长首页 · ${TODAY_TEXT}`}
+        title={`先看 ${viewModel.child.name} 今天的状态，再决定今晚怎么做`}
+        description="首页只保留今天最需要处理的信息：孩子状态、AI 提醒、今晚任务、反馈入口和移动端趋势。"
+        headerVariant="hidden"
+        className="max-w-[78rem]"
+      >
+        <PixelParentHomeReplica
+          todayText={TODAY_TEXT}
+          currentUserName={currentUser.name}
+          childName={viewModel.child.name}
+          childMeta={childMeta}
+          allergies={viewModel.child.allergies}
+          statusLabel={parentStatusLabel}
+          statusVariant={parentStatusVariant}
+          careMode={careMode}
+          onCareModeChange={setCareMode}
+          agentHref={agentHref}
+          storybookHref={storybookHref}
+          switchChildHref={`/parent?child=${feed.child.id}`}
+          reminderSpeechText={reminderSpeechText}
+          statusItems={pixelStatusItems}
+          reminders={pixelReminders}
+          aiTitle={previewResult?.title ?? viewModel.aiReminder.title}
+          aiDescription={previewResult?.whyNow ?? displayWhyRecommended}
+          tonightTitle={displayTonightTaskTitle}
+          tonightDescription={displayTonightTaskDescription}
+          whyRecommended={displayWhyRecommended}
+          teacherFocus={displayReviewIn48h}
+          growthImages={pixelGrowthImages}
+          hasPendingFeedback={hasPendingFeedback}
         />
       </RolePageShell>
     );
