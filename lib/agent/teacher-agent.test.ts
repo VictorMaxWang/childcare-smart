@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { AiFollowUpResponse, AiSuggestionResponse } from "@/lib/ai/types";
 import {
   buildTeacherAgentChildContext,
   buildTeacherAgentClassContext,
@@ -21,7 +22,7 @@ function createTeacherContexts(birthDate: string) {
       name: "Teacher A",
       className: "Sun Class",
       institutionId: "inst-1",
-      role: "teacher",
+      role: "教师",
     },
     visibleChildren: [
       {
@@ -56,7 +57,7 @@ function createTeacherContexts(birthDate: string) {
   return { classContext, childContext: childContext! };
 }
 
-const suggestion = {
+const suggestion: AiSuggestionResponse = {
   riskLevel: "medium",
   summary: "",
   highlights: [],
@@ -69,15 +70,15 @@ const suggestion = {
   },
   disclaimer: "本建议仅用于托育观察与家园沟通参考，不构成医疗诊断。",
   source: "fallback",
-} as const;
+};
 
-const communicationResponse = {
+const communicationResponse: AiFollowUpResponse = {
   answer: "",
   keyPoints: [],
   nextSteps: [],
   disclaimer: "本建议仅用于托育观察与家园沟通参考，不构成医疗诊断。",
   source: "fallback",
-} as const;
+};
 
 test("teacher-agent communication result reflects age-band guidance", () => {
   const infant = createTeacherContexts(birthDateMonthsAgo(10));

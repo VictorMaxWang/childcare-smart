@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { shouldEnableAdminConsultationFeed } from "./use-admin-workspace-loader";
 import { buildAdminConsultationWorkspaceView, getAdminConsultationFeedBadge } from "./use-admin-consultation-workspace";
-import { normalizeAdminNotificationSource } from "@/lib/db/notification-events";
+import { normalizeAdminNotificationSource } from "@/lib/db/notification-event-source";
 
 test("shouldEnableAdminConsultationFeed depends on visible children and not notification readiness", () => {
   assert.equal(

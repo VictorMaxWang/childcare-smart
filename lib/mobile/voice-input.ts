@@ -25,6 +25,7 @@ export function buildMockVoiceDraft(params: {
     draftType: "voice",
     targetRole: params.targetRole,
     content: transcript,
+    persistenceScope: "local",
     structuredPayload: {
       transcript,
       scenario: params.scenario,
@@ -146,6 +147,10 @@ export function buildVoiceDraftFromUpload(params: {
     targetRole: params.targetRole,
     content: params.result.upload.draftContent,
     attachmentName: params.result.upload.attachmentName,
+    persistenceScope:
+      params.result.upload.source === "mock" || params.result.upload.status === "mocked"
+        ? "local"
+        : "remote",
     structuredPayload,
   });
 }

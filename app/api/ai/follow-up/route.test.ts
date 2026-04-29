@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { AiFollowUpPayload } from "@/lib/ai/types";
+import type { AiFollowUpPayload, ChildSuggestionSnapshot } from "@/lib/ai/types";
 import { buildTasksFromFollowUpCardContext } from "@/lib/tasks/task-model";
 import { POST } from "./route.ts";
 
@@ -72,7 +72,6 @@ function buildPayload(): AiFollowUpPayload {
       },
       ruleFallback: [
         {
-          id: "rule-1",
           title: "Sleep support",
           description: "Keep the bedtime routine stable tonight.",
           level: "warning",
@@ -83,7 +82,11 @@ function buildPayload(): AiFollowUpPayload {
     question: "What should the parent do tonight?",
     latestFeedback: {
       feedbackId: "fb-structured-1",
+      id: "fb-structured-1",
       childId: "child-1",
+      date: "2026-04-10T20:00:00.000Z",
+      status: "partial",
+      content: "The child completed the first two steps.",
       sourceRole: "parent",
       sourceChannel: "manual",
       relatedTaskId: "task-parent-1",
@@ -101,7 +104,7 @@ function buildPayload(): AiFollowUpPayload {
         kind: "structured",
         workflow: "manual",
         createdBy: "Parent Chen",
-        createdByRole: "parent",
+        createdByRole: "家长",
       },
       fallback: {},
     },
@@ -169,15 +172,20 @@ test("follow-up route accepts structured latestFeedback and falls back locally w
 test("follow-up route reselects task-aware structured feedback from snapshot recentDetails", async () => {
   const originalFetch = globalThis.fetch;
   const payload = buildPayload();
+  const snapshot = payload.snapshot as ChildSuggestionSnapshot;
   const parentTaskId = buildTasksFromFollowUpCardContext({
-    childId: payload.snapshot.child.id,
+    childId: snapshot.child.id,
     currentInterventionCard: payload.currentInterventionCard!,
   }).parentTask.taskId;
   let memoryRequestBody: Record<string, unknown> | null = null;
 
   payload.latestFeedback = {
     feedbackId: "fb-unrelated",
+    id: "fb-unrelated",
     childId: "child-1",
+    date: "2026-04-12T08:00:00.000Z",
+    status: "completed",
+    content: "A different task went well.",
     sourceRole: "parent",
     sourceChannel: "manual",
     relatedTaskId: "task-unrelated",
@@ -195,14 +203,18 @@ test("follow-up route reselects task-aware structured feedback from snapshot rec
       kind: "structured",
       workflow: "manual",
       createdBy: "Parent Chen",
-      createdByRole: "parent",
+      createdByRole: "家长",
     },
     fallback: {},
   };
-  payload.snapshot.recentDetails.feedback = [
+  snapshot.recentDetails!.feedback = [
     {
       feedbackId: "fb-task-aware",
+      id: "fb-task-aware",
       childId: "child-1",
+      date: "2026-04-11T20:00:00.000Z",
+      status: "unable_to_execute",
+      content: "The family could not execute the task tonight.",
       sourceRole: "parent",
       sourceChannel: "manual",
       relatedTaskId: parentTaskId,
@@ -220,7 +232,7 @@ test("follow-up route reselects task-aware structured feedback from snapshot rec
         kind: "structured",
         workflow: "manual",
         createdBy: "Parent Chen",
-        createdByRole: "parent",
+        createdByRole: "家长",
       },
       fallback: {
         rawInterventionCardId: "card-1",

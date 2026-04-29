@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import type { AccountRole } from "@/lib/auth/accounts";
+import {
+  canRoleAccessPath,
+  getRequiredRoleForPath,
+  isAccountRole,
+  resolveUnauthorizedRedirectPath,
+  sanitizeNextPath,
+} from "@/lib/auth/route-access";
 import { getAuthSessionSecret } from "@/lib/auth/session-config";
 
 const SESSION_COOKIE = "ccs_session";
 const encoder = new TextEncoder();
+const decoder = new TextDecoder();
 
 function normalizeBase64Url(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -23,7 +32,7 @@ function bytesToBase64Url(bytes: Uint8Array) {
 
 function decodePayload<T>(value: string): T | null {
   try {
-    return JSON.parse(atob(normalizeBase64Url(value))) as T;
+    return JSON.parse(decoder.decode(base64UrlToBytes(value))) as T;
   } catch {
     return null;
   }
@@ -52,24 +61,53 @@ async function sign(payloadBase64: string) {
   return bytesToBase64Url(new Uint8Array(signature));
 }
 
-async function verifySessionToken(token?: string | null) {
-  if (!token) return false;
+async function verifySessionToken(token?: string | null): Promise<{ userId: string; role?: AccountRole } | null> {
+  if (!token) return null;
 
   const parts = token.split(".");
-  if (parts.length !== 2) return false;
+  if (parts.length !== 2) return null;
 
   const [encodedPayload, signature] = parts;
-  const payload = decodePayload<{ userId?: string; exp?: number }>(encodedPayload);
+  const payload = decodePayload<{ userId?: string; role?: unknown; exp?: number }>(encodedPayload);
   if (!payload?.userId || !payload.exp || payload.exp < Math.floor(Date.now() / 1000)) {
-    return false;
+    return null;
   }
 
   try {
     const expectedSignature = await sign(encodedPayload);
-    return equalBytes(base64UrlToBytes(signature), base64UrlToBytes(expectedSignature));
+    if (!equalBytes(base64UrlToBytes(signature), base64UrlToBytes(expectedSignature))) {
+      return null;
+    }
+
+    return {
+      userId: payload.userId,
+      role: isAccountRole(payload.role) ? payload.role : undefined,
+    };
   } catch {
-    return false;
+    return null;
   }
+}
+
+function clearSessionCookie(response: NextResponse) {
+  response.cookies.set(SESSION_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  });
+}
+
+function redirectToLogin(request: NextRequest, nextPath?: string | null) {
+  const loginUrl = new URL("/login", request.url);
+  const sanitizedNextPath = sanitizeNextPath(nextPath);
+  if (sanitizedNextPath) {
+    loginUrl.searchParams.set("next", sanitizedNextPath);
+  }
+
+  const response = NextResponse.redirect(loginUrl);
+  clearSessionCookie(response);
+  return response;
 }
 
 export async function proxy(request: NextRequest) {
@@ -86,19 +124,19 @@ export async function proxy(request: NextRequest) {
   }
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const isValidSession = await verifySessionToken(token);
-  if (!isValidSession) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", `${pathname}${search}`);
-    const response = NextResponse.redirect(loginUrl);
-    response.cookies.set(SESSION_COOKIE, "", {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 0,
-    });
-    return response;
+  const session = await verifySessionToken(token);
+  if (!session) {
+    return redirectToLogin(request, `${pathname}${search}`);
+  }
+
+  const requiredRole = getRequiredRoleForPath(pathname);
+  if (requiredRole && !session.role) {
+    return redirectToLogin(request, `${pathname}${search}`);
+  }
+
+  if (session.role && !canRoleAccessPath(session.role, pathname)) {
+    const redirectUrl = new URL(resolveUnauthorizedRedirectPath(session.role), request.url);
+    return NextResponse.redirect(redirectUrl);
   }
 
   return NextResponse.next();

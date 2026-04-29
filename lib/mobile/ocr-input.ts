@@ -15,6 +15,7 @@ export function buildMockOcrDraft(params: {
     targetRole: params.targetRole,
     content,
     attachmentName: params.attachmentName ?? "mock-note.jpg",
+    persistenceScope: "local",
     structuredPayload: {
       source: "mock-ocr",
       extractedText: content,

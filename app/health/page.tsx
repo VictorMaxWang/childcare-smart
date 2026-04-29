@@ -42,6 +42,9 @@ const TEMPLATE_REMARKS = {
   LOW_FEVER: "低烧，已通知家长"
 };
 
+const TEMPERATURE_MIN = 34;
+const TEMPERATURE_MAX = 42;
+
 export default function HealthPage() {
   const { presentChildren, healthCheckRecords, upsertHealthCheck, currentUser, visibleChildren } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
@@ -50,6 +53,7 @@ export default function HealthPage() {
   // Dialog State
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [temperature, setTemperature] = useState<string>("36.5");
+  const [temperatureError, setTemperatureError] = useState("");
   const [mood, setMood] = useState<string>(HEALTH_MOOD_OPTIONS[0].label);
   const [handMouthEye, setHandMouthEye] = useState<"正常" | "异常">("正常");
   const [remark, setRemark] = useState("");
@@ -157,6 +161,7 @@ export default function HealthPage() {
   const handleOpenDialog = (childId: string) => {
     const child = childData.find(c => c.id === childId);
     if (!child) return;
+    setTemperatureError("");
     
     if (child.health) {
       setTemperature(String(child.health.temperature));
@@ -177,7 +182,27 @@ export default function HealthPage() {
   const handleSaveHealthCheck = () => {
     if (!selectedChildId) return;
     
-    const tempNum = parseFloat(temperature);
+    const trimmedTemperature = temperature.trim();
+    const tempNum = Number(trimmedTemperature);
+    if (!trimmedTemperature || !Number.isFinite(tempNum)) {
+      const message = "请填写有效体温。";
+      setTemperatureError(message);
+      toast.warning("晨检记录未保存", {
+        description: message,
+      });
+      return;
+    }
+
+    if (tempNum < TEMPERATURE_MIN || tempNum > TEMPERATURE_MAX) {
+      const message = `体温需在 ${TEMPERATURE_MIN.toFixed(1)}-${TEMPERATURE_MAX.toFixed(1)}°C 之间。`;
+      setTemperatureError(message);
+      toast.warning("晨检记录未保存", {
+        description: message,
+      });
+      return;
+    }
+
+    setTemperatureError("");
     const isTempAbnormal = tempNum >= TEMPERATURE_THRESHOLD;
     const isAbnormal = isTempAbnormal || handMouthEye === "异常" || mood.includes("哭闹");
 
@@ -222,6 +247,9 @@ export default function HealthPage() {
   }
 
   const isTeacher = currentUser.role === "教师";
+  const previewTemperature = temperature.trim() ? Number(temperature) : NaN;
+  const isPreviewTemperatureAbnormal =
+    Number.isFinite(previewTemperature) && previewTemperature >= TEMPERATURE_THRESHOLD;
 
   return (
     <div className="app-page max-w-[86rem] page-enter">
@@ -470,7 +498,7 @@ export default function HealthPage() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <ChartCard title="一周体温趋势" description="对比平均体温和异常人数，红线为发热预警阈值。" minHeight="20rem">
-            <div className="h-65 w-full">
+            <div className="h-[16.25rem] min-h-[16.25rem] w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={weeklyTemperatureData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -731,16 +759,22 @@ export default function HealthPage() {
             <FormField
               label="体温 (°C)"
               htmlFor="temperature"
-              error={parseFloat(temperature) >= TEMPERATURE_THRESHOLD ? `发热预警 (≥${TEMPERATURE_THRESHOLD}°C)` : undefined}
+              required
+              error={temperatureError || (isPreviewTemperatureAbnormal ? `发热预警 (≥${TEMPERATURE_THRESHOLD}°C)` : undefined)}
             >
                 <Input
                   id="temperature"
                   type="number"
                   step="0.1"
                   value={temperature}
-                  onChange={(e) => setTemperature(e.target.value)}
-                  aria-invalid={parseFloat(temperature) >= TEMPERATURE_THRESHOLD}
-                  className={parseFloat(temperature) >= TEMPERATURE_THRESHOLD ? "text-red-600" : ""}
+                  min={TEMPERATURE_MIN}
+                  max={TEMPERATURE_MAX}
+                  onChange={(e) => {
+                    setTemperature(e.target.value);
+                    if (temperatureError) setTemperatureError("");
+                  }}
+                  aria-invalid={Boolean(temperatureError) || isPreviewTemperatureAbnormal}
+                  className={temperatureError || isPreviewTemperatureAbnormal ? "text-red-600" : ""}
                 />
             </FormField>
             

@@ -98,10 +98,6 @@ export function scopeSnapshotForSessionUser(
   snapshot: AppStateSnapshot,
   user: Pick<SessionUser, "role" | "id" | "institutionId" | "className" | "childIds">
 ) {
-  if (!isParentSessionUser(user)) {
-    return snapshot;
-  }
-
   const authorizedChildIds = resolveAuthorizedChildIdSet(user, snapshot.children);
 
   return {
@@ -131,12 +127,13 @@ export function mergeScopedSnapshotForSessionUser(params: {
   user: Pick<SessionUser, "role" | "id" | "institutionId" | "className" | "childIds">;
 }) {
   const { currentSnapshot, incomingSnapshot, user } = params;
-  if (!isParentSessionUser(user)) {
-    return incomingSnapshot;
+  const scopedIncomingSnapshot = scopeSnapshotForSessionUser(incomingSnapshot, user);
+
+  if (user.role === ROLE_ADMIN) {
+    return scopedIncomingSnapshot;
   }
 
   const authorizedChildIds = resolveAuthorizedChildIdSet(user, currentSnapshot.children);
-  const scopedIncomingSnapshot = scopeSnapshotForSessionUser(incomingSnapshot, user);
 
   return {
     ...currentSnapshot,

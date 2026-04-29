@@ -24,6 +24,7 @@ export type ConsultationParticipantId =
 export type ConsultationResultSource = "ai" | "fallback" | "mock" | "rule" | "vivo";
 export type MobileDraftType = "voice" | "ocr" | "feedback" | "observation";
 export type MobileDraftSyncStatus = "local_pending" | "synced" | "failed";
+export type MobileDraftPersistenceScope = "remote" | "local";
 export type ReminderType =
   | "family-task"
   | "review-48h"
@@ -268,6 +269,7 @@ export interface MobileDraft {
   targetRole: "teacher" | "parent" | "admin";
   content: string;
   structuredPayload?: Record<string, unknown>;
+  persistenceScope?: MobileDraftPersistenceScope;
   syncStatus: MobileDraftSyncStatus;
   attachmentName?: string;
   createdAt: string;

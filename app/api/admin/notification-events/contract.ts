@@ -8,6 +8,7 @@ export const ADMIN_NOTIFICATION_EVENTS_AUTH_UNAVAILABLE_REASON_CODE =
 
 interface AdminNotificationEventsUnavailableBody {
   available: false;
+  items: [];
   reasonCode: string;
   message: string;
   error: string;
@@ -16,10 +17,11 @@ interface AdminNotificationEventsUnavailableBody {
 export function buildUnavailableResponse(message: string, reasonCode: string) {
   const body: AdminNotificationEventsUnavailableBody = {
     available: false,
+    items: [],
     reasonCode,
     message,
     error: message,
   };
 
-  return NextResponse.json(body, { status: 503 });
+  return NextResponse.json(body, { status: 200 });
 }

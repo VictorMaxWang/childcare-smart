@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { ParentMessageReflexionResponse } from "@/lib/ai/types";
+import type { ParentAgentResult } from "./parent-agent.ts";
 import { mergeParentMessageReflexionResult } from "./parent-message-reflexion.ts";
 
 function buildBaseResult() {
@@ -46,11 +48,13 @@ function buildBaseResult() {
     source: "mock",
     model: "baseline-model",
     generatedAt: "2026-04-05T10:00:00.000Z",
-  };
+  } as ParentAgentResult;
 }
 
-function buildResponse(overrides = {}) {
-  return {
+function buildResponse(
+  overrides: Partial<ParentMessageReflexionResponse> = {}
+): ParentMessageReflexionResponse {
+  const base: ParentMessageReflexionResponse = {
     finalOutput: {
       title: "更新后的标题",
       summary: "更新后的摘要",
@@ -95,8 +99,8 @@ function buildResponse(overrides = {}) {
     continuityNotes: ["连续性提示 A"],
     memoryMeta: { backend: "memory" },
     debugIterations: [],
-    ...overrides,
   };
+  return { ...base, ...overrides };
 }
 
 test("mergeParentMessageReflexionResult merges refined finalOutput into ParentAgentResult and InterventionCard", () => {
@@ -120,8 +124,9 @@ test("mergeParentMessageReflexionResult merges refined finalOutput into ParentAg
   assert.equal(result.interventionCard.parentMessageDraft, "今晚先抱一抱再说，再观察孩子情绪变化。");
   assert.equal(result.interventionCard.teacherFollowupDraft, "原始老师跟进话术");
 
-  assert.match(result.assistantAnswer, /Tonight's top action: 今晚先抱一抱再说/);
-  assert.match(result.assistantAnswer, /Follow-up window: 明早入园前反馈/);
+  assert.ok(result.assistantAnswer.includes(`今晚先做这一步：${result.tonightTopAction}`));
+  assert.ok(result.assistantAnswer.includes(`接下来重点观察：${result.interventionCard.reviewIn48h}`));
+  assert.ok(result.assistantAnswer.includes("大约需要：5-10 分钟"));
   assert.deepEqual(result.parentMessageMeta, {
     revisionCount: 1,
     score: 8.6,
@@ -191,8 +196,8 @@ test("mergeParentMessageReflexionResult falls back to base fields when finalOutp
   assert.equal(result.interventionCard.reviewIn48h, "48 小时内复盘");
   assert.equal(result.interventionCard.parentMessageDraft, "原始家长话术");
   assert.match(result.assistantAnswer, /原始家长话术/);
-  assert.match(result.assistantAnswer, /Follow-up window: 48 小时内复盘/);
-  assert.match(result.assistantAnswer, /Estimated time:\s*$/m);
+  assert.ok(result.assistantAnswer.includes(`接下来重点观察：${result.interventionCard.reviewIn48h}`));
+  assert.equal(result.assistantAnswer.includes("大约需要："), false);
   assert.deepEqual(result.parentMessageMeta, {
     revisionCount: 0,
     score: 7.2,
@@ -225,7 +230,7 @@ test("mergeParentMessageReflexionResult preserves warnings/meta and non-sendable
     model: "Volc-DeepSeek-V3.2",
     continuityNotes: ["提示 A"],
     memoryMeta: { backend: "memory", degraded: false },
-    debugIterations: [{ iteration: 1 }],
+    debugIterations: [],
   });
 
   const result = mergeParentMessageReflexionResult({

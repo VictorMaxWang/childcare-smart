@@ -53,3 +53,19 @@ Updated: 2026-04-29
   - Added duplicate ledger entries `BUG-B26-001`, `BUG-B26-002`, and `BUG-B26-003`.
   - `npm run lint`: passed.
   - `npm run build`: passed.
+
+## F99 Final Regression
+
+- Ran final command gate on 2026-04-29:
+  - `npm run lint`: passed.
+  - `npm run build`: passed.
+  - `npx tsc --noEmit`: passed.
+  - `npm run test:parent-message-mapper`: passed.
+  - `BUGBASH_BASE_URL=http://127.0.0.1:3000 npm run bugbash:smoke`: passed.
+- Attempted Browser Use in-app browser automation; local node_repl failed because system Node is v22.20.0 and Browser Use requires >=22.22.0.
+- Used Playwright Chromium fallback for real browser regression; `artifacts/bug-bash/F99/f99-browser-regression.json` records 136 checks, 0 failures, 0 same-origin 5xx/image 404, and 0 browser console errors.
+- Applied F99 small fixes:
+  - Cloned the parent suggestions request before JSON parsing so local/brain fallback cannot fail on a consumed body.
+  - Made teacher high-priority/mobile alert list keys unique across repeated child items.
+  - Isolated explicit parent storybook `demoSeed` requests locally regardless of the visual demo-seed feature flag.
+- Generated `docs/bug-bash/FINAL_BUG_BASH_REPORT.md`.

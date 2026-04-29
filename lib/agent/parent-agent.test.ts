@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { AiSuggestionResponse } from "@/lib/ai/types";
 import {
   buildParentAgentChildContext,
   buildParentAgentSuggestionResult,
@@ -43,11 +44,12 @@ function createParentContext(birthDate: string) {
       monotonyDays: 1,
       vegetableDays: 4,
       proteinDays: 4,
+      stapleDays: 5,
     },
   });
 }
 
-const suggestion = {
+const suggestion: AiSuggestionResponse = {
   riskLevel: "medium",
   summary: "建议继续做一轮轻量家园协同。",
   highlights: [],
@@ -60,7 +62,7 @@ const suggestion = {
   },
   disclaimer: "本建议仅用于托育观察与家园沟通参考，不构成医疗诊断。",
   source: "fallback",
-} as const;
+};
 
 test("parent-agent carries ageBandContext into snapshot and main suggestion output", () => {
   const infantContext = createParentContext(birthDateMonthsAgo(10));

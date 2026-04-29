@@ -1,0 +1,66 @@
+{
+  "thread": "F30",
+  "assignedBugIds": [
+    "BUG-B12-001",
+    "BUG-B21-002",
+    "BUG-B21-005",
+    "BUG-B22-002",
+    "BUG-B22-005",
+    "BUG-B22-006",
+    "BUG-B22-007",
+    "BUG-B25-001"
+  ],
+  "fixedBugIds": [
+    "BUG-B12-001",
+    "BUG-B21-002",
+    "BUG-B21-005",
+    "BUG-B22-002",
+    "BUG-B22-005",
+    "BUG-B22-006",
+    "BUG-B22-007",
+    "BUG-B25-001"
+  ],
+  "unfixedBugIds": [],
+  "summary": "教师工作台、教师 AI/家园沟通、健康材料解析和高风险会诊已移除误导性 mock/空状态覆盖；mock draft 仅本地保存并从远端状态同步中过滤。",
+  "verification": {
+    "lint": {
+      "command": "npm run lint",
+      "status": "passed"
+    },
+    "build": {
+      "command": "npm run build",
+      "status": "failed_external",
+      "notes": "首次构建失败于非 F30 范围 app/api/ai/follow-up/route.ts:110 的 ChildSuggestionSnapshot | InstitutionSuggestionSnapshot union narrowing；复跑时被现有 .next/lock 阻塞。"
+    },
+    "playwright": {
+      "status": "passed",
+      "baseUrl": "http://127.0.0.1:3000",
+      "results": [
+        "李老师 /teacher 加载成功，晨检待办可导航到 /health",
+        "周老师 /teacher 加载成功，晨检待办可导航到 /health",
+        "mock draft 显示仅本地演示，捕获到的 /api/state PUT 中没有 mock 内容",
+        "家园沟通 tab/filter 可用，硬编码张阳消息已移除",
+        "健康材料解析无文件阻止提交，上传后显示解析/兜底结果",
+        "高风险会诊筛选/讨论可用，双击生成最多触发一次 stream 请求"
+      ]
+    }
+  },
+  "changedFiles": [
+    "app/teacher/agent/page.tsx",
+    "app/teacher/health-file-bridge/page.tsx",
+    "app/teacher/high-risk-consultation/page.tsx",
+    "components/teacher/TeacherPixelReplicaPrimitives.tsx",
+    "components/teacher/TeacherWorkbenchPage.tsx",
+    "lib/ai/types.ts",
+    "lib/mobile/local-draft-cache.ts",
+    "lib/mobile/ocr-input.ts",
+    "lib/mobile/teacher-draft-records.ts",
+    "lib/mobile/voice-input.ts",
+    "lib/store.tsx"
+  ],
+  "resultFiles": [
+    "docs/bug-bash/fix-results/F30-result.md",
+    "docs/bug-bash/fix-results/F30-result.json"
+  ],
+  "bugsJsonModified": false
+}

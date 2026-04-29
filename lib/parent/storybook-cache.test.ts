@@ -8,7 +8,7 @@ import {
 } from "./storybook-cache.ts";
 
 function buildStory(
-  overrides: Partial<ParentStoryBookResponse> & {
+  overrides: Omit<Partial<ParentStoryBookResponse>, "providerMeta" | "scenes"> & {
     providerMeta?: Record<string, unknown>;
     scenes?: Array<Record<string, unknown>>;
   } = {}
@@ -37,6 +37,18 @@ function buildStory(
       audioDelivery: "real",
       diagnostics: {
         brain: { reachable: true, fallbackReason: null, upstreamHost: "api.example.com" },
+        image: {
+          requestedProvider: "storybook-asset",
+          resolvedProvider: "storybook-asset",
+          liveEnabled: false,
+          missingConfig: [],
+        },
+        audio: {
+          requestedProvider: "storybook-mock-preview",
+          resolvedProvider: "storybook-mock-preview",
+          liveEnabled: false,
+          missingConfig: [],
+        },
       },
       ...overrides.providerMeta,
     },
@@ -60,7 +72,7 @@ function buildStory(
       ...(overrides.scenes ?? []),
     ],
     ...overrides,
-  } as ParentStoryBookResponse;
+  } as unknown as ParentStoryBookResponse;
 }
 
 test("storybook cache bypasses stale demo or preview-only results on first load", () => {

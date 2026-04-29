@@ -1,0 +1,132 @@
+{
+  "threadId": "F10",
+  "generatedAt": "2026-04-29T02:58:00.000Z",
+  "bugIds": [],
+  "statusByBugId": {},
+  "changedFiles": {
+    "added": [
+      "docs/bug-bash/fix-results/F10-result.md",
+      "docs/bug-bash/fix-results/F10-result.json"
+    ],
+    "modified": []
+  },
+  "checksRun": [
+    {
+      "name": "F10 Playwright login regression",
+      "command": "inline Playwright Chromium script against http://127.0.0.1:3000",
+      "status": "passed",
+      "summary": {
+        "desktopLogin": "passed at 1440x900",
+        "mobileLogin": "passed at 390x844",
+        "registerDialog": "passed on desktop and mobile",
+        "passwordVisibility": "passed",
+        "normalLoginFailureFeedback": "passed; visible alert shown",
+        "demoAccounts": {
+          "u-admin": "/admin",
+          "u-teacher": "/teacher",
+          "u-teacher2": "/teacher",
+          "u-parent": "/parent"
+        }
+      }
+    },
+    {
+      "name": "npm run lint",
+      "status": "passed"
+    },
+    {
+      "name": "npm run build",
+      "status": "passed"
+    },
+    {
+      "name": "npm run bugbash:smoke",
+      "command": "$env:BUGBASH_BASE_URL='http://127.0.0.1:3000'; npm run bugbash:smoke",
+      "status": "failed-non-f10-residuals",
+      "summary": {
+        "issueCount": 30,
+        "byKind": {
+          "server-error": 15,
+          "console-error": 15
+        },
+        "duplicateOrKnownResidualCounts": {
+          "BUG-001": 8,
+          "BUG-002": 5,
+          "BUG-003": 2,
+          "notDuplicateTaggedConsoleErrors": 15
+        },
+        "loginMobileCheck": {
+          "ok": true,
+          "scrollWidth": 390,
+          "clientWidth": 390
+        },
+        "artifact": "artifacts/bug-bash/B26/b26-smoke-results.json"
+      }
+    }
+  ],
+  "browserOrPlaywrightEvidence": {
+    "tool": "Playwright Chromium",
+    "baseURL": "http://127.0.0.1:3000",
+    "viewportCoverage": [
+      {
+        "route": "/login",
+        "viewport": "desktop 1440x900",
+        "status": "passed",
+        "bodyTextLength": 564,
+        "demoCardCount": 4,
+        "scrollWidth": 1440,
+        "clientWidth": 1440
+      },
+      {
+        "route": "/login",
+        "viewport": "mobile 390x844",
+        "status": "passed",
+        "bodyTextLength": 289,
+        "demoCardCount": 4,
+        "scrollWidth": 390,
+        "clientWidth": 390
+      }
+    ],
+    "interactionCoverage": {
+      "registerDialogDesktop": "opened and closed by Escape",
+      "registerDialogMobile": "opened and closed by Escape",
+      "passwordVisibility": "input type changed from text to password",
+      "normalLoginFailure": "visible alert shown: 服务端缺少 DATABASE_URL 配置。"
+    },
+    "demoAccountCoverage": [
+      {
+        "accountId": "u-admin",
+        "displayName": "陈园长",
+        "expectedPath": "/admin",
+        "finalUrl": "http://127.0.0.1:3000/admin",
+        "status": "passed"
+      },
+      {
+        "accountId": "u-teacher",
+        "displayName": "李老师",
+        "expectedPath": "/teacher",
+        "finalUrl": "http://127.0.0.1:3000/teacher",
+        "status": "passed"
+      },
+      {
+        "accountId": "u-teacher2",
+        "displayName": "周老师",
+        "expectedPath": "/teacher",
+        "finalUrl": "http://127.0.0.1:3000/teacher",
+        "status": "passed"
+      },
+      {
+        "accountId": "u-parent",
+        "displayName": "林妈妈",
+        "expectedPath": "/parent",
+        "finalUrl": "http://127.0.0.1:3000/parent",
+        "status": "passed"
+      }
+    ]
+  },
+  "unfixedReasons": {},
+  "conflictRisks": [
+    "F10 has no independently assigned bugId, so no login code was changed.",
+    "BUG-B24-001 is login-related but assigned to F60; F10 did not modify the mobile image payload behavior.",
+    "F00 auth, role guard, session, and next validation changes are left untouched.",
+    "The working tree already contained unrelated F00/doc changes before F10 execution; F10 only adds its result files."
+  ]
+}

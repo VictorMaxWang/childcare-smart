@@ -654,7 +654,7 @@ export default function GrowthPage() {
             </ChartCard>
 
             <ChartCard title="复查状态对比" description="用柱状图快速说明当前待追踪工作量和已闭环完成度。" minHeight="18rem">
-                <div className="h-65 w-full">
+                <div className="h-[16.25rem] min-h-[16.25rem] w-full min-w-0">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={reviewChartData} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
                       <defs>

@@ -28,6 +28,7 @@ import { emptyInstitutionSnapshot } from "@/lib/persistence/bootstrap";
 import { materializeTasksFromLegacy, pickActiveTask } from "@/lib/tasks/task-model";
 import type { CanonicalTask, TaskOwnerRole } from "@/lib/tasks/types";
 import { buildDemoConsultationResults } from "@/lib/demo/demo-consultations";
+import { filterRemotePersistableMobileDrafts } from "@/lib/mobile/local-draft-cache";
 
 export type Role = AccountRole;
 export type GuardianFeedback = SharedGuardianFeedback;
@@ -471,6 +472,16 @@ function writeScopedSnapshot(namespace: string, snapshot: AppStateSnapshot) {
 
 function buildScopedStorageKey(namespace: string, key: keyof typeof STORAGE_KEYS) {
   return `childcare.${namespace}.${STORAGE_KEYS[key]}`;
+}
+
+function buildRemotePersistableSnapshot(snapshot: AppStateSnapshot): AppStateSnapshot {
+  const mobileDrafts = filterRemotePersistableMobileDrafts(snapshot.mobileDrafts);
+  return mobileDrafts.length === snapshot.mobileDrafts.length
+    ? snapshot
+    : {
+        ...snapshot,
+        mobileDrafts,
+      };
 }
 
 const GIRL_AVATARS = ["👧", "🧒", "👶"];
@@ -2514,6 +2525,10 @@ function validateDemoSnapshotCoverage(snapshot: AppStateSnapshot, targetToday: s
     return snapshot;
   }
 
+  if (isExplicitEmptyRecordsSnapshot(snapshot) && missingChildRefCount === 0 && invalidTaskIdCount === 0) {
+    return snapshot;
+  }
+
   const message = `[DEMO] Snapshot coverage invalid for ${targetToday}: attendance=${todayAttendanceCount}, meals=${todayMealCount}, growth=${todayGrowthCount}, health=${todayHealthCount}, orphanMeals=${orphanMealCount}, orphanHealth=${orphanHealthCount}, missingChildRefs=${missingChildRefCount}, invalidTaskIds=${invalidTaskIdCount}`;
   if (process.env.NODE_ENV !== "production") {
     throw new Error(message);
@@ -2521,6 +2536,17 @@ function validateDemoSnapshotCoverage(snapshot: AppStateSnapshot, targetToday: s
 
   console.error(message);
   return snapshot;
+}
+
+function isExplicitEmptyRecordsSnapshot(snapshot: AppStateSnapshot) {
+  return (
+    snapshot.children.length > 0 &&
+    snapshot.attendance.length === 0 &&
+    snapshot.meals.length === 0 &&
+    snapshot.growth.length === 0 &&
+    snapshot.feedback.length === 0 &&
+    snapshot.health.length === 0
+  );
 }
 
 function buildFreshDemoSnapshot(targetToday = getLocalToday()): AppStateSnapshot {
@@ -2537,6 +2563,13 @@ function buildFreshDemoSnapshot(targetToday = getLocalToday()): AppStateSnapshot
 }
 
 function hydrateDemoSnapshotForToday(snapshot: AppStateSnapshot, targetToday = getLocalToday()) {
+  if (isExplicitEmptyRecordsSnapshot(snapshot)) {
+    return {
+      ...snapshot,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   const attendanceLookup = buildAttendanceLookup(snapshot.attendance);
   const normalizedSnapshot = applyDemoNarrativeScaffold({
     ...snapshot,
@@ -4560,7 +4593,14 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     ]
   );
 
-  const remoteSnapshotKey = useMemo(() => JSON.stringify(remoteSnapshot), [remoteSnapshot]);
+  const remotePersistableSnapshot = useMemo(
+    () => buildRemotePersistableSnapshot(remoteSnapshot),
+    [remoteSnapshot]
+  );
+  const remoteSnapshotKey = useMemo(
+    () => JSON.stringify(remotePersistableSnapshot),
+    [remotePersistableSnapshot]
+  );
 
   const isSnapshotEffectivelyEmpty = useCallback((snapshot: AppStateSnapshot) => {
     return (
@@ -4699,7 +4739,8 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const persistAppSnapshotNow = useCallback(
     async (override?: Partial<AppStateSnapshot>): Promise<PersistAppSnapshotResult> => {
       const snapshot = buildSnapshotWithOverride(override);
-      const snapshotKey = JSON.stringify(snapshot);
+      const remotePersistableSnapshot = buildRemotePersistableSnapshot(snapshot);
+      const snapshotKey = JSON.stringify(remotePersistableSnapshot);
       const persistedAt = new Date().toISOString();
 
       if (currentStorageNamespace) {
@@ -4720,7 +4761,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         const response = await fetch("/api/state", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot }),
+          body: JSON.stringify({ snapshot: remotePersistableSnapshot }),
         });
 
         if (response.ok) {
@@ -4779,7 +4820,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         const response = await fetch("/api/state", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot: remoteSnapshot }),
+          body: JSON.stringify({ snapshot: remotePersistableSnapshot }),
         });
 
         if (response.ok) {
@@ -4793,7 +4834,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [authLoading, dataLoading, isNormalUser, remoteSnapshot, remoteSnapshotKey]);
+  }, [authLoading, dataLoading, isNormalUser, remotePersistableSnapshot, remoteSnapshotKey]);
 
   const visibleChildren = useMemo(() => filterChildrenByUser(childrenList, currentUser), [childrenList, currentUser]);
   const visibleChildIds = useMemo(() => visibleChildren.map((child) => child.id), [visibleChildren]);
@@ -5269,9 +5310,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   }, [visibleWeeklyMealRecords, visibleWeeklyTrendMap, weeklyMealRecordsMap]);
 
   const adminBoardData = useMemo<AdminBoardData>(() => {
-    const scopeChildren = currentUser.institutionId
-      ? childrenList.filter((child) => child.institutionId === currentUser.institutionId)
-      : visibleChildren;
+    const scopeChildren = visibleChildren;
 
     const highAttentionChildren = scopeChildren
       .map((child) => {
@@ -5301,7 +5340,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       .slice(0, 5);
 
     return { highAttentionChildren, lowHydrationChildren, lowVegTrendChildren };
-  }, [childrenList, currentUser.institutionId, getWeeklyDietTrend, visibleChildren, visibleWeeklyTrendMap, weeklyAttentionGrowthCountMap]);
+  }, [getWeeklyDietTrend, visibleChildren, visibleWeeklyTrendMap, weeklyAttentionGrowthCountMap]);
 
   const smartInsights = useMemo(() => {
     const insights: SmartInsight[] = [];

@@ -42,7 +42,11 @@ test("buildConsultationInputFromSnapshot prefers task-aware structured feedback 
         feedback: [
           {
             feedbackId: "fb-task-match",
+            id: "fb-task-match",
             childId: "child-1",
+            date: "2026-04-11T08:00:00.000Z",
+            status: "unable_to_execute",
+            content: "The family could not execute the task tonight.",
             sourceRole: "parent",
             sourceChannel: "manual",
             relatedTaskId: "task-parent-1",
@@ -60,7 +64,11 @@ test("buildConsultationInputFromSnapshot prefers task-aware structured feedback 
           },
           {
             feedbackId: "fb-unrelated",
+            id: "fb-unrelated",
             childId: "child-1",
+            date: "2026-04-12T08:00:00.000Z",
+            status: "completed",
+            content: "A different task went well.",
             sourceRole: "parent",
             sourceChannel: "manual",
             relatedTaskId: "task-parent-other",
@@ -79,7 +87,6 @@ test("buildConsultationInputFromSnapshot prefers task-aware structured feedback 
       },
       ruleFallback: [
         {
-          id: "rule-1",
           title: "Sleep support",
           description: "Keep the bedtime routine stable tonight.",
           level: "warning",

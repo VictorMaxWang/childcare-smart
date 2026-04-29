@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   Baby,
   Bell,
@@ -61,6 +61,8 @@ const ROLE_LABEL_MAP: Record<AccountRole, string> = {
 
 export default function MobileNav({ onLogout }: { onLogout: () => void | Promise<void> }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentLocation = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
   const { currentUser } = useApp();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -199,7 +201,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
                     <MobileNavLink
                       key={`${item.href}-${item.label}`}
                       item={item}
-                      pathname={pathname}
+                      pathname={currentLocation}
                       onClick={close}
                       ref={groupIndex === 0 && itemIndex === 0 ? firstLinkRef : undefined}
                     />
