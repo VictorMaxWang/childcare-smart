@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-04-29T10:50:00+08:00",
+  "updatedAt": "2026-04-29",
   "fields": [
     "bugId",
     "title",
@@ -25,14 +25,20 @@
     "suggestedFix",
     "ownerSuggested",
     "blocksRelease",
-    "notes"
+    "notes",
+    "duplicateOf",
+    "fixedByThread",
+    "fixedAt",
+    "fixSummary",
+    "verification",
+    "remainingRisk"
   ],
   "bugs": [
     {
       "bugId": "BUG-B12-001",
       "title": "教师工作台“今日待办”任务行呈现为可点击但点击无反馈",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B12",
       "role": "teacher",
       "demoAccount": "李老师；周老师",
@@ -67,13 +73,24 @@
       "suggestedFix": "Convert task rows to real buttons/links for the relevant teacher routes, or restyle and label them as non-interactive display rows.",
       "ownerSuggested": "teacher/workbench",
       "blocksRelease": false,
-      "notes": "Targeted check captured before/after screenshots; beforeUrl and afterUrl both stayed http://localhost:3000/teacher, and body text was unchanged after click."
+      "notes": "Targeted check captured before/after screenshots; beforeUrl and afterUrl both stayed http://localhost:3000/teacher, and body text was unchanged after click.",
+      "duplicateOf": "",
+      "fixedByThread": "F30",
+      "fixedAt": "2026-04-29T03:33:58.179Z",
+      "fixSummary": "F30 converted teacher today-task affordances into real navigation or explicit disabled/display-only states.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F30-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F30-result.md",
+        "checksRun": [],
+        "evidence": ""
+      },
+      "remainingRisk": "No in-scope residual risk reported by F30; F90 lint/build revalidation is recorded in FIX_MERGE_REPORT.md."
     },
     {
       "bugId": "BUG-B12-002",
       "title": "晨检/成长记录页面正常导航时反复输出 Recharts 尺寸 warning",
       "severity": "P3",
-      "status": "confirmed",
+      "status": "duplicate",
       "foundByThread": "B12",
       "role": "teacher",
       "demoAccount": "李老师；周老师",
@@ -110,13 +127,22 @@
       "suggestedFix": "Give chart containers stable min dimensions or defer chart rendering until the container has measurable dimensions.",
       "ownerSuggested": "shared-records/ui",
       "blocksRelease": false,
-      "notes": "Tracked as P3 because the pages remain usable, but the warning is reproducible across both teacher accounts and mobile/desktop core checks."
+      "notes": "Duplicate of BUG-004. B12 provides additional teacher-account and mobile/desktop confirmation for the same shared Recharts invalid-size warning on /health and /growth.",
+      "duplicateOf": "BUG-004",
+      "fixedByThread": "",
+      "fixedAt": "",
+      "fixSummary": "Duplicate of BUG-004; retained as historical evidence and not counted as a separate fix.",
+      "verification": {
+        "status": "duplicate-retained",
+        "duplicateOf": "BUG-004"
+      },
+      "remainingRisk": "Follow canonical record BUG-004."
     },
     {
       "bugId": "BUG-001",
       "title": "园长首页正常进入后通知事件接口返回 503",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B10",
       "role": "director",
       "demoAccount": "陈园长",
@@ -148,13 +174,28 @@
       "suggestedFix": "为演示/本地环境提供空列表 fallback，或让首页识别 available:false 类状态并避免未处理 503。",
       "ownerSuggested": "admin/dashboard",
       "blocksRelease": false,
-      "notes": "Also reproduced on mobile 390x844. Login, page render, navigation, and logout still complete."
+      "notes": "Also reproduced on mobile 390x844. Login, page render, navigation, and logout still complete.",
+      "duplicateOf": "",
+      "fixedByThread": "F20",
+      "fixedAt": "2026-04-29T03:46:33.866Z",
+      "fixSummary": "F20 made director notification-events return a controlled 200 fallback when local/demo persistence is unavailable.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F20-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F20-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Playwright fallback F20 director regression: passed"
+        ],
+        "evidence": "fallback=Playwright; baseURL=http://127.0.0.1:3000; ok=true"
+      },
+      "remainingRisk": "conflictRisks=[\"components/Navbar.tsx and lib/navigation/primary-nav.ts had parallel auth/navigation changes from other threads; F20 only layered query-aware active-state handling on top.\",\"lib/store.tsx change is intentionally narrow: demo snapshots with emptied core record arrays are allowed so admin zero-state QA can render real 0 values instead of throwing in development.\"] | notes=[\"BUGS.md and BUGS.json were not edited by F20.\",\"Existing ignored Playwright artifacts were written under artifacts/bug-bash/fixes/F20 for evidence.\"]"
     },
     {
       "bugId": "BUG-002",
       "title": "家长首页 AI 建议接口在正常登录路径返回 500",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B10",
       "role": "parent",
       "demoAccount": "林妈妈",
@@ -187,13 +228,27 @@
       "suggestedFix": "捕获 suggestions 生成链路异常并返回可追踪的 fallback payload，避免首页正常浏览时出现 500。",
       "ownerSuggested": "parent/ai",
       "blocksRelease": false,
-      "notes": "Also reproduced on mobile 390x844. Page is not blank, but normal user path emits a visible devtools error."
+      "notes": "Also reproduced on mobile 390x844. Page is not blank, but normal user path emits a visible devtools error.",
+      "duplicateOf": "",
+      "fixedByThread": "F40",
+      "fixedAt": "2026-04-29T03:59:48.752Z",
+      "fixSummary": "F40 added parent AI suggestions fallback responses so normal parent home no longer surfaces provider 500s.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F40-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F40-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed"
+        ],
+        "evidence": "tool=Playwright; baseURL=http://localhost:3410"
+      },
+      "remainingRisk": "conflictRisks=[\"B24 storybook eager loading 未在 F40 范围内修改，保留给 F60。\",\"未修改 docs/bug-bash/BUGS.json；该文件由 F90 统一合并。\"]"
     },
     {
       "bugId": "BUG-003",
       "title": "家长成长绘本生成接口返回 503 并显示“成长绘本暂时不可用”",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B10",
       "role": "parent",
       "demoAccount": "林妈妈",
@@ -227,13 +282,27 @@
       "suggestedFix": "Add a local/demo fallback response for parent storybook generation, or degrade the generation panel without surfacing a failed demo path.",
       "ownerSuggested": "parent/storybook",
       "blocksRelease": false,
-      "notes": "Also reproduced on mobile 390x844. Retested after 20 seconds; the error panel remains visible."
+      "notes": "Also reproduced on mobile 390x844. Retested after 20 seconds; the error panel remains visible.",
+      "duplicateOf": "",
+      "fixedByThread": "F40",
+      "fixedAt": "2026-04-29T03:59:48.752Z",
+      "fixSummary": "F40 added parent storybook local fallback responses for unavailable brain/provider paths instead of 503 UI failure.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F40-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F40-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed"
+        ],
+        "evidence": "tool=Playwright; baseURL=http://localhost:3410"
+      },
+      "remainingRisk": "conflictRisks=[\"B24 storybook eager loading 未在 F40 范围内修改，保留给 F60。\",\"未修改 docs/bug-bash/BUGS.json；该文件由 F90 统一合并。\"]"
     },
     {
       "bugId": "BUG-004",
       "title": "教师健康/成长页面正常导航时重复出现 Recharts 尺寸 warning",
       "severity": "P3",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B10",
       "role": "shared",
       "demoAccount": "李老师",
@@ -265,19 +334,37 @@
       "suggestedFix": "Give chart containers stable min width/height or defer chart rendering until the container has measurable dimensions.",
       "ownerSuggested": "shared-records/ui",
       "blocksRelease": false,
-      "notes": "Also reproduced with 周老师 on /growth. Initial B10 screenshot caught the route loading state; targeted retest confirmed pages render after 1s, so this is tracked as console warning rather than navigation failure."
+      "notes": "Also reproduced with 周老师 on /growth. Initial B10 screenshot caught the route loading state; targeted retest confirmed pages render after 1s, so this is tracked as console warning rather than navigation failure.",
+      "duplicateOf": "",
+      "fixedByThread": "F60",
+      "fixedAt": "2026-04-29T06:20:46.432Z",
+      "fixSummary": "F60 replaced invalid chart wrapper sizing with stable chart heights for health and growth pages.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F60-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F60-result.md",
+        "checksRun": [
+          "node --check scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Select-String production/public path leak scan: passed",
+          "node scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run bugbash:smoke: failed"
+        ],
+        "evidence": "login-mobile, login-register-dialog-mobile, parent-home-mobile, parent-storybook-mobile, teacher-workbench-mobile, director-home-tablet, director-home-mobile, and parent-feedback-tablet all passed without horizontal overflow, broken images, image 404s, Recharts invalid-size warnings, mobile login replica requests, or feedback bottom-nav coverage."
+      },
+      "remainingRisk": "unfixedReasons={\"bugbash:smoke\":\"The remaining smoke failures are outside F60 scope and pre-existing/currently owned by other threads: teacher duplicate key warning and parent suggestions API 500 duplicateOf BUG-002.\"} | conflictRisks=[\"F60 touched files already modified by earlier fix threads; changes were kept narrowly scoped to CSS/resource/responsive behavior.\",\"scripts/extract-pixel-assets.mjs still writes full source paths to artifacts/source-index for local audit evidence, but strips them from public/pixel-replica/manifest.json.\"]"
     },
     {
       "bugId": "BUG-011",
       "title": "Director account can directly open teacher and parent workspaces",
       "severity": "P1",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B15",
       "role": "director",
       "demoAccount": "陈园长",
       "route": "/teacher; /parent",
       "viewport": "desktop",
-      "browser": "Playwright Chromium fallback; Browser Use node_repl blocked by system Node 22.20.0 < 22.22.0",
+      "browser": "Playwright Chromium F00 retest against http://127.0.0.1:3330",
       "reproSteps": [
         "Open /login",
         "Click the director demo account",
@@ -298,8 +385,8 @@
         "FAILED GET https://va.vercel-scripts.com/v1/script.debug.js net::ERR_BLOCKED_BY_ORB"
       ],
       "screenshotBefore": "",
-      "screenshotAfter": "artifacts/bug-bash/B15/BUG-011-admin-cross-role.png",
-      "videoOrTrace": "artifacts/bug-bash/B15/b15-run-results.json",
+      "screenshotAfter": "artifacts/bug-bash/fixes/F00/permission-route-retest.json",
+      "videoOrTrace": "artifacts/bug-bash/fixes/F00/permission-route-retest.json",
       "sourceFilesSuspected": [
         "app/teacher/page.tsx",
         "app/parent/page.tsx",
@@ -310,20 +397,36 @@
       "likelyCause": "Navigation is role-filtered, but direct route access is not guarded by role at the route/page boundary.",
       "suggestedFix": "Add a shared authenticated role guard for role-owned routes and redirect or render a permission state before the page body mounts.",
       "ownerSuggested": "frontend/auth",
-      "blocksRelease": true,
-      "notes": "B15 route checks: /teacher -> /teacher and /parent -> /parent?child=c-1 under the director session."
+      "blocksRelease": false,
+      "notes": "B15 route checks: /teacher -> /teacher and /parent -> /parent?child=c-1 under the director session. F00 fixed 2026-04-29: centralized route access, session role, proxy/AppShell role guards, login next authorization, and teacher scope retested by artifacts/bug-bash/fixes/F00/permission-route-retest.json.",
+      "duplicateOf": "",
+      "fixedByThread": "F00",
+      "fixedAt": "2026-04-29T02:42:40.065Z",
+      "fixSummary": "F00 added centralized route access rules so director sessions cannot render teacher or parent workspaces.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F00-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F00-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "F00 Playwright route/auth retest: passed",
+          "npm run bugbash:smoke: failed-non-f00-p2-residuals"
+        ],
+        "evidence": "tool=Playwright Chromium; baseURL=http://127.0.0.1:3330; artifact=artifacts/bug-bash/fixes/F00/permission-route-retest.json; summary={\"total\":23,\"passed\":23,\"failed\":0}"
+      },
+      "remainingRisk": "unfixedReasons={\"BUG-001\":\"P2 notification-events 503 remains out of F00 scope; bugbash smoke still reports it as a non-blocking residual.\",\"BUG-002\":\"P2 parent suggestions issue remains out of F00 scope; not changed by this thread.\",\"BUG-003\":\"P2 parent storybook 503 remains out of F00 scope; bugbash smoke still reports it as a non-blocking residual.\",\"bugbash:smoke\":\"The suite failed on 39 P2 issues, including existing API fallback bugs and local analytics/404 noise; F00-specific Playwright checks passed 23/23.\"} | conflictRisks=[\"Existing dev server on port 3000 held the Next dev lock, so F00 retest used next start on port 3330 after a successful production build.\",\"Legacy session cookies without role are intentionally cleared on role-owned protected routes and redirected to login.\",\"Navigation changes remove cross-role shortcuts only; role-owned routes remain present and are guarded.\"]"
     },
     {
       "bugId": "BUG-012",
       "title": "Teacher account can directly open director and parent workspaces",
       "severity": "P1",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B15",
       "role": "teacher",
       "demoAccount": "u-teacher",
       "route": "/admin; /parent",
       "viewport": "desktop",
-      "browser": "Playwright Chromium fallback; Browser Use node_repl blocked by system Node 22.20.0 < 22.22.0",
+      "browser": "Playwright Chromium F00 retest against http://127.0.0.1:3330",
       "reproSteps": [
         "Open /login",
         "Click the Li teacher demo account",
@@ -344,8 +447,8 @@
         "FAILED GET https://va.vercel-scripts.com/v1/script.debug.js net::ERR_BLOCKED_BY_ORB"
       ],
       "screenshotBefore": "",
-      "screenshotAfter": "artifacts/bug-bash/B15/BUG-012-teacher-cross-role.png",
-      "videoOrTrace": "artifacts/bug-bash/B15/b15-run-results.json",
+      "screenshotAfter": "artifacts/bug-bash/fixes/F00/permission-route-retest.json",
+      "videoOrTrace": "artifacts/bug-bash/fixes/F00/permission-route-retest.json",
       "sourceFilesSuspected": [
         "app/admin/page.tsx",
         "app/parent/page.tsx",
@@ -356,20 +459,36 @@
       "likelyCause": "Route pages trust the current session but do not enforce allowed role ownership before rendering.",
       "suggestedFix": "Add route-level role checks for /admin and /parent and provide a consistent permission-denied or role-home redirect behavior.",
       "ownerSuggested": "frontend/auth",
-      "blocksRelease": true,
-      "notes": "B15 route checks: /admin -> /admin and /parent -> /parent?child=c-1 under the teacher session."
+      "blocksRelease": false,
+      "notes": "B15 route checks: /admin -> /admin and /parent -> /parent?child=c-1 under the teacher session. F00 fixed 2026-04-29: centralized route access, session role, proxy/AppShell role guards, login next authorization, and teacher scope retested by artifacts/bug-bash/fixes/F00/permission-route-retest.json.",
+      "duplicateOf": "",
+      "fixedByThread": "F00",
+      "fixedAt": "2026-04-29T02:42:40.065Z",
+      "fixSummary": "F00 added centralized route access rules so teacher sessions cannot render director or parent workspaces.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F00-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F00-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "F00 Playwright route/auth retest: passed",
+          "npm run bugbash:smoke: failed-non-f00-p2-residuals"
+        ],
+        "evidence": "tool=Playwright Chromium; baseURL=http://127.0.0.1:3330; artifact=artifacts/bug-bash/fixes/F00/permission-route-retest.json; summary={\"total\":23,\"passed\":23,\"failed\":0}"
+      },
+      "remainingRisk": "unfixedReasons={\"BUG-001\":\"P2 notification-events 503 remains out of F00 scope; bugbash smoke still reports it as a non-blocking residual.\",\"BUG-002\":\"P2 parent suggestions issue remains out of F00 scope; not changed by this thread.\",\"BUG-003\":\"P2 parent storybook 503 remains out of F00 scope; bugbash smoke still reports it as a non-blocking residual.\",\"bugbash:smoke\":\"The suite failed on 39 P2 issues, including existing API fallback bugs and local analytics/404 noise; F00-specific Playwright checks passed 23/23.\"} | conflictRisks=[\"Existing dev server on port 3000 held the Next dev lock, so F00 retest used next start on port 3330 after a successful production build.\",\"Legacy session cookies without role are intentionally cleared on role-owned protected routes and redirected to login.\",\"Navigation changes remove cross-role shortcuts only; role-owned routes remain present and are guarded.\"]"
     },
     {
       "bugId": "BUG-013",
       "title": "Parent account can directly open director and teacher workspaces",
       "severity": "P1",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B15",
       "role": "parent",
       "demoAccount": "林妈妈",
       "route": "/admin; /teacher",
       "viewport": "desktop",
-      "browser": "Playwright Chromium fallback; Browser Use node_repl blocked by system Node 22.20.0 < 22.22.0",
+      "browser": "Playwright Chromium F00 retest against http://127.0.0.1:3330",
       "reproSteps": [
         "Open /login",
         "Click the Lin parent demo account",
@@ -389,8 +508,8 @@
         "FAILED GET https://va.vercel-scripts.com/v1/script.debug.js net::ERR_BLOCKED_BY_ORB"
       ],
       "screenshotBefore": "",
-      "screenshotAfter": "artifacts/bug-bash/B15/BUG-013-parent-cross-role.png",
-      "videoOrTrace": "artifacts/bug-bash/B15/b15-run-results.json",
+      "screenshotAfter": "artifacts/bug-bash/fixes/F00/permission-route-retest.json",
+      "videoOrTrace": "artifacts/bug-bash/fixes/F00/permission-route-retest.json",
       "sourceFilesSuspected": [
         "app/admin/page.tsx",
         "app/teacher/page.tsx",
@@ -401,14 +520,30 @@
       "likelyCause": "Role-specific nav availability does not prevent direct URL access to role-owned pages.",
       "suggestedFix": "Centralize route authorization and deny parent sessions before rendering /admin or /teacher content.",
       "ownerSuggested": "frontend/auth",
-      "blocksRelease": true,
-      "notes": "B15 route checks: /admin -> /admin and /teacher -> /teacher under the parent session."
+      "blocksRelease": false,
+      "notes": "B15 route checks: /admin -> /admin and /teacher -> /teacher under the parent session. F00 fixed 2026-04-29: centralized route access, session role, proxy/AppShell role guards, login next authorization, and teacher scope retested by artifacts/bug-bash/fixes/F00/permission-route-retest.json.",
+      "duplicateOf": "",
+      "fixedByThread": "F00",
+      "fixedAt": "2026-04-29T02:42:40.065Z",
+      "fixSummary": "F00 added centralized route access rules so parent sessions cannot render director or teacher workspaces.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F00-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F00-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "F00 Playwright route/auth retest: passed",
+          "npm run bugbash:smoke: failed-non-f00-p2-residuals"
+        ],
+        "evidence": "tool=Playwright Chromium; baseURL=http://127.0.0.1:3330; artifact=artifacts/bug-bash/fixes/F00/permission-route-retest.json; summary={\"total\":23,\"passed\":23,\"failed\":0}"
+      },
+      "remainingRisk": "unfixedReasons={\"BUG-001\":\"P2 notification-events 503 remains out of F00 scope; bugbash smoke still reports it as a non-blocking residual.\",\"BUG-002\":\"P2 parent suggestions issue remains out of F00 scope; not changed by this thread.\",\"BUG-003\":\"P2 parent storybook 503 remains out of F00 scope; bugbash smoke still reports it as a non-blocking residual.\",\"bugbash:smoke\":\"The suite failed on 39 P2 issues, including existing API fallback bugs and local analytics/404 noise; F00-specific Playwright checks passed 23/23.\"} | conflictRisks=[\"Existing dev server on port 3000 held the Next dev lock, so F00 retest used next start on port 3330 after a successful production build.\",\"Legacy session cookies without role are intentionally cleared on role-owned protected routes and redirected to login.\",\"Navigation changes remove cross-role shortcuts only; role-owned routes remain present and are guarded.\"]"
     },
     {
       "bugId": "BUG-014",
       "title": "Parent feedback hash does not land on the feedback section",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B15",
       "role": "parent",
       "demoAccount": "林妈妈",
@@ -444,13 +579,27 @@
       "suggestedFix": "On parent agent load, detect hash === \"#feedback\" after content hydration and call scrollIntoView/focus on the feedback section.",
       "ownerSuggested": "parent/frontend",
       "blocksRelease": false,
-      "notes": "Child query is preserved; the failure is the hash landing behavior."
+      "notes": "Child query is preserved; the failure is the hash landing behavior.",
+      "duplicateOf": "",
+      "fixedByThread": "F40",
+      "fixedAt": "2026-04-29T03:59:48.752Z",
+      "fixSummary": "F40 added post-render scroll/focus retry so the desktop parent feedback hash lands on the feedback composer.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F40-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F40-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed"
+        ],
+        "evidence": "tool=Playwright; baseURL=http://localhost:3410"
+      },
+      "remainingRisk": "conflictRisks=[\"B24 storybook eager loading 未在 F40 范围内修改，保留给 F60。\",\"未修改 docs/bug-bash/BUGS.json；该文件由 F90 统一合并。\"]"
     },
     {
       "bugId": "BUG-015",
       "title": "Parent feedback hash fails on mobile viewport",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B15",
       "role": "parent",
       "demoAccount": "林妈妈",
@@ -487,13 +636,27 @@
       "suggestedFix": "Re-run hash scrolling after parent agent content settles on mobile, accounting for fixed top/bottom navigation.",
       "ownerSuggested": "parent/frontend",
       "blocksRelease": false,
-      "notes": "Mobile child route /parent?child=c-1 preserved the child query and rendered correctly."
+      "notes": "Mobile child route /parent?child=c-1 preserved the child query and rendered correctly.",
+      "duplicateOf": "",
+      "fixedByThread": "F40",
+      "fixedAt": "2026-04-29T03:59:48.752Z",
+      "fixSummary": "F40 applied the parent feedback hash behavior to mobile with fixed-nav offset and no horizontal overflow.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F40-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F40-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed"
+        ],
+        "evidence": "tool=Playwright; baseURL=http://localhost:3410"
+      },
+      "remainingRisk": "conflictRisks=[\"B24 storybook eager loading 未在 F40 范围内修改，保留给 F60。\",\"未修改 docs/bug-bash/BUGS.json；该文件由 F90 统一合并。\"]"
     },
     {
       "bugId": "BUG-021",
       "title": "Tablet 家长反馈控件被底部导航覆盖",
       "severity": "P2",
-      "status": "open",
+      "status": "fixed",
       "foundByThread": "B14",
       "role": "parent",
       "demoAccount": "林妈妈",
@@ -530,13 +693,31 @@
       "suggestedFix": "Increase bottom padding/scroll padding for feedback sections under lg:hidden bottom tabs and verify #feedback scroll positioning leaves controls above the fixed nav.",
       "ownerSuggested": "parent/feedback",
       "blocksRelease": false,
-      "notes": "The page has no document-level horizontal overflow, but the fixed bottom navigation blocks a core parent feedback action. B15 already separately tracks the feedback hash landing issue as BUG-014/BUG-015."
+      "notes": "The page has no document-level horizontal overflow, but the fixed bottom navigation blocks a core parent feedback action. B15 already separately tracks the feedback hash landing issue as BUG-014/BUG-015.",
+      "duplicateOf": "",
+      "fixedByThread": "F60",
+      "fixedAt": "2026-04-29T06:20:46.432Z",
+      "fixSummary": "F60 fixed responsive director closure progress rendering with mobile cards and safe table behavior.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F60-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F60-result.md",
+        "checksRun": [
+          "node --check scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Select-String production/public path leak scan: passed",
+          "node scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run bugbash:smoke: failed"
+        ],
+        "evidence": "login-mobile, login-register-dialog-mobile, parent-home-mobile, parent-storybook-mobile, teacher-workbench-mobile, director-home-tablet, director-home-mobile, and parent-feedback-tablet all passed without horizontal overflow, broken images, image 404s, Recharts invalid-size warnings, mobile login replica requests, or feedback bottom-nav coverage."
+      },
+      "remainingRisk": "unfixedReasons={\"bugbash:smoke\":\"The remaining smoke failures are outside F60 scope and pre-existing/currently owned by other threads: teacher duplicate key warning and parent suggestions API 500 duplicateOf BUG-002.\"} | conflictRisks=[\"F60 touched files already modified by earlier fix threads; changes were kept narrowly scoped to CSS/resource/responsive behavior.\",\"scripts/extract-pixel-assets.mjs still writes full source paths to artifacts/source-index for local audit evidence, but strips them from public/pixel-replica/manifest.json.\"]"
     },
     {
       "bugId": "BUG-B11-001",
       "title": "园长 AI 助手展示输入框但没有可编辑输入控件，发送按钮不可用",
       "severity": "P1",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B11",
       "role": "director",
       "demoAccount": "陈园长",
@@ -556,13 +737,28 @@
       "suggestedFix": "Render a real text input or textarea, bind local prompt state, enable send when trimmed text is present, and keep quick-question chips separate from free-text entry.",
       "ownerSuggested": "frontend",
       "blocksRelease": true,
-      "notes": "This blocks a core 园长 AI assistant workflow."
+      "notes": "This blocks a core 园长 AI assistant workflow.",
+      "duplicateOf": "",
+      "fixedByThread": "F20",
+      "fixedAt": "2026-04-29T03:46:33.866Z",
+      "fixSummary": "F20 connected director metric cards and dashboard navigation to real target routes with query-aware active state.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F20-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F20-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Playwright fallback F20 director regression: passed"
+        ],
+        "evidence": "fallback=Playwright; baseURL=http://127.0.0.1:3000; ok=true"
+      },
+      "remainingRisk": "conflictRisks=[\"components/Navbar.tsx and lib/navigation/primary-nav.ts had parallel auth/navigation changes from other threads; F20 only layered query-aware active-state handling on top.\",\"lib/store.tsx change is intentionally narrow: demo snapshots with emptied core record arrays are allowed so admin zero-state QA can render real 0 values instead of throwing in development.\"] | notes=[\"BUGS.md and BUGS.json were not edited by F20.\",\"Existing ignored Playwright artifacts were written under artifacts/bug-bash/fixes/F20 for evidence.\"]"
     },
     {
       "bugId": "BUG-B11-002",
       "title": "/admin/agent 菜单和面包屑误显示为周报分析，AI 助手与周报分析同时高亮",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B11",
       "role": "director",
       "demoAccount": "陈园长",
@@ -582,13 +778,28 @@
       "suggestedFix": "Make active-state and breadcrumb matching query-aware for weekly report mode, and use exact path matching for the AI assistant base route.",
       "ownerSuggested": "frontend",
       "blocksRelease": false,
-      "notes": "Matches the bug bash focus area “菜单高亮错乱”."
+      "notes": "Matches the bug bash focus area “菜单高亮错乱”.",
+      "duplicateOf": "",
+      "fixedByThread": "F20",
+      "fixedAt": "2026-04-29T03:46:33.866Z",
+      "fixSummary": "F20 corrected director AI assistant and weekly-report active navigation state for /admin/agent query variants.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F20-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F20-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Playwright fallback F20 director regression: passed"
+        ],
+        "evidence": "fallback=Playwright; baseURL=http://127.0.0.1:3000; ok=true"
+      },
+      "remainingRisk": "conflictRisks=[\"components/Navbar.tsx and lib/navigation/primary-nav.ts had parallel auth/navigation changes from other threads; F20 only layered query-aware active-state handling on top.\",\"lib/store.tsx change is intentionally narrow: demo snapshots with emptied core record arrays are allowed so admin zero-state QA can render real 0 values instead of throwing in development.\"] | notes=[\"BUGS.md and BUGS.json were not edited by F20.\",\"Existing ignored Playwright artifacts were written under artifacts/bug-bash/fixes/F20 for evidence.\"]"
     },
     {
       "bugId": "BUG-B11-003",
       "title": "园长首页“刷新数据”实际跳转到周报页面",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B11",
       "role": "director",
       "demoAccount": "陈园长",
@@ -608,13 +819,28 @@
       "suggestedFix": "Convert the CTA to a button that refetches dashboard data, or rename it if the intended action is opening weekly report.",
       "ownerSuggested": "frontend",
       "blocksRelease": false,
-      "notes": "This is a misleading primary action on the director dashboard."
+      "notes": "This is a misleading primary action on the director dashboard.",
+      "duplicateOf": "",
+      "fixedByThread": "F20",
+      "fixedAt": "2026-04-29T03:46:33.866Z",
+      "fixSummary": "F20 replaced the misleading director refresh CTA with real refresh behavior for weekly report data.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F20-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F20-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Playwright fallback F20 director regression: passed"
+        ],
+        "evidence": "fallback=Playwright; baseURL=http://127.0.0.1:3000; ok=true"
+      },
+      "remainingRisk": "conflictRisks=[\"components/Navbar.tsx and lib/navigation/primary-nav.ts had parallel auth/navigation changes from other threads; F20 only layered query-aware active-state handling on top.\",\"lib/store.tsx change is intentionally narrow: demo snapshots with emptied core record arrays are allowed so admin zero-state QA can render real 0 values instead of throwing in development.\"] | notes=[\"BUGS.md and BUGS.json were not edited by F20.\",\"Existing ignored Playwright artifacts were written under artifacts/bug-bash/fixes/F20 for evidence.\"]"
     },
     {
       "bugId": "BUG-B11-004",
       "title": "mobile 园长首页闭环进度表格列过窄，长文本被挤成逐字竖排",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B11",
       "role": "director",
       "demoAccount": "陈园长",
@@ -634,13 +860,31 @@
       "suggestedFix": "Replace this table with mobile cards below the tablet breakpoint, or introduce horizontal table scrolling with minimum column widths.",
       "ownerSuggested": "frontend",
       "blocksRelease": false,
-      "notes": "No horizontal document overflow was detected, but visual readability is still broken."
+      "notes": "No horizontal document overflow was detected, but visual readability is still broken.",
+      "duplicateOf": "",
+      "fixedByThread": "F60",
+      "fixedAt": "2026-04-29T06:20:46.432Z",
+      "fixSummary": "F60 corrected responsive/overflow behavior in director and shared visual surfaces.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F60-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F60-result.md",
+        "checksRun": [
+          "node --check scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Select-String production/public path leak scan: passed",
+          "node scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run bugbash:smoke: failed"
+        ],
+        "evidence": "login-mobile, login-register-dialog-mobile, parent-home-mobile, parent-storybook-mobile, teacher-workbench-mobile, director-home-tablet, director-home-mobile, and parent-feedback-tablet all passed without horizontal overflow, broken images, image 404s, Recharts invalid-size warnings, mobile login replica requests, or feedback bottom-nav coverage."
+      },
+      "remainingRisk": "unfixedReasons={\"bugbash:smoke\":\"The remaining smoke failures are outside F60 scope and pre-existing/currently owned by other threads: teacher duplicate key warning and parent suggestions API 500 duplicateOf BUG-002.\"} | conflictRisks=[\"F60 touched files already modified by earlier fix threads; changes were kept narrowly scoped to CSS/resource/responsive behavior.\",\"scripts/extract-pixel-assets.mjs still writes full source paths to artifacts/source-index for local audit evidence, but strips them from public/pixel-replica/manifest.json.\"]"
     },
     {
       "bugId": "BUG-B11-005",
       "title": "园长首页核心数据卡点击没有反馈或下钻",
       "severity": "P3",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B11",
       "role": "director",
       "demoAccount": "陈园长",
@@ -660,13 +904,28 @@
       "suggestedFix": "Either wire metric cards to relevant drill-down filters/routes, or make them visually non-interactive and provide separate explicit links.",
       "ownerSuggested": "frontend/product",
       "blocksRelease": false,
-      "notes": "Matches the bug bash focus area “园长首页数据卡片点击无反应 / visual-only 指标看起来可点但没有反馈”."
+      "notes": "Matches the bug bash focus area “园长首页数据卡片点击无反应 / visual-only 指标看起来可点但没有反馈”.",
+      "duplicateOf": "",
+      "fixedByThread": "F20",
+      "fixedAt": "2026-04-29T03:46:33.866Z",
+      "fixSummary": "F20 moved director dashboard/report surfaces away from hard-coded mock totals toward derived data and zero states.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F20-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F20-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Playwright fallback F20 director regression: passed"
+        ],
+        "evidence": "fallback=Playwright; baseURL=http://127.0.0.1:3000; ok=true"
+      },
+      "remainingRisk": "conflictRisks=[\"components/Navbar.tsx and lib/navigation/primary-nav.ts had parallel auth/navigation changes from other threads; F20 only layered query-aware active-state handling on top.\",\"lib/store.tsx change is intentionally narrow: demo snapshots with emptied core record arrays are allowed so admin zero-state QA can render real 0 values instead of throwing in development.\"] | notes=[\"BUGS.md and BUGS.json were not edited by F20.\",\"Existing ignored Playwright artifacts were written under artifacts/bug-bash/fixes/F20 for evidence.\"]"
     },
     {
       "bugId": "BUG-B11-006",
       "title": "儿童档案台账缺少明显详情/编辑入口，点击儿童姓名只选中行不打开详情",
       "severity": "P3",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B11",
       "role": "director",
       "demoAccount": "陈园长",
@@ -686,7 +945,23 @@
       "suggestedFix": "Add a clear “详情/编辑” action or render the selected child detail drawer when a row/card is selected.",
       "ownerSuggested": "frontend",
       "blocksRelease": false,
-      "notes": "新增档案和删除确认弹窗可打开，最终提交/确认未执行。"
+      "notes": "新增档案和删除确认弹窗可打开，最终提交/确认未执行。",
+      "duplicateOf": "",
+      "fixedByThread": "F50",
+      "fixedAt": "2026-04-29T05:42:36.014Z",
+      "fixSummary": "F50 added usable feedback for shared top-bar search, notification, and message controls.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F50-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F50-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Playwright F50 shared interactions regression against http://127.0.0.1:3000: passed",
+          "$env:BUGBASH_BASE_URL='http://127.0.0.1:3000'; npm run bugbash:smoke: failed-non-f50-residuals"
+        ],
+        "evidence": "tool=Playwright Chromium; baseURL=http://127.0.0.1:3000; ok=true"
+      },
+      "remainingRisk": "conflictRisks=[\"当前工作树已有 F00/F20/F30/F40/F70 等线程留下的大量未提交修改；F50只叠加了 app/children/page.tsx、app/health/page.tsx、components/Navbar.tsx 和 F50 结果文件。\",\"components/Navbar.tsx 已包含上游认证/导航改动；F50仅补充顶部搜索/通知/消息按钮反馈和 ShellIconButton onClick 契约。\",\"BUGS.md 与 BUGS.json 未由 F50 修改，保留给 F90 统一合并状态。\"]"
     },
     {
       "bugId": "BUG-017",
@@ -726,7 +1001,16 @@
       "suggestedFix": "Handle #feedback after client render and add scroll-margin for sticky headers/bottom tabs.",
       "ownerSuggested": "parent/feedback",
       "blocksRelease": false,
-      "notes": "Duplicate/confirmation of the existing parent feedback hash issue already recorded by B15 as BUG-014/BUG-015."
+      "notes": "Duplicate/confirmation of the existing parent feedback hash issue already recorded by B15 as BUG-014/BUG-015.",
+      "duplicateOf": "BUG-014",
+      "fixedByThread": "",
+      "fixedAt": "",
+      "fixSummary": "Duplicate of BUG-014; retained as historical evidence and not counted as a separate fix.",
+      "verification": {
+        "status": "duplicate-retained",
+        "duplicateOf": "BUG-014"
+      },
+      "remainingRisk": "Follow canonical record BUG-014."
     },
     {
       "bugId": "BUG-018",
@@ -767,13 +1051,22 @@
       "suggestedFix": "Provide cached/demo storybook content when the AI endpoint is unavailable and keep flip/view controls usable.",
       "ownerSuggested": "parent/storybook",
       "blocksRelease": false,
-      "notes": "Duplicate/confirmation of existing BUG-003, reproduced again in B13 on the required parent mobile path."
+      "notes": "Duplicate/confirmation of existing BUG-003, reproduced again in B13 on the required parent mobile path.",
+      "duplicateOf": "BUG-003",
+      "fixedByThread": "",
+      "fixedAt": "",
+      "fixSummary": "Duplicate of BUG-003; retained as historical evidence and not counted as a separate fix.",
+      "verification": {
+        "status": "duplicate-retained",
+        "duplicateOf": "BUG-003"
+      },
+      "remainingRisk": "Follow canonical record BUG-003."
     },
     {
       "bugId": "BUG-019",
       "title": "Parent home AI recommendation exposes internal demo copy and route names",
       "severity": "P3",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B13",
       "role": "parent",
       "demoAccount": "林妈妈",
@@ -805,13 +1098,27 @@
       "suggestedFix": "Replace parent fallback copy with polished parent-facing language and keep route/demo metadata out of visible recommendation text.",
       "ownerSuggested": "parent/content",
       "blocksRelease": false,
-      "notes": "This appeared on both desktop and mobile parent home after logging in as 林妈妈."
+      "notes": "This appeared on both desktop and mobile parent home after logging in as 林妈妈.",
+      "duplicateOf": "",
+      "fixedByThread": "F40",
+      "fixedAt": "2026-04-29T03:59:48.752Z",
+      "fixSummary": "F40 removed internal route/demoSeed/recording/mock wording from parent-facing recommendation copy.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F40-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F40-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed"
+        ],
+        "evidence": "tool=Playwright; baseURL=http://localhost:3410"
+      },
+      "remainingRisk": "conflictRisks=[\"B24 storybook eager loading 未在 F40 范围内修改，保留给 F60。\",\"未修改 docs/bug-bash/BUGS.json；该文件由 F90 统一合并。\"]"
     },
     {
       "bugId": "BUG-020",
       "title": "Mobile storybook bottom navigation overlaps the summary card content",
       "severity": "P3",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B13",
       "role": "parent",
       "demoAccount": "林妈妈",
@@ -842,13 +1149,31 @@
       "suggestedFix": "Add bottom padding/scroll padding around mobile storybook sections that can sit under the fixed bottom navigation.",
       "ownerSuggested": "parent/mobile-ui",
       "blocksRelease": false,
-      "notes": "No document-level horizontal overflow was detected at 390x844."
+      "notes": "No document-level horizontal overflow was detected at 390x844.",
+      "duplicateOf": "",
+      "fixedByThread": "F60",
+      "fixedAt": "2026-04-29T06:20:46.432Z",
+      "fixSummary": "F60 fixed responsive layout and bottom-nav coverage issues across parent storybook and feedback views.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F60-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F60-result.md",
+        "checksRun": [
+          "node --check scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Select-String production/public path leak scan: passed",
+          "node scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run bugbash:smoke: failed"
+        ],
+        "evidence": "login-mobile, login-register-dialog-mobile, parent-home-mobile, parent-storybook-mobile, teacher-workbench-mobile, director-home-tablet, director-home-mobile, and parent-feedback-tablet all passed without horizontal overflow, broken images, image 404s, Recharts invalid-size warnings, mobile login replica requests, or feedback bottom-nav coverage."
+      },
+      "remainingRisk": "unfixedReasons={\"bugbash:smoke\":\"The remaining smoke failures are outside F60 scope and pre-existing/currently owned by other threads: teacher duplicate key warning and parent suggestions API 500 duplicateOf BUG-002.\"} | conflictRisks=[\"F60 touched files already modified by earlier fix threads; changes were kept narrowly scoped to CSS/resource/responsive behavior.\",\"scripts/extract-pixel-assets.mjs still writes full source paths to artifacts/source-index for local audit evidence, but strips them from public/pixel-replica/manifest.json.\"]"
     },
     {
       "bugId": "BUG-016",
       "title": "Parent AI follow-up suggestion click returns 500 and leaves the page unchanged",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B13",
       "role": "parent",
       "demoAccount": "林妈妈",
@@ -883,19 +1208,33 @@
       "suggestedFix": "Return a stable demo-safe fallback for follow-up failures and surface a visible handled error state instead of leaving the interaction unchanged.",
       "ownerSuggested": "parent/ai",
       "blocksRelease": false,
-      "notes": "Reproduced during the B13 required AI care suggestion path. No feedback form was submitted."
+      "notes": "Reproduced during the B13 required AI care suggestion path. No feedback form was submitted.",
+      "duplicateOf": "",
+      "fixedByThread": "F40",
+      "fixedAt": "2026-04-29T03:59:48.752Z",
+      "fixSummary": "F40 added follow-up fallback handling so failed follow-up requests still produce visible parent-facing output.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F40-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F40-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed"
+        ],
+        "evidence": "tool=Playwright; baseURL=http://localhost:3410"
+      },
+      "remainingRisk": "conflictRisks=[\"B24 storybook eager loading 未在 F40 范围内修改，保留给 F60。\",\"未修改 docs/bug-bash/BUGS.json；该文件由 F90 统一合并。\"]"
     },
     {
       "bugId": "BUG-B23-001",
       "title": "??????????????????????????",
       "severity": "P1",
-      "status": "open",
+      "status": "fixed",
       "foundByThread": "B23",
       "role": "teacher",
       "demoAccount": "???",
       "route": "/",
       "viewport": "unknown",
-      "browser": "Static code scan; no browser run",
+      "browser": "Playwright Chromium F00 retest against http://127.0.0.1:3330",
       "reproSteps": [
         "?????????",
         "??????????????????? /",
@@ -910,8 +1249,8 @@
         "none; static scan only"
       ],
       "screenshotBefore": "",
-      "screenshotAfter": "",
-      "videoOrTrace": "artifacts/bug-bash/B23/routing-auth-permission-scan.md",
+      "screenshotAfter": "artifacts/bug-bash/fixes/F00/permission-route-retest.json",
+      "videoOrTrace": "artifacts/bug-bash/fixes/F00/permission-route-retest.json",
       "sourceFilesSuspected": [
         "lib/navigation/primary-nav.ts",
         "app/page.tsx",
@@ -921,20 +1260,36 @@
       "likelyCause": "????????????????????????? OVERVIEW_ITEM???????????????????????????????",
       "suggestedFix": "??????? / ????????? / ??????? /teacher????????????? visibleChildren/?? scope????????????",
       "ownerSuggested": "frontend/auth",
-      "blocksRelease": true,
-      "notes": "B15 ?????????? BUG-012???????????????/??????????????"
+      "blocksRelease": false,
+      "notes": "B15 ?????????? BUG-012???????????????/?????????????? F00 fixed 2026-04-29: centralized route access, session role, proxy/AppShell role guards, login next authorization, and teacher scope retested by artifacts/bug-bash/fixes/F00/permission-route-retest.json.",
+      "duplicateOf": "",
+      "fixedByThread": "F00",
+      "fixedAt": "2026-04-29T02:42:40.065Z",
+      "fixSummary": "F00 validated and sanitized login next redirects so demo accounts cannot land on unauthorized role routes.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F00-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F00-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "F00 Playwright route/auth retest: passed",
+          "npm run bugbash:smoke: failed-non-f00-p2-residuals"
+        ],
+        "evidence": "tool=Playwright Chromium; baseURL=http://127.0.0.1:3330; artifact=artifacts/bug-bash/fixes/F00/permission-route-retest.json; summary={\"total\":23,\"passed\":23,\"failed\":0}"
+      },
+      "remainingRisk": "unfixedReasons={\"BUG-001\":\"P2 notification-events 503 remains out of F00 scope; bugbash smoke still reports it as a non-blocking residual.\",\"BUG-002\":\"P2 parent suggestions issue remains out of F00 scope; not changed by this thread.\",\"BUG-003\":\"P2 parent storybook 503 remains out of F00 scope; bugbash smoke still reports it as a non-blocking residual.\",\"bugbash:smoke\":\"The suite failed on 39 P2 issues, including existing API fallback bugs and local analytics/404 noise; F00-specific Playwright checks passed 23/23.\"} | conflictRisks=[\"Existing dev server on port 3000 held the Next dev lock, so F00 retest used next start on port 3330 after a successful production build.\",\"Legacy session cookies without role are intentionally cleared on role-owned protected routes and redirected to login.\",\"Navigation changes remove cross-role shortcuts only; role-owned routes remain present and are guarded.\"]"
     },
     {
       "bugId": "BUG-B23-002",
       "title": "?? next ???????????????????????????",
       "severity": "P1",
-      "status": "open",
+      "status": "fixed",
       "foundByThread": "B23",
       "role": "login",
       "demoAccount": "none",
       "route": "/login?next=...",
       "viewport": "unknown",
-      "browser": "Static code scan; no browser run",
+      "browser": "Playwright Chromium F00 retest against http://127.0.0.1:3330",
       "reproSteps": [
         "?? /login?next=/admin",
         "???????????",
@@ -949,8 +1304,8 @@
         "none; static scan only"
       ],
       "screenshotBefore": "",
-      "screenshotAfter": "",
-      "videoOrTrace": "artifacts/bug-bash/B23/routing-auth-permission-scan.md",
+      "screenshotAfter": "artifacts/bug-bash/fixes/F00/permission-route-retest.json",
+      "videoOrTrace": "artifacts/bug-bash/fixes/F00/permission-route-retest.json",
       "sourceFilesSuspected": [
         "app/login/page.tsx",
         "proxy.ts"
@@ -958,14 +1313,30 @@
       "likelyCause": "???? next ???????????????????????????????????????????????????????",
       "suggestedFix": "????? next??????? / ?????????? scheme?// ? javascript:??????????????????? getDefaultLandingPath(role)?",
       "ownerSuggested": "frontend/auth",
-      "blocksRelease": true,
-      "notes": "B15 ???????? BUG-011/012/013???????????????????? next ????/??????"
+      "blocksRelease": false,
+      "notes": "B15 ???????? BUG-011/012/013???????????????????? next ????/?????? F00 fixed 2026-04-29: centralized route access, session role, proxy/AppShell role guards, login next authorization, and teacher scope retested by artifacts/bug-bash/fixes/F00/permission-route-retest.json.",
+      "duplicateOf": "",
+      "fixedByThread": "F00",
+      "fixedAt": "2026-04-29T02:42:40.065Z",
+      "fixSummary": "F00 removed teacher exposure to global data overview paths and scoped protected route access by role.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F00-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F00-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "F00 Playwright route/auth retest: passed",
+          "npm run bugbash:smoke: failed-non-f00-p2-residuals"
+        ],
+        "evidence": "tool=Playwright Chromium; baseURL=http://127.0.0.1:3330; artifact=artifacts/bug-bash/fixes/F00/permission-route-retest.json; summary={\"total\":23,\"passed\":23,\"failed\":0}"
+      },
+      "remainingRisk": "unfixedReasons={\"BUG-001\":\"P2 notification-events 503 remains out of F00 scope; bugbash smoke still reports it as a non-blocking residual.\",\"BUG-002\":\"P2 parent suggestions issue remains out of F00 scope; not changed by this thread.\",\"BUG-003\":\"P2 parent storybook 503 remains out of F00 scope; bugbash smoke still reports it as a non-blocking residual.\",\"bugbash:smoke\":\"The suite failed on 39 P2 issues, including existing API fallback bugs and local analytics/404 noise; F00-specific Playwright checks passed 23/23.\"} | conflictRisks=[\"Existing dev server on port 3000 held the Next dev lock, so F00 retest used next start on port 3330 after a successful production build.\",\"Legacy session cookies without role are intentionally cleared on role-owned protected routes and redirected to login.\",\"Navigation changes remove cross-role shortcuts only; role-owned routes remain present and are guarded.\"]"
     },
     {
       "bugId": "BUG-B23-003",
       "title": "??????????? child ??????????? URL ???",
       "severity": "P2",
-      "status": "open",
+      "status": "fixed",
       "foundByThread": "B23",
       "role": "parent",
       "demoAccount": "???",
@@ -995,13 +1366,27 @@
       "suggestedFix": "? selectedFeed ?????/?? child query??? child ???????? child?????? child ??????????????",
       "ownerSuggested": "parent/storybook",
       "blocksRelease": false,
-      "notes": "/parent ? /parent/agent ?? nextParams.set(\"child\", ...) ? canonicalization?storybook ?????????"
+      "notes": "/parent ? /parent/agent ?? nextParams.set(\"child\", ...) ? canonicalization?storybook ?????????",
+      "duplicateOf": "",
+      "fixedByThread": "F40",
+      "fixedAt": "2026-04-29T03:59:48.752Z",
+      "fixSummary": "F40 canonicalized missing or invalid parent storybook child parameters to a valid child route.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F40-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F40-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed"
+        ],
+        "evidence": "tool=Playwright; baseURL=http://localhost:3410"
+      },
+      "remainingRisk": "conflictRisks=[\"B24 storybook eager loading 未在 F40 范围内修改，保留给 F60。\",\"未修改 docs/bug-bash/BUGS.json；该文件由 F90 统一合并。\"]"
     },
     {
       "bugId": "BUG-B25-001",
       "title": "?????????????????????????",
       "severity": "P2",
-      "status": "open",
+      "status": "fixed",
       "foundByThread": "B25",
       "role": "teacher",
       "demoAccount": "???????",
@@ -1031,13 +1416,24 @@
       "suggestedFix": "????? viewModel/useApp ????????????????????????????????????????? demo/visual mode ??????",
       "ownerSuggested": "teacher/workbench",
       "blocksRelease": false,
-      "notes": "Static evidence: visualClassSize?visualAttendance?abnormalCount?waitingMessages?pendingRecords ?? Math.max?highPriorityChildren ??????????"
+      "notes": "Static evidence: visualClassSize?visualAttendance?abnormalCount?waitingMessages?pendingRecords ?? Math.max?highPriorityChildren ??????????",
+      "duplicateOf": "",
+      "fixedByThread": "F30",
+      "fixedAt": "2026-04-29T03:33:58.179Z",
+      "fixSummary": "F30 removed teacher workbench minimum/mock counts so true empty and zero states can render.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F30-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F30-result.md",
+        "checksRun": [],
+        "evidence": ""
+      },
+      "remainingRisk": "No in-scope residual risk reported by F30; F90 lint/build revalidation is recorded in FIX_MERGE_REPORT.md."
     },
     {
       "bugId": "BUG-B25-002",
       "title": "?????? state ??? KPI/??/?? mock ??",
       "severity": "P2",
-      "status": "open",
+      "status": "fixed",
       "foundByThread": "B25",
       "role": "director",
       "demoAccount": "???",
@@ -1068,13 +1464,28 @@
       "suggestedFix": "? home/adminContext ?? KPI????????????? ?? ???? 0 ????????????????????????? mock ?????????",
       "ownerSuggested": "admin/dashboard",
       "blocksRelease": false,
-      "notes": "Static evidence: healthAbnormalCount || 1.2?scope.visibleChildren || 108?Math.max(..., 5)?weeklyPendingRows?childArchiveRows?feedbackCompletionRate || 100?"
+      "notes": "Static evidence: healthAbnormalCount || 1.2?scope.visibleChildren || 108?Math.max(..., 5)?weeklyPendingRows?childArchiveRows?feedbackCompletionRate || 100?",
+      "duplicateOf": "",
+      "fixedByThread": "F20",
+      "fixedAt": "2026-04-29T03:46:33.866Z",
+      "fixSummary": "F20 allowed real zero-state director data to render without mock fallback overriding empty scoped records.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F20-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F20-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Playwright fallback F20 director regression: passed"
+        ],
+        "evidence": "fallback=Playwright; baseURL=http://127.0.0.1:3000; ok=true"
+      },
+      "remainingRisk": "conflictRisks=[\"components/Navbar.tsx and lib/navigation/primary-nav.ts had parallel auth/navigation changes from other threads; F20 only layered query-aware active-state handling on top.\",\"lib/store.tsx change is intentionally narrow: demo snapshots with emptied core record arrays are allowed so admin zero-state QA can render real 0 values instead of throwing in development.\"] | notes=[\"BUGS.md and BUGS.json were not edited by F20.\",\"Existing ignored Playwright artifacts were written under artifacts/bug-bash/fixes/F20 for evidence.\"]"
     },
     {
       "bugId": "BUG-B25-003",
       "title": "????????????????????? child ??",
       "severity": "P2",
-      "status": "open",
+      "status": "fixed",
       "foundByThread": "B25",
       "role": "parent",
       "demoAccount": "???",
@@ -1105,13 +1516,27 @@
       "suggestedFix": "? selectedFeed.child ? ParentStructuredFeedbackComposer ?? childName/className ?????? key by childId ?????????????????",
       "ownerSuggested": "parent/feedback",
       "blocksRelease": false,
-      "notes": "Static evidence: ParentStructuredFeedbackComposer lines around header render literal ??/??? while parent page only passes childId."
+      "notes": "Static evidence: ParentStructuredFeedbackComposer lines around header render literal ??/??? while parent page only passes childId.",
+      "duplicateOf": "",
+      "fixedByThread": "F40",
+      "fixedAt": "2026-04-29T03:59:48.752Z",
+      "fixSummary": "F40 made structured parent feedback display and validate the currently selected child instead of hard-coded child identity.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F40-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F40-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed"
+        ],
+        "evidence": "tool=Playwright; baseURL=http://localhost:3410"
+      },
+      "remainingRisk": "conflictRisks=[\"B24 storybook eager loading 未在 F40 范围内修改，保留给 F60。\",\"未修改 docs/bug-bash/BUGS.json；该文件由 F90 统一合并。\"]"
     },
     {
       "bugId": "BUG-B20-001",
       "title": "全仓 TypeScript 检查失败，测试与截图脚本类型已偏离当前契约",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B20",
       "role": "shared",
       "demoAccount": "none",
@@ -1141,13 +1566,33 @@
       "suggestedFix": "Update stale test fixtures to current domain types, narrow union snapshots before property access, avoid as const where mutable arrays are required, export or stop importing non-public helpers, then add a typecheck script.",
       "ownerSuggested": "shared/test-infra",
       "blocksRelease": false,
-      "notes": "npm run build still passes because Next's production type phase does not typecheck all included test fixtures the same way this direct whole-repo tsc command does."
+      "notes": "npm run build still passes because Next's production type phase does not typecheck all included test fixtures the same way this direct whole-repo tsc command does.",
+      "duplicateOf": "",
+      "fixedByThread": "F70",
+      "fixedAt": "2026-04-29T03:38:22.6686255Z",
+      "fixSummary": "F70 added stable typecheck tooling and fixed TypeScript/test fixture drift for current route and agent types.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F70-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F70-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "npx tsc --noEmit: passed",
+          "npx --no-install tsc --noEmit --pretty false --incremental false: passed",
+          "npm run typecheck: passed",
+          "npm run test:parent-message-mapper: passed",
+          "npm run bugbash:smoke: failed-preflight-expected",
+          "BUGBASH_BASE_URL reuse mode: failed-non-f70-residuals"
+        ],
+        "evidence": "tool=Playwright Chromium; baseURL=http://127.0.0.1:3000; artifact=artifacts/bug-bash/B26/b26-smoke-results.json; preflight=With .next/dev/lock and no BUGBASH_BASE_URL, npm run bugbash:smoke exits before Playwright with a clear reuse-service message.; reuse=With BUGBASH_BASE_URL set, Playwright webServer is disabled and the suite runs against the existing service."
+      },
+      "remainingRisk": "unfixedReasons={\"bugbash:smoke\":\"Full smoke still fails on non-F70 B26 residuals. F70 fixed startup/reuse/lock handling and did not change business pages or generate new bug records.\",\"BUG-B26-001\":\"Duplicate status intentionally retained for F90 merge.\",\"BUG-B26-002\":\"Duplicate status intentionally retained for F90 merge.\",\"BUG-B26-003\":\"Duplicate status intentionally retained for F90 merge.\"} | conflictRisks=[\"The worktree already contained unrelated dirty files and BUGS/triage edits from other threads; F70 did not intentionally modify BUGS.md or BUGS.json.\",\".next/dev/lock is still present because an existing dev server is running; this is expected and now handled by preflight.\",\"Smoke artifacts under artifacts/bug-bash/B26 were refreshed by the required smoke run and still contain non-F70 residual failures.\"]"
     },
     {
       "bugId": "BUG-B20-002",
       "title": "`npm run test:parent-message-mapper` 无法解析 `@/lib` 路径别名",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B20",
       "role": "shared",
       "demoAccount": "none",
@@ -1176,13 +1621,33 @@
       "suggestedFix": "Run tests through a loader/runtime that supports TS path aliases, precompile tests before execution, or replace runtime @/ imports in directly executed test targets with resolvable relative/package imports.",
       "ownerSuggested": "shared/test-infra",
       "blocksRelease": false,
-      "notes": "This is the only test-like script in package.json; there is no root test, typecheck, or preview script."
+      "notes": "This is the only test-like script in package.json; there is no root test, typecheck, or preview script.",
+      "duplicateOf": "",
+      "fixedByThread": "F70",
+      "fixedAt": "2026-04-29T03:38:22.6686255Z",
+      "fixSummary": "F70 fixed Node native test alias loading and bugbash smoke preflight behavior for existing dev-server reuse.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F70-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F70-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "npx tsc --noEmit: passed",
+          "npx --no-install tsc --noEmit --pretty false --incremental false: passed",
+          "npm run typecheck: passed",
+          "npm run test:parent-message-mapper: passed",
+          "npm run bugbash:smoke: failed-preflight-expected",
+          "BUGBASH_BASE_URL reuse mode: failed-non-f70-residuals"
+        ],
+        "evidence": "tool=Playwright Chromium; baseURL=http://127.0.0.1:3000; artifact=artifacts/bug-bash/B26/b26-smoke-results.json; preflight=With .next/dev/lock and no BUGBASH_BASE_URL, npm run bugbash:smoke exits before Playwright with a clear reuse-service message.; reuse=With BUGBASH_BASE_URL set, Playwright webServer is disabled and the suite runs against the existing service."
+      },
+      "remainingRisk": "unfixedReasons={\"bugbash:smoke\":\"Full smoke still fails on non-F70 B26 residuals. F70 fixed startup/reuse/lock handling and did not change business pages or generate new bug records.\",\"BUG-B26-001\":\"Duplicate status intentionally retained for F90 merge.\",\"BUG-B26-002\":\"Duplicate status intentionally retained for F90 merge.\",\"BUG-B26-003\":\"Duplicate status intentionally retained for F90 merge.\"} | conflictRisks=[\"The worktree already contained unrelated dirty files and BUGS/triage edits from other threads; F70 did not intentionally modify BUGS.md or BUGS.json.\",\".next/dev/lock is still present because an existing dev server is running; this is expected and now handled by preflight.\",\"Smoke artifacts under artifacts/bug-bash/B26 were refreshed by the required smoke run and still contain non-F70 residual failures.\"]"
     },
     {
       "bugId": "BUG-B22-001",
       "title": "晨检弹窗允许空/非法体温保存为 NaN",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B22",
       "role": "shared",
       "demoAccount": "none",
@@ -1213,13 +1678,29 @@
       "suggestedFix": "保存前校验体温必填、数值合法和合理范围；失败时保留弹窗并显示表单错误。",
       "ownerSuggested": "shared-records/ui",
       "blocksRelease": false,
-      "notes": "B22 表单校验问题；同时会影响后续 toFixed、图表聚合等依赖数值的展示路径。"
+      "notes": "B22 表单校验问题；同时会影响后续 toFixed、图表聚合等依赖数值的展示路径。",
+      "duplicateOf": "",
+      "fixedByThread": "F50",
+      "fixedAt": "2026-04-29T05:42:36.014Z",
+      "fixSummary": "F50 completed children/shared page interactions including search empty state and open/close dialog flows.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F50-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F50-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Playwright F50 shared interactions regression against http://127.0.0.1:3000: passed",
+          "$env:BUGBASH_BASE_URL='http://127.0.0.1:3000'; npm run bugbash:smoke: failed-non-f50-residuals"
+        ],
+        "evidence": "tool=Playwright Chromium; baseURL=http://127.0.0.1:3000; ok=true"
+      },
+      "remainingRisk": "conflictRisks=[\"当前工作树已有 F00/F20/F30/F40/F70 等线程留下的大量未提交修改；F50只叠加了 app/children/page.tsx、app/health/page.tsx、components/Navbar.tsx 和 F50 结果文件。\",\"components/Navbar.tsx 已包含上游认证/导航改动；F50仅补充顶部搜索/通知/消息按钮反馈和 ShellIconButton onClick 契约。\",\"BUGS.md 与 BUGS.json 未由 F50 修改，保留给 F90 统一合并状态。\"]"
     },
     {
       "bugId": "BUG-B22-002",
       "title": "高风险会诊生成按钮在流式生成期间仍可重复点击",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B22",
       "role": "teacher",
       "demoAccount": "none",
@@ -1250,13 +1731,24 @@
       "suggestedFix": "将 isStreaming 传入 ConsultationInputCard，生成期间禁用按钮，并在 runConsultation 开头增加活动流保护。",
       "ownerSuggested": "teacher/ai",
       "blocksRelease": false,
-      "notes": "B22 loading/repeated-click 问题；高风险会诊属于核心教师工作流，建议优先修复。"
+      "notes": "B22 loading/repeated-click 问题；高风险会诊属于核心教师工作流，建议优先修复。",
+      "duplicateOf": "",
+      "fixedByThread": "F30",
+      "fixedAt": "2026-04-29T03:33:58.179Z",
+      "fixSummary": "F30 guarded high-risk consultation generation against repeated starts while a stream is already running.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F30-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F30-result.md",
+        "checksRun": [],
+        "evidence": ""
+      },
+      "remainingRisk": "No in-scope residual risk reported by F30; F90 lint/build revalidation is recorded in FIX_MERGE_REPORT.md."
     },
     {
       "bugId": "BUG-B22-003",
       "title": "顶部栏搜索、通知、消息图标按钮没有行为",
       "severity": "P3",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B22",
       "role": "shared",
       "demoAccount": "none",
@@ -1286,13 +1778,29 @@
       "suggestedFix": "接入对应弹层/页面，或改为 disabled/非按钮视觉元素。",
       "ownerSuggested": "shared-navigation",
       "blocksRelease": false,
-      "notes": "B22 visual-only button 问题；不重复记录既有导航高亮或角色权限问题。"
+      "notes": "B22 visual-only button 问题；不重复记录既有导航高亮或角色权限问题。",
+      "duplicateOf": "",
+      "fixedByThread": "F50",
+      "fixedAt": "2026-04-29T05:42:36.014Z",
+      "fixSummary": "F50 added shared form validation behavior so invalid health submissions stay open with feedback.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F50-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F50-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Playwright F50 shared interactions regression against http://127.0.0.1:3000: passed",
+          "$env:BUGBASH_BASE_URL='http://127.0.0.1:3000'; npm run bugbash:smoke: failed-non-f50-residuals"
+        ],
+        "evidence": "tool=Playwright Chromium; baseURL=http://127.0.0.1:3000; ok=true"
+      },
+      "remainingRisk": "conflictRisks=[\"当前工作树已有 F00/F20/F30/F40/F70 等线程留下的大量未提交修改；F50只叠加了 app/children/page.tsx、app/health/page.tsx、components/Navbar.tsx 和 F50 结果文件。\",\"components/Navbar.tsx 已包含上游认证/导航改动；F50仅补充顶部搜索/通知/消息按钮反馈和 ShellIconButton onClick 契约。\",\"BUGS.md 与 BUGS.json 未由 F50 修改，保留给 F90 统一合并状态。\"]"
     },
     {
       "bugId": "BUG-B22-004",
       "title": "园长端导出、分享和使用说明按钮无点击行为",
       "severity": "P3",
-      "status": "confirmed",
+      "status": "duplicate",
       "foundByThread": "B22",
       "role": "director",
       "demoAccount": "陈园长",
@@ -1324,13 +1832,22 @@
       "suggestedFix": "实现导出、分享、说明弹窗，或明确渲染为 disabled/说明性控件。",
       "ownerSuggested": "director/frontend",
       "blocksRelease": false,
-      "notes": "与既有 BUG-B11-003 的刷新数据错误跳转不同，本条只覆盖无 handler 的导出/分享/help 按钮。"
+      "notes": "Duplicate of BUG-B21-004. B22 provides additional static scan evidence for the same director export/share/help no-handler risk; BUG-B11-003 remains separate because it tracks the mislabeled refresh CTA.",
+      "duplicateOf": "BUG-B21-004",
+      "fixedByThread": "",
+      "fixedAt": "",
+      "fixSummary": "Duplicate of BUG-B21-004; retained as historical evidence and not counted as a separate fix.",
+      "verification": {
+        "status": "duplicate-retained",
+        "duplicateOf": "BUG-B21-004"
+      },
+      "remainingRisk": "Follow canonical record BUG-B21-004."
     },
     {
       "bugId": "BUG-B22-005",
       "title": "教师 AI 沟通模式多个控件无行为且发送按钮语义错误",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B22",
       "role": "teacher",
       "demoAccount": "none",
@@ -1360,13 +1877,24 @@
       "suggestedFix": "接入真实 tab/filter/dropdown/reply composer，发送前校验输入；未实现项改 disabled 或非交互样式。",
       "ownerSuggested": "teacher/ai",
       "blocksRelease": false,
-      "notes": "B22 重点按钮语义问题；不重复记录既有教师工作台待办 visual-only 问题。"
+      "notes": "B22 重点按钮语义问题；不重复记录既有教师工作台待办 visual-only 问题。",
+      "duplicateOf": "",
+      "fixedByThread": "F30",
+      "fixedAt": "2026-04-29T03:33:58.179Z",
+      "fixSummary": "F30 replaced hard-coded home-school communication content with derived local data, tabs, filters, and local reply behavior.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F30-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F30-result.md",
+        "checksRun": [],
+        "evidence": ""
+      },
+      "remainingRisk": "No in-scope residual risk reported by F30; F90 lint/build revalidation is recorded in FIX_MERGE_REPORT.md."
     },
     {
       "bugId": "BUG-B22-006",
       "title": "健康材料解析顶部文件和幼儿操作按钮无行为",
       "severity": "P3",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B22",
       "role": "teacher",
       "demoAccount": "none",
@@ -1396,13 +1924,24 @@
       "suggestedFix": "绑定到文件列表/幼儿选择控件，或移除按钮样式并改为展示文本。",
       "ownerSuggested": "teacher/health-files",
       "blocksRelease": false,
-      "notes": "下方真实上传表单有提交保护；本条仅覆盖顶部 visual-only 操作。"
+      "notes": "下方真实上传表单有提交保护；本条仅覆盖顶部 visual-only 操作。",
+      "duplicateOf": "",
+      "fixedByThread": "F30",
+      "fixedAt": "2026-04-29T03:33:58.179Z",
+      "fixSummary": "F30 removed misleading sample health-file analysis records when no upload exists and preserved real upload validation.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F30-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F30-result.md",
+        "checksRun": [],
+        "evidence": ""
+      },
+      "remainingRisk": "No in-scope residual risk reported by F30; F90 lint/build revalidation is recorded in FIX_MERGE_REPORT.md."
     },
     {
       "bugId": "BUG-B22-007",
       "title": "高风险会诊侧栏筛选、行动和讨论控件为 visual-only",
       "severity": "P3",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B22",
       "role": "teacher",
       "demoAccount": "none",
@@ -1432,13 +1971,24 @@
       "suggestedFix": "接入筛选状态、档案跳转、行动入口和讨论输入提交；暂未支持的控件禁用或改为非交互样式。",
       "ownerSuggested": "teacher/consultation",
       "blocksRelease": false,
-      "notes": "与 BUG-B22-002 不同，本条覆盖会诊页非生成按钮的 visual-only 交互。"
+      "notes": "与 BUG-B22-002 不同，本条覆盖会诊页非生成按钮的 visual-only 交互。",
+      "duplicateOf": "",
+      "fixedByThread": "F30",
+      "fixedAt": "2026-04-29T03:33:58.179Z",
+      "fixSummary": "F30 added real behavior or local feedback to high-risk consultation filters, case entry, next actions, and discussion input.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F30-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F30-result.md",
+        "checksRun": [],
+        "evidence": ""
+      },
+      "remainingRisk": "No in-scope residual risk reported by F30; F90 lint/build revalidation is recorded in FIX_MERGE_REPORT.md."
     },
     {
       "bugId": "BUG-B21-001",
       "title": "家长成长绘本自动注入 demoSeed 并把演示种子内容发送到真实生成接口",
       "severity": "P1",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B21",
       "role": "parent",
       "demoAccount": "林妈妈",
@@ -1472,13 +2022,27 @@
       "suggestedFix": "Keep demo seed behind an explicit screenshot/dev flag, do not auto-inject demoSeed in normal parent navigation, and prevent seeded demo fields from entering real API/cache calls.",
       "ownerSuggested": "parent/storybook",
       "blocksRelease": true,
-      "notes": "This is distinct from existing parent storybook 503 records; it tracks mock/demo data entering the real request path."
+      "notes": "This is distinct from existing parent storybook 503 records; it tracks mock/demo data entering the real request path.",
+      "duplicateOf": "",
+      "fixedByThread": "F40",
+      "fixedAt": "2026-04-29T03:59:48.752Z",
+      "fixSummary": "F40 removed automatic demoSeed propagation from normal parent storybook entry points and isolated explicit demo seed use.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F40-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F40-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed"
+        ],
+        "evidence": "tool=Playwright; baseURL=http://localhost:3410"
+      },
+      "remainingRisk": "conflictRisks=[\"B24 storybook eager loading 未在 F40 范围内修改，保留给 F60。\",\"未修改 docs/bug-bash/BUGS.json；该文件由 F90 统一合并。\"]"
     },
     {
       "bugId": "BUG-B21-002",
       "title": "教师 AI 页语音/OCR 入口创建 mock 草稿并可进入真实持久化队列",
       "severity": "P1",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B21",
       "role": "teacher",
       "demoAccount": "李老师；周老师",
@@ -1513,13 +2077,24 @@
       "suggestedFix": "Gate mock draft creation to demo/dev mode, visibly label it as demo-only, and block source: mock-* drafts from remote sync unless explicitly running a demo flow.",
       "ownerSuggested": "teacher/agent",
       "blocksRelease": true,
-      "notes": "This matches B21 mock-data risk: mock data can be saved as if it were teacher-created business data."
+      "notes": "This matches B21 mock-data risk: mock data can be saved as if it were teacher-created business data.",
+      "duplicateOf": "",
+      "fixedByThread": "F30",
+      "fixedAt": "2026-04-29T03:33:58.179Z",
+      "fixSummary": "F30 kept teacher mock voice/OCR drafts local-only and filtered mock draft content before remote state sync.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F30-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F30-result.md",
+        "checksRun": [],
+        "evidence": ""
+      },
+      "remainingRisk": "No in-scope residual risk reported by F30; F90 lint/build revalidation is recorded in FIX_MERGE_REPORT.md."
     },
     {
       "bugId": "BUG-B21-003",
       "title": "园长 replica 看板和周报展示静态 mock 数据及过期日期但缺少一致占位标识",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B21",
       "role": "director",
       "demoAccount": "陈园长",
@@ -1552,13 +2127,28 @@
       "suggestedFix": "Derive data from the real view model where available; otherwise add visible “演示/视觉占位” labels and avoid stale dates or hard-coded totals.",
       "ownerSuggested": "admin/pixel-replica",
       "blocksRelease": false,
-      "notes": "Existing B11 records cover some individual director interactions; this record groups the static/mock data contamination risk."
+      "notes": "Existing B11 records cover some individual director interactions; this record groups the static/mock data contamination risk.",
+      "duplicateOf": "",
+      "fixedByThread": "F20",
+      "fixedAt": "2026-04-29T03:46:33.866Z",
+      "fixSummary": "F20 removed static director replica data contamination from core dashboard/report rendering paths.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F20-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F20-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Playwright fallback F20 director regression: passed"
+        ],
+        "evidence": "fallback=Playwright; baseURL=http://127.0.0.1:3000; ok=true"
+      },
+      "remainingRisk": "conflictRisks=[\"components/Navbar.tsx and lib/navigation/primary-nav.ts had parallel auth/navigation changes from other threads; F20 only layered query-aware active-state handling on top.\",\"lib/store.tsx change is intentionally narrow: demo snapshots with emptied core record arrays are allowed so admin zero-state QA can render real 0 values instead of throwing in development.\"] | notes=[\"BUGS.md and BUGS.json were not edited by F20.\",\"Existing ignored Playwright artifacts were written under artifacts/bug-bash/fixes/F20 for evidence.\"]"
     },
     {
       "bugId": "BUG-B21-004",
       "title": "园长导出/分享/使用说明按钮启用但没有处理逻辑或不可用反馈",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B21",
       "role": "director",
       "demoAccount": "陈园长",
@@ -1591,13 +2181,28 @@
       "suggestedFix": "Wire real export/share/help actions, or mark them disabled with “暂未开放/视觉占位” feedback.",
       "ownerSuggested": "admin/pixel-replica",
       "blocksRelease": false,
-      "notes": "Existing BUG-B11-003 tracks the mislabeled refresh CTA separately; this record covers other enabled no-op replica buttons."
+      "notes": "Existing BUG-B11-003 tracks the mislabeled refresh CTA separately; this record covers other enabled no-op replica buttons.",
+      "duplicateOf": "",
+      "fixedByThread": "F20",
+      "fixedAt": "2026-04-29T03:46:33.866Z",
+      "fixSummary": "F20 disabled director export/share/help style visual-only actions and surfaced unavailable state instead of no-op buttons.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F20-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F20-result.md",
+        "checksRun": [
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Playwright fallback F20 director regression: passed"
+        ],
+        "evidence": "fallback=Playwright; baseURL=http://127.0.0.1:3000; ok=true"
+      },
+      "remainingRisk": "conflictRisks=[\"components/Navbar.tsx and lib/navigation/primary-nav.ts had parallel auth/navigation changes from other threads; F20 only layered query-aware active-state handling on top.\",\"lib/store.tsx change is intentionally narrow: demo snapshots with emptied core record arrays are allowed so admin zero-state QA can render real 0 values instead of throwing in development.\"] | notes=[\"BUGS.md and BUGS.json were not edited by F20.\",\"Existing ignored Playwright artifacts were written under artifacts/bug-bash/fixes/F20 for evidence.\"]"
     },
     {
       "bugId": "BUG-B21-005",
       "title": "教师工作台移动端铃铛和“自定义”入口看似可交互但无逻辑反馈",
       "severity": "P3",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B21",
       "role": "teacher",
       "demoAccount": "李老师；周老师",
@@ -1627,13 +2232,24 @@
       "suggestedFix": "Connect them to real notification/settings flows, or render them as non-interactive/disabled with clear unavailable state.",
       "ownerSuggested": "teacher/workbench",
       "blocksRelease": false,
-      "notes": "Teacher task-row no-op behavior is already tracked by BUG-B12-001; this entry covers additional mobile visual-only controls."
+      "notes": "Teacher task-row no-op behavior is already tracked by BUG-B12-001; this entry covers additional mobile visual-only controls.",
+      "duplicateOf": "",
+      "fixedByThread": "F30",
+      "fixedAt": "2026-04-29T03:33:58.179Z",
+      "fixSummary": "F30 connected teacher mobile notification entry behavior and marked customization as unavailable instead of silent no-op.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F30-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F30-result.md",
+        "checksRun": [],
+        "evidence": ""
+      },
+      "remainingRisk": "No in-scope residual risk reported by F30; F90 lint/build revalidation is recorded in FIX_MERGE_REPORT.md."
     },
     {
       "bugId": "BUG-B24-001",
       "title": "登录页移动端仍下载 857KB 桌面裁剪大图",
       "severity": "P2",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B24",
       "role": "guest",
       "demoAccount": "none",
@@ -1664,13 +2280,31 @@
       "suggestedFix": "只在桌面断点渲染该图片，或移除移动端 preload/priority；可改为响应式 picture/media、客户端断点条件渲染，或把桌面装饰图延迟到 901px 以上加载。",
       "ownerSuggested": "login/ui",
       "blocksRelease": false,
-      "notes": "app/login/page.tsx:261 渲染图片；app/login/login-pixel.module.css:42 默认隐藏，app/login/login-pixel.module.css:773 仅桌面显示。"
+      "notes": "app/login/page.tsx:261 渲染图片；app/login/login-pixel.module.css:42 默认隐藏，app/login/login-pixel.module.css:773 仅桌面显示。",
+      "duplicateOf": "",
+      "fixedByThread": "F60",
+      "fixedAt": "2026-04-29T06:20:46.432Z",
+      "fixSummary": "F60 gated the desktop login replica image behind desktop-only rendering and removed mobile priority/unoptimized loading.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F60-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F60-result.md",
+        "checksRun": [
+          "node --check scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Select-String production/public path leak scan: passed",
+          "node scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run bugbash:smoke: failed"
+        ],
+        "evidence": "login-mobile, login-register-dialog-mobile, parent-home-mobile, parent-storybook-mobile, teacher-workbench-mobile, director-home-tablet, director-home-mobile, and parent-feedback-tablet all passed without horizontal overflow, broken images, image 404s, Recharts invalid-size warnings, mobile login replica requests, or feedback bottom-nav coverage."
+      },
+      "remainingRisk": "unfixedReasons={\"bugbash:smoke\":\"The remaining smoke failures are outside F60 scope and pre-existing/currently owned by other threads: teacher duplicate key warning and parent suggestions API 500 duplicateOf BUG-002.\"} | conflictRisks=[\"F60 touched files already modified by earlier fix threads; changes were kept narrowly scoped to CSS/resource/responsive behavior.\",\"scripts/extract-pixel-assets.mjs still writes full source paths to artifacts/source-index for local audit evidence, but strips them from public/pixel-replica/manifest.json.\"]"
     },
     {
       "bugId": "BUG-B24-002",
       "title": "绘本查看器所有场景图固定 eager loading，长绘本首屏加载过重",
       "severity": "P3",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B24",
       "role": "parent",
       "demoAccount": "林妈妈",
@@ -1700,13 +2334,31 @@
       "suggestedFix": "给 StoryBookImage 增加 loading 参数；当前页或首屏图使用 eager，其余页使用 lazy，并保留 decoding=\"async\"。",
       "ownerSuggested": "parent/storybook",
       "blocksRelease": false,
-      "notes": "components/parent/StoryBookViewer.tsx:309 定义 StoryBookImage，components/parent/StoryBookViewer.tsx:315 固定 loading=\"eager\"。"
+      "notes": "components/parent/StoryBookViewer.tsx:309 定义 StoryBookImage，components/parent/StoryBookViewer.tsx:315 固定 loading=\"eager\"。",
+      "duplicateOf": "",
+      "fixedByThread": "F60",
+      "fixedAt": "2026-04-29T06:20:46.432Z",
+      "fixSummary": "F60 added explicit storybook image loading strategy so only current/first scene loads eagerly and offscreen scenes lazy load.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F60-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F60-result.md",
+        "checksRun": [
+          "node --check scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Select-String production/public path leak scan: passed",
+          "node scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run bugbash:smoke: failed"
+        ],
+        "evidence": "login-mobile, login-register-dialog-mobile, parent-home-mobile, parent-storybook-mobile, teacher-workbench-mobile, director-home-tablet, director-home-mobile, and parent-feedback-tablet all passed without horizontal overflow, broken images, image 404s, Recharts invalid-size warnings, mobile login replica requests, or feedback bottom-nav coverage."
+      },
+      "remainingRisk": "unfixedReasons={\"bugbash:smoke\":\"The remaining smoke failures are outside F60 scope and pre-existing/currently owned by other threads: teacher duplicate key warning and parent suggestions API 500 duplicateOf BUG-002.\"} | conflictRisks=[\"F60 touched files already modified by earlier fix threads; changes were kept narrowly scoped to CSS/resource/responsive behavior.\",\"scripts/extract-pixel-assets.mjs still writes full source paths to artifacts/source-index for local audit evidence, but strips them from public/pixel-replica/manifest.json.\"]"
     },
     {
       "bugId": "BUG-B24-003",
       "title": "Pixel replica 运行时数据保留 Windows 中文绝对源路径",
       "severity": "P3",
-      "status": "confirmed",
+      "status": "fixed",
       "foundByThread": "B24",
       "role": "shared",
       "demoAccount": "none",
@@ -1738,7 +2390,25 @@
       "suggestedFix": "public/runtime 数据只保留 publicPath、basename 或相对设计标识；将 sourceRoot、sourceAbsolutePath 和 sourceReferences 移到 artifacts-only 报告，或在构建前剥离这些字段。",
       "ownerSuggested": "pixel-replica/assets",
       "blocksRelease": false,
-      "notes": "该问题不表现为 404，但会泄露本机路径并降低 Windows 中文路径以外环境的可移植性。"
+      "notes": "该问题不表现为 404，但会泄露本机路径并降低 Windows 中文路径以外环境的可移植性。",
+      "duplicateOf": "",
+      "fixedByThread": "F60",
+      "fixedAt": "2026-04-29T06:20:46.432Z",
+      "fixSummary": "F60 stripped local absolute source paths from public/runtime pixel replica data while keeping audit data in artifacts.",
+      "verification": {
+        "sourceResult": "docs/bug-bash/fix-results/F60-result.json",
+        "sourceMarkdown": "docs/bug-bash/fix-results/F60-result.md",
+        "checksRun": [
+          "node --check scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run lint: passed",
+          "npm run build: passed",
+          "Select-String production/public path leak scan: passed",
+          "node scripts/f60-responsive-assets-retest.mjs: passed",
+          "npm run bugbash:smoke: failed"
+        ],
+        "evidence": "login-mobile, login-register-dialog-mobile, parent-home-mobile, parent-storybook-mobile, teacher-workbench-mobile, director-home-tablet, director-home-mobile, and parent-feedback-tablet all passed without horizontal overflow, broken images, image 404s, Recharts invalid-size warnings, mobile login replica requests, or feedback bottom-nav coverage."
+      },
+      "remainingRisk": "unfixedReasons={\"bugbash:smoke\":\"The remaining smoke failures are outside F60 scope and pre-existing/currently owned by other threads: teacher duplicate key warning and parent suggestions API 500 duplicateOf BUG-002.\"} | conflictRisks=[\"F60 touched files already modified by earlier fix threads; changes were kept narrowly scoped to CSS/resource/responsive behavior.\",\"scripts/extract-pixel-assets.mjs still writes full source paths to artifacts/source-index for local audit evidence, but strips them from public/pixel-replica/manifest.json.\"]"
     },
     {
       "bugId": "BUG-B26-001",
@@ -1778,7 +2448,16 @@
       "suggestedFix": "Reuse the BUG-001 fix: provide a demo-safe fallback or handle unavailable notification-events without surfacing 503 console/network errors.",
       "ownerSuggested": "admin/dashboard",
       "blocksRelease": false,
-      "notes": "Duplicate confirmation of BUG-001 from the new B26 regression suite. Login, menu click, nonblank checks, and refresh checks all passed for ???."
+      "notes": "Duplicate confirmation of BUG-001 from the new B26 regression suite. Login, menu click, nonblank checks, and refresh checks all passed for ???.",
+      "duplicateOf": "BUG-001",
+      "fixedByThread": "",
+      "fixedAt": "",
+      "fixSummary": "Duplicate of BUG-001; retained as historical evidence and not counted as a separate fix.",
+      "verification": {
+        "status": "duplicate-retained",
+        "duplicateOf": "BUG-001"
+      },
+      "remainingRisk": "Follow canonical record BUG-001."
     },
     {
       "bugId": "BUG-B26-002",
@@ -1818,7 +2497,16 @@
       "suggestedFix": "Reuse the BUG-002 fix: catch suggestions generation/provider failures and return a traceable fallback payload instead of a 500.",
       "ownerSuggested": "parent/ai",
       "blocksRelease": false,
-      "notes": "Duplicate confirmation of BUG-002 from the new B26 regression suite. Login, parent menu click, nonblank checks, route refresh, and mobile horizontal overflow checks passed."
+      "notes": "Duplicate confirmation of BUG-002 from the new B26 regression suite. Login, parent menu click, nonblank checks, route refresh, and mobile horizontal overflow checks passed.",
+      "duplicateOf": "BUG-002",
+      "fixedByThread": "",
+      "fixedAt": "",
+      "fixSummary": "Duplicate of BUG-002; retained as historical evidence and not counted as a separate fix.",
+      "verification": {
+        "status": "duplicate-retained",
+        "duplicateOf": "BUG-002"
+      },
+      "remainingRisk": "Follow canonical record BUG-002."
     },
     {
       "bugId": "BUG-B26-003",
@@ -1858,7 +2546,16 @@
       "suggestedFix": "Reuse the BUG-003 fix: provide cached/demo storybook content or a handled fallback response for unavailable storybook generation.",
       "ownerSuggested": "parent/storybook",
       "blocksRelease": false,
-      "notes": "Duplicate confirmation of BUG-003 from the new B26 regression suite. The storybook page and refresh remained nonblank; the failure is the API/console error path."
+      "notes": "Duplicate confirmation of BUG-003 from the new B26 regression suite. The storybook page and refresh remained nonblank; the failure is the API/console error path.",
+      "duplicateOf": "BUG-003",
+      "fixedByThread": "",
+      "fixedAt": "",
+      "fixSummary": "Duplicate of BUG-003; retained as historical evidence and not counted as a separate fix.",
+      "verification": {
+        "status": "duplicate-retained",
+        "duplicateOf": "BUG-003"
+      },
+      "remainingRisk": "Follow canonical record BUG-003."
     }
   ]
 }

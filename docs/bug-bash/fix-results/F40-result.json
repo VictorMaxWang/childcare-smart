@@ -1,0 +1,116 @@
+{
+  "threadId": "F40",
+  "bugIds": [
+    "BUG-002",
+    "BUG-003",
+    "BUG-014",
+    "BUG-015",
+    "BUG-016",
+    "BUG-019",
+    "BUG-B21-001",
+    "BUG-B23-003",
+    "BUG-B25-003"
+  ],
+  "statusByBugId": {
+    "BUG-002": "fixed",
+    "BUG-003": "fixed",
+    "BUG-014": "fixed",
+    "BUG-015": "fixed",
+    "BUG-016": "fixed",
+    "BUG-019": "fixed",
+    "BUG-B21-001": "fixed",
+    "BUG-B23-003": "fixed",
+    "BUG-B25-003": "fixed"
+  },
+  "changedFiles": [
+    "app/parent/page.tsx",
+    "app/parent/agent/page.tsx",
+    "app/parent/storybook/page.tsx",
+    "components/parent/ParentStructuredFeedbackComposer.tsx",
+    "app/api/ai/suggestions/route.ts",
+    "app/api/ai/follow-up/route.ts",
+    "app/api/ai/parent-storybook/route.ts",
+    "app/api/ai/parent-message-reflexion/route.ts",
+    "lib/agent/parent-copy.ts",
+    "docs/bug-bash/fix-results/F40-result.md",
+    "docs/bug-bash/fix-results/F40-result.json"
+  ],
+  "checksRun": [
+    {
+      "command": "npm run lint",
+      "status": "passed"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed"
+    }
+  ],
+  "browserOrPlaywrightEvidence": {
+    "tool": "Playwright",
+    "baseUrl": "http://localhost:3410",
+    "desktop": {
+      "parent": {
+        "path": "/parent?child=c-1",
+        "child": "c-1",
+        "hasLinChild": true,
+        "bodyHasInternalLeak": false,
+        "apiAi5xx": []
+      },
+      "agent": {
+        "path": "/parent/agent?child=c-1",
+        "child": "c-1",
+        "feedbackSectionFound": true,
+        "feedbackShowsCurrentChild": "林小雨 / 向阳班",
+        "hardcodedChildVisible": false
+      },
+      "feedbackHash": {
+        "path": "/parent/agent?child=c-1#feedback",
+        "hash": "#feedback",
+        "scrollY": 8173,
+        "feedbackTop": 0,
+        "focusedFeedback": true
+      },
+      "storybook": {
+        "path": "/parent/storybook?child=c-1",
+        "child": "c-1",
+        "hasDemoSeedParam": false,
+        "hasErrorText": false,
+        "storybookRequestCount": 7,
+        "demoSeedLeakInRequestBody": false
+      },
+      "storybookCanonicalChild": {
+        "inputPath": "/parent/storybook?child=bad",
+        "finalPath": "/parent/storybook?child=c-1"
+      },
+      "followUp": {
+        "action": "clicked quick question",
+        "apiStatus": 200,
+        "historyVisible": true
+      }
+    },
+    "mobile390x844": {
+      "agentFeedbackHash": {
+        "path": "/parent/agent?child=c-1#feedback",
+        "hash": "#feedback",
+        "scrollY": 13756,
+        "feedbackTop": 88,
+        "hasHorizontalOverflow": false,
+        "feedbackShowsCurrentChild": true,
+        "hardcodedChildVisible": false
+      },
+      "storybook": {
+        "path": "/parent/storybook?child=c-1",
+        "child": "c-1",
+        "hasDemoSeedParam": false,
+        "hasHorizontalOverflow": false
+      },
+      "apiAi5xx": []
+    }
+  },
+  "unfixedReasons": {},
+  "conflictRisks": [
+    "B24 storybook eager loading 未在 F40 范围内修改，保留给 F60。",
+    "未修改 docs/bug-bash/BUGS.json；该文件由 F90 统一合并。"
+  ],
+  "bugsJsonModified": false
+}

@@ -85,6 +85,8 @@ type StreamDoneEvent = {
   fallback?: boolean;
 };
 
+type ConsultationFilter = "all" | "pending" | "active" | "completed";
+
 function ConsultationInputCard({
   draftId,
   selectedChildName,
@@ -92,6 +94,7 @@ function ConsultationInputCard({
   saveMobileDraft,
   onStart,
   draftPayload,
+  isStreaming,
 }: {
   draftId: string;
   selectedChildName: string;
@@ -102,6 +105,7 @@ function ConsultationInputCard({
     imageInput?: { attachmentName?: string; content?: string };
     voiceInput?: { attachmentName?: string; content?: string };
   }) => void;
+  isStreaming: boolean;
   draftPayload?: {
     teacherNote?: string;
     imageInput?: { attachmentName?: string; content?: string };
@@ -165,9 +169,10 @@ function ConsultationInputCard({
                 voiceInput: voiceNote.trim() ? { attachmentName: voiceAttachmentName.trim(), content: voiceNote.trim() } : undefined,
               })
             }
+            disabled={isStreaming}
           >
             <Sparkles className="h-4 w-4" />
-            一键生成会诊
+            {isStreaming ? "生成中..." : "一键生成会诊"}
           </Button>
         </div>
       </div>
@@ -223,10 +228,15 @@ export default function TeacherHighRiskConsultationPage() {
   const [streamEndedUnexpectedly, setStreamEndedUnexpectedly] = useState(false);
   const [invalidResultReason, setInvalidResultReason] = useState<string | null>(null);
   const [showSetupSections, setShowSetupSections] = useState(true);
+  const [consultationFilter, setConsultationFilter] = useState<ConsultationFilter>("all");
+  const [discussionInput, setDiscussionInput] = useState("");
+  const [discussionNotes, setDiscussionNotes] = useState<string[]>([]);
+  const [sideActionMessage, setSideActionMessage] = useState<string | null>(null);
 
   const receivedAnyEventRef = useRef(false);
   const receivedDoneRef = useRef(false);
   const streamErroredRef = useRef(false);
+  const consultationStartGuardRef = useRef(false);
 
   const classContext = useMemo(
     () =>
@@ -319,7 +329,8 @@ export default function TeacherHighRiskConsultationPage() {
     imageInput?: { attachmentName?: string; content?: string };
     voiceInput?: { attachmentName?: string; content?: string };
   }) {
-    if (!selectedChild) return;
+    if (!selectedChild || isStreaming || consultationStartGuardRef.current) return;
+    consultationStartGuardRef.current = true;
     setStreamError(null);
     setStreamMessage("正在连接会诊流...");
     setResult(null);
@@ -502,6 +513,8 @@ export default function TeacherHighRiskConsultationPage() {
       streamErroredRef.current = true;
       setStreamError(message);
       setStreamMessage(message);
+    } finally {
+      consultationStartGuardRef.current = false;
     }
   }
 
@@ -536,6 +549,26 @@ export default function TeacherHighRiskConsultationPage() {
       </div>
     );
   }
+
+  const consultationStatus: ConsultationFilter = isStreaming ? "active" : result ? "completed" : "pending";
+  const showConsultationCard = consultationFilter === "all" || consultationFilter === consultationStatus;
+  const participants = [
+    { name: currentUser.name, role: "发起人" },
+    ...(selectedChild.guardians ?? []).slice(0, 2).map((guardian) => ({
+      name: guardian.name,
+      role: guardian.relation,
+    })),
+  ];
+  const discussionMessages = [
+    `${currentUser.name}：发起会诊，近期出现持续关注信号。`,
+    ...discussionNotes,
+  ];
+  const sendDiscussionNote = () => {
+    const note = discussionInput.trim();
+    if (!note) return;
+    setDiscussionNotes((prev) => [`${currentUser.name}：${note}`, ...prev]);
+    setDiscussionInput("");
+  };
 
   return (
     <RolePageShell
@@ -604,11 +637,11 @@ export default function TeacherHighRiskConsultationPage() {
                   </div>
 
                   <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                    {[
-                      { label: "待处理会诊", value: `${autoContext.pendingReviewNotes.length + autoContext.morningCheckAlerts.length}`, tone: "bg-sky-50 text-sky-700", icon: ClipboardList },
-                      { label: "在会诊中", value: isStreaming ? "1" : result ? "0" : "0", tone: "bg-indigo-50 text-indigo-700", icon: UsersRound },
-                      { label: "本周完成会诊", value: `${Math.max(1, autoContext.growthObservationNotes.length)}`, tone: "bg-emerald-50 text-emerald-700", icon: CheckCircle2 },
-                      { label: "高风险儿童", value: "1", tone: "bg-rose-50 text-rose-700", icon: ShieldAlert },
+                      {[
+                        { label: "待处理会诊", value: `${autoContext.pendingReviewNotes.length + autoContext.morningCheckAlerts.length}`, tone: "bg-sky-50 text-sky-700", icon: ClipboardList },
+                        { label: "在会诊中", value: isStreaming ? "1" : result ? "0" : "0", tone: "bg-indigo-50 text-indigo-700", icon: UsersRound },
+                      { label: "本周完成会诊", value: result ? "1" : "0", tone: "bg-emerald-50 text-emerald-700", icon: CheckCircle2 },
+                      { label: "高风险儿童", value: `${classContext.focusChildren.length}`, tone: "bg-rose-50 text-rose-700", icon: ShieldAlert },
                       { label: "未回复家长消息", value: `${autoContext.parentFeedbackNotes.length}`, tone: "bg-emerald-50 text-emerald-700", icon: MessageSquareText },
                     ].map((item) => {
                       const Icon = item.icon;
@@ -618,7 +651,7 @@ export default function TeacherHighRiskConsultationPage() {
                             <div>
                               <p className="text-xs text-slate-500">{item.label}</p>
                               <p className="mt-2 text-2xl font-semibold text-slate-950">{item.value}</p>
-                              <p className="mt-1 text-xs text-slate-500">较昨日 {item.label === "高风险儿童" ? "+0" : "-1"}</p>
+                              <p className="mt-1 text-xs text-slate-500">来自当前班级数据</p>
                             </div>
                             <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${item.tone}`}>
                               <Icon className="h-5 w-5" />
@@ -632,18 +665,32 @@ export default function TeacherHighRiskConsultationPage() {
                   <div className="mt-5 rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
-                        <Button type="button" variant="premium" size="sm" className="rounded-full">全部</Button>
-                        <Button type="button" variant="outline" size="sm" className="rounded-full">待处理</Button>
-                        <Button type="button" variant="outline" size="sm" className="rounded-full">进行中</Button>
-                        <Button type="button" variant="outline" size="sm" className="rounded-full">已完成</Button>
+                        {[
+                          { key: "all" as const, label: "全部" },
+                          { key: "pending" as const, label: "待处理" },
+                          { key: "active" as const, label: "进行中" },
+                          { key: "completed" as const, label: "已完成" },
+                        ].map((item) => (
+                          <Button
+                            key={item.key}
+                            type="button"
+                            variant={consultationFilter === item.key ? "premium" : "outline"}
+                            size="sm"
+                            className="rounded-full"
+                            onClick={() => setConsultationFilter(item.key)}
+                          >
+                            {item.label}
+                          </Button>
+                        ))}
                       </div>
                       {traceHeaderActions}
                     </div>
+                    {showConsultationCard ? (
                     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
                       <div className="rounded-2xl border border-rose-100 bg-rose-50/60 p-4">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="destructive">高风险</Badge>
-                          <h2 className="text-lg font-semibold text-slate-950">{classContext.className} · 儿童姓名</h2>
+                          <h2 className="text-lg font-semibold text-slate-950">{classContext.className} · {selectedChild.name}</h2>
                           <Badge variant="outline">{selectedChild.className}</Badge>
                         </div>
                         <p className="mt-2 text-sm text-slate-600">{getAgeText(selectedChild.birthDate)} · 出生于 {formatDisplayDate(selectedChild.birthDate)}</p>
@@ -669,7 +716,9 @@ export default function TeacherHighRiskConsultationPage() {
                           </div>
                         </div>
                         <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                          <Button type="button" variant="outline" className="rounded-2xl">查看完整档案</Button>
+                          <Button asChild type="button" variant="outline" className="rounded-2xl">
+                            <Link href="/children">查看完整档案</Link>
+                          </Button>
                           <Button type="button" variant="premium" className="rounded-2xl" onClick={() => setShowSetupSections(true)}>编辑风险信息</Button>
                         </div>
                       </div>
@@ -678,18 +727,13 @@ export default function TeacherHighRiskConsultationPage() {
                         <div className="rounded-2xl border border-slate-100 bg-white p-4">
                           <div className="flex items-center justify-between">
                             <p className="text-sm font-semibold text-slate-950">会议参与人员</p>
-                            <Badge variant="info">4/6</Badge>
+                            <Badge variant="info">{participants.length}/6</Badge>
                           </div>
                           <div className="mt-4 space-y-3">
-                            {[
-                              [currentUser.name, "发起人"],
-                              ["张医生", "专家"],
-                              ["王老师", "专家"],
-                              ["刘老师", "专家"],
-                            ].map(([name, role]) => (
-                              <div key={name} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
-                                <span className="text-sm font-medium text-slate-800">{name}</span>
-                                <Badge variant="secondary">{role}</Badge>
+                            {participants.map((participant) => (
+                              <div key={`${participant.name}-${participant.role}`} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                                <span className="text-sm font-medium text-slate-800">{participant.name}</span>
+                                <Badge variant="secondary">{participant.role}</Badge>
                               </div>
                             ))}
                           </div>
@@ -704,6 +748,13 @@ export default function TeacherHighRiskConsultationPage() {
                         </div>
                       </div>
                     </div>
+                    ) : (
+                      <EmptyState
+                        icon={<ClipboardList className="h-6 w-6" />}
+                        title="当前筛选下没有会诊记录"
+                        description="切换到全部、待处理、进行中或已完成查看当前儿童的真实会诊状态。"
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -716,25 +767,55 @@ export default function TeacherHighRiskConsultationPage() {
                         ["建议检查与评估", "待执行", "去执行"],
                         ["制定干预计划", "待安排", "去安排"],
                         ["跟踪观察与复盘", "待安排", "去跟踪"],
-                      ].map(([title, status, action]) => (
+                      ].map(([title, status, action], index) => (
                         <div key={title} className="grid grid-cols-[1fr_auto] gap-3 rounded-2xl bg-slate-50 px-3 py-3">
                           <div>
                             <p className="text-sm font-semibold text-slate-950">{title}</p>
                             <p className="mt-1 text-xs text-slate-500">{status}</p>
                           </div>
-                          <Button type="button" variant="outline" size="sm" className="rounded-full">{action}</Button>
+                          {index === 0 ? (
+                            <Button asChild type="button" variant="outline" size="sm" className="rounded-full">
+                              <Link href={`/teacher/agent?action=communication&childId=${selectedChild.id}`}>{action}</Link>
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="rounded-full"
+                              onClick={() => {
+                                setShowSetupSections(true);
+                                setSideActionMessage(`${title}已定位到会诊输入区，请补充信息后生成方案。`);
+                              }}
+                            >
+                              {action}
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
+                    {sideActionMessage ? <p className="mt-3 rounded-xl bg-indigo-50 px-3 py-2 text-xs text-indigo-700">{sideActionMessage}</p> : null}
                   </div>
                   <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
                     <p className="text-sm font-semibold text-slate-950">会议讨论与记录</p>
                     <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-                      <div className="rounded-2xl bg-slate-50 p-3">{currentUser.name}：发起会诊，近期出现持续关注信号。</div>
-                      <div className="rounded-2xl bg-slate-50 p-3">张医生：建议先排除躯体不适，再看行为观察。</div>
-                      <div className="flex items-center gap-2 rounded-2xl border border-indigo-100 bg-white px-3 py-2 text-slate-400">
-                        输入讨论内容，按 Enter 发送
-                        <Button type="button" size="sm" variant="premium" className="ml-auto rounded-xl">发送</Button>
+                      {discussionMessages.map((message, index) => (
+                        <div key={`${index}-${message}`} className="rounded-2xl bg-slate-50 p-3">{message}</div>
+                      ))}
+                      <div className="flex items-center gap-2 rounded-2xl border border-indigo-100 bg-white px-3 py-2">
+                        <input
+                          value={discussionInput}
+                          onChange={(event) => setDiscussionInput(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              sendDiscussionNote();
+                            }
+                          }}
+                          className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                          placeholder="输入讨论内容，按 Enter 发送"
+                        />
+                        <Button type="button" size="sm" variant="premium" className="ml-auto rounded-xl" onClick={sendDiscussionNote} disabled={!discussionInput.trim()}>发送</Button>
                       </div>
                     </div>
                   </div>
@@ -798,7 +879,7 @@ export default function TeacherHighRiskConsultationPage() {
                 <SectionCard
                   title="1. 锁定会诊对象"
                   description="先选需要升级关注的儿童，再启动会诊流。"
-                  actions={existingDraft ? <Badge variant="secondary">{getDraftSyncStatusLabel(existingDraft.syncStatus)}</Badge> : <Badge variant="outline">自动草稿缓存</Badge>}
+              actions={existingDraft ? <Badge variant="secondary">{getDraftSyncStatusLabel(existingDraft.syncStatus, existingDraft.persistenceScope)}</Badge> : <Badge variant="outline">自动草稿缓存</Badge>}
                 >
                   <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
                     <div className="space-y-4">
@@ -855,6 +936,7 @@ export default function TeacherHighRiskConsultationPage() {
                   className={autoContext.className}
                   draftPayload={existingDraftPayload}
                   saveMobileDraft={saveMobileDraft}
+                  isStreaming={isStreaming}
                   onStart={(form) => void runConsultation(form)}
                 />
               </>

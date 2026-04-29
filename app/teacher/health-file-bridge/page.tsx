@@ -171,6 +171,8 @@ export default function TeacherHealthFileBridgePage() {
       toUploadMeta(file, index, previewText.trim())
     );
     setFiles(nextFiles);
+    setResult(null);
+    setError(null);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -314,17 +316,11 @@ export default function TeacherHealthFileBridgePage() {
                   <div className="rounded-2xl border border-slate-100 bg-white/90 p-4 shadow-sm">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-slate-950">最近上传记录</p>
-                      <Button type="button" variant="ghost" size="sm" className="rounded-full">全部文件</Button>
-                    </div>
+                  <Button type="button" variant="ghost" size="sm" className="rounded-full" disabled>全部文件</Button>
+                </div>
+                    {files.length > 0 ? (
                     <div className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100">
-                      {(files.length > 0
-                        ? files
-                        : [
-                            { fileId: "sample-1", name: "儿童体检报告_向阳班_20240426.pdf", mimeType: "application/pdf", sizeBytes: 204800 },
-                            { fileId: "sample-2", name: "疫苗接种本_李小宇.jpg", mimeType: "image/jpeg", sizeBytes: 102400 },
-                            { fileId: "sample-3", name: "儿童过敏史证明.pdf", mimeType: "application/pdf", sizeBytes: 184000 },
-                          ] as HealthFileBridgeFile[]
-                      ).slice(0, 4).map((file, index) => (
+                      {files.slice(0, 4).map((file) => (
                         <div key={file.fileId ?? file.name} className="grid gap-3 bg-white px-4 py-3 sm:grid-cols-[auto_1fr_auto] sm:items-center">
                           <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
                             <FileText className="h-5 w-5" />
@@ -333,12 +329,17 @@ export default function TeacherHealthFileBridgePage() {
                             <p className="truncate text-sm font-semibold text-slate-950">{file.name}</p>
                             <p className="mt-1 text-xs text-slate-500">{file.mimeType || "未知类型"} · {formatBytes(file.sizeBytes)}</p>
                           </div>
-                          <Badge variant={result || index < 2 ? "success" : "warning"}>
-                            {result || index < 2 ? "解析完成" : "解析中"}
+                          <Badge variant={result ? (result.fallback || result.mock ? "warning" : "success") : "outline"}>
+                            {result ? (result.fallback || result.mock ? "本地兜底结果" : "解析完成") : "等待解析"}
                           </Badge>
                         </div>
                       ))}
                     </div>
+                    ) : (
+                      <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                        尚未选择健康材料。请先在下方上传图片或 PDF，再开始结构化解析。
+                      </div>
+                    )}
                   </div>
 
                   <div className="rounded-2xl border border-slate-100 bg-white/90 p-4 shadow-sm">
@@ -369,12 +370,24 @@ export default function TeacherHealthFileBridgePage() {
                         <p className="mt-1 text-xs text-slate-500">{selectedChild?.className ?? currentUser.className ?? "当前班级"}</p>
                       </div>
                     </div>
-                    <Button type="button" variant="outline" className="mt-4 w-full rounded-2xl">更换关联幼儿</Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-4 w-full rounded-2xl"
+                      disabled={visibleChildren.length <= 1}
+                      onClick={() => {
+                        const currentIndex = visibleChildren.findIndex((child) => child.id === childId);
+                        const nextChild = visibleChildren[(currentIndex + 1) % visibleChildren.length];
+                        setChildId(nextChild?.id ?? NONE_CHILD_VALUE);
+                      }}
+                    >
+                      {visibleChildren.length <= 1 ? "仅有当前幼儿" : "更换关联幼儿"}
+                    </Button>
                   </div>
                   <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
                     <p className="text-sm font-semibold text-slate-950">材料信息</p>
                     <div className="mt-4 space-y-3 text-sm text-slate-600">
-                      <div className="rounded-xl bg-slate-50 px-3 py-2">文件名称：{files[0]?.name ?? "儿童体检报告_向阳班_20240426.pdf"}</div>
+                      <div className="rounded-xl bg-slate-50 px-3 py-2">文件名称：{files[0]?.name ?? "尚未选择文件"}</div>
                       <div className="rounded-xl bg-slate-50 px-3 py-2">来源：{getSourceRoleLabel(sourceRole)}</div>
                       <div className="rounded-xl bg-slate-50 px-3 py-2">材料类型：{getFileKindLabel(fileKind)}</div>
                     </div>

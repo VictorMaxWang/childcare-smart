@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { AiSuggestionResponse } from "../ai/types.ts";
 import { resolveAgeBandContext } from "../age-band/policy.ts";
 import { buildInterventionCardFromSuggestion } from "./intervention-card.ts";
 
@@ -11,7 +12,7 @@ function birthDateMonthsAgo(monthsAgo: number) {
   return date.toISOString().slice(0, 10);
 }
 
-const baseSuggestion = {
+const baseSuggestion: AiSuggestionResponse = {
   riskLevel: "medium",
   summary: "建议继续做一轮轻量家园协同。",
   highlights: [],
@@ -24,7 +25,7 @@ const baseSuggestion = {
   },
   disclaimer: "本建议仅用于托育观察与家园沟通参考，不构成医疗诊断。",
   source: "fallback",
-} as const;
+};
 
 test("intervention-card uses tri-band policy defaults for key action fields", () => {
   const infantCard = buildInterventionCardFromSuggestion({

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BookOpenCheck, Clock3, HeartPulse, Search, Trash2, UserPlus, Users, Utensils } from "lucide-react";
+import { BookOpenCheck, Clock3, Eye, HeartPulse, Search, Trash2, UserPlus, Users, Utensils } from "lucide-react";
 import {
   formatDisplayDate,
   getAgeBandFromBirthDate,
@@ -27,6 +27,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerBody,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +55,7 @@ export default function ChildrenPage() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     nickname: "",
@@ -94,6 +104,11 @@ export default function ChildrenPage() {
     acc[band] = (acc[band] ?? 0) + 1;
     return acc;
   }, {});
+
+  const selectedDetailChild = selectedDetailId
+    ? visibleChildren.find((child) => child.id === selectedDetailId) ?? null
+    : null;
+  const selectedDetailAttendance = selectedDetailChild ? attendanceMap.get(selectedDetailChild.id) : undefined;
 
   function resetForm() {
     setForm({
@@ -335,7 +350,14 @@ export default function ChildrenPage() {
                             {child.avatar}
                           </div>
                           <div>
-                            <p className="font-semibold text-slate-900">{child.name}</p>
+                            <button
+                              type="button"
+                              className="font-semibold text-slate-900 underline-offset-4 transition hover:text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                              onClick={() => setSelectedDetailId(child.id)}
+                              aria-label={`查看 ${child.name} 的档案详情`}
+                            >
+                              {child.name}
+                            </button>
                             <p className="text-xs text-slate-500">{child.nickname || "无昵称"} · {child.gender}</p>
                           </div>
                         </div>
@@ -369,6 +391,10 @@ export default function ChildrenPage() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => setSelectedDetailId(child.id)}>
+                            <Eye className="mr-1.5 h-3.5 w-3.5" />
+                            详情
+                          </Button>
                           {canManage ? (
                             <>
                               <Button
@@ -406,6 +432,7 @@ export default function ChildrenPage() {
                   child={child}
                   canManage={canManage}
                   attendance={attendance}
+                  onOpenDetails={() => setSelectedDetailId(child.id)}
                   onDelete={() => setDeleteId(child.id)}
                   onToggleAttendance={() => {
                     toggleTodayAttendance(child.id);
@@ -556,6 +583,98 @@ export default function ChildrenPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Drawer open={Boolean(selectedDetailChild)} onOpenChange={(value) => !value && setSelectedDetailId(null)}>
+        <DrawerContent side="right">
+          {selectedDetailChild ? (
+            <>
+              <DrawerHeader>
+                <DrawerTitle className="text-xl font-semibold text-slate-950">
+                  {selectedDetailChild.name} 档案详情
+                </DrawerTitle>
+                <DrawerDescription className="mt-2 text-sm leading-6 text-slate-500">
+                  查看幼儿基础信息、监护人、健康关注项和今日出勤状态。
+                </DrawerDescription>
+              </DrawerHeader>
+              <DrawerBody className="space-y-5">
+                <section className="rounded-3xl border border-indigo-100 bg-white p-5 shadow-sm">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-4xl" role="img" aria-label={`${selectedDetailChild.name} 的头像`}>
+                      {selectedDetailChild.avatar}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-xl font-semibold text-slate-950">{selectedDetailChild.name}</h3>
+                        <Badge variant={selectedDetailChild.gender === "男" ? "info" : "warning"}>{selectedDetailChild.gender}</Badge>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {selectedDetailChild.nickname ? `昵称：${selectedDetailChild.nickname} · ` : ""}
+                        {selectedDetailChild.className} · {getAgeText(selectedDetailChild.birthDate)}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Badge variant="secondary">出生：{formatDisplayDate(selectedDetailChild.birthDate)}</Badge>
+                        <Badge variant="info">年龄段：{getAgeBandFromBirthDate(selectedDetailChild.birthDate)}</Badge>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="grid gap-3 sm:grid-cols-2">
+                  <InfoItem
+                    label="身高体重"
+                    value={`${selectedDetailChild.heightCm > 0 ? `${selectedDetailChild.heightCm} cm` : "--"} / ${selectedDetailChild.weightKg > 0 ? `${selectedDetailChild.weightKg} kg` : "--"}`}
+                  />
+                  <InfoItem label="机构班级" value={`${INSTITUTION_NAME} · ${selectedDetailChild.className}`} />
+                  <InfoItem
+                    label="监护人"
+                    value={selectedDetailChild.guardians.map((guardian) => `${guardian.name}（${guardian.relation}）`).join("、") || "待补充"}
+                  />
+                  <InfoItem
+                    label="联系电话"
+                    value={selectedDetailChild.guardians.map((guardian) => guardian.phone).filter(Boolean).join(" / ") || "待补充"}
+                  />
+                </section>
+
+                <section className="rounded-3xl border border-slate-100 bg-white p-5 text-sm text-slate-600 shadow-sm">
+                  <p className="font-semibold text-slate-900">健康与特殊关注</p>
+                  <div className="mt-4 space-y-3">
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                      <p className="text-xs font-semibold text-slate-500">过敏信息</p>
+                      <p className="mt-2 leading-6">{selectedDetailChild.allergies.length > 0 ? selectedDetailChild.allergies.join("、") : "暂无过敏记录"}</p>
+                    </div>
+                    <div className="rounded-2xl bg-indigo-50 p-4">
+                      <p className="text-xs font-semibold text-indigo-700">特殊关注项</p>
+                      <p className="mt-2 leading-6">{selectedDetailChild.specialNotes || "暂无特殊关注项"}</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-3xl border border-slate-100 bg-white p-5 text-sm text-slate-600 shadow-sm">
+                  <p className="flex items-center gap-2 font-semibold text-slate-900">
+                    <Clock3 className="h-4 w-4" />
+                    今日到离园信息
+                  </p>
+                  {selectedDetailAttendance?.isPresent ? (
+                    <p className="mt-3 leading-6">
+                      今日出勤，入园 {selectedDetailAttendance.checkInAt ?? "--"}，离园 {selectedDetailAttendance.checkOutAt ?? "--"}。
+                    </p>
+                  ) : (
+                    <p className="mt-3 leading-6">今日缺勤，原因：{selectedDetailAttendance?.absenceReason || "未登记"}。</p>
+                  )}
+                </section>
+              </DrawerBody>
+              <DrawerFooter>
+                <Button variant="outline" onClick={() => setSelectedDetailId(null)}>
+                  关闭
+                </Button>
+                <Button disabled title="暂未开放">
+                  编辑档案（暂未开放）
+                </Button>
+              </DrawerFooter>
+            </>
+          ) : null}
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
@@ -564,6 +683,7 @@ function ChildArchiveCard({
   child,
   canManage,
   attendance,
+  onOpenDetails,
   onDelete,
   onToggleAttendance,
 }: {
@@ -575,6 +695,7 @@ function ChildArchiveCard({
     checkOutAt?: string;
     absenceReason?: string;
   };
+  onOpenDetails: () => void;
   onDelete: () => void;
   onToggleAttendance: () => void;
 }) {
@@ -646,13 +767,17 @@ function ChildArchiveCard({
           )}
         </div>
 
-        {canManage ? (
-          <div className="flex justify-end">
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" onClick={onOpenDetails}>
+            <Eye className="mr-2 h-4 w-4" />
+            查看详情
+          </Button>
+          {canManage ? (
             <Button variant="outline" onClick={onToggleAttendance}>
               切换为{isPresent ? "缺勤" : "出勤"}
             </Button>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </CardContent>
     </Card>
   );

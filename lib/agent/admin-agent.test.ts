@@ -19,6 +19,8 @@ function buildResult(): AdminAgentResult {
       date: "2026-04-07",
       visibleChildren: 1,
       classCount: 1,
+      todayPresentCount: 1,
+      todayAttendanceRate: 100,
       attendanceRate: 100,
       healthAbnormalCount: 1,
       growthAttentionCount: 1,

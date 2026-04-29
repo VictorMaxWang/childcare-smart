@@ -6,8 +6,8 @@ import { spawnSync } from "node:child_process";
 import sharp from "sharp";
 
 const REPO_ROOT = process.cwd();
-const FIXED_DESIGN_SOURCE_ROOT = String.raw`C:\Users\12804\Desktop\childcare-smart源代码\前端重构`;
-const DESIGN_SOURCE_ROOT = process.env.PIXEL_DESIGN_SOURCE_DIR || FIXED_DESIGN_SOURCE_ROOT;
+const DEFAULT_DESIGN_SOURCE_ROOT = path.resolve(REPO_ROOT, "..", "前端重构");
+const DESIGN_SOURCE_ROOT = process.env.PIXEL_DESIGN_SOURCE_DIR || DEFAULT_DESIGN_SOURCE_ROOT;
 const ARTIFACT_ROOT = path.join(REPO_ROOT, "artifacts", "pixel-replica");
 const SOURCE_INDEX_ROOT = path.join(ARTIFACT_ROOT, "source-index");
 const EXTRACTED_ZIPS_ROOT = path.join(SOURCE_INDEX_ROOT, "extracted-zips");
@@ -192,10 +192,9 @@ async function main() {
   const references = await copyReferences(referenceRows, imageByBasename);
   const assets = await createAssetCrops(imageByBasename);
 
-  const manifest = {
+  const manifest = sanitizePublicManifest({
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
-    sourceRoot: DESIGN_SOURCE_ROOT,
     assetRoot: "public/pixel-replica",
     publicBasePath: "/pixel-replica",
     sourceIndexPath: toPosix(path.relative(REPO_ROOT, SOURCE_SCAN_PATH)),
@@ -216,7 +215,7 @@ async function main() {
     assets,
     unsupportedFiles: sourceIndex.unsupportedFiles,
     zipExtractions,
-  };
+  });
 
   await fs.writeFile(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   await fs.writeFile(REPORT_PATH, buildReport(manifest, sourceIndex), "utf8");
@@ -231,7 +230,9 @@ async function main() {
 async function prepareOutputDirectories() {
   await fs.mkdir(ARTIFACT_ROOT, { recursive: true });
   await fs.rm(REFERENCES_ROOT, { recursive: true, force: true });
-  await fs.rm(ASSET_ROOT, { recursive: true, force: true });
+  for (const dir of REQUIRED_ASSET_DIRS) {
+    await fs.rm(path.join(ASSET_ROOT, dir), { recursive: true, force: true });
+  }
   await fs.rm(EXTRACTED_ZIPS_ROOT, { recursive: true, force: true });
 
   for (const dir of [SOURCE_INDEX_ROOT, REFERENCES_ROOT, REPORTS_ROOT, EXTRACTED_ZIPS_ROOT]) {
@@ -518,6 +519,30 @@ async function createAssetCrops(imageByBasename) {
     });
   }
   return assets;
+}
+
+function sanitizePublicManifest(value) {
+  const privatePathKeys = new Set([
+    "sourceRoot",
+    "sourceAbsolutePath",
+    "absolutePath",
+    "sourceDirectory",
+    "sourceZipAbsolutePath",
+  ]);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizePublicManifest(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => !privatePathKeys.has(key))
+        .map(([key, item]) => [key, sanitizePublicManifest(item)])
+    );
+  }
+
+  return value;
 }
 
 function resolveCropRect(metadata, crop) {

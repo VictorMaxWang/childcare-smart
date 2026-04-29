@@ -1,9 +1,16 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
+import type { AccountRole } from "@/lib/auth/accounts";
+import { isAccountRole } from "@/lib/auth/route-access";
 import { getAuthSessionSecret } from "@/lib/auth/session-config";
 
 const COOKIE_NAME = "ccs_session";
 const SESSION_AGE_SECONDS = 60 * 60 * 12;
+
+export interface SessionTokenPayload {
+  userId: string;
+  role?: AccountRole;
+}
 
 function sign(payloadBase64: string) {
   return crypto.createHmac("sha256", getAuthSessionSecret()).update(payloadBase64).digest("base64url");
@@ -21,9 +28,10 @@ function decodePayload<T>(value: string): T | null {
   }
 }
 
-export function buildSessionToken(userId: string) {
+export function buildSessionToken(userId: string, role: AccountRole) {
   const payload = {
     userId,
+    role,
     exp: Math.floor(Date.now() / 1000) + SESSION_AGE_SECONDS,
   };
   const encoded = encodePayload(payload);
@@ -31,7 +39,7 @@ export function buildSessionToken(userId: string) {
   return `${encoded}.${signature}`;
 }
 
-export function verifySessionToken(token?: string | null): { userId: string } | null {
+export function verifySessionToken(token?: string | null): SessionTokenPayload | null {
   if (!token) return null;
   const parts = token.split(".");
   if (parts.length !== 2) return null;
@@ -46,11 +54,14 @@ export function verifySessionToken(token?: string | null): { userId: string } | 
     return null;
   }
 
-  const payload = decodePayload<{ userId?: string; exp?: number }>(encodedPayload);
+  const payload = decodePayload<{ userId?: string; role?: unknown; exp?: number }>(encodedPayload);
   if (!payload?.userId || !payload.exp) return null;
   if (payload.exp < Math.floor(Date.now() / 1000)) return null;
 
-  return { userId: payload.userId };
+  return {
+    userId: payload.userId,
+    role: isAccountRole(payload.role) ? payload.role : undefined,
+  };
 }
 
 export async function getSessionUserId() {
@@ -60,8 +71,8 @@ export async function getSessionUserId() {
   return parsed?.userId ?? null;
 }
 
-export async function setSessionCookie(userId: string) {
-  const token = buildSessionToken(userId);
+export async function setSessionCookie(userId: string, role: AccountRole) {
+  const token = buildSessionToken(userId, role);
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,

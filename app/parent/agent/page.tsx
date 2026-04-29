@@ -56,8 +56,7 @@ import {
   isLikelyTrendQuestion,
   PARENT_TREND_QUICK_QUESTIONS,
 } from "@/lib/agent/parent-trend";
-import { resolveDefaultParentStoryBookDemoSeedId } from "@/lib/agent/parent-storybook-demo-seeds";
-import { buildFallbackSuggestion } from "@/lib/ai/fallback";
+import { buildFallbackFollowUp, buildFallbackSuggestion } from "@/lib/ai/fallback";
 import type {
   AiFollowUpResponse,
   AiSuggestionResponse,
@@ -158,6 +157,7 @@ export default function ParentAgentPage() {
   const reflexionAbortRef = useRef<AbortController | null>(null);
   const selectedChildIdRef = useRef(selectedChildId);
   const autoTrendHandledRef = useRef<string | null>(null);
+  const feedbackSectionRef = useRef<HTMLDivElement | null>(null);
 
   const resolvedChildId =
     selectedChildId && authorizedChildIds.has(selectedChildId)
@@ -280,8 +280,8 @@ export default function ParentAgentPage() {
   ]);
   const displayTonightTopAction = displayInterventionCard?.tonightHomeAction ?? currentResult?.tonightTopAction ?? baseContext?.task.description ?? "";
   const displayWhyNow =
-    currentResult?.whyNow ??
-    displayConsultation?.summary ??
+    sanitizeParentFacingText(currentResult?.whyNow) ||
+    sanitizeParentFacingText(displayConsultation?.summary) ||
     "系统综合近 7 天业务数据、教师观察和家长反馈，为今晚优先选出一条最值得执行的家庭动作。";
   const displayObservationPoints =
     displayInterventionCard?.observationPoints ?? currentResult?.tonightObservationPoints ?? [];
@@ -336,17 +336,7 @@ export default function ParentAgentPage() {
     [reminders, selectedFeed]
   );
   const questionLoading = suggestionLoading || followUpLoading || displayedTrendLoading;
-  const storybookDemoSeedId = selectedFeed
-    ? resolveDefaultParentStoryBookDemoSeedId({
-        childId: selectedFeed.child.id,
-        currentUserId: currentUser.id,
-        accountKind: currentUser.accountKind,
-      })
-    : null;
-  const storybookHref =
-    selectedFeed && storybookDemoSeedId
-      ? `/parent/storybook?child=${selectedFeed.child.id}&demoSeed=${storybookDemoSeedId}`
-      : `/parent/storybook?child=${selectedFeed?.child.id ?? ""}`;
+  const storybookHref = `/parent/storybook?child=${selectedFeed?.child.id ?? ""}`;
   const unifiedTrendQuestion = useMemo(
     () =>
       selectedFeed
@@ -383,6 +373,42 @@ export default function ParentAgentPage() {
   useEffect(() => {
     selectedChildIdRef.current = selectedFeed?.child.id ?? "";
   }, [selectedFeed]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || window.location.hash !== "#feedback") {
+      return;
+    }
+
+    let cancelled = false;
+    const timers: number[] = [];
+
+    const scrollToFeedback = () => {
+      if (cancelled) return;
+      const target = feedbackSectionRef.current ?? document.getElementById("feedback");
+      if (!target) return;
+
+      target.focus({ preventScroll: true });
+      const top = target.getBoundingClientRect().top + window.scrollY - 88;
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    };
+
+    window.requestAnimationFrame(scrollToFeedback);
+    [120, 360, 720].forEach((delay) => {
+      timers.push(window.setTimeout(scrollToFeedback, delay));
+    });
+
+    return () => {
+      cancelled = true;
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [
+    careMode,
+    currentResult,
+    displayInterventionCard?.id,
+    followUpLoading,
+    selectedFeed?.child.id,
+    suggestionLoading,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -680,14 +706,14 @@ export default function ParentAgentPage() {
     setLatestTrendQuery(null);
     setLatestTrendResult(null);
     setFollowUpLoading(true);
-    try {
-      const payload = buildParentAgentFollowUpPayload({
-        context: activeContext,
-        question: nextQuestion,
-        suggestionResult: currentResult,
-        history: history.map((item) => ({ question: item.question, answer: item.result.assistantAnswer })),
-      });
+    const payload = buildParentAgentFollowUpPayload({
+      context: activeContext,
+      question: nextQuestion,
+      suggestionResult: currentResult,
+      history: history.map((item) => ({ question: item.question, answer: item.result.assistantAnswer })),
+    });
 
+    try {
       const response = await fetch("/api/ai/follow-up", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -721,6 +747,22 @@ export default function ParentAgentPage() {
         baseResult: nextResult,
         historyId,
       });
+      setQuestion("");
+    } catch {
+      const fallback = buildFallbackFollowUp(payload);
+      const nextResult = buildParentAgentFollowUpResult({
+        context: activeContext,
+        baseResult: currentResult,
+        response: fallback,
+      });
+
+      setCurrentResult(nextResult);
+      const historyId = `${Date.now()}-${history.length}`;
+      setHistory((prev) => [
+        ...prev,
+        { id: historyId, question: nextQuestion, result: nextResult },
+      ]);
+      setParentMessageStatus("追问服务暂时不可用，已先展示本地可用建议。");
       setQuestion("");
     } finally {
       setFollowUpLoading(false);
@@ -812,6 +854,11 @@ export default function ParentAgentPage() {
   ) {
     if (!selectedFeed || !displayInterventionCard) {
       setFeedbackStatus("当前还没有可提交的今晚建议，请先确认当前孩子的行动卡。");
+      return false;
+    }
+
+    if (input.childId !== selectedFeed.child.id) {
+      setFeedbackStatus("当前反馈对象与页面选择的孩子不一致，请刷新后重试。");
       return false;
     }
 
@@ -1226,7 +1273,12 @@ export default function ParentAgentPage() {
                 }
               />
 
-              <div id="feedback">
+              <div
+                id="feedback"
+                ref={feedbackSectionRef}
+                tabIndex={-1}
+                className="scroll-mt-24 scroll-mb-[calc(env(safe-area-inset-bottom)+8rem)] pb-[calc(env(safe-area-inset-bottom)+7rem)] lg:scroll-mb-0 lg:pb-0"
+              >
                 <SectionCard
                   title="做完后告诉老师"
                   description="首屏只保留最关键的三项反馈，补充情况可以稍后再填。"
@@ -1235,6 +1287,8 @@ export default function ParentAgentPage() {
                     careMode
                     key={`${selectedFeed.child.id}-${displayInterventionCard?.id ?? "no-card"}-${feedbackNotePrefill?.token ?? "no-prefill"}-care`}
                     childId={selectedFeed.child.id}
+                    childName={selectedFeed.child.name}
+                    childClassName={selectedFeed.child.className}
                     interventionCard={displayInterventionCard}
                     activeTask={structuredFeedbackTaskContext?.activeTask}
                     consultation={displayConsultation}
@@ -1971,11 +2025,18 @@ export default function ParentAgentPage() {
               description="做了没有、孩子反应、有没有更好一点会优先进入建议闭环；补充语音和备注可以按需要再展开。"
             />
 
-            <div id="feedback">
+            <div
+              id="feedback"
+              ref={feedbackSectionRef}
+              tabIndex={-1}
+              className="scroll-mt-24 scroll-mb-[calc(env(safe-area-inset-bottom)+8rem)] pb-[calc(env(safe-area-inset-bottom)+7rem)] lg:scroll-mb-0 lg:pb-0"
+            >
               <SectionCard title="提交今晚反馈" description="把今晚做了没有、孩子反应和补充情况记下来，下一轮建议会继续参考。">
                 <ParentStructuredFeedbackComposer
                   key={`${selectedFeed.child.id}-${displayInterventionCard?.id ?? "no-card"}-${feedbackNotePrefill?.token ?? "no-prefill"}`}
                   childId={selectedFeed.child.id}
+                  childName={selectedFeed.child.name}
+                  childClassName={selectedFeed.child.className}
                   interventionCard={displayInterventionCard}
                   activeTask={structuredFeedbackTaskContext?.activeTask}
                   consultation={displayConsultation}

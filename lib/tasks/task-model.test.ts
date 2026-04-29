@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { InterventionCard } from "@/lib/agent/intervention-card";
 import { normalizeAppStateSnapshot } from "@/lib/persistence/snapshot";
 import {
   evaluateTaskEscalations,
@@ -14,9 +15,96 @@ import {
   mapReminderStatusToTaskStatus,
   materializeTasksFromLegacy,
 } from "@/lib/tasks/task-model";
+import type { ParentStructuredFeedbackRecord } from "@/lib/feedback/types";
+
+type TestGuardianFeedbackInput = {
+  id: string;
+  childId: string;
+  date: string;
+  status: string;
+  content: string;
+  interventionCardId: string;
+  executionStatus: ParentStructuredFeedbackRecord["executionStatus"];
+  createdBy: string;
+  createdByRole: ParentStructuredFeedbackRecord["createdByRole"];
+} & Partial<ParentStructuredFeedbackRecord>;
+
+function buildTestInterventionCard(
+  overrides: Pick<
+    InterventionCard,
+    "id" | "title" | "targetChildId" | "tonightHomeAction" | "reviewIn48h"
+  > &
+    Partial<InterventionCard>
+): InterventionCard {
+  return {
+    riskLevel: "medium",
+    triggerReason: overrides.title,
+    summary: overrides.title,
+    todayInSchoolAction: "Observe today.",
+    homeSteps: [overrides.tonightHomeAction],
+    observationPoints: [],
+    tomorrowObservationPoint: overrides.reviewIn48h,
+    parentMessageDraft: overrides.tonightHomeAction,
+    teacherFollowupDraft: overrides.reviewIn48h,
+    source: "mock",
+    ...overrides,
+  };
+}
+
+function buildTestGuardianFeedback(
+  overrides: TestGuardianFeedbackInput
+): ParentStructuredFeedbackRecord {
+  const feedbackId = overrides.feedbackId ?? overrides.id;
+  const submittedAt = overrides.submittedAt ?? overrides.date;
+  return {
+    ...overrides,
+    feedbackId,
+    childId: overrides.childId,
+    sourceRole: overrides.sourceRole ?? "parent",
+    sourceChannel: overrides.sourceChannel ?? "manual",
+    relatedTaskId: overrides.relatedTaskId ?? overrides.interventionCardId,
+    relatedConsultationId: overrides.relatedConsultationId,
+    executionStatus: overrides.executionStatus,
+    executionCount: overrides.executionCount,
+    executorRole: overrides.executorRole ?? "parent",
+    childReaction: overrides.childReaction ?? "accepted",
+    improvementStatus: overrides.improvementStatus ?? "clear_improvement",
+    barriers: overrides.barriers ?? [],
+    notes: overrides.notes ?? overrides.content,
+    attachments: overrides.attachments ?? {},
+    submittedAt,
+    source:
+      overrides.source ??
+      {
+        kind: "legacy_guardian_feedback",
+        workflow: "manual",
+        createdBy: overrides.createdBy,
+        createdByRole: overrides.createdByRole,
+      },
+    fallback:
+      overrides.fallback ??
+      {
+        rawStatus: overrides.status,
+        rawExecutionStatus: overrides.executionStatus,
+        rawInterventionCardId: overrides.interventionCardId,
+        notesSummary: overrides.content,
+      },
+    id: overrides.id,
+    date: overrides.date,
+    status: overrides.status,
+    content: overrides.content,
+    interventionCardId: overrides.interventionCardId,
+    sourceWorkflow: overrides.sourceWorkflow ?? "manual",
+    executed: overrides.executed ?? overrides.executionStatus === "completed",
+    improved: overrides.improved ?? "unknown",
+    freeNote: overrides.freeNote ?? overrides.content,
+    createdBy: overrides.createdBy,
+    createdByRole: overrides.createdByRole,
+  };
+}
 
 test("intervention card materializes into parent and teacher canonical tasks", () => {
-  const card = {
+  const card = buildTestInterventionCard({
     id: "card-c-1-demo",
     title: "Evening Decompression",
     targetChildId: "c-1",
@@ -24,7 +112,7 @@ test("intervention card materializes into parent and teacher canonical tasks", (
     reviewIn48h: "Check whether tomorrow drop-off is calmer.",
     createdAt: "2026-04-10T10:00:00.000Z",
     updatedAt: "2026-04-10T10:00:00.000Z",
-  };
+  });
 
   const { parentTask, followUpTask } = buildInterventionTasksFromCard(card, {
     legacyWeeklyTaskId: "task_001",
@@ -43,7 +131,7 @@ test("intervention card materializes into parent and teacher canonical tasks", (
 });
 
 test("task to reminder projection preserves canonical linkage", () => {
-  const { parentTask } = buildInterventionTasksFromCard({
+  const { parentTask } = buildInterventionTasksFromCard(buildTestInterventionCard({
     id: "card-c-1-demo",
     title: "Evening Decompression",
     targetChildId: "c-1",
@@ -51,7 +139,7 @@ test("task to reminder projection preserves canonical linkage", () => {
     reviewIn48h: "Check whether tomorrow drop-off is calmer.",
     createdAt: "2026-04-10T10:00:00.000Z",
     updatedAt: "2026-04-10T10:00:00.000Z",
-  });
+  }));
 
   const reminder = buildReminderFromTask({ ...parentTask, status: "in_progress" }, { childName: "Anan" });
 
@@ -63,7 +151,7 @@ test("task to reminder projection preserves canonical linkage", () => {
 });
 
 test("legacy reminders, guardian feedback and check-ins reconcile into canonical task status", () => {
-  const card = {
+  const card = buildTestInterventionCard({
     id: "card-c-1-demo",
     title: "Evening Decompression",
     targetChildId: "c-1",
@@ -71,7 +159,7 @@ test("legacy reminders, guardian feedback and check-ins reconcile into canonical
     reviewIn48h: "Check whether tomorrow drop-off is calmer.",
     createdAt: "2026-04-08T10:00:00.000Z",
     updatedAt: "2026-04-08T10:00:00.000Z",
-  };
+  });
   const tasks = materializeTasksFromLegacy({
     interventionCards: [card],
     reminders: [
@@ -89,7 +177,7 @@ test("legacy reminders, guardian feedback and check-ins reconcile into canonical
       },
     ],
     guardianFeedbacks: [
-      {
+      buildTestGuardianFeedback({
         id: "feedback-1",
         childId: "c-1",
         date: "2026-04-08T19:00:00.000Z",
@@ -99,7 +187,7 @@ test("legacy reminders, guardian feedback and check-ins reconcile into canonical
         executionStatus: "completed",
         createdBy: "Parent",
         createdByRole: "家长",
-      },
+      }),
     ],
     taskCheckIns: [
       {
@@ -121,7 +209,7 @@ test("legacy reminders, guardian feedback and check-ins reconcile into canonical
 });
 
 test("task adapter builds follow-up compatible intervention card context", () => {
-  const { parentTask, followUpTask } = buildInterventionTasksFromCard({
+  const { parentTask, followUpTask } = buildInterventionTasksFromCard(buildTestInterventionCard({
     id: "card-c-1-demo",
     consultationId: "consult-card-1",
     title: "Evening Decompression",
@@ -130,7 +218,7 @@ test("task adapter builds follow-up compatible intervention card context", () =>
     reviewIn48h: "Check whether tomorrow drop-off is calmer.",
     createdAt: "2026-04-10T10:00:00.000Z",
     updatedAt: "2026-04-10T10:00:00.000Z",
-  });
+  }));
 
   const cardContext = buildCurrentInterventionCardFromTask({
     activeTask: parentTask,
@@ -235,7 +323,7 @@ test("reminder status mapping keeps snoozed tasks pending", () => {
 test("materialized canonical tasks support parent-completed and teacher-stalled escalation", () => {
   const tasks = materializeTasksFromLegacy({
     interventionCards: [
-      {
+      buildTestInterventionCard({
         id: "card-stalled",
         title: "Evening Decompression",
         targetChildId: "c-1",
@@ -243,10 +331,10 @@ test("materialized canonical tasks support parent-completed and teacher-stalled 
         reviewIn48h: "Check next-day drop-off.",
         createdAt: "2026-04-08T08:00:00.000Z",
         updatedAt: "2026-04-08T08:00:00.000Z",
-      },
+      }),
     ],
     guardianFeedbacks: [
-      {
+      buildTestGuardianFeedback({
         id: "feedback-stalled",
         childId: "c-1",
         date: "2026-04-08T19:00:00.000Z",
@@ -255,8 +343,8 @@ test("materialized canonical tasks support parent-completed and teacher-stalled 
         interventionCardId: "card-stalled",
         executionStatus: "completed",
         createdBy: "Parent",
-        createdByRole: "瀹堕暱",
-      },
+        createdByRole: "家长",
+      }),
     ],
     now: "2026-04-09T10:30:00.000Z",
   });
@@ -280,7 +368,7 @@ test("materialized canonical tasks support parent-completed and teacher-stalled 
 test("materialized canonical tasks expose repeated follow-up within 48 hours", () => {
   const tasks = materializeTasksFromLegacy({
     interventionCards: [
-      {
+      buildTestInterventionCard({
         id: "card-repeat-1",
         title: "Sleep Support",
         targetChildId: "c-1",
@@ -288,8 +376,8 @@ test("materialized canonical tasks expose repeated follow-up within 48 hours", (
         reviewIn48h: "Check bedtime resistance.",
         createdAt: "2026-04-09T08:00:00.000Z",
         updatedAt: "2026-04-09T08:00:00.000Z",
-      },
-      {
+      }),
+      buildTestInterventionCard({
         id: "card-repeat-2",
         title: "Morning Transition",
         targetChildId: "c-1",
@@ -297,7 +385,7 @@ test("materialized canonical tasks expose repeated follow-up within 48 hours", (
         reviewIn48h: "Check drop-off regulation.",
         createdAt: "2026-04-10T10:00:00.000Z",
         updatedAt: "2026-04-10T10:00:00.000Z",
-      },
+      }),
     ],
     now: "2026-04-10T18:00:00.000Z",
   });
@@ -318,7 +406,7 @@ test("materialized canonical tasks expose repeated follow-up within 48 hours", (
 test("materialized canonical tasks escalate multiple pending tasks for the same child", () => {
   const tasks = materializeTasksFromLegacy({
     interventionCards: [
-      {
+      buildTestInterventionCard({
         id: "card-backlog-1",
         title: "Action One",
         targetChildId: "c-1",
@@ -326,8 +414,8 @@ test("materialized canonical tasks escalate multiple pending tasks for the same 
         reviewIn48h: "Review one",
         createdAt: "2026-04-10T08:00:00.000Z",
         updatedAt: "2026-04-10T08:00:00.000Z",
-      },
-      {
+      }),
+      buildTestInterventionCard({
         id: "card-backlog-2",
         title: "Action Two",
         targetChildId: "c-1",
@@ -335,8 +423,8 @@ test("materialized canonical tasks escalate multiple pending tasks for the same 
         reviewIn48h: "Review two",
         createdAt: "2026-04-10T09:00:00.000Z",
         updatedAt: "2026-04-10T09:00:00.000Z",
-      },
-      {
+      }),
+      buildTestInterventionCard({
         id: "card-backlog-3",
         title: "Action Three",
         targetChildId: "c-1",
@@ -344,7 +432,7 @@ test("materialized canonical tasks escalate multiple pending tasks for the same 
         reviewIn48h: "Review three",
         createdAt: "2026-04-10T10:00:00.000Z",
         updatedAt: "2026-04-10T10:00:00.000Z",
-      },
+      }),
     ],
     now: "2026-04-10T12:00:00.000Z",
   });
@@ -361,7 +449,7 @@ test("materialized canonical tasks escalate multiple pending tasks for the same 
 });
 
 test("materializeTasksFromLegacy matches structured feedback by relatedTaskId before interventionCardId fallback", () => {
-  const { parentTask } = buildInterventionTasksFromCard({
+  const { parentTask } = buildInterventionTasksFromCard(buildTestInterventionCard({
     id: "card-related-task",
     title: "Sleep support",
     targetChildId: "c-1",
@@ -369,7 +457,7 @@ test("materializeTasksFromLegacy matches structured feedback by relatedTaskId be
     reviewIn48h: "Review bedtime stability in 48 hours.",
     createdAt: "2026-04-10T08:00:00.000Z",
     updatedAt: "2026-04-10T08:00:00.000Z",
-  });
+  }));
 
   const tasks = materializeTasksFromLegacy({
     existingTasks: [parentTask],
@@ -398,7 +486,7 @@ test("materializeTasksFromLegacy matches structured feedback by relatedTaskId be
         executed: true,
         improved: true,
         createdBy: "Parent",
-        createdByRole: "parent" as never,
+        createdByRole: "家长",
       },
     ],
     now: "2026-04-10T21:00:00.000Z",
@@ -412,7 +500,7 @@ test("materializeTasksFromLegacy matches structured feedback by relatedTaskId be
 test("materializeTasksFromLegacy keeps unable_to_execute feedback as incomplete evidence", () => {
   const tasks = materializeTasksFromLegacy({
     interventionCards: [
-      {
+      buildTestInterventionCard({
         id: "card-unable",
         title: "Hydration support",
         targetChildId: "c-1",
@@ -420,7 +508,7 @@ test("materializeTasksFromLegacy keeps unable_to_execute feedback as incomplete 
         reviewIn48h: "Review hydration follow-up in 48 hours.",
         createdAt: "2026-04-10T08:00:00.000Z",
         updatedAt: "2026-04-10T08:00:00.000Z",
-      },
+      }),
     ],
     guardianFeedbacks: [
       {
@@ -446,7 +534,7 @@ test("materializeTasksFromLegacy keeps unable_to_execute feedback as incomplete 
         executed: false,
         improved: false,
         createdBy: "Parent",
-        createdByRole: "parent" as never,
+        createdByRole: "家长",
       },
     ],
     now: "2026-04-10T21:00:00.000Z",

@@ -101,6 +101,8 @@ export interface ParentStructuredFeedbackComposerSubmitInput {
 
 interface ParentStructuredFeedbackComposerProps {
   childId: string;
+  childName: string;
+  childClassName?: string;
   interventionCard?: InterventionCard | null;
   activeTask?: CanonicalTask;
   consultation?: ConsultationResult;
@@ -129,6 +131,8 @@ function getOptionButtonClassName(careMode: boolean) {
 
 export default function ParentStructuredFeedbackComposer({
   childId,
+  childName,
+  childClassName,
   interventionCard,
   activeTask,
   consultation,
@@ -277,9 +281,11 @@ export default function ParentStructuredFeedbackComposer({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-2xl font-black tracking-normal text-slate-950">
-                    小宇
+                    {childName}
                   </h3>
-                  <Badge variant="info" className="rounded-full px-3 py-1">小一班</Badge>
+                  <Badge variant="info" className="rounded-full px-3 py-1">
+                    {childClassName ?? "当前班级"}
+                  </Badge>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <p className="text-xl font-bold text-slate-950">今晚家庭干预卡</p>
@@ -536,7 +542,7 @@ export default function ParentStructuredFeedbackComposer({
           </div>
         </section>
 
-        <div className="sticky bottom-4 z-10">
+        <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+6.75rem)] z-10 lg:bottom-4">
           <Button
             type="button"
             className="h-16 w-full rounded-[28px] bg-[linear-gradient(135deg,#5b46ff,#7c3aed)] text-xl font-black text-white shadow-[0_18px_44px_rgb(91_70_255_/_0.28)]"

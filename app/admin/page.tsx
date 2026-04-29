@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ShieldAlert } from "lucide-react";
+import { toast } from "sonner";
 import DirectorDashboardReplica from "@/components/admin/pixel-replica/DirectorDashboardReplica";
 import EmptyState from "@/components/EmptyState";
 import { buildAdminHomeViewModel, buildAdminWeeklyReportSnapshot } from "@/lib/agent/admin-agent";
@@ -35,6 +36,7 @@ export default function AdminHomePage() {
   const [weeklyReport, setWeeklyReport] = useState<WeeklyReportResponse | null>(null);
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
   const [weeklyReportError, setWeeklyReportError] = useState<string | null>(null);
+  const [weeklyReportRefreshNonce, setWeeklyReportRefreshNonce] = useState(0);
 
   const latestConsultations = getLatestConsultations();
   const { priorityItems: consultationPriorityItems, notificationEvents } = useAdminConsultationWorkspace({
@@ -100,7 +102,7 @@ export default function AdminHomePage() {
   useEffect(() => {
     if (visibleChildren.length === 0) return;
 
-    const cached = weeklyReportCacheRef.current.get(weeklyReportKey);
+    const cached = weeklyReportRefreshNonce === 0 ? weeklyReportCacheRef.current.get(weeklyReportKey) : undefined;
     if (cached) {
       setWeeklyReport(cached);
       setWeeklyReportError(null);
@@ -143,7 +145,13 @@ export default function AdminHomePage() {
       cancelled = true;
       controller.abort();
     };
-  }, [visibleChildren.length, weeklyReportKey, weeklyReportPayload]);
+  }, [visibleChildren.length, weeklyReportKey, weeklyReportPayload, weeklyReportRefreshNonce]);
+
+  function handleRefreshDashboard() {
+    weeklyReportCacheRef.current.delete(weeklyReportKey);
+    setWeeklyReportRefreshNonce((value) => value + 1);
+    toast.info("正在刷新园长看板数据");
+  }
 
   if (visibleChildren.length === 0) {
     return (
@@ -167,6 +175,7 @@ export default function AdminHomePage() {
       weeklyReportLoading={weeklyReportLoading}
       weeklyReportError={weeklyReportError}
       weeklyReportPeriodLabel={weeklyReportPayload.snapshot.periodLabel}
+      onRefresh={handleRefreshDashboard}
     />
   );
 }

@@ -10,6 +10,7 @@ import {
   ADMIN_AGENT_QUICK_QUESTIONS,
   attachNotificationEventToResult,
   attachNotificationEventsToResult,
+  buildAdminHomeViewModel,
 } from "@/lib/agent/admin-agent";
 import type { AdminConsultationPriorityItem } from "@/lib/agent/admin-consultation";
 import { dedupeAdminAgentResultExposure } from "@/lib/agent/admin-home-dedupe";
@@ -327,6 +328,11 @@ export default function AdminAgentPage() {
     syncEventIntoAgentState(nextEvent);
   }
 
+  const directorViewModel = useMemo(
+    () => buildAdminHomeViewModel({ ...payload, workflow: modeConfig.workflow }),
+    [modeConfig.workflow, payload]
+  );
+
   if (visibleChildren.length === 0) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
@@ -353,6 +359,9 @@ export default function AdminAgentPage() {
         requestError={requestError}
         dispatchAvailable={dispatchAvailable}
         dispatchStatusMessage={safeDispatchStatusMessage}
+        trendLabels={directorViewModel.trendLabels}
+        attendanceTrendSeries={directorViewModel.attendanceTrendSeries}
+        classDistribution={directorViewModel.classDistribution}
         onRerun={rerunCurrentMode}
         onSwitchDaily={() => switchMode("daily")}
         onCreateDispatch={(actionItem) => void handleCreateDispatch(actionItem)}

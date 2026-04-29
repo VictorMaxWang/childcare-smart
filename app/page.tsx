@@ -125,6 +125,12 @@ export default function RootOverviewPage() {
     }
   }, [authLoading, currentUser.role, isAuthenticated, router]);
 
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && getRoleHomePath(currentUser.role) === "/teacher") {
+      router.replace("/teacher");
+    }
+  }, [authLoading, currentUser.role, isAuthenticated, router]);
+
   const visibleIds = useMemo(() => new Set(visibleChildren.map((child) => child.id)), [visibleChildren]);
   const todayAttendance = getTodayAttendance();
   const presentCount = todayAttendance.filter((item) => item.isPresent).length;
@@ -362,7 +368,7 @@ export default function RootOverviewPage() {
     };
   }, [isAuthenticated, weeklyReportKey, weeklyReportSnapshot]);
 
-  if (authLoading || !isAuthenticated || currentUser.role === "家长") {
+  if (authLoading || !isAuthenticated || currentUser.role === "家长" || currentUser.role === "教师") {
     return (
       <div className="flex min-h-[calc(100vh-64px)] items-center justify-center px-6">
         <div className="flex flex-col items-center gap-3">

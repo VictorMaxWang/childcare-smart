@@ -55,5 +55,5 @@ test("age-band policy keeps broad legacy 1–3岁 unresolved when birthDate is a
 
 test("age-band care focus helper returns child-scoped focus from normalized input", () => {
   assert.deepEqual(getCareFocusForAgeBand("24-36m"), AGE_BAND_POLICIES["24-36m"].careFocus);
-  assert.equal(resolveAgeBandPolicy("12–24个月")?.ageBand, "12-24m");
+  assert.equal(resolveAgeBandPolicy({ ageBand: "12–24个月" })?.ageBand, "12-24m");
 });

@@ -43,7 +43,7 @@ function buildConsultationItem(): AdminConsultationPriorityItem {
       recentActions: [],
       evidence: [],
       nextSteps: [],
-    } as AdminConsultationPriorityItem["trace"],
+    } as unknown as AdminConsultationPriorityItem["trace"],
     dispatchBindingScope: "consultation",
     notificationPayload: {
       eventType: "consultation-follow-up",

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { executeFollowUp, getAiRuntimeOptions, isValidFollowUpPayload } from "@/lib/ai/server";
-import type { AiFollowUpPayload, ChildSuggestionSnapshot } from "@/lib/ai/types";
+import { buildFallbackFollowUp } from "@/lib/ai/fallback";
+import type { AiFollowUpPayload, AiFollowUpResponse, ChildSuggestionSnapshot } from "@/lib/ai/types";
 import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
 import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
 import { selectStructuredFeedbackConsumption } from "@/lib/feedback/consumption";
@@ -105,21 +106,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid follow-up payload" }, { status: 400 });
   }
 
-  const childId =
-    payload.scope === "institution" || !("child" in payload.snapshot)
-      ? null
-      : payload.snapshot.child.id;
+  const childSnapshot =
+    payload.scope !== "institution" && "child" in payload.snapshot
+      ? payload.snapshot
+      : null;
+  const isChildScoped = childSnapshot !== null;
+  const childId = childSnapshot?.child.id ?? null;
   const access = await requireParentChildAccess(childId);
   if (access.response) {
     return access.response;
   }
 
   const brainForward = await forwardBrainRequest(request, "/api/v1/agents/parent/follow-up");
-  if (brainForward.response) return brainForward.response;
+  if (brainForward.response?.ok || (brainForward.response && !isChildScoped)) {
+    return brainForward.response;
+  }
 
   const taskContext = buildTaskContext(payload);
   const feedbackConsumption =
-    payload.scope === "institution" || !("child" in payload.snapshot)
+    !childSnapshot
       ? {
           feedback: undefined,
           summary: undefined,
@@ -128,9 +133,9 @@ export async function POST(request: Request) {
           primaryActionSupport: undefined,
         }
       : selectStructuredFeedbackConsumption(
-          [payload.latestFeedback, payload.snapshot.recentDetails?.feedback],
+          [payload.latestFeedback, childSnapshot.recentDetails?.feedback],
           {
-            childId: payload.snapshot.child.id,
+            childId: childSnapshot.child.id,
             relatedTaskId: taskContext.activeTask?.taskId,
             relatedConsultationId:
               taskContext.currentInterventionCard?.consultationId ??
@@ -144,29 +149,33 @@ export async function POST(request: Request) {
     feedbackConsumption.feedback?.relatedConsultationId ??
     taskContext.currentInterventionCard?.consultationId ??
     payload.currentInterventionCard?.consultationId;
-  const memoryContext =
-    payload.scope === "institution" || !("child" in payload.snapshot)
-      ? null
-      : await buildMemoryContextForPrompt({
-          childId: payload.snapshot.child.id,
-          workflowType: "parent-follow-up",
-          query: payload.question,
-          sessionId,
-          request,
-        });
+  let memoryContext: Awaited<ReturnType<typeof buildMemoryContextForPrompt>> | null = null;
+  if (isChildScoped) {
+    try {
+      memoryContext = await buildMemoryContextForPrompt({
+        childId: childSnapshot.child.id,
+        workflowType: "parent-follow-up",
+        query: payload.question,
+        sessionId,
+        request,
+      });
+    } catch (error) {
+      console.warn("[AI] Parent follow-up memory fallback", error);
+    }
+  }
 
   const nextPayload =
-    payload.scope === "institution" || !("child" in payload.snapshot) || !memoryContext
+    !childSnapshot || !memoryContext
       ? payload
       : {
           ...payload,
           snapshot: {
-            ...payload.snapshot,
+            ...childSnapshot,
             memoryContext: memoryContext.promptContext,
             continuityNotes:
-              payload.snapshot.continuityNotes ??
+              childSnapshot.continuityNotes ??
               uniqueTexts([
-                `参考了${payload.snapshot.child.name}的长期与近期连续上下文。`,
+                `参考了${childSnapshot.child.name}的长期与近期连续上下文。`,
                 feedbackConsumption.summary,
                 ...feedbackConsumption.continuitySignals,
                 ...feedbackConsumption.openLoops,
@@ -189,22 +198,36 @@ export async function POST(request: Request) {
     currentInterventionCard: taskContext.currentInterventionCard ?? nextPayload.currentInterventionCard,
   } satisfies AiFollowUpPayload;
 
-  const result = await executeFollowUp(taskAwarePayload, getAiRuntimeOptions(request));
-  const consultation =
-    payload.scope === "institution"
-      ? null
-      : await maybeRunHighRiskConsultation(
-          buildConsultationInputFromSnapshot({
-            snapshot: taskAwarePayload.snapshot as ChildSuggestionSnapshot,
-            latestFeedback: taskAwarePayload.latestFeedback,
-            currentInterventionCard: taskAwarePayload.currentInterventionCard,
-            activeTaskId: taskContext.activeTask?.taskId,
-            question: payload.question,
-            followUp: result,
-            source: "api",
-            memoryContext,
-          })
-        );
+  let result: AiFollowUpResponse;
+  try {
+    result = await executeFollowUp(taskAwarePayload, getAiRuntimeOptions(request));
+  } catch (error) {
+    if (!isChildScoped) {
+      throw error;
+    }
+    console.warn("[AI] Parent follow-up fallback after route failure", error);
+    result = buildFallbackFollowUp(taskAwarePayload);
+  }
+
+  let consultation: Awaited<ReturnType<typeof maybeRunHighRiskConsultation>> | null = null;
+  if (isChildScoped) {
+    try {
+      consultation = await maybeRunHighRiskConsultation(
+        buildConsultationInputFromSnapshot({
+          snapshot: taskAwarePayload.snapshot as ChildSuggestionSnapshot,
+          latestFeedback: taskAwarePayload.latestFeedback,
+          currentInterventionCard: taskAwarePayload.currentInterventionCard,
+          activeTaskId: taskContext.activeTask?.taskId,
+          question: payload.question,
+          followUp: result,
+          source: "api",
+          memoryContext,
+        })
+      );
+    } catch (error) {
+      console.warn("[AI] Parent follow-up consultation fallback", error);
+    }
+  }
 
   if (consultation) {
     return NextResponse.json(

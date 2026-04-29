@@ -6,9 +6,10 @@ import {
   buildHealthFileBridgeWriteback,
   isValidHealthFileBridgeRequest,
 } from "./health-file-bridge.ts";
+import type { HealthFileBridgeRequest } from "../ai/types";
 
 test("health-file-bridge helper returns extraction-only output for metadata-heavy files", () => {
-  const request = {
+  const request: HealthFileBridgeRequest = {
     childId: "child-1",
     sourceRole: "teacher",
     files: [
@@ -20,7 +21,7 @@ test("health-file-bridge helper returns extraction-only output for metadata-heav
       },
     ],
     requestSource: "unit-test",
-  } as const;
+  };
 
   assert.equal(isValidHealthFileBridgeRequest(request), true);
 
@@ -47,7 +48,7 @@ test("health-file-bridge helper returns extraction-only output for metadata-heav
 });
 
 test("health-file-bridge helper promotes fever and medication cues into extraction fields only", () => {
-  const request = {
+  const request: HealthFileBridgeRequest = {
     childId: "child-2",
     sourceRole: "parent",
     fileKind: "prescription",
@@ -62,7 +63,7 @@ test("health-file-bridge helper promotes fever and medication cues into extracti
     ],
     requestSource: "unit-test",
     optionalNotes: "家长补充：有过敏史，今天仍在用药。",
-  } as const;
+  };
 
   const result = buildHealthFileBridgeResponse(request, {
     source: "next-local-extractor",
@@ -100,7 +101,7 @@ test("health-file-bridge helper promotes fever and medication cues into extracti
 });
 
 test("health-file-bridge helper keeps contraindications from turning into risky actions", () => {
-  const request = {
+  const request: HealthFileBridgeRequest = {
     childId: "child-3",
     sourceRole: "teacher",
     files: [
@@ -112,7 +113,7 @@ test("health-file-bridge helper keeps contraindications from turning into risky 
       },
     ],
     requestSource: "unit-test",
-  } as const;
+  };
 
   const result = buildHealthFileBridgeResponse(request, {
     source: "next-local-extractor",
@@ -135,7 +136,7 @@ test("health-file-bridge helper keeps contraindications from turning into risky 
 });
 
 test("health-file-bridge helper builds writeback contract with provenance and follow-up seed", () => {
-  const request = {
+  const request: HealthFileBridgeRequest = {
     childId: "child-4",
     sourceRole: "parent",
     fileKind: "health-note",
@@ -149,7 +150,7 @@ test("health-file-bridge helper builds writeback contract with provenance and fo
     ],
     requestSource: "unit-test",
     traceId: "trace-health-4",
-  } as const;
+  };
 
   const response = buildHealthFileBridgeResponse(request, {
     source: "next-local-extractor",

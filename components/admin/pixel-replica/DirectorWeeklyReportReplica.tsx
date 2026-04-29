@@ -14,11 +14,7 @@ import {
 } from "lucide-react";
 import type { AdminAgentActionItem, AdminAgentResult } from "@/lib/agent/admin-types";
 import {
-  chartLabels,
-  classDistribution,
   directorReplicaAssets,
-  weeklyPendingRows,
-  weeklyTrendSeries,
 } from "./directorReplicaData";
 import {
   DirectorReplicaPage,
@@ -28,6 +24,7 @@ import {
   ReplicaMetric,
   ReplicaPanel,
   ReplicaPill,
+  ReplicaUnavailableButton,
 } from "./DirectorReplicaPrimitives";
 
 function priorityTone(priority: string) {
@@ -43,6 +40,9 @@ export default function DirectorWeeklyReportReplica({
   requestError,
   dispatchAvailable,
   dispatchStatusMessage,
+  trendLabels,
+  attendanceTrendSeries,
+  classDistribution,
   onRerun,
   onSwitchDaily,
   onCreateDispatch,
@@ -54,6 +54,9 @@ export default function DirectorWeeklyReportReplica({
   requestError: string | null;
   dispatchAvailable: boolean;
   dispatchStatusMessage: string;
+  trendLabels: string[];
+  attendanceTrendSeries: number[];
+  classDistribution: Array<{ label: string; value: number; detail: string; color: string }>;
   onRerun: () => void;
   onSwitchDaily: () => void;
   onCreateDispatch: (actionItem: AdminAgentActionItem) => void;
@@ -61,36 +64,36 @@ export default function DirectorWeeklyReportReplica({
 }) {
   const scope = result?.institutionScope;
   const actionItems = result?.actionItems ?? [];
-  const summary =
-    result?.summary ??
-    "春芽智慧托育中心本周整体运营平稳，出勤率 87%，饮食均衡率 88%，家园反馈完成率 100%。建议关注 1 列儿童饮水量偏低及午睡时长波动，加强户外活动安排。";
+  const feedbackExpectedCount = scope?.feedbackExpectedChildCount ?? 0;
+  const feedbackCompletedCount = scope?.feedbackCompletedChildCount ?? 0;
+  const summary = result?.summary ?? (loading ? "正在生成本周运营报表..." : "暂无周报结果，请重新生成。");
 
   const metrics = [
     {
       label: "出勤管理",
-      value: `${scope?.todayAttendanceRate ?? scope?.attendanceRate ?? 87}%`,
-      subValue: `出勤 ${scope?.todayPresentCount ?? 108} / 应出勤 ${scope?.visibleChildren ?? 124}`,
+      value: `${scope?.todayAttendanceRate ?? scope?.attendanceRate ?? 0}%`,
+      subValue: `出勤 ${scope?.todayPresentCount ?? 0} / 应出勤 ${scope?.visibleChildren ?? 0}`,
       icon: <CalendarCheck2 className="h-4 w-4" />,
       tone: "blue" as const,
     },
     {
       label: "健康管理",
-      value: `${scope?.healthAbnormalCount ?? 1.2}%`,
-      subValue: `异常 ${scope?.healthAbnormalCount ?? 1} / 应检 84`,
+      value: `${scope?.healthAbnormalCount ?? 0}项`,
+      subValue: `近 7 天异常记录 ${scope?.healthAbnormalCount ?? 0} 项`,
       icon: <HeartPulse className="h-4 w-4" />,
       tone: "purple" as const,
     },
     {
-      label: "饮食管理",
-      value: "88%",
-      subValue: "均衡 92 / 应评估 105",
+      label: "家园反馈",
+      value: `${scope?.feedbackCompletionRate ?? 0}%`,
+      subValue: feedbackExpectedCount > 0 ? `完成 ${feedbackCompletedCount} / 应完成 ${feedbackExpectedCount}` : "暂无绑定家长反馈对象",
       icon: <Utensils className="h-4 w-4" />,
       tone: "orange" as const,
     },
     {
       label: "成长发展",
-      value: "92%",
-      subValue: "参与 110 / 应参与 120",
+      value: `${scope?.growthAttentionCount ?? 0}项`,
+      subValue: `待复盘 ${scope?.pendingReviewCount ?? 0} 项`,
       icon: <Activity className="h-4 w-4" />,
       tone: "green" as const,
     },
@@ -103,14 +106,14 @@ export default function DirectorWeeklyReportReplica({
       description="数据统计周期：周一 00:00 - 周日 24:00。复刻运营报表总览、风险趋势、指标卡片与待跟进事项。"
       actions={
         <>
-          <ReplicaButton variant="outline">
+          <ReplicaUnavailableButton variant="outline">
             <Download className="h-4 w-4" />
             导出周报
-          </ReplicaButton>
-          <ReplicaButton variant="outline">
+          </ReplicaUnavailableButton>
+          <ReplicaUnavailableButton variant="outline">
             <Share2 className="h-4 w-4" />
             分享周报
-          </ReplicaButton>
+          </ReplicaUnavailableButton>
           <ReplicaButton onClick={onRerun} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             重新生成周报
@@ -151,21 +154,21 @@ export default function DirectorWeeklyReportReplica({
                     <AlertTriangle className="h-4 w-4" />
                     风险预警
                   </p>
-                  <p className="mt-2 text-xl font-bold">{Math.max(scope?.healthAbnormalCount ?? 1, 1)}项</p>
+                  <p className="mt-2 text-xl font-bold">{scope?.healthAbnormalCount ?? 0}项</p>
                 </div>
                 <div className="rounded-[14px] border border-orange-100 bg-orange-50 px-4 py-3 text-orange-600">
                   <p className="text-sm font-semibold">关注儿童</p>
-                  <p className="mt-2 text-xl font-bold">{Math.max(result?.riskChildren.length ?? 3, 3)}人</p>
+                  <p className="mt-2 text-xl font-bold">{result?.riskChildren.length ?? 0}人</p>
                 </div>
                 <div className="rounded-[14px] border border-blue-100 bg-blue-50 px-4 py-3 text-blue-600">
                   <p className="text-sm font-semibold">待跟进事项</p>
-                  <p className="mt-2 text-xl font-bold">{Math.max(actionItems.length, 5)}项</p>
+                  <p className="mt-2 text-xl font-bold">{actionItems.length}项</p>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-3 divide-x divide-[#E8ECF7] rounded-[14px] border border-[#E8ECF7] bg-[#FBFCFF] py-3 text-center text-sm">
-                <span className="text-[#23B26D]">↓ 1项</span>
-                <span className="text-red-500">↑ 2人</span>
-                <span className="text-[#23B26D]">↓ 1项</span>
+                <span className="text-[#596681]">真实记录</span>
+                <span className="text-[#596681]">实时统计</span>
+                <span className="text-[#596681]">待闭环</span>
               </div>
             </ReplicaPanel>
           </div>
@@ -178,10 +181,16 @@ export default function DirectorWeeklyReportReplica({
 
           <div className="grid gap-5 xl:grid-cols-[1.12fr_0.88fr]">
             <ReplicaPanel title="关键趋势分析" actions={<ReplicaPill tone="purple">出勤趋势</ReplicaPill>}>
-              <MiniLineChart data={weeklyTrendSeries} labels={chartLabels} />
+              <MiniLineChart data={attendanceTrendSeries} labels={trendLabels} />
             </ReplicaPanel>
             <ReplicaPanel title="本周分布概览">
-              <DonutChart totalLabel="在园儿童" totalValue={`${scope?.visibleChildren ?? 108}人`} segments={classDistribution} />
+              {classDistribution.length > 0 ? (
+                <DonutChart totalLabel="在园儿童" totalValue={`${scope?.visibleChildren ?? 0}人`} segments={classDistribution} />
+              ) : (
+                <div className="rounded-[15px] border border-dashed border-[#D8DEEF] bg-[#FBFCFF] p-5 text-sm text-[#7A86A6]">
+                  暂无可展示的班级分布数据。
+                </div>
+              )}
             </ReplicaPanel>
           </div>
 
@@ -206,42 +215,39 @@ export default function DirectorWeeklyReportReplica({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF1F8] text-[#596681]">
-                  {(actionItems.length ? actionItems.slice(0, 4) : weeklyPendingRows).map((row) => {
-                    const isAction = "ownerLabel" in row;
-                    return (
-                      <tr key={isAction ? row.id : row.title}>
-                        <td className="px-4 py-3 font-semibold text-[#172554]">{isAction ? row.title : row.title}</td>
-                        <td className="px-4 py-3">{isAction ? row.targetName : row.target}</td>
+                  {actionItems.length > 0 ? (
+                    actionItems.slice(0, 4).map((row) => (
+                      <tr key={row.id}>
+                        <td className="px-4 py-3 font-semibold text-[#172554]">{row.title}</td>
+                        <td className="px-4 py-3">{row.targetName}</td>
                         <td className="px-4 py-3">
-                          <ReplicaPill tone={priorityTone(isAction ? row.priorityLevel : row.priority)}>
-                            {isAction ? row.priorityLevel : row.priority}
-                          </ReplicaPill>
+                          <ReplicaPill tone={priorityTone(row.priorityLevel)}>{row.priorityLevel}</ReplicaPill>
                         </td>
-                        <td className="px-4 py-3">{isAction ? row.deadline : row.deadline}</td>
+                        <td className="px-4 py-3">{row.deadline}</td>
                         <td className="px-4 py-3">
-                          <ReplicaPill tone={isAction && row.status === "completed" ? "green" : "blue"}>
-                            {isAction ? (row.relatedEventId ? "已派单" : "待派单") : row.status}
+                          <ReplicaPill tone={row.status === "completed" ? "green" : "blue"}>
+                            {row.relatedEventId ? "已派单" : "待派单"}
                           </ReplicaPill>
                         </td>
                         <td className="px-4 py-3">
-                          {isAction ? (
-                            <ReplicaButton
-                              variant="soft"
-                              className="h-8 px-3 text-xs"
-                              disabled={!dispatchAvailable || isCreatingNotification(row.id) || Boolean(row.relatedEventId)}
-                              onClick={() => onCreateDispatch(row)}
-                            >
-                              {isCreatingNotification(row.id) ? "派单中" : row.relatedEventId ? "已派单" : "派单"}
-                            </ReplicaButton>
-                          ) : (
-                            <ReplicaButton variant="soft" className="h-8 px-3 text-xs" disabled>
-                              占位
-                            </ReplicaButton>
-                          )}
+                          <ReplicaButton
+                            variant="soft"
+                            className="h-8 px-3 text-xs"
+                            disabled={!dispatchAvailable || isCreatingNotification(row.id) || Boolean(row.relatedEventId)}
+                            onClick={() => onCreateDispatch(row)}
+                          >
+                            {isCreatingNotification(row.id) ? "派单中" : row.relatedEventId ? "已派单" : "派单"}
+                          </ReplicaButton>
                         </td>
                       </tr>
-                    );
-                  })}
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-sm text-[#7A86A6]">
+                        当前没有 AI 生成的待跟进事项。
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -257,7 +263,7 @@ export default function DirectorWeeklyReportReplica({
               </span>
               <p className="text-sm leading-7 text-[#596681]">
                 {result?.assistantAnswer ??
-                  "本周整体运营保持稳定，出勤与健康状况良好，饮食均衡率与活动参与率较上周小幅提升。建议继续关注个别儿童睡眠与饮水情况。"}
+                  "暂无 AI 周报结论，请重新生成周报。"}
               </p>
             </div>
             <ReplicaButton onClick={onSwitchDaily} className="mt-5 w-full">
@@ -267,12 +273,14 @@ export default function DirectorWeeklyReportReplica({
 
           <ReplicaPanel title="本周家园反馈">
             <div className="rounded-[18px] bg-gradient-to-br from-[#F3F0FF] to-white p-6 text-center">
-              <p className="text-[44px] font-bold leading-none text-[#635BFF]">{scope?.feedbackCompletionRate ?? 100}%</p>
+              <p className="text-[44px] font-bold leading-none text-[#635BFF]">{scope?.feedbackCompletionRate ?? 0}%</p>
               <p className="mt-2 text-sm font-semibold text-[#172554]">完成率</p>
-              <p className="mt-3 text-xs text-[#7A86A6]">已完成 96 / 应完成 96</p>
-              <ReplicaButton variant="soft" className="mt-5 w-full" disabled>
+              <p className="mt-3 text-xs text-[#7A86A6]">
+                {feedbackExpectedCount > 0 ? `已完成 ${feedbackCompletedCount} / 应完成 ${feedbackExpectedCount}` : "暂无绑定家长反馈对象"}
+              </p>
+              <ReplicaUnavailableButton variant="soft" className="mt-5 w-full">
                 查看反馈详情
-              </ReplicaButton>
+              </ReplicaUnavailableButton>
             </div>
           </ReplicaPanel>
 
@@ -284,11 +292,11 @@ export default function DirectorWeeklyReportReplica({
               </div>
               <div className="flex items-center justify-between rounded-[14px] bg-[#F8FAFF] px-4 py-3">
                 <span className="text-sm text-[#596681]">建议动作</span>
-                <strong className="text-[#172554]">{Math.max(actionItems.length, 4)}条</strong>
+                <strong className="text-[#172554]">{actionItems.length}条</strong>
               </div>
               <div className="flex items-center justify-between rounded-[14px] bg-[#F8FAFF] px-4 py-3">
                 <span className="text-sm text-[#596681]">重点儿童</span>
-                <strong className="text-[#172554]">{Math.max(result?.riskChildren.length ?? 3, 3)}人</strong>
+                <strong className="text-[#172554]">{result?.riskChildren.length ?? 0}人</strong>
               </div>
             </div>
           </ReplicaPanel>

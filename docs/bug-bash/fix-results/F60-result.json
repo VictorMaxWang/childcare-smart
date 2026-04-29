@@ -1,0 +1,79 @@
+{
+  "threadId": "F60",
+  "bugIds": [
+    "BUG-004",
+    "BUG-020",
+    "BUG-021",
+    "BUG-B11-004",
+    "BUG-B24-001",
+    "BUG-B24-002",
+    "BUG-B24-003"
+  ],
+  "statusByBugId": {
+    "BUG-004": "fixed",
+    "BUG-020": "fixed",
+    "BUG-021": "fixed",
+    "BUG-B11-004": "fixed",
+    "BUG-B24-001": "fixed",
+    "BUG-B24-002": "fixed",
+    "BUG-B24-003": "fixed"
+  },
+  "changedFiles": [
+    "app/login/page.tsx",
+    "components/parent/StoryBookViewer.tsx",
+    "components/parent/ParentStructuredFeedbackComposer.tsx",
+    "app/parent/agent/page.tsx",
+    "app/health/page.tsx",
+    "app/growth/page.tsx",
+    "components/admin/pixel-replica/DirectorDashboardReplica.tsx",
+    "components/admin/pixel-replica/directorReplicaData.ts",
+    "public/pixel-replica/manifest.json",
+    "scripts/extract-pixel-assets.mjs",
+    "scripts/f60-responsive-assets-retest.mjs",
+    "docs/bug-bash/fix-results/F60-result.md",
+    "docs/bug-bash/fix-results/F60-result.json"
+  ],
+  "checksRun": [
+    {
+      "command": "node --check scripts/f60-responsive-assets-retest.mjs",
+      "status": "passed"
+    },
+    {
+      "command": "npm run lint",
+      "status": "passed"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed"
+    },
+    {
+      "command": "Select-String production/public path leak scan",
+      "status": "passed",
+      "notes": "No C:\\\\Users\\\\12804, 前端重构, sourceAbsolutePath, sourceRoot, or sourceReferences matches in app/components/lib/public runtime targets."
+    },
+    {
+      "command": "node scripts/f60-responsive-assets-retest.mjs",
+      "status": "passed",
+      "artifact": "artifacts/bug-bash/fixes/F60/f60-responsive-assets-retest.json"
+    },
+    {
+      "command": "npm run bugbash:smoke",
+      "status": "failed",
+      "artifact": "artifacts/bug-bash/B26/b26-smoke-results.json",
+      "notes": "Failed on 11 non-F60 residual issues: teacher duplicate key warning and parent suggestions 500 duplicateOf BUG-002."
+    }
+  ],
+  "browserOrPlaywrightEvidence": [
+    {
+      "artifact": "artifacts/bug-bash/fixes/F60/f60-responsive-assets-retest.json",
+      "summary": "login-mobile, login-register-dialog-mobile, parent-home-mobile, parent-storybook-mobile, teacher-workbench-mobile, director-home-tablet, director-home-mobile, and parent-feedback-tablet all passed without horizontal overflow, broken images, image 404s, Recharts invalid-size warnings, mobile login replica requests, or feedback bottom-nav coverage."
+    }
+  ],
+  "unfixedReasons": {
+    "bugbash:smoke": "The remaining smoke failures are outside F60 scope and pre-existing/currently owned by other threads: teacher duplicate key warning and parent suggestions API 500 duplicateOf BUG-002."
+  },
+  "conflictRisks": [
+    "F60 touched files already modified by earlier fix threads; changes were kept narrowly scoped to CSS/resource/responsive behavior.",
+    "scripts/extract-pixel-assets.mjs still writes full source paths to artifacts/source-index for local audit evidence, but strips them from public/pixel-replica/manifest.json."
+  ]
+}

@@ -19,7 +19,8 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react";
-import { getDefaultLandingPath, type AccountRole } from "@/lib/auth/accounts";
+import { type AccountRole } from "@/lib/auth/accounts";
+import { resolveAuthorizedRedirectPath, sanitizeNextPath } from "@/lib/auth/route-access";
 import { type Gender, useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -107,6 +108,21 @@ function startsOnMobileViewport() {
   return typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches;
 }
 
+function useDesktopReplicaImage() {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 901px)");
+    const update = () => setEnabled(mediaQuery.matches);
+
+    update();
+    mediaQuery.addEventListener("change", update);
+    return () => mediaQuery.removeEventListener("change", update);
+  }, []);
+
+  return enabled;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -137,16 +153,16 @@ export default function LoginPage() {
   const [guardianPhone, setGuardianPhone] = useState("");
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const showDesktopReplicaImage = useDesktopReplicaImage();
 
   const nextPath = useMemo(() => {
-    const rawNextPath = searchParams.get("next");
-    if (!rawNextPath || rawNextPath === "/login" || rawNextPath === "/auth/login") {
-      return null;
-    }
-    return rawNextPath;
+    return sanitizeNextPath(searchParams.get("next"));
   }, [searchParams]);
 
-  const resolveLandingPath = useCallback((role: AccountRole) => nextPath ?? getDefaultLandingPath(role), [nextPath]);
+  const resolveLandingPath = useCallback(
+    (role: AccountRole) => resolveAuthorizedRedirectPath(role, nextPath),
+    [nextPath]
+  );
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
@@ -258,15 +274,17 @@ export default function LoginPage() {
     <div className={styles.page}>
       <main className={styles.shell}>
         <section className={styles.leftColumn} aria-label="智慧托育平台介绍与示例账号入口">
-          <Image
-            src={loginLeftReplica}
-            alt=""
-            width={840}
-            height={1086}
-            className={styles.leftReplica}
-            priority
-            unoptimized
-          />
+          {showDesktopReplicaImage ? (
+            <Image
+              src={loginLeftReplica}
+              alt=""
+              aria-hidden="true"
+              width={840}
+              height={1086}
+              className={styles.leftReplica}
+              sizes="(min-width: 901px) 840px, 0px"
+            />
+          ) : null}
 
           <div className={styles.heroBlock}>
             <div className={styles.brand}>

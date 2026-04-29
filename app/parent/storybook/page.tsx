@@ -15,7 +15,6 @@ import {
 import {
   applyParentStoryBookDemoSeed,
   getParentStoryBookDemoSeedPreset,
-  resolveDefaultParentStoryBookDemoSeedId,
   resolveParentStoryBookDemoSeedId,
 } from "@/lib/agent/parent-storybook-demo-seeds";
 import type {
@@ -52,7 +51,6 @@ type StoryBookControls = {
 const PAGE_COUNT_OPTIONS = [4, 6, 8] as const satisfies readonly ParentStoryBookPageCount[];
 const MEDIA_POLL_INTERVAL_MS = 2_000;
 const MEDIA_POLL_MAX_ATTEMPTS = 24;
-
 function buildInitialControls(input: {
   hasChildContext: boolean;
   preset: ParentStoryBookStylePreset;
@@ -79,7 +77,6 @@ export default function ParentStoryBookPage() {
     searchParams.get("demoSeed")
   );
   const {
-    currentUser,
     getParentFeed,
     healthCheckRecords,
     mealRecords,
@@ -113,16 +110,7 @@ export default function ParentStoryBookPage() {
   }, [childFromQuery, feeds]);
   const hasChildContext = Boolean(selectedFeed);
 
-  const resolvedDemoSeedId = useMemo(
-    () =>
-      resolveDefaultParentStoryBookDemoSeedId({
-        childId: selectedFeed?.child.id ?? childFromQuery,
-        currentUserId: currentUser.id,
-        accountKind: currentUser.accountKind,
-        explicitDemoSeedId,
-      }),
-    [childFromQuery, currentUser.accountKind, currentUser.id, explicitDemoSeedId, selectedFeed]
-  );
+  const resolvedDemoSeedId = explicitDemoSeedId;
   const seededPreset = useMemo(
     () => getParentStoryBookDemoSeedPreset(resolvedDemoSeedId),
     [resolvedDemoSeedId]
@@ -169,6 +157,11 @@ export default function ParentStoryBookPage() {
     if (typeof window === "undefined") return;
 
     const url = new URL(window.location.href);
+    if (selectedFeed?.child.id) {
+      url.searchParams.set("child", selectedFeed.child.id);
+    } else {
+      url.searchParams.delete("child");
+    }
     if (draftControls.preset === DEFAULT_PARENT_STORYBOOK_STYLE_PRESET) {
       url.searchParams.delete("preset");
     } else {
@@ -180,7 +173,7 @@ export default function ParentStoryBookPage() {
       url.searchParams.delete("demoSeed");
     }
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [draftControls.preset, resolvedDemoSeedId]);
+  }, [draftControls.preset, resolvedDemoSeedId, selectedFeed?.child.id]);
 
   useEffect(() => {
     storyRef.current = story;
@@ -263,7 +256,9 @@ export default function ParentStoryBookPage() {
       customStylePrompt: appliedControls.customStylePrompt,
       customStyleNegativePrompt: appliedControls.customStyleNegativePrompt,
     });
-    return applyParentStoryBookDemoSeed(baseRequest, resolvedDemoSeedId);
+    return resolvedDemoSeedId
+      ? applyParentStoryBookDemoSeed(baseRequest, resolvedDemoSeedId)
+      : baseRequest;
   }, [
     appliedControls,
     getChildInterventionCard,

@@ -1,8 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Baby,
   Bell,
@@ -26,7 +26,14 @@ import {
 } from "lucide-react";
 import MobileNav from "@/components/MobileNav";
 import { RoleBadge, type RoleBadgeRole } from "@/components/ui/role-badge";
+import { LoadingState } from "@/components/ui/state-block";
 import type { AccountRole } from "@/lib/auth/accounts";
+import {
+  ACCESS_DENIED_QUERY_PARAM,
+  canRoleAccessPath,
+  resolveUnauthorizedRedirectPath,
+  sanitizeNextPath,
+} from "@/lib/auth/route-access";
 import {
   buildPrimaryNavGroups,
   buildPrimaryNavItems,
@@ -37,6 +44,7 @@ import {
 } from "@/lib/navigation/primary-nav";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const ICON_MAP: Record<PrimaryNavIconKey, LucideIcon> = {
   overview: Monitor,
@@ -126,26 +134,94 @@ const ROUTE_TITLE_MAP = [
 export default function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { currentUser, logout } = useApp();
-  const childId = currentUser.childIds?.[0] ?? "c-1";
+  const searchParams = useSearchParams();
+  const { currentUser, logout, authLoading, isAuthenticated } = useApp();
+  const accessDeniedNoticeKeyRef = useRef<string | null>(null);
+  const currentLocation = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
 
   const hideShell = pathname === "/login" || pathname.startsWith("/auth/login");
+
+  useEffect(() => {
+    if (hideShell || authLoading) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      const currentPath =
+        typeof window !== "undefined" ? `${window.location.pathname}${window.location.search}` : pathname;
+      const nextPath = sanitizeNextPath(currentPath);
+      router.replace(nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : "/login");
+      return;
+    }
+
+    if (!canRoleAccessPath(currentUser.role, pathname)) {
+      router.replace(resolveUnauthorizedRedirectPath(currentUser.role));
+    }
+  }, [authLoading, currentUser.role, hideShell, isAuthenticated, pathname, router]);
+
+  useEffect(() => {
+    if (hideShell || authLoading || !isAuthenticated || typeof window === "undefined") {
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    if (url.searchParams.get(ACCESS_DENIED_QUERY_PARAM) !== "1") {
+      return;
+    }
+
+    const noticeKey = `${url.pathname}${url.search}`;
+    if (accessDeniedNoticeKeyRef.current === noticeKey) {
+      return;
+    }
+    accessDeniedNoticeKeyRef.current = noticeKey;
+
+    toast.warning("已回到当前角色首页", {
+      description: "当前账号无权访问刚才请求的页面。",
+    });
+
+    url.searchParams.delete(ACCESS_DENIED_QUERY_PARAM);
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [authLoading, hideShell, isAuthenticated, pathname]);
+
+  if (hideShell) {
+    return <main className="min-h-screen bg-(--background)">{children}</main>;
+  }
+
+  if (authLoading) {
+    return (
+      <main className="min-h-screen bg-(--background) p-6">
+        <LoadingState
+          title="正在校验登录状态"
+          description="系统正在确认当前账号身份与页面访问权限。"
+        />
+      </main>
+    );
+  }
+
+  if (!isAuthenticated || !canRoleAccessPath(currentUser.role, pathname)) {
+    return (
+      <main className="min-h-screen bg-(--background) p-6">
+        <LoadingState
+          title={isAuthenticated ? "正在回到当前角色首页" : "正在进入登录页"}
+          description={isAuthenticated ? "当前账号无权访问该页面，系统正在安全重定向。" : "请先登录后继续访问该页面。"}
+        />
+      </main>
+    );
+  }
+
+  const childId = currentUser.childIds?.[0] ?? "c-1";
   const navOptions = { childId };
   const navItems = buildPrimaryNavItems(currentUser.role, navOptions);
   const navGroups = buildPrimaryNavGroups(currentUser.role, navOptions);
   const roleMeta = ROLE_META[currentUser.role];
-  const activeItem = findActiveNavItem(pathname, navItems);
-  const pageTitle = resolvePageTitle(pathname, activeItem);
+  const activeItem = findActiveNavItem(currentLocation, navItems);
+  const pageTitle = resolvePageTitle(currentLocation, activeItem);
   const bottomNavItems = buildMobileBottomNavItems(roleMeta.badgeRole, childId);
 
   async function handleLogout() {
     await logout();
     router.replace("/login");
     router.refresh();
-  }
-
-  if (hideShell) {
-    return <main className="min-h-screen bg-(--background)">{children}</main>;
   }
 
   return (
@@ -160,7 +236,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         navItems={navItems}
         onLogout={handleLogout}
         pageTitle={pageTitle}
-        pathname={pathname}
+        pathname={currentLocation}
         roleMeta={roleMeta}
       />
 
@@ -169,7 +245,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           currentUser={currentUser}
           navGroups={navGroups}
           onLogout={handleLogout}
-          pathname={pathname}
+          pathname={currentLocation}
           roleMeta={roleMeta}
         />
       ) : null}
@@ -184,7 +260,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <main className="pixel-app-main min-h-[calc(100vh-86px)] overflow-x-hidden pb-[calc(env(safe-area-inset-bottom)+5.9rem)] sm:min-h-[calc(100vh-72px)] lg:min-h-[calc(100vh-80px)] lg:pb-0">
           {children}
         </main>
-        <MobileBottomTabBar items={bottomNavItems} pathname={pathname} />
+        <MobileBottomTabBar items={bottomNavItems} pathname={currentLocation} />
       </div>
     </div>
   );
@@ -216,6 +292,11 @@ function ShellTopbar({
   roleMeta: (typeof ROLE_META)[AccountRole];
 }) {
   const topNavItems = roleMeta.shellMode === "top-tabs" ? navItems.slice(0, 7) : navItems.slice(0, 5);
+  const showUnavailableNotice = (feature: string) => {
+    toast.info(`${feature}暂未开放`, {
+      description: "当前为演示环境，后续将接入真实业务消息与检索能力。",
+    });
+  };
 
   return (
     <header className="pixel-topbar sticky top-0 z-50 border-b border-slate-200/80 bg-white/94 shadow-[0_1px_0_rgb(15_23_42_/_0.03),0_10px_34px_rgb(79_70_229_/_0.06)] backdrop-blur-xl">
@@ -253,8 +334,10 @@ function ShellTopbar({
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
+            onClick={() => showUnavailableNotice("通知中心")}
             className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-[0_10px_24px_rgb(15_23_42_/_0.08)] ring-1 ring-slate-200/80 sm:hidden"
             aria-label="通知"
+            title="通知中心暂未开放"
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
             <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
@@ -263,16 +346,21 @@ function ShellTopbar({
           </button>
           <button
             type="button"
+            onClick={() => showUnavailableNotice("消息中心")}
             className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-[0_10px_24px_rgb(15_23_42_/_0.08)] ring-1 ring-slate-200/80 sm:hidden"
             aria-label="消息"
+            title="消息中心暂未开放"
           >
             <MessageCircle className="h-5 w-5" aria-hidden="true" />
           </button>
-          <ShellIconButton label="搜索">
+          <ShellIconButton label="搜索" onClick={() => showUnavailableNotice("全局搜索")}>
             <Search className="h-4 w-4" aria-hidden="true" />
           </ShellIconButton>
-          <ShellIconButton label="通知" badge="6">
+          <ShellIconButton label="通知" badge="6" onClick={() => showUnavailableNotice("通知中心")}>
             <Bell className="h-4 w-4" aria-hidden="true" />
+          </ShellIconButton>
+          <ShellIconButton label="消息" onClick={() => showUnavailableNotice("消息中心")}>
+            <MessageCircle className="h-4 w-4" aria-hidden="true" />
           </ShellIconButton>
           <div className="hidden items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-[0_10px_26px_rgb(15_23_42_/_0.07)] sm:flex">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-50 to-cyan-50 text-lg">
@@ -468,7 +556,7 @@ function buildMobileBottomNavItems(role: RoleBadgeRole, childId = "c-1"): Mobile
 
   if (role === "parent") {
     return [
-      { href: `/parent?${childQuery}`, label: "首页", icon: Home, match: (pathname) => pathname === "/parent" },
+      { href: `/parent?${childQuery}`, label: "首页", icon: Home, match: (pathname) => stripLocationPath(pathname) === "/parent" },
       { href: `/parent/agent?${childQuery}`, label: "建议", icon: Sparkles, match: (pathname) => pathname.startsWith("/parent/agent"), highlight: true },
       { href: `/parent/agent?${childQuery}#feedback`, label: "反馈", icon: MessageCircle, match: () => false },
       { href: `/parent/storybook?${childQuery}`, label: "绘本", icon: BookHeart, match: (pathname) => pathname.startsWith("/parent/storybook") },
@@ -478,21 +566,25 @@ function buildMobileBottomNavItems(role: RoleBadgeRole, childId = "c-1"): Mobile
 
   if (role === "teacher") {
     return [
-      { href: "/teacher", label: "工作台", icon: House, match: (pathname) => pathname === "/teacher" || pathname === "/teacher/home" },
-      { href: "/health", label: "晨检", icon: ShieldCheck, match: (pathname) => pathname === "/health" },
-      { href: "/diet", label: "饮食", icon: Salad, match: (pathname) => pathname === "/diet" },
-      { href: "/growth", label: "成长", icon: BookHeart, match: (pathname) => pathname === "/growth" },
+      { href: "/teacher", label: "工作台", icon: House, match: (pathname) => stripLocationPath(pathname) === "/teacher" || stripLocationPath(pathname) === "/teacher/home" },
+      { href: "/health", label: "晨检", icon: ShieldCheck, match: (pathname) => stripLocationPath(pathname) === "/health" },
+      { href: "/diet", label: "饮食", icon: Salad, match: (pathname) => stripLocationPath(pathname) === "/diet" },
+      { href: "/growth", label: "成长", icon: BookHeart, match: (pathname) => stripLocationPath(pathname) === "/growth" },
       { href: "/teacher/agent", label: "AI", icon: Sparkles, match: (pathname) => pathname.startsWith("/teacher/agent"), highlight: true },
     ];
   }
 
   return [
-    { href: "/admin", label: "首页", icon: House, match: (pathname) => pathname === "/admin" },
-    { href: "/admin/agent", label: "AI", icon: Sparkles, match: (pathname) => pathname.startsWith("/admin/agent"), highlight: true },
-    { href: "/admin/agent?action=weekly-report", label: "周报", icon: Monitor, match: (pathname) => pathname.startsWith("/admin/agent") },
-    { href: "/children", label: "儿童", icon: Users, match: (pathname) => pathname === "/children" },
-    { href: "/health", label: "健康", icon: ShieldCheck, match: (pathname) => pathname === "/health" },
+    { href: "/admin", label: "首页", icon: House, match: (pathname) => stripLocationPath(pathname) === "/admin" },
+    { href: "/admin/agent", label: "AI", icon: Sparkles, match: (pathname) => isPrimaryNavItemActive(pathname, "/admin/agent"), highlight: true },
+    { href: "/admin/agent?action=weekly-report", label: "周报", icon: Monitor, match: (pathname) => isPrimaryNavItemActive(pathname, "/admin/agent?action=weekly-report") },
+    { href: "/children", label: "儿童", icon: Users, match: (pathname) => stripLocationPath(pathname) === "/children" },
+    { href: "/health", label: "健康", icon: ShieldCheck, match: (pathname) => stripLocationPath(pathname) === "/health" },
   ];
+}
+
+function stripLocationPath(value: string) {
+  return (value.split("#")[0] ?? value).split("?")[0] || "/";
 }
 
 function MobileBottomTabBar({ items, pathname }: { items: MobileBottomTabItem[]; pathname: string }) {
@@ -539,12 +631,24 @@ function MobileBottomTabBar({ items, pathname }: { items: MobileBottomTabItem[];
   );
 }
 
-function ShellIconButton({ badge, children, label }: { badge?: string; children: ReactNode; label: string }) {
+function ShellIconButton({
+  badge,
+  children,
+  label,
+  onClick,
+}: {
+  badge?: string;
+  children: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
+      onClick={onClick}
       className="relative hidden h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 sm:flex"
       aria-label={label}
+      title={`${label}暂未开放`}
     >
       {children}
       {badge ? (
@@ -569,11 +673,16 @@ function BrandMark({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function findActiveNavItem(pathname: string, navItems: PrimaryNavItem[]) {
-  return [...navItems].reverse().find((item) => isPrimaryNavItemActive(pathname, item.href));
+function findActiveNavItem(currentLocation: string, navItems: PrimaryNavItem[]) {
+  return [...navItems].reverse().find((item) => isPrimaryNavItemActive(currentLocation, item.href));
 }
 
-function resolvePageTitle(pathname: string, activeItem?: PrimaryNavItem) {
+function resolvePageTitle(currentLocation: string, activeItem?: PrimaryNavItem) {
+  if (isPrimaryNavItemActive(currentLocation, "/admin/agent?action=weekly-report")) {
+    return "周报分析";
+  }
+
+  const pathname = currentLocation.split("?")[0] ?? currentLocation;
   const routeTitle = ROUTE_TITLE_MAP.find((item) => {
     if (item.prefix === "/") {
       return pathname === "/";

@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
     }
 
-    await setSessionCookie(result.data.id);
+    await setSessionCookie(result.data.id, result.data.role);
     return NextResponse.json({ ok: true, user: result.data });
   } catch (error) {
     if (error instanceof MissingAuthSessionSecretError) {

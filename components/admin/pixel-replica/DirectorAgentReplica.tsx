@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import {
   AlertCircle,
   Bell,
@@ -17,9 +18,7 @@ import {
 import type { AdminAgentActionItem, AdminAgentResult, AdminDispatchEvent } from "@/lib/agent/admin-types";
 import type { AdminConsultationPriorityItem } from "@/lib/agent/admin-consultation";
 import {
-  assignedObjects,
   directorReplicaAssets,
-  weeklyPendingRows,
 } from "./directorReplicaData";
 import {
   DirectorReplicaPage,
@@ -27,6 +26,7 @@ import {
   ReplicaMetric,
   ReplicaPanel,
   ReplicaPill,
+  ReplicaUnavailableButton,
 } from "./DirectorReplicaPrimitives";
 
 function statusLabel(status: AdminDispatchEvent["status"] | AdminAgentActionItem["status"]) {
@@ -83,6 +83,22 @@ export default function DirectorAgentReplica({
 }) {
   const scope = result?.institutionScope;
   const actionItems = result?.actionItems ?? [];
+  const recommendedOwners = result?.recommendedOwnerMap ?? [];
+  const [questionText, setQuestionText] = useState("");
+  const trimmedQuestion = questionText.trim();
+  const closureValues = [
+    scope?.riskChildrenCount ?? 0,
+    actionItems.length,
+    scope?.pendingDispatchCount ?? 0,
+    scope?.pendingReviewCount ?? 0,
+  ];
+
+  function handleSubmitQuestion() {
+    if (!trimmedQuestion || loading) return;
+    onQuestion(trimmedQuestion);
+    setQuestionText("");
+  }
+
   return (
     <DirectorReplicaPage
       eyebrow={`园长 AI 助手 · ${institutionName}`}
@@ -90,10 +106,10 @@ export default function DirectorAgentReplica({
       description="基于近 7 天数据分析，识别重点问题、生成建议动作、承接派单状态并保留周报入口。"
       actions={
         <>
-          <ReplicaButton variant="outline">
+          <ReplicaUnavailableButton variant="outline">
             <CircleHelp className="h-4 w-4" />
             使用说明
-          </ReplicaButton>
+          </ReplicaUnavailableButton>
           <ReplicaButton variant="outline" onClick={onOpenWeekly}>
             <FileText className="h-4 w-4" />
             周报工作区
@@ -127,30 +143,28 @@ export default function DirectorAgentReplica({
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                   <span className="text-xs font-semibold text-[#7A86A6]">机构问题</span>
-                  <span className="mt-1 text-[26px] font-bold text-[#172554]">{Math.max(actionItems.length, 3)}类</span>
+                  <span className="mt-1 text-[26px] font-bold text-[#172554]">{actionItems.length}类</span>
                 </div>
               </div>
             </ReplicaPanel>
             <ReplicaMetric
               label="AI 分析结论"
-              value={`${Math.max(result?.highlights.length ?? 2, 2)}项`}
+              value={`${result?.highlights.length ?? 0}项`}
               subValue="重点关注"
-              delta="较上周持平"
               icon={<Sparkles className="h-4 w-4" />}
               tone="purple"
             />
             <ReplicaMetric
               label="建议动作"
-              value={`${Math.max(actionItems.length, 6)}条`}
-              subValue={`待审核 ${Math.max(actionItems.length - 2, 2)} 条`}
+              value={`${actionItems.length}条`}
+              subValue={`待派单 ${scope?.pendingDispatchCount ?? 0} 条`}
               icon={<ClipboardList className="h-4 w-4" />}
               tone="blue"
             />
             <ReplicaMetric
               label="闭环进度"
-              value="60%"
-              subValue="本周完成度"
-              delta="较上周 ↑15%"
+              value={`${scope?.pendingReviewCount ?? 0}项`}
+              subValue="待复盘优化"
               icon={<ShieldCheck className="h-4 w-4" />}
               tone="green"
             />
@@ -158,17 +172,17 @@ export default function DirectorAgentReplica({
 
           <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
             <ReplicaPanel
-              title="建议动作（6）"
+              title={`建议动作（${actionItems.length}）`}
               actions={
                 <>
-                  <ReplicaPill tone="purple">待派单任务（4）</ReplicaPill>
-                  <ReplicaPill tone="slate">我发起的任务（8）</ReplicaPill>
+                  <ReplicaPill tone="purple">{`待派单任务（${scope?.pendingDispatchCount ?? 0}）`}</ReplicaPill>
+                  <ReplicaPill tone="slate">真实 AI 结果</ReplicaPill>
                 </>
               }
             >
               <div className="space-y-4">
-                {actionItems.length > 0
-                  ? actionItems.map((item) => (
+                {actionItems.length > 0 ? (
+                  actionItems.map((item) => (
                       <article key={item.id} className="rounded-[16px] border border-[#E8ECF7] bg-[#FBFCFF] p-4">
                         <div className="flex gap-4">
                           <ReplicaPill tone={item.priorityLevel === "P1" ? "red" : item.priorityLevel === "P2" ? "orange" : "green"}>
@@ -201,51 +215,36 @@ export default function DirectorAgentReplica({
                         </div>
                       </article>
                     ))
-                  : weeklyPendingRows.map((row, index) => (
-                      <article key={row.title} className="rounded-[16px] border border-[#E8ECF7] bg-[#FBFCFF] p-4">
-                        <div className="flex gap-4">
-                          <ReplicaPill tone={index === 0 ? "red" : "orange"}>{index === 0 ? "P1 优先" : "P2 较高"}</ReplicaPill>
-                          <div className="min-w-0 flex-1">
-                            <h2 className="font-bold text-[#172554]">{row.title}</h2>
-                            <p className="mt-2 text-sm leading-6 text-[#596681]">
-                              {index === 0 ? "连续饮水量低于标准，建议调整饮水计划与督导策略。" : "根据本周数据生成的视觉占位建议，等待 AI 返回真实结构化结果。"}
-                            </p>
-                            <div className="mt-4 flex items-center justify-between">
-                              <ReplicaPill tone={index === 0 ? "blue" : "purple"}>{row.tag}</ReplicaPill>
-                              <ReplicaButton variant="soft" disabled>
-                                等待 AI 结果
-                              </ReplicaButton>
-                            </div>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
+                ) : (
+                  <div className="rounded-[16px] border border-dashed border-[#D8DEEF] bg-[#FBFCFF] p-5 text-sm text-[#7A86A6]">
+                    当前没有 AI 生成的建议动作。可重新生成或输入自定义问题。
+                  </div>
+                )}
               </div>
               <div className="mt-5 flex items-center justify-between">
-                <span className="text-sm text-[#7A86A6]">共 {Math.max(actionItems.length, 6)} 条</span>
-                <ReplicaButton disabled variant="soft">
-                  批量派单（视觉占位）
-                </ReplicaButton>
+                <span className="text-sm text-[#7A86A6]">共 {actionItems.length} 条</span>
+                <ReplicaUnavailableButton variant="soft">批量派单</ReplicaUnavailableButton>
               </div>
             </ReplicaPanel>
 
             <div className="space-y-5">
-              <ReplicaPanel title="待派单任务（4）" actions={<ReplicaPill tone={dispatchAvailable ? "green" : "orange"}>{dispatchAvailable ? "支持派单" : dispatchStatusMessage}</ReplicaPill>}>
+              <ReplicaPanel title={`待派单任务（${actionItems.length}）`} actions={<ReplicaPill tone={dispatchAvailable ? "green" : "orange"}>{dispatchAvailable ? "支持派单" : dispatchStatusMessage}</ReplicaPill>}>
                 <div className="space-y-3">
-                  {(actionItems.length ? actionItems.slice(0, 4) : weeklyPendingRows).map((item) => {
-                    const isAction = "ownerLabel" in item;
-                    return (
-                      <div key={isAction ? item.id : item.title} className="rounded-[14px] border border-[#E8ECF7] bg-white p-4">
+                  {actionItems.length > 0 ? (
+                    actionItems.slice(0, 4).map((item) => (
+                      <div key={item.id} className="rounded-[14px] border border-[#E8ECF7] bg-white p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-bold text-[#172554]">{isAction ? item.title : item.title}</p>
-                          <ReplicaPill tone={isAction ? statusTone(item.status) : "orange"}>
-                            {isAction ? statusLabel(item.status) : item.status}
-                          </ReplicaPill>
+                          <p className="text-sm font-bold text-[#172554]">{item.title}</p>
+                          <ReplicaPill tone={statusTone(item.status)}>{statusLabel(item.status)}</ReplicaPill>
                         </div>
-                        <p className="mt-2 text-xs text-[#7A86A6]">{isAction ? item.deadline : item.deadline}</p>
+                        <p className="mt-2 text-xs text-[#7A86A6]">{item.deadline}</p>
                       </div>
-                    );
-                  })}
+                    ))
+                  ) : (
+                    <div className="rounded-[14px] border border-dashed border-[#D8DEEF] bg-[#FBFCFF] p-4 text-sm text-[#7A86A6]">
+                      暂无待派单任务。
+                    </div>
+                  )}
                 </div>
               </ReplicaPanel>
 
@@ -266,10 +265,17 @@ export default function DirectorAgentReplica({
                   </div>
                 </div>
                 <div className="mt-4 flex gap-2">
-                  <div className="flex h-10 flex-1 items-center rounded-xl border border-[#E4E7F5] bg-white px-3 text-sm text-[#9AA4BD]">
-                    输入问题，如：饮水量低的原因有哪些？
-                  </div>
-                  <ReplicaButton disabled>
+                  <input
+                    value={questionText}
+                    onChange={(event) => setQuestionText(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") handleSubmitQuestion();
+                    }}
+                    disabled={loading}
+                    placeholder="输入问题，如：饮水量低的原因有哪些？"
+                    className="h-10 min-w-0 flex-1 rounded-xl border border-[#E4E7F5] bg-white px-3 text-sm text-[#172554] outline-none transition focus:border-[#635BFF] disabled:bg-[#F5F7FB] disabled:text-[#9AA4BD]"
+                  />
+                  <ReplicaButton disabled={!trimmedQuestion || loading} onClick={handleSubmitQuestion}>
                     <Send className="h-4 w-4" />
                     发送
                   </ReplicaButton>
@@ -287,22 +293,28 @@ export default function DirectorAgentReplica({
         </div>
 
         <aside className="space-y-5">
-          <ReplicaPanel title="已指派对象（6）" actions={<ReplicaPill tone="blue">查看全部</ReplicaPill>}>
+          <ReplicaPanel title={`已指派对象（${recommendedOwners.length}）`} actions={<ReplicaPill tone="blue">AI 推荐</ReplicaPill>}>
             <div className="space-y-3">
-              {assignedObjects.map((item) => (
-                <div key={item.name} className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EEF4FF] text-sm font-bold text-[#635BFF]">
-                      {item.name.slice(0, 1)}
-                    </span>
-                    <div>
-                      <p className="text-sm font-bold text-[#172554]">{item.name}</p>
-                      <p className="text-xs text-[#7A86A6]">{item.role}</p>
+              {recommendedOwners.length > 0 ? (
+                recommendedOwners.map((item) => (
+                  <div key={`${item.ownerLabel}-${item.count}`} className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EEF4FF] text-sm font-bold text-[#635BFF]">
+                        {item.ownerLabel.slice(0, 1)}
+                      </span>
+                      <div>
+                        <p className="text-sm font-bold text-[#172554]">{item.ownerLabel}</p>
+                        <p className="text-xs text-[#7A86A6]">{item.count} 项建议动作</p>
+                      </div>
                     </div>
+                    <ReplicaPill tone="blue">{item.count}项</ReplicaPill>
                   </div>
-                  <ReplicaPill tone={item.status === "待反馈" ? "orange" : "green"}>{item.status}</ReplicaPill>
+                ))
+              ) : (
+                <div className="rounded-[14px] border border-dashed border-[#D8DEEF] bg-[#FBFCFF] p-4 text-sm text-[#7A86A6]">
+                  暂无 AI 推荐指派对象。
                 </div>
-              ))}
+              )}
             </div>
           </ReplicaPanel>
 
@@ -321,10 +333,10 @@ export default function DirectorAgentReplica({
               </div>
             </div>
             <div className="mt-5 grid grid-cols-4 gap-2 text-center">
-              {["12", "4", "2", "1.8天"].map((value, index) => (
-                <div key={value} className="rounded-[12px] bg-[#F8FAFF] px-2 py-3">
+              {closureValues.map((value, index) => (
+                <div key={`${index}-${value}`} className="rounded-[12px] bg-[#F8FAFF] px-2 py-3">
                   <p className="text-lg font-bold text-[#172554]">{value}</p>
-                  <p className="mt-1 text-[11px] text-[#7A86A6]">{index === 3 ? "平均" : "已完成"}</p>
+                  <p className="mt-1 text-[11px] text-[#7A86A6]">{index === 3 ? "待复盘" : "真实计数"}</p>
                 </div>
               ))}
             </div>
@@ -408,7 +420,7 @@ export default function DirectorAgentReplica({
             <div className="space-y-3 text-sm text-[#596681]">
               <p className="flex items-center gap-2">
                 <UsersRound className="h-4 w-4 text-[#635BFF]" />
-                儿童数：{scope?.visibleChildren ?? 128} 人
+                儿童数：{scope?.visibleChildren ?? 0} 人
               </p>
               <p className="flex items-center gap-2">
                 <Bell className="h-4 w-4 text-[#635BFF]" />

@@ -93,14 +93,3 @@ export const aiInsightBullets = [
   "饮食均衡率与活动参与率较上周小幅提升。",
   "建议继续关注个别儿童睡眠与饮水情况。",
 ];
-
-export const sourceReferences = {
-  dashboard:
-    "C:\\Users\\12804\\Desktop\\childcare-smart源代码\\前端重构\\smartchildcare_images_part_08_of_08\\images\\smartchildcare_dashboard_for_childcare_management.png",
-  dashboardArchive:
-    "C:\\Users\\12804\\Desktop\\childcare-smart源代码\\前端重构\\smartchildcare_images_part_03_of_08\\images\\childcare_management_platform_dashboard_ui.png",
-  agent:
-    "C:\\Users\\12804\\Desktop\\childcare-smart源代码\\前端重构\\smartchildcare_images_part_01_of_08\\images\\ai_powered_childcare_management_dashboard.png",
-  weekly:
-    "C:\\Users\\12804\\Desktop\\childcare-smart源代码\\前端重构\\smartchildcare_images_part_03_of_08\\images\\childcare_management_dashboard_report_overview.png",
-};

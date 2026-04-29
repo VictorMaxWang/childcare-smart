@@ -22,8 +22,14 @@ function looksLikeDebugLabel(line: string) {
 }
 
 function looksLikeInternalLeak(line: string) {
-  return /(admin-agent|recent context|memorymeta|evaluationmeta|debugiterations|can_send|raw json|backend fallback|fully live|providertrace|trace meta)/i.test(
-    line
+  const normalized = line.trim();
+  return (
+    /(admin-agent|recent context|memorymeta|evaluationmeta|debugiterations|can_send|raw json|backend fallback|fully live|providertrace|trace meta)/i.test(
+      normalized
+    ) ||
+    /(demoSeed|storybook-demo|fixture|mock|route|visual-only|recording-c\d+)/i.test(normalized) ||
+    /(^|\s)\/(parent|admin|teacher|login|api)(\/|\?|#|\s|$)/i.test(normalized) ||
+    /Parent\s*端|录屏|演示种子|内部路由|调试/i.test(normalized)
   );
 }
 

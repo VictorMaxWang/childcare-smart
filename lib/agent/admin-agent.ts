@@ -25,7 +25,7 @@ import {
   sanitizeAdminWeeklyTexts,
 } from "@/lib/agent/admin-weekly-sanitize";
 import { buildInstitutionPriorityEngine } from "@/lib/agent/priority-engine";
-import { getLocalToday, isDateWithinLastDays } from "@/lib/date";
+import { getLocalToday, isDateWithinLastDays, normalizeLocalDate, shiftLocalDate } from "@/lib/date";
 import {
   buildContinuityNotes,
   createEmptyMemoryMeta,
@@ -330,10 +330,12 @@ function buildInstitutionScope(payload: AdminAgentRequestPayload, notificationEv
     (record) => visibleChildIds.has(record.childId) && isDateWithinLastDays(record.date, 7, today)
   );
   const feedbackChildIds = new Set(feedbackRecords.map((record) => record.childId));
+  const feedbackExpectedChildCount = parentLinkedChildren.length;
+  const feedbackCompletedChildCount = parentLinkedChildren.filter((child) => feedbackChildIds.has(child.id)).length;
   const feedbackCompletionRate =
-    parentLinkedChildren.length > 0
-      ? Math.min(100, Math.round((feedbackChildIds.size / parentLinkedChildren.length) * 100))
-      : 100;
+    feedbackExpectedChildCount > 0
+      ? Math.min(100, Math.round((feedbackCompletedChildCount / feedbackExpectedChildCount) * 100))
+      : 0;
 
   return {
     institutionName:
@@ -356,6 +358,8 @@ function buildInstitutionScope(payload: AdminAgentRequestPayload, notificationEv
     pendingReviewCount: growthRecords.filter((record) => record.reviewStatus === "待复查").length,
     feedbackCount: feedbackRecords.length,
     feedbackCompletionRate,
+    feedbackCompletedChildCount,
+    feedbackExpectedChildCount,
     riskChildrenCount: 0,
     riskClassCount: 0,
     pendingDispatchCount: notificationEvents.filter((event) => event.status !== "completed").length,
@@ -630,10 +634,128 @@ export function buildAdminQuestionFollowUpPayload(params: {
   };
 }
 
+const CLASS_DISTRIBUTION_COLORS = ["#635BFF", "#8B5CF6", "#4CC383", "#F7C25B", "#4F8DF7", "#F97316"];
+
+function formatTrendLabel(date: string) {
+  const [, month = "01", day = "01"] = date.split("-");
+  return `${month}/${day}`;
+}
+
+function buildRecentDates(today: string) {
+  return Array.from({ length: 7 }, (_, index) => shiftLocalDate(today, index - 6));
+}
+
+function calculateRate(numerator: number, denominator: number) {
+  return denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
+}
+
+function buildAdminDashboardTrend(payload: AdminAgentRequestPayload, today: string) {
+  const dates = buildRecentDates(today);
+  const visibleChildIds = new Set(payload.visibleChildren.map((child) => child.id));
+  const visibleChildCount = payload.visibleChildren.length;
+
+  return {
+    labels: dates.map(formatTrendLabel),
+    attendance: dates.map((date) => {
+      const records = payload.attendanceRecords.filter(
+        (record) => record.date === date && visibleChildIds.has(record.childId)
+      );
+      return calculateRate(records.filter((record) => record.isPresent).length, visibleChildCount);
+    }),
+    health: dates.map((date) => {
+      const records = payload.healthCheckRecords.filter(
+        (record) => record.date === date && visibleChildIds.has(record.childId)
+      );
+      return records.filter((record) => record.isAbnormal).length;
+    }),
+    diet: dates.map((date) => {
+      const childIdsWithMeals = new Set(
+        payload.mealRecords
+          .filter((record) => record.date === date && visibleChildIds.has(record.childId))
+          .map((record) => record.childId)
+      );
+      return calculateRate(childIdsWithMeals.size, visibleChildCount);
+    }),
+    growth: dates.map((date) =>
+      payload.growthRecords.filter(
+        (record) =>
+          visibleChildIds.has(record.childId) &&
+          record.needsAttention &&
+          normalizeLocalDate(record.createdAt) === date
+      ).length
+    ),
+  };
+}
+
+function buildClassDistribution(children: AdminAgentRequestPayload["visibleChildren"]) {
+  const counts = children.reduce<Map<string, number>>((acc, child) => {
+    const className = child.className || "未分班";
+    acc.set(className, (acc.get(className) ?? 0) + 1);
+    return acc;
+  }, new Map<string, number>());
+  const total = children.length;
+
+  return Array.from(counts.entries()).map(([label, count], index) => {
+    const value = calculateRate(count, total);
+    return {
+      label,
+      value,
+      detail: `${count}人 (${value}%)`,
+      color: CLASS_DISTRIBUTION_COLORS[index % CLASS_DISTRIBUTION_COLORS.length] ?? "#635BFF",
+    };
+  });
+}
+
+function formatChildAge(birthDate: string, today: string) {
+  const birth = new Date(`${birthDate}T00:00:00`);
+  const current = new Date(`${today}T00:00:00`);
+  if (Number.isNaN(birth.getTime()) || Number.isNaN(current.getTime()) || birth > current) {
+    return "年龄未知";
+  }
+
+  let months = (current.getFullYear() - birth.getFullYear()) * 12 + current.getMonth() - birth.getMonth();
+  if (current.getDate() < birth.getDate()) months -= 1;
+  if (months <= 0) return "0岁";
+
+  const years = Math.floor(months / 12);
+  const remainingMonths = months % 12;
+  if (years === 0) return `${remainingMonths}个月`;
+  return remainingMonths > 0 ? `${years}岁${remainingMonths}月` : `${years}岁`;
+}
+
+function buildChildArchiveRows(payload: AdminAgentRequestPayload, context: AdminAgentContext) {
+  const today = context.institutionScope.date;
+  const riskByChildId = new Map(context.riskChildren.map((item) => [item.childId, item]));
+  const orderedChildren = [
+    ...payload.visibleChildren.filter((child) => riskByChildId.has(child.id)),
+    ...payload.visibleChildren.filter((child) => !riskByChildId.has(child.id)),
+  ];
+
+  return orderedChildren.slice(0, 3).map((child) => {
+    const risk = riskByChildId.get(child.id);
+    const guardian = child.parentUserId ? "已绑定家长" : "未绑定家长";
+    const health =
+      risk?.reason ||
+      child.specialNotes ||
+      (child.allergies.length > 0 ? `过敏：${child.allergies.join("、")}` : "暂无重点风险");
+
+    return {
+      id: child.id,
+      name: child.name,
+      className: child.className || "未分班",
+      age: formatChildAge(child.birthDate, today),
+      guardian,
+      health,
+      status: risk?.priorityLevel ?? "正常",
+    };
+  });
+}
+
 export function buildAdminHomeViewModel(payload: AdminAgentRequestPayload): AdminHomeViewModel {
   const context = buildAdminAgentContext(payload);
   const weeklyPreview = buildWeeklyPreview(payload, context);
   const pendingDispatches = context.notificationEvents.filter((event) => event.status !== "completed").slice(0, 4);
+  const dashboardTrend = buildAdminDashboardTrend(payload, context.institutionScope.date);
 
   return {
     riskChildrenCount: context.institutionScope.riskChildrenCount,
@@ -641,6 +763,13 @@ export function buildAdminHomeViewModel(payload: AdminAgentRequestPayload): Admi
     pendingItems: context.pendingItems,
     weeklySummary: weeklyPreview.summary,
     weeklyHighlights: takeUnique([...weeklyPreview.highlights, ...context.weeklyHighlights], 4),
+    trendLabels: dashboardTrend.labels,
+    attendanceTrendSeries: dashboardTrend.attendance,
+    healthTrendSeries: dashboardTrend.health,
+    dietTrendSeries: dashboardTrend.diet,
+    growthTrendSeries: dashboardTrend.growth,
+    classDistribution: buildClassDistribution(payload.visibleChildren),
+    childArchiveRows: buildChildArchiveRows(payload, context),
     heroStats: [
       {
         label: "今日实到",

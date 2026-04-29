@@ -1,0 +1,114 @@
+{
+  "threadId": "F70",
+  "generatedAt": "2026-04-29T03:38:22.6686255Z",
+  "bugIds": [
+    "BUG-B20-001",
+    "BUG-B20-002"
+  ],
+  "statusByBugId": {
+    "BUG-B20-001": "fixed",
+    "BUG-B20-002": "fixed",
+    "BUG-B26-001": "duplicate; unchanged",
+    "BUG-B26-002": "duplicate; unchanged",
+    "BUG-B26-003": "duplicate; unchanged"
+  },
+  "changedFiles": {
+    "added": [
+      "scripts/bugbash-smoke-preflight.mjs",
+      "scripts/register-test-path-loader.mjs",
+      "docs/bug-bash/fix-results/F70-result.md",
+      "docs/bug-bash/fix-results/F70-result.json"
+    ],
+    "modified": [
+      "package.json",
+      "playwright.bugbash.config.ts",
+      "app/api/ai/admin-agent/route.test.ts",
+      "app/api/ai/follow-up/route.test.ts",
+      "app/api/ai/follow-up/route.ts",
+      "app/api/ai/suggestions/route.ts",
+      "app/teacher/agent/page.tsx",
+      "app/teacher/high-risk-consultation/page.tsx",
+      "components/admin/admin-dispatch-gating.test.ts",
+      "components/parent/StoryBookViewer.test.tsx",
+      "lib/age-band/policy.test.ts",
+      "lib/agent/admin-agent.test.ts",
+      "lib/agent/admin-agent.ts",
+      "lib/agent/admin-home-dedupe.test.ts",
+      "lib/agent/admin-workspace-loader.test.ts",
+      "lib/agent/consultation/input.test.ts",
+      "lib/agent/health-file-bridge.test.ts",
+      "lib/agent/intervention-card.test.ts",
+      "lib/agent/parent-agent.test.ts",
+      "lib/agent/parent-message-reflexion.test.ts",
+      "lib/agent/parent-weekly-report.test.ts",
+      "lib/agent/teacher-agent.test.ts",
+      "lib/parent/storybook-cache.test.ts",
+      "lib/tasks/task-model.test.ts",
+      "tests/visual/capture-ui-screenshots.spec.ts"
+    ]
+  },
+  "checksRun": [
+    {
+      "name": "npm run lint",
+      "status": "passed"
+    },
+    {
+      "name": "npm run build",
+      "status": "passed"
+    },
+    {
+      "name": "npx tsc --noEmit",
+      "status": "passed"
+    },
+    {
+      "name": "npx --no-install tsc --noEmit --pretty false --incremental false",
+      "status": "passed"
+    },
+    {
+      "name": "npm run typecheck",
+      "status": "passed"
+    },
+    {
+      "name": "npm run test:parent-message-mapper",
+      "status": "passed",
+      "summary": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0
+      }
+    },
+    {
+      "name": "npm run bugbash:smoke",
+      "status": "failed-preflight-expected",
+      "summary": ".next/dev/lock exists and http://127.0.0.1:3330/login is not reachable; preflight refused to start another dev server and printed BUGBASH_BASE_URL reuse instructions."
+    },
+    {
+      "name": "BUGBASH_BASE_URL reuse mode",
+      "command": "$env:BUGBASH_BASE_URL='http://127.0.0.1:3000'; npm run bugbash:smoke; Remove-Item Env:BUGBASH_BASE_URL",
+      "status": "failed-non-f70-residuals",
+      "baseURL": "http://127.0.0.1:3000",
+      "issueCount": 13,
+      "artifact": "artifacts/bug-bash/B26/b26-smoke-results.json",
+      "summary": "Playwright ran against the existing service without starting webServer; failures are B26 runtime/business residuals, including duplicateOf BUG-002 parent suggestions 500 and teacher duplicate-key console errors."
+    }
+  ],
+  "browserOrPlaywrightEvidence": {
+    "tool": "Playwright Chromium",
+    "config": "playwright.bugbash.config.ts",
+    "baseURL": "http://127.0.0.1:3000",
+    "artifact": "artifacts/bug-bash/B26/b26-smoke-results.json",
+    "preflightBehavior": "With .next/dev/lock and no BUGBASH_BASE_URL, npm run bugbash:smoke exits before Playwright with a clear reuse-service message.",
+    "reuseBehavior": "With BUGBASH_BASE_URL set, Playwright webServer is disabled and the suite runs against the existing service."
+  },
+  "unfixedReasons": {
+    "bugbash:smoke": "Full smoke still fails on non-F70 B26 residuals. F70 fixed startup/reuse/lock handling and did not change business pages or generate new bug records.",
+    "BUG-B26-001": "Duplicate status intentionally retained for F90 merge.",
+    "BUG-B26-002": "Duplicate status intentionally retained for F90 merge.",
+    "BUG-B26-003": "Duplicate status intentionally retained for F90 merge."
+  },
+  "conflictRisks": [
+    "The worktree already contained unrelated dirty files and BUGS/triage edits from other threads; F70 did not intentionally modify BUGS.md or BUGS.json.",
+    ".next/dev/lock is still present because an existing dev server is running; this is expected and now handled by preflight.",
+    "Smoke artifacts under artifacts/bug-bash/B26 were refreshed by the required smoke run and still contain non-F70 residual failures."
+  ]
+}

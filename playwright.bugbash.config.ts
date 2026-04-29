@@ -1,7 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
+import { existsSync } from "node:fs";
 
-const baseURL = (process.env.BUGBASH_BASE_URL ?? "http://127.0.0.1:3330").replace(/\/$/, "");
-const useExistingServer = Boolean(process.env.BUGBASH_BASE_URL);
+const bugbashPort = process.env.BUGBASH_PORT?.trim() || "3330";
+const baseURL = (process.env.BUGBASH_BASE_URL ?? `http://127.0.0.1:${bugbashPort}`).replace(/\/$/, "");
+const hasExplicitBaseURL = Boolean(process.env.BUGBASH_BASE_URL);
+const skipWebServer = process.env.BUGBASH_SKIP_WEBSERVER === "1";
+const devLockExists = existsSync(".next/dev/lock");
+const useExistingServer = hasExplicitBaseURL || skipWebServer || devLockExists;
 
 export default defineConfig({
   testDir: ".",
@@ -41,7 +46,7 @@ export default defineConfig({
   webServer: useExistingServer
     ? undefined
     : {
-        command: "npm run dev -- --hostname 127.0.0.1 --port 3330",
+        command: `npm run dev -- --hostname 127.0.0.1 --port ${bugbashPort}`,
         url: baseURL,
         reuseExistingServer: true,
         timeout: 120 * 1000,

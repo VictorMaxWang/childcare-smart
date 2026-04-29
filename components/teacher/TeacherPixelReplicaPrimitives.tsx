@@ -167,15 +167,19 @@ export function PixelTaskRow({
   status,
   tone = "violet",
   checked = false,
+  href,
+  disabled = false,
 }: {
   title: string;
   detail: string;
   status: string;
   tone?: TeacherPixelTone;
   checked?: boolean;
+  href?: string;
+  disabled?: boolean;
 }) {
-  return (
-    <div className="grid grid-cols-[auto_1fr_auto] items-start gap-3 border-b border-[#edf1f8] py-2 last:border-b-0">
+  const content = (
+    <>
       <span
         className={cn(
           "mt-0.5 flex h-4 w-4 items-center justify-center rounded-[0.25rem] border",
@@ -192,6 +196,24 @@ export function PixelTaskRow({
         <p className="truncate text-xs font-medium text-[#7b87a5]">{detail}</p>
       </div>
       <span className={cn("rounded-full px-2.5 py-1 text-xs font-bold", toneSurface[tone])}>{status}</span>
+    </>
+  );
+  const className = cn(
+    "grid grid-cols-[auto_1fr_auto] items-start gap-3 border-b border-[#edf1f8] py-2 last:border-b-0",
+    disabled ? "cursor-not-allowed opacity-70" : href ? "transition hover:bg-violet-50/45" : ""
+  );
+
+  if (href && !disabled) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <div className={className} aria-disabled={disabled || undefined}>
+      {content}
     </div>
   );
 }

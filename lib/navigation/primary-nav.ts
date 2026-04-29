@@ -40,12 +40,6 @@ const CHILDREN_ITEM: PrimaryNavItem = { href: "/children", label: "幼儿档案"
 const HEALTH_ITEM: PrimaryNavItem = { href: "/health", label: "晨检与健康", icon: "health" };
 const GROWTH_ITEM: PrimaryNavItem = { href: "/growth", label: "成长行为", icon: "growth" };
 const DIET_ITEM: PrimaryNavItem = { href: "/diet", label: "饮食记录", icon: "diet" };
-const PARENT_ITEM: PrimaryNavItem = { href: "/parent", label: "家长端", icon: "parent" };
-const INSTITUTION_SCREEN_ITEM: PrimaryNavItem = {
-  href: "/teacher",
-  label: "机构大屏",
-  icon: "screen",
-};
 const ADMIN_HOME_ITEM: PrimaryNavItem = { href: "/admin", label: "园所首页", icon: "role-home" };
 const ADMIN_AGENT_ITEM: PrimaryNavItem = { href: "/admin/agent", label: "AI 助手", icon: "ai" };
 const ADMIN_WEEKLY_ITEM: PrimaryNavItem = {
@@ -115,8 +109,6 @@ const ADMIN_NAV_ITEMS: PrimaryNavItem[] = [
   HEALTH_ITEM,
   GROWTH_ITEM,
   DIET_ITEM,
-  PARENT_ITEM,
-  INSTITUTION_SCREEN_ITEM,
   OVERVIEW_ITEM,
 ];
 
@@ -129,8 +121,6 @@ const TEACHER_NAV_ITEMS: PrimaryNavItem[] = [
   HEALTH_ITEM,
   GROWTH_ITEM,
   DIET_ITEM,
-  PARENT_ITEM,
-  OVERVIEW_ITEM,
 ];
 
 export function getRoleStandaloneHomeItem(role: AccountRole, options: PrimaryNavOptions = {}): PrimaryNavItem | null {
@@ -188,14 +178,33 @@ export function buildPrimaryNavGroups(role: AccountRole, options: PrimaryNavOpti
 }
 
 export function isPrimaryNavItemActive(pathname: string, href: string) {
-  const normalizedPathname = stripUrlPath(pathname);
-  const normalizedHref = stripUrlPath(href);
+  const current = parseNavLocation(pathname);
+  const target = parseNavLocation(href);
+  const hrefHasQuery = href.includes("?");
 
-  if (normalizedHref === "/") {
-    return normalizedPathname === "/";
+  if (target.path === "/") {
+    return current.path === "/";
   }
 
-  return normalizedPathname === normalizedHref || normalizedPathname.startsWith(`${normalizedHref}/`);
+  if (target.path === "/admin" || target.path === "/teacher" || target.path === "/parent") {
+    return current.path === target.path;
+  }
+
+  if (hrefHasQuery) {
+    if (current.path !== target.path) return false;
+
+    for (const [key, value] of target.searchParams.entries()) {
+      if (current.searchParams.get(key) !== value) return false;
+    }
+
+    return true;
+  }
+
+  if (target.path === "/admin/agent" && current.searchParams.has("action")) {
+    return false;
+  }
+
+  return current.path === target.path || current.path.startsWith(`${target.path}/`);
 }
 
 function getPrimaryNavGroupKey(item: PrimaryNavItem): PrimaryNavGroupKey {
@@ -206,8 +215,6 @@ function getPrimaryNavGroupKey(item: PrimaryNavItem): PrimaryNavGroupKey {
   }
 
   if (
-    item.label === "家长端" ||
-    item.label === "机构大屏" ||
     path.startsWith("/parent") ||
     path.includes("agent") ||
     path.includes("consultation") ||
@@ -220,8 +227,16 @@ function getPrimaryNavGroupKey(item: PrimaryNavItem): PrimaryNavGroupKey {
 }
 
 function stripUrlPath(value: string) {
+  return parseNavLocation(value).path;
+}
+
+function parseNavLocation(value: string) {
   const raw = value || "/";
   const withoutHash = raw.split("#")[0] ?? raw;
-  const withoutQuery = withoutHash.split("?")[0] ?? withoutHash;
-  return withoutQuery || "/";
+  const [pathValue, searchValue = ""] = withoutHash.split("?");
+
+  return {
+    path: pathValue || "/",
+    searchParams: new URLSearchParams(searchValue),
+  };
 }

@@ -4,6 +4,7 @@ import type {
   ParentStoryBookResponse,
   ParentStoryBookTransport,
 } from "@/lib/ai/types";
+import { buildParentStoryBookResponse } from "@/lib/agent/parent-storybook";
 import {
   buildParentStoryBookRequestCacheKey,
   getCachedParentStoryBookResponse,
@@ -71,15 +72,6 @@ function isParentStoryBookRequest(payload: unknown): payload is ParentStoryBookR
     return false;
   }
   return Array.isArray(payload.highlightCandidates);
-}
-
-function buildBrainProxyErrorHeaders(brainForward: BrainForwardResult) {
-  return createBrainTransportHeaders({
-    transport: "brain-proxy-error",
-    targetPath: brainForward.targetPath,
-    upstreamHost: brainForward.upstreamHost,
-    fallbackReason: brainForward.fallbackReason ?? "brain-proxy-unavailable",
-  });
 }
 
 function buildCacheHeaders(value: "hit" | "miss" | "bypass") {
@@ -186,30 +178,60 @@ function attachTransportMetadata(
   } satisfies ParentStoryBookResponse;
 }
 
-function buildBrainProxyUnavailableResponse(brainForward: BrainForwardResult) {
-  return NextResponse.json(
+function isDemoSeedRequest(payload: ParentStoryBookRequest) {
+  return payload.requestSource?.startsWith("parent-storybook-demo-seed:") ?? false;
+}
+
+function buildLocalStoryBookFallback(input: {
+  payload: ParentStoryBookRequest;
+  brainForward?: BrainForwardResult;
+  fallbackReason: string;
+  cacheState: "miss" | "bypass";
+}) {
+  return attachTransportMetadata(
+    prepareParentStoryBookResponseForDelivery(
+      buildParentStoryBookResponse(input.payload, {
+        transport: "next-json-fallback",
+        fallbackReason: input.fallbackReason,
+        source: "fallback",
+        fallback: true,
+        upstreamHost: input.brainForward?.upstreamHost,
+        statusCode: input.brainForward?.statusCode,
+        retryStrategy: input.brainForward?.retryStrategy,
+      }),
+      { cacheState: input.cacheState }
+    ),
     {
-      error: "Parent storybook brain is unavailable",
-      code: "brain-proxy-unavailable",
-      diagnostics: {
-        transport: "brain-proxy-error",
-        targetPath: brainForward.targetPath,
-        upstreamHost: brainForward.upstreamHost,
-        fallbackReason: brainForward.fallbackReason ?? "brain-proxy-unavailable",
-        statusCode: brainForward.statusCode,
-        retryStrategy: brainForward.retryStrategy,
-        elapsedMs: brainForward.elapsedMs,
-        timeoutMs: brainForward.timeoutMs,
-      },
-    },
-    {
-      status: 503,
-      headers: mergeHeaders(
-        buildBrainProxyErrorHeaders(brainForward),
-        buildCacheHeaders("bypass")
-      ),
+      transport: "next-json-fallback",
+      fallbackReason: input.fallbackReason,
+      upstreamHost: input.brainForward?.upstreamHost ?? null,
+      statusCode: input.brainForward?.statusCode,
+      retryStrategy: input.brainForward?.retryStrategy,
+      elapsedMs: input.brainForward?.elapsedMs,
+      timeoutMs: input.brainForward?.timeoutMs,
     }
   );
+}
+
+function buildLocalStoryBookFallbackHeaders(input: {
+  brainForward?: BrainForwardResult;
+  fallbackReason: string;
+  cacheState: "miss" | "bypass";
+  demoSeedIsolated?: boolean;
+}) {
+  const headers = mergeHeaders(
+    createBrainTransportHeaders({
+      transport: "next-json-fallback",
+      targetPath: input.brainForward?.targetPath ?? "/api/v1/agents/parent/storybook",
+      upstreamHost: input.brainForward?.upstreamHost ?? null,
+      fallbackReason: input.fallbackReason,
+    }),
+    buildCacheHeaders(input.cacheState)
+  );
+  if (input.demoSeedIsolated) {
+    headers.set("x-smartchildcare-storybook-demo-seed", "isolated");
+  }
+  return headers;
 }
 
 export async function POST(request: Request) {
@@ -235,6 +257,24 @@ export async function POST(request: Request) {
   const bypassCache = shouldBypassStoryCache(request);
   const cacheKey = buildParentStoryBookRequestCacheKey(payload);
   const cachedResponse = bypassCache ? null : getCachedParentStoryBookResponse(cacheKey);
+
+  if (isDemoSeedRequest(payload)) {
+    const fallbackReason = "demo-seed-isolated";
+    const localStory = buildLocalStoryBookFallback({
+      payload,
+      fallbackReason,
+      cacheState: "bypass",
+    });
+
+    return NextResponse.json(localStory, {
+      status: 200,
+      headers: buildLocalStoryBookFallbackHeaders({
+        fallbackReason,
+        cacheState: "bypass",
+        demoSeedIsolated: true,
+      }),
+    });
+  }
 
   if (cachedResponse) {
     const cachedStory = attachTransportMetadata(
@@ -274,8 +314,25 @@ export async function POST(request: Request) {
 
   if (brainForward.response) {
     const remoteStory = await parseRemoteStoryResponse(brainForward.response.clone());
-    if (!remoteStory) {
-      return brainForward.response;
+    if (!brainForward.response.ok || !remoteStory) {
+      const fallbackReason =
+        brainForward.fallbackReason ??
+        (!brainForward.response.ok ? "brain-proxy-non-ok" : "brain-proxy-invalid-json");
+      const localStory = buildLocalStoryBookFallback({
+        payload,
+        brainForward,
+        fallbackReason,
+        cacheState: "bypass",
+      });
+
+      return NextResponse.json(localStory, {
+        status: 200,
+        headers: buildLocalStoryBookFallbackHeaders({
+          brainForward,
+          fallbackReason,
+          cacheState: "bypass",
+        }),
+      });
     }
 
     const preparedStory = attachTransportMetadata(
@@ -312,5 +369,20 @@ export async function POST(request: Request) {
     });
   }
 
-  return buildBrainProxyUnavailableResponse(brainForward);
+  const fallbackReason = brainForward.fallbackReason ?? "brain-proxy-unavailable";
+  const localStory = buildLocalStoryBookFallback({
+    payload,
+    brainForward,
+    fallbackReason,
+    cacheState: "bypass",
+  });
+
+  return NextResponse.json(localStory, {
+    status: 200,
+    headers: buildLocalStoryBookFallbackHeaders({
+      brainForward,
+      fallbackReason,
+      cacheState: "bypass",
+    }),
+  });
 }

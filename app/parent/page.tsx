@@ -50,9 +50,9 @@ import {
   buildParentChildSuggestionSnapshot,
   type ParentAgentResult,
 } from "@/lib/agent/parent-agent";
+import { sanitizeParentFacingText } from "@/lib/agent/parent-copy";
 import { buildParentHomeTransparencyModel } from "@/lib/agent/parent-transparency";
 import { buildParentWeeklyReportSnapshot } from "@/lib/agent/parent-weekly-report";
-import { resolveDefaultParentStoryBookDemoSeedId } from "@/lib/agent/parent-storybook-demo-seeds";
 import { fetchWeeklyReport } from "@/lib/agent/weekly-report-client";
 import { buildFallbackSuggestion } from "@/lib/ai/fallback";
 import type { AiSuggestionResponse, WeeklyReportResponse } from "@/lib/ai/types";
@@ -290,14 +290,7 @@ export default function ParentHomePage() {
   }
 
   const agentHref = `/parent/agent?child=${feed.child.id}`;
-  const storybookDemoSeedId = resolveDefaultParentStoryBookDemoSeedId({
-    childId: feed.child.id,
-    currentUserId: currentUser.id,
-    accountKind: currentUser.accountKind,
-  });
-  const storybookHref = storybookDemoSeedId
-    ? `/parent/storybook?child=${feed.child.id}&demoSeed=${storybookDemoSeedId}`
-    : `/parent/storybook?child=${feed.child.id}`;
+  const storybookHref = `/parent/storybook?child=${feed.child.id}`;
   const primaryAgentLabel = previewResult ? "继续追问" : "进入 AI 助手";
   const displayInterventionCard = latestInterventionCard ?? previewResult?.interventionCard;
   const displayTonightTaskTitle = displayInterventionCard?.title ?? viewModel.tonightTask.title;
@@ -306,9 +299,10 @@ export default function ParentHomePage() {
     previewResult?.tonightTopAction ??
     viewModel.tonightTask.description;
   const displayWhyRecommended =
-    latestConsultation?.summary ??
-    previewResult?.whyNow ??
+    sanitizeParentFacingText(latestConsultation?.summary) ||
+    sanitizeParentFacingText(previewResult?.whyNow) ||
     "系统综合最近 7 天观察、园内风险和家庭反馈，优先给出今晚最值得执行的一件事。";
+  const displayPreviewWhyNow = sanitizeParentFacingText(previewResult?.whyNow) || displayWhyRecommended;
   const displayReviewIn48h =
     latestConsultation?.followUp48h?.[0] ??
     displayInterventionCard?.reviewIn48h ??
@@ -327,7 +321,7 @@ export default function ParentHomePage() {
     title: "AI 今日提醒",
     sections: [
       { label: "提醒", text: previewResult?.title ?? viewModel.aiReminder.title },
-      { label: "为什么现在看", text: previewResult?.whyNow ?? displayWhyRecommended },
+      { label: "为什么现在看", text: displayPreviewWhyNow },
     ],
     outro: "浏览器播报，仅用于当前设备预览，不是后端真实语音。",
   });
@@ -682,7 +676,7 @@ export default function ParentHomePage() {
                     {previewResult?.title ?? viewModel.aiReminder.title}
                   </p>
                   <p className="mt-3 text-base leading-8 text-slate-700">
-                    {previewResult?.whyNow ?? displayWhyRecommended}
+                    {displayPreviewWhyNow}
                   </p>
                 </div>
               </SectionCard>
@@ -853,7 +847,7 @@ export default function ParentHomePage() {
           statusItems={pixelStatusItems}
           reminders={pixelReminders}
           aiTitle={previewResult?.title ?? viewModel.aiReminder.title}
-          aiDescription={previewResult?.whyNow ?? displayWhyRecommended}
+          aiDescription={displayPreviewWhyNow}
           tonightTitle={displayTonightTaskTitle}
           tonightDescription={displayTonightTaskDescription}
           whyRecommended={displayWhyRecommended}
@@ -986,7 +980,7 @@ export default function ParentHomePage() {
                       {previewResult?.title ?? viewModel.aiReminder.title}
                     </p>
                     <p className="mt-3 text-sm leading-7 text-slate-600">
-                      {previewResult?.whyNow ?? displayWhyRecommended}
+                      {displayPreviewWhyNow}
                     </p>
                   </div>
                   <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
@@ -1054,7 +1048,7 @@ export default function ParentHomePage() {
                   {previewResult?.title ?? viewModel.aiReminder.title}
                 </p>
                 <p className="mt-3 text-sm leading-7 text-slate-600">
-                  {previewResult?.whyNow ?? viewModel.aiReminder.description}
+                  {displayPreviewWhyNow || viewModel.aiReminder.description}
                 </p>
               </div>
             </SectionCard>

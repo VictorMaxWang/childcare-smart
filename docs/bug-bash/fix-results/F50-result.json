@@ -1,0 +1,113 @@
+{
+  "threadId": "F50",
+  "generatedAt": "2026-04-29T05:42:36.014Z",
+  "bugIds": [
+    "BUG-B11-006",
+    "BUG-B22-001",
+    "BUG-B22-003"
+  ],
+  "statusByBugId": {
+    "BUG-B11-006": "fixed",
+    "BUG-B22-001": "fixed",
+    "BUG-B22-003": "fixed"
+  },
+  "changedFiles": {
+    "added": [
+      "docs/bug-bash/fix-results/F50-result.md",
+      "docs/bug-bash/fix-results/F50-result.json"
+    ],
+    "modified": [
+      "app/children/page.tsx",
+      "app/health/page.tsx",
+      "components/Navbar.tsx"
+    ]
+  },
+  "checksRun": [
+    {
+      "command": "npm run lint",
+      "status": "passed"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed"
+    },
+    {
+      "command": "Playwright F50 shared interactions regression against http://127.0.0.1:3000",
+      "status": "passed"
+    },
+    {
+      "command": "$env:BUGBASH_BASE_URL='http://127.0.0.1:3000'; npm run bugbash:smoke",
+      "status": "failed-non-f50-residuals",
+      "artifact": "artifacts/bug-bash/B26/b26-smoke-results.json",
+      "summary": "B26 smoke found 13 issues: teacher duplicate-key console errors for 江沐晴 and parent /api/ai/suggestions 500 duplicateOf BUG-002. F50专项路由与交互复测未复现这些问题。"
+    }
+  ],
+  "browserOrPlaywrightEvidence": {
+    "browserUse": {
+      "attempted": false,
+      "status": "not_used",
+      "reason": "F50计划允许Playwright优先；本地Node为v22.20.0，低于此前Browser Use node_repl观测到的>=22.22.0要求。"
+    },
+    "tool": "Playwright Chromium",
+    "baseUrl": "http://127.0.0.1:3000",
+    "ok": true,
+    "routes": {
+      "/children": {
+        "nonBlank": true,
+        "searchEmptyState": true,
+        "detailDrawerOpened": true,
+        "detailDrawerClosed": true,
+        "deleteDialogOpened": true,
+        "deleteDialogClosedWithoutConfirm": true
+      },
+      "/health": {
+        "nonBlank": true,
+        "dialogOpened": true,
+        "invalidTemperatureBlocked": true,
+        "dialogStayedOpenAfterInvalidSubmit": true
+      },
+      "/growth": {
+        "nonBlank": true,
+        "filterChanged": true
+      },
+      "/diet": {
+        "nonBlank": true,
+        "confirmDialogOpened": true,
+        "confirmDialogClosedWithoutConfirm": true
+      }
+    },
+    "topbar": {
+      "desktopSearchToast": true,
+      "desktopNotificationToast": true,
+      "desktopMessageToast": true,
+      "mobileNotificationToast": true,
+      "mobileMessageToast": true
+    },
+    "mobile390x844": {
+      "/children": {
+        "horizontalOverflow": false,
+        "detailDrawerOpenedAndClosed": true
+      },
+      "/health": {
+        "horizontalOverflow": false
+      },
+      "/growth": {
+        "horizontalOverflow": false
+      },
+      "/diet": {
+        "horizontalOverflow": false
+      }
+    },
+    "consoleErrors": [],
+    "pageErrors": [],
+    "serverErrors": []
+  },
+  "unfixedReasons": {},
+  "conflictRisks": [
+    "当前工作树已有 F00/F20/F30/F40/F70 等线程留下的大量未提交修改；F50只叠加了 app/children/page.tsx、app/health/page.tsx、components/Navbar.tsx 和 F50 结果文件。",
+    "components/Navbar.tsx 已包含上游认证/导航改动；F50仅补充顶部搜索/通知/消息按钮反馈和 ShellIconButton onClick 契约。",
+    "BUGS.md 与 BUGS.json 未由 F50 修改，保留给 F90 统一合并状态。"
+  ],
+  "bugsJsonModified": false
+}
+

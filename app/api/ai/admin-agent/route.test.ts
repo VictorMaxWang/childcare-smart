@@ -149,7 +149,6 @@ function assertNoRawWeeklyPayload(text: string) {
 
 function buildDirtyProxyWeeklyAdminResult(): AdminAgentResult {
   return {
-    title: "本周机构运营周报",
     summary:
       'teacher-agent: {"workflow":"communication","objectScope":"child","targetChildId":"child-1","actionItems":[{"id":"a1"}]}',
     assistantAnswer:
@@ -248,7 +247,7 @@ test("admin agent weekly route falls back to local AdminAgentResult when proxy b
 
       assert.equal(response.status, 200);
       assertIsAdminAgentResult(body);
-      assert.equal((body as Record<string, unknown>).malformed, undefined);
+      assert.equal((body as unknown as Record<string, unknown>).malformed, undefined);
     });
   } finally {
     globalThis.fetch = originalFetch;

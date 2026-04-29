@@ -1138,7 +1138,7 @@ async function validateArtifacts() {
   }
 }
 
-function countBy<T extends Record<string, unknown>>(items: T[], key: keyof T) {
+function countBy<T extends object>(items: T[], key: keyof T) {
   return items.reduce<Record<string, number>>((acc, item) => {
     const value = String(item[key]);
     acc[value] = (acc[value] ?? 0) + 1;

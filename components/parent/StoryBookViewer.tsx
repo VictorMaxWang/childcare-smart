@@ -134,6 +134,7 @@ type StoryBookImageProps = {
   src: string;
   alt: string;
   className?: string;
+  loading?: "eager" | "lazy";
   onError?: (event: SyntheticEvent<HTMLImageElement>) => void;
 };
 const StoryBookLink = forwardRef<HTMLAnchorElement, AnchorHTMLAttributes<HTMLAnchorElement>>(
@@ -306,14 +307,17 @@ function formatSeconds(value: number) {
   return `${minutes}:${seconds}`;
 }
 
-function StoryBookImage({ src, alt, className, onError }: StoryBookImageProps) {
+function StoryBookImage({ src, alt, className, loading = "lazy", onError }: StoryBookImageProps) {
+  const decorative = alt.length === 0;
+
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={src}
       alt={alt}
+      aria-hidden={decorative ? "true" : undefined}
       className={className ?? "h-full w-full object-cover"}
-      loading="eager"
+      loading={loading}
       decoding="async"
       onError={onError}
     />
@@ -1193,7 +1197,12 @@ export default function StoryBookViewer({
       ];
 
   return (
-    <div className={cn("min-h-[100svh] px-4 py-4 sm:px-6 sm:py-6", theme.page)}>
+    <div
+      className={cn(
+        "min-h-[100svh] px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+7rem)] sm:px-6 sm:pt-6 sm:pb-[calc(env(safe-area-inset-bottom)+7.5rem)] lg:pb-6",
+        theme.page
+      )}
+    >
       <div className="mx-auto flex max-w-[1320px] gap-6">
         <aside className="sticky top-4 hidden h-[calc(100svh-2rem)] w-52 shrink-0 flex-col justify-between rounded-[28px] border border-slate-100 bg-white/86 p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] backdrop-blur xl:flex">
           <div>
@@ -1340,6 +1349,7 @@ export default function StoryBookViewer({
                     <StoryBookImage
                       src="/pixel-replica/parent/parent-storybook-main-photos.png"
                       alt="成长瞬间"
+                      loading="eager"
                       className="absolute inset-0 h-full w-full object-cover"
                     />
                   </div>
@@ -2405,6 +2415,7 @@ function StoryBookSceneStream({
                   <StoryBookImage
                     src={sceneImageSrc}
                     alt={scene.sceneTitle}
+                    loading={index === 0 || index === activeIndex ? "eager" : "lazy"}
                     className="absolute inset-0 h-full w-full object-cover"
                     onError={() => {
                       if (!scene.assetRef || scene.assetRef === scene.imageUrl) return;

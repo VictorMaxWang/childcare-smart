@@ -1,0 +1,109 @@
+{
+  "threadId": "F00",
+  "generatedAt": "2026-04-29T02:42:40.065Z",
+  "bugIds": [
+    "BUG-011",
+    "BUG-012",
+    "BUG-013",
+    "BUG-B23-001",
+    "BUG-B23-002"
+  ],
+  "statusByBugId": {
+    "BUG-011": "fixed",
+    "BUG-012": "fixed",
+    "BUG-013": "fixed",
+    "BUG-B23-001": "fixed",
+    "BUG-B23-002": "fixed",
+    "BUG-001": "confirmed; P2 and out of F00 scope",
+    "BUG-002": "confirmed; P2 and out of F00 scope",
+    "BUG-003": "confirmed; P2 and out of F00 scope"
+  },
+  "changedFiles": {
+    "added": [
+      "lib/auth/route-access.ts",
+      "docs/bug-bash/fix-results/F00-result.md",
+      "docs/bug-bash/fix-results/F00-result.json",
+      "artifacts/bug-bash/fixes/F00/permission-route-retest.json",
+      "artifacts/bug-bash/fixes/F00/dev-server-3330.out.log",
+      "artifacts/bug-bash/fixes/F00/dev-server-3330.err.log",
+      "artifacts/bug-bash/fixes/F00/next-start-3330.out.log",
+      "artifacts/bug-bash/fixes/F00/next-start-3330.err.log"
+    ],
+    "modified": [
+      "app/api/auth/demo-login/route.ts",
+      "app/api/auth/login/route.ts",
+      "app/api/auth/register/route.ts",
+      "app/login/page.tsx",
+      "app/page.tsx",
+      "components/Navbar.tsx",
+      "docs/bug-bash/BUGS.md",
+      "docs/bug-bash/BUGS.json",
+      "docs/bug-bash/BUG_STATUS.md",
+      "lib/auth/session.ts",
+      "lib/navigation/primary-nav.ts",
+      "lib/persistence/state-scope.ts",
+      "lib/store.tsx",
+      "proxy.ts"
+    ]
+  },
+  "checksRun": [
+    {
+      "name": "npm run lint",
+      "status": "passed"
+    },
+    {
+      "name": "npm run build",
+      "status": "passed"
+    },
+    {
+      "name": "F00 Playwright route/auth retest",
+      "command": "BUGBASH_BASE_URL=http://127.0.0.1:3330 node inline-playwright-retest",
+      "status": "passed",
+      "summary": {
+        "total": 23,
+        "passed": 23,
+        "failed": 0
+      },
+      "artifact": "artifacts/bug-bash/fixes/F00/permission-route-retest.json"
+    },
+    {
+      "name": "npm run bugbash:smoke",
+      "command": "$env:BUGBASH_BASE_URL='http://127.0.0.1:3330'; npm run bugbash:smoke",
+      "status": "failed-non-f00-p2-residuals",
+      "issueCount": 39,
+      "severityCounts": {
+        "P2": 39
+      },
+      "artifact": "artifacts/bug-bash/B26/b26-smoke-results.json"
+    }
+  ],
+  "browserOrPlaywrightEvidence": {
+    "tool": "Playwright Chromium",
+    "baseURL": "http://127.0.0.1:3330",
+    "artifact": "artifacts/bug-bash/fixes/F00/permission-route-retest.json",
+    "summary": {
+      "total": 23,
+      "passed": 23,
+      "failed": 0
+    },
+    "covered": [
+      "unauthenticated protected-route redirects",
+      "login next role authorization",
+      "normal demo-account login destinations",
+      "protected-route refresh stability",
+      "browser back/forward cannot retain unauthorized route",
+      "external/api/login/unknown next sanitization"
+    ]
+  },
+  "unfixedReasons": {
+    "BUG-001": "P2 notification-events 503 remains out of F00 scope; bugbash smoke still reports it as a non-blocking residual.",
+    "BUG-002": "P2 parent suggestions issue remains out of F00 scope; not changed by this thread.",
+    "BUG-003": "P2 parent storybook 503 remains out of F00 scope; bugbash smoke still reports it as a non-blocking residual.",
+    "bugbash:smoke": "The suite failed on 39 P2 issues, including existing API fallback bugs and local analytics/404 noise; F00-specific Playwright checks passed 23/23."
+  },
+  "conflictRisks": [
+    "Existing dev server on port 3000 held the Next dev lock, so F00 retest used next start on port 3330 after a successful production build.",
+    "Legacy session cookies without role are intentionally cleared on role-owned protected routes and redirected to login.",
+    "Navigation changes remove cross-role shortcuts only; role-owned routes remain present and are guarded."
+  ]
+}

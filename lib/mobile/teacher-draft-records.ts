@@ -3,6 +3,7 @@ import type {
   TeacherVoiceDraftItem,
   TeacherVoiceUnderstandResponse,
 } from "@/lib/ai/teacher-voice-understand";
+import { isLocalOnlyMobileDraft } from "@/lib/mobile/local-draft-cache";
 import type { TeacherCopilotPayload } from "@/lib/teacher-copilot/types";
 
 export type DraftRecordStatus = "pending" | "confirmed" | "discarded";
@@ -445,6 +446,14 @@ function buildFailedPersistResult(error: unknown, persistedAt: string): TeacherD
   };
 }
 
+function buildLocalOnlyPersistResult(persistedAt: string): TeacherDraftPersistResult {
+  return {
+    status: "local_only",
+    message: "演示草稿仅保留在本地。",
+    persistedAt,
+  };
+}
+
 function getPersistMessageForAction(
   action: TeacherDraftRecordAction,
   result: TeacherDraftPersistResult
@@ -570,8 +579,30 @@ export function createTeacherDraftPersistAdapter(params: {
     params.saveDraft(nextSourceDraft);
 
     let finalRecords = nextRecords;
+    const shouldPersistRemote = !isLocalOnlyMobileDraft(nextSourceDraft);
 
-    if (params.persistNow) {
+    if (!shouldPersistRemote) {
+      const persistResult = buildLocalOnlyPersistResult(updatedAt);
+      finalRecords = nextRecords.map((record) =>
+        record.recordId === input.recordId
+          ? applyPersistResultToRecord({
+              record,
+              action: input.action,
+              result: persistResult,
+            })
+          : record
+      );
+
+      params.saveDraft(
+        buildSourceDraftWithState({
+          sourceDraft: nextSourceDraft,
+          records: finalRecords,
+          activeRecordId: input.activeRecordId,
+          structuredPayloadOverrides: params.structuredPayloadOverrides,
+          now: persistResult.persistedAt,
+        })
+      );
+    } else if (params.persistNow) {
       let persistResult: TeacherDraftPersistResult;
       try {
         persistResult = await params.persistNow(

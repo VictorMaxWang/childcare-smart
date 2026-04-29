@@ -1,0 +1,111 @@
+{
+  "threadId": "F20",
+  "bugIds": [
+    "BUG-001",
+    "BUG-B11-001",
+    "BUG-B11-002",
+    "BUG-B11-003",
+    "BUG-B11-005",
+    "BUG-B21-003",
+    "BUG-B21-004",
+    "BUG-B25-002"
+  ],
+  "statusByBugId": {
+    "BUG-001": "fixed",
+    "BUG-B11-001": "fixed",
+    "BUG-B11-002": "fixed",
+    "BUG-B11-003": "fixed",
+    "BUG-B11-005": "fixed",
+    "BUG-B21-003": "fixed",
+    "BUG-B21-004": "fixed",
+    "BUG-B25-002": "fixed"
+  },
+  "changedFiles": {
+    "added": [
+      "docs/bug-bash/fix-results/F20-result.md",
+      "docs/bug-bash/fix-results/F20-result.json"
+    ],
+    "modified": [
+      "app/admin/page.tsx",
+      "app/admin/agent/page.tsx",
+      "app/api/admin/notification-events/contract.ts",
+      "components/Navbar.tsx",
+      "components/MobileNav.tsx",
+      "components/admin/pixel-replica/DirectorDashboardReplica.tsx",
+      "components/admin/pixel-replica/DirectorAgentReplica.tsx",
+      "components/admin/pixel-replica/DirectorWeeklyReportReplica.tsx",
+      "components/admin/pixel-replica/DirectorReplicaPrimitives.tsx",
+      "lib/agent/admin-agent.ts",
+      "lib/agent/admin-types.ts",
+      "lib/navigation/primary-nav.ts",
+      "lib/store.tsx"
+    ]
+  },
+  "checksRun": [
+    {
+      "command": "npm run lint",
+      "status": "passed"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed"
+    },
+    {
+      "command": "Playwright fallback F20 director regression",
+      "status": "passed",
+      "evidencePath": "artifacts/bug-bash/fixes/F20/playwright-evidence.json"
+    }
+  ],
+  "browserOrPlaywrightEvidence": {
+    "browserUse": {
+      "attempted": true,
+      "status": "blocked",
+      "reason": "node_repl uses local Node v22.20.0 but requires >= v22.22.0"
+    },
+    "fallback": "Playwright",
+    "ok": true,
+    "baseURL": "http://127.0.0.1:3000",
+    "notificationEventStatuses": [200],
+    "home": {
+      "nonBlank": true,
+      "refreshStayedOn": "/admin",
+      "metricNavigation": {
+        "/children": "/children",
+        "/health": "/health",
+        "/diet": "/diet",
+        "/growth": "/growth"
+      },
+      "visualButtonsDisabled": ["导出周报", "分享周报"]
+    },
+    "agent": {
+      "agentActiveCount": 2,
+      "weeklyActiveCount": 0,
+      "inputVisible": true,
+      "sendEnabledAfterInput": true,
+      "followUpTriggered": true,
+      "visualButtonsDisabled": ["使用说明", "批量派单"]
+    },
+    "weeklyReport": {
+      "agentActiveCount": 0,
+      "weeklyActiveCount": 2,
+      "rerunEnabled": true,
+      "visualButtonsDisabled": ["导出周报", "分享周报", "查看反馈详情"]
+    },
+    "zeroState": {
+      "zeroAttendance": true,
+      "zeroFeedback": true
+    },
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "serverErrors": 0
+  },
+  "unfixedReasons": {},
+  "conflictRisks": [
+    "components/Navbar.tsx and lib/navigation/primary-nav.ts had parallel auth/navigation changes from other threads; F20 only layered query-aware active-state handling on top.",
+    "lib/store.tsx change is intentionally narrow: demo snapshots with emptied core record arrays are allowed so admin zero-state QA can render real 0 values instead of throwing in development."
+  ],
+  "notes": [
+    "BUGS.md and BUGS.json were not edited by F20.",
+    "Existing ignored Playwright artifacts were written under artifacts/bug-bash/fixes/F20 for evidence."
+  ]
+}

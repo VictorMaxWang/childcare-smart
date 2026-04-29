@@ -187,7 +187,7 @@ test("local speech handoff hotfix targets the active scene once real audio arriv
       audioDelivery: "mixed",
       sceneCount: 2,
       diagnostics: {
-        ...baseStory.providerMeta.diagnostics,
+        ...baseStory.providerMeta.diagnostics!,
         audio: {
           ...baseStory.providerMeta.diagnostics!.audio,
           jobStatus: "partial",
@@ -244,7 +244,7 @@ test("runtime banners hotfix maps brain 504 and local speech honestly", () => {
       imageDelivery: "dynamic-fallback",
       audioDelivery: "preview-only",
       diagnostics: {
-        ...baseStory.providerMeta.diagnostics,
+        ...baseStory.providerMeta.diagnostics!,
         brain: {
           ...baseStory.providerMeta.diagnostics!.brain,
           reachable: false,
@@ -286,7 +286,7 @@ test("runtime banners hotfix keeps mixed backend audio visible even if current p
       audioDelivery: "mixed",
       sceneCount: 2,
       diagnostics: {
-        ...baseStory.providerMeta.diagnostics,
+        ...baseStory.providerMeta.diagnostics!,
         audio: {
           ...baseStory.providerMeta.diagnostics!.audio,
           jobStatus: "partial",

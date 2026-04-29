@@ -149,6 +149,35 @@ export function ReplicaButton({
   );
 }
 
+export function ReplicaUnavailableButton({
+  children,
+  variant = "outline",
+  className,
+  reason = "暂未开放",
+}: {
+  children: ReactNode;
+  variant?: ButtonTone;
+  className?: string;
+  reason?: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled
+      title={reason}
+      aria-disabled="true"
+      className={cn(
+        "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold opacity-65",
+        buttonToneClass[variant],
+        className
+      )}
+    >
+      {children}
+      <span className="text-[11px] font-medium opacity-80">{reason}</span>
+    </button>
+  );
+}
+
 export function ReplicaPill({
   children,
   tone = "slate",
@@ -202,6 +231,30 @@ export function ReplicaMetric({
         {delta ? <span className="font-semibold text-[#23B26D]">{delta}</span> : null}
       </div>
     </div>
+  );
+}
+
+export function ReplicaMetricLink({
+  href,
+  label,
+  value,
+  subValue,
+  delta,
+  icon,
+  tone = "blue",
+}: {
+  href: string;
+  label: string;
+  value: string;
+  subValue?: string;
+  delta?: string;
+  icon?: ReactNode;
+  tone?: Tone;
+}) {
+  return (
+    <Link href={href} className="block rounded-[16px] transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#635BFF]/35">
+      <ReplicaMetric label={label} value={value} subValue={subValue} delta={delta} icon={icon} tone={tone} />
+    </Link>
   );
 }
 

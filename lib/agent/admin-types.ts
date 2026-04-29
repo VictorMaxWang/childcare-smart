@@ -232,6 +232,8 @@ export interface InstitutionScopeSummary {
   pendingReviewCount: number;
   feedbackCount: number;
   feedbackCompletionRate: number;
+  feedbackCompletedChildCount?: number;
+  feedbackExpectedChildCount?: number;
   riskChildrenCount: number;
   riskClassCount: number;
   pendingDispatchCount: number;
@@ -315,6 +317,21 @@ export interface AdminHomeViewModel {
   pendingItems: string[];
   weeklySummary: string;
   weeklyHighlights: string[];
+  trendLabels: string[];
+  attendanceTrendSeries: number[];
+  healthTrendSeries: number[];
+  dietTrendSeries: number[];
+  growthTrendSeries: number[];
+  classDistribution: Array<{ label: string; value: number; detail: string; color: string }>;
+  childArchiveRows: Array<{
+    id: string;
+    name: string;
+    className: string;
+    age: string;
+    guardian: string;
+    health: string;
+    status: string;
+  }>;
   heroStats: Array<{ label: string; value: string }>;
   priorityTopItems: InstitutionPriorityItem[];
   riskChildren: AdminRiskChildSummary[];

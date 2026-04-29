@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: DEMO_ACCOUNT_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    await setSessionCookie(account.id);
+    await setSessionCookie(account.id, account.role);
     return NextResponse.json({ ok: true, user: account });
   } catch (error) {
     if (error instanceof MissingAuthSessionSecretError) {

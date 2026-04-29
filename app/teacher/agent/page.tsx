@@ -57,6 +57,7 @@ import { buildTeacherVoiceUnderstandFallback } from "@/lib/ai/teacher-voice-unde
 import {
   createMobileDraft,
   getDraftSyncStatusLabel,
+  isLocalOnlyMobileDraft,
 } from "@/lib/mobile/local-draft-cache";
 import { buildReminderItems, getReminderStatusLabel } from "@/lib/mobile/reminders";
 import { buildMockOcrDraft } from "@/lib/mobile/ocr-input";
@@ -93,6 +94,20 @@ type TeacherVoiceSourceDraftItem = {
   previewSummary?: string;
 };
 
+type CommunicationTab = "pending" | "history" | "mine";
+
+type CommunicationItem = {
+  id: string;
+  childId: string;
+  senderName: string;
+  childLabel: string;
+  content: string;
+  status: "待回复" | "已处理" | "我发起";
+  timeLabel: string;
+  attention: boolean;
+  avatar: string;
+};
+
 function isWorkflow(value: string | null): value is TeacherAgentWorkflowType {
   return value === "communication" || value === "follow-up" || value === "weekly-summary";
 }
@@ -127,6 +142,12 @@ export default function TeacherAgentPage() {
   const [selectedSourceDraftId, setSelectedSourceDraftId] = useState<string | null>(
     null
   );
+  const [communicationTab, setCommunicationTab] = useState<CommunicationTab>("pending");
+  const [communicationOnlyAttention, setCommunicationOnlyAttention] = useState(false);
+  const [expandedCommunicationId, setExpandedCommunicationId] = useState<string | null>(null);
+  const [communicationDrafts, setCommunicationDrafts] = useState<Record<string, string>>({});
+  const [processedCommunicationIds, setProcessedCommunicationIds] = useState<string[]>([]);
+  const [sentCommunicationItems, setSentCommunicationItems] = useState<CommunicationItem[]>([]);
   const routeIntent = searchParams.get("intent");
   const preloadAction = searchParams.get("action");
   const queryDraftId = searchParams.get("draftId");
@@ -337,6 +358,7 @@ export default function TeacherAgentPage() {
           content: transcript,
           attachmentName: "mock-understanding-note.txt",
           syncStatus: "local_pending",
+          persistenceScope: "local",
           structuredPayload: createTeacherVoiceDraftPayload({
             childName: activeChildContext.child.name,
             transcript: understanding.transcript.text,
@@ -482,7 +504,8 @@ export default function TeacherAgentPage() {
         sourceDraftLabel: `${selectedStructuredDraftSource.draft.draftType === "ocr" ? "图片" : "语音"}草稿`,
         sourceModeLabel: "已完成结构化整理",
         sourceSyncStatusLabel: getDraftSyncStatusLabel(
-          selectedStructuredDraftSource.draft.syncStatus
+          selectedStructuredDraftSource.draft.syncStatus,
+          isLocalOnlyMobileDraft(selectedStructuredDraftSource.draft) ? "local" : selectedStructuredDraftSource.draft.persistenceScope
         ),
         initialExpandedRecordId: readTeacherDraftConfirmationState(
           selectedStructuredDraftSource.payload
@@ -503,7 +526,8 @@ export default function TeacherAgentPage() {
         sourceDraftLabel: `${fallbackTeacherSourceDraft.draftType === "ocr" ? "图片" : "语音"}草稿`,
         sourceModeLabel: "本地兜底整理结果",
         sourceSyncStatusLabel: getDraftSyncStatusLabel(
-          fallbackTeacherSourceDraft.syncStatus
+          fallbackTeacherSourceDraft.syncStatus,
+          isLocalOnlyMobileDraft(fallbackTeacherSourceDraft) ? "local" : fallbackTeacherSourceDraft.persistenceScope
         ),
         initialExpandedRecordId: readTeacherDraftConfirmationState(
           fallbackStructuredPayload
@@ -686,7 +710,12 @@ export default function TeacherAgentPage() {
 
       if (resultChildId) {
         teacherRoleDrafts
-          .filter((draft) => draft.childId === resultChildId && draft.syncStatus === "local_pending")
+          .filter(
+            (draft) =>
+              draft.childId === resultChildId &&
+              draft.syncStatus === "local_pending" &&
+              !isLocalOnlyMobileDraft(draft)
+          )
           .forEach((draft) => markMobileDraftSyncStatus(draft.draftId, "synced"));
 
         buildReminderItems({
@@ -802,14 +831,111 @@ export default function TeacherAgentPage() {
   }
 
   const isCommunicationMode = preloadAction === "communication";
-  const waitingCommunicationCount = Math.max(
-    1,
-    Math.min(
-      6,
-      classContext.visibleChildren.length - classContext.weeklyFeedbacks.length + classContext.todayAbnormalChildren.length
-    )
-  );
-  const handledCommunicationCount = Math.max(0, classContext.weeklyFeedbacks.length);
+  const processedCommunicationSet = new Set(processedCommunicationIds);
+  const communicationFeedbackChildIds = new Set(classContext.weeklyFeedbacks.map((feedback) => feedback.childId));
+  const allPendingCommunicationItems: CommunicationItem[] = classContext.visibleChildren
+    .filter((child) => !communicationFeedbackChildIds.has(child.id))
+    .map((child) => {
+      const focus = classContext.focusChildren.find((item) => item.childId === child.id);
+      return {
+        id: `pending-${child.id}`,
+        childId: child.id,
+        senderName: `${child.guardians?.[0]?.name ?? child.name + "家长"}`,
+        childLabel: `${child.name} · ${child.className}`,
+        content:
+          focus && focus.reasons.length > 0
+            ? `本周关注：${focus.reasons.join("、")}。建议主动同步园内观察，并请家长补充今晚表现。`
+            : "本周尚未收到家长反馈，可提醒家长补充今晚在家表现。",
+        status: "待回复" as const,
+        timeLabel: "待主动沟通",
+        attention: Boolean(focus && focus.score >= 3),
+        avatar: child.guardians?.[0]?.relation?.includes("爸爸") ? "👨🏻" : "👩🏻",
+      };
+    });
+  const pendingCommunicationItems = allPendingCommunicationItems.filter((item) => !processedCommunicationSet.has(item.id));
+  const feedbackCommunicationItems: CommunicationItem[] = classContext.weeklyFeedbacks.map((feedback) => {
+    const child = classContext.visibleChildren.find((item) => item.id === feedback.childId);
+    return {
+      id: `feedback-${feedback.id}`,
+      childId: feedback.childId,
+      senderName: feedback.createdBy || `${child?.name ?? "幼儿"}家长`,
+      childLabel: `${child?.name ?? "未知幼儿"} · ${child?.className ?? classContext.className}`,
+      content: feedback.content || feedback.notes || "家长已提交反馈，等待老师核对。",
+      status: "已处理",
+      timeLabel: feedback.date,
+      attention: feedback.status !== "已知晓" && feedback.status !== "在家已配合",
+      avatar: feedback.createdBy?.includes("爸爸") ? "👨🏻" : "👩🏻",
+    };
+  });
+  const processedCommunicationItems: CommunicationItem[] = processedCommunicationIds.map((id) => {
+    const source = allPendingCommunicationItems.find((item) => item.id === id);
+    return (
+      source ?? {
+        id,
+        childId: activeChildId,
+        senderName: "已处理沟通",
+        childLabel: classContext.className,
+        content: "该沟通项已由老师在本地标记处理。",
+        status: "已处理" as const,
+        timeLabel: "刚刚",
+        attention: false,
+        avatar: "✓",
+      }
+    );
+  });
+  const communicationItemsByTab =
+    communicationTab === "pending"
+      ? pendingCommunicationItems
+      : communicationTab === "history"
+        ? [...feedbackCommunicationItems, ...processedCommunicationItems]
+        : sentCommunicationItems;
+  const communicationItems = communicationOnlyAttention
+    ? communicationItemsByTab.filter((item) => item.attention)
+    : communicationItemsByTab;
+  const waitingCommunicationCount = pendingCommunicationItems.length;
+  const handledCommunicationCount = feedbackCommunicationItems.length + processedCommunicationItems.length;
+  const prepareCommunicationReply = (item: CommunicationItem) => {
+    setExpandedCommunicationId(item.id);
+    setCommunicationDrafts((prev) => ({
+      ...prev,
+      [item.id]:
+        prev[item.id] ??
+        currentResult?.parentMessageDraft ??
+        `您好，${item.content} 我会在园内继续观察，并在离园前同步今天的重点情况。`,
+    }));
+  };
+  const markCommunicationHandled = (item: CommunicationItem) => {
+    setProcessedCommunicationIds((prev) => (prev.includes(item.id) ? prev : [item.id, ...prev]));
+    setCommunicationTab("history");
+  };
+  const sendCommunicationReply = (item: CommunicationItem) => {
+    const draft = communicationDrafts[item.id]?.trim();
+    if (!draft) {
+      prepareCommunicationReply(item);
+      return;
+    }
+
+    const sentItem: CommunicationItem = {
+      ...item,
+      id: `sent-${item.childId}-${Date.now()}`,
+      senderName: currentUser.name,
+      content: draft,
+      status: "我发起",
+      timeLabel: "刚刚",
+      attention: false,
+      avatar: "✓",
+    };
+
+    setSentCommunicationItems((prev) => [sentItem, ...prev]);
+    setProcessedCommunicationIds((prev) => (prev.includes(item.id) ? prev : [item.id, ...prev]));
+    setCommunicationDrafts((prev) => ({ ...prev, [item.id]: "" }));
+    setExpandedCommunicationId(null);
+    setCommunicationTab("mine");
+  };
+  const runCommunicationSuggestion = (item: CommunicationItem) => {
+    setSelectedChildId(item.childId);
+    void runWorkflow("communication");
+  };
   const pendingTaskCount =
     classContext.todayAbnormalChildren.length +
     classContext.uncheckedMorningChecks.length +
@@ -913,12 +1039,12 @@ export default function TeacherAgentPage() {
                   </Button>
                 </div>
 
-                <div className="mt-6 grid grid-cols-4 overflow-hidden rounded-[1.25rem] border border-[#dfe7f4] bg-white px-4 py-5 shadow-[0_12px_32px_rgb(70_88_140_/_0.045)]">
+                <div className="mt-6 grid grid-cols-2 overflow-hidden rounded-[1.25rem] border border-[#dfe7f4] bg-white px-4 py-5 shadow-[0_12px_32px_rgb(70_88_140_/_0.045)] sm:grid-cols-4">
                   {[
-                    { label: "待回复", value: waitingCommunicationCount, icon: <MessageSquareText className="h-7 w-7" />, tone: "bg-violet-50 text-violet-600", badge: "3" },
-                    { label: "待处理", value: classContext.pendingReviews.length || 1, icon: <Clock3 className="h-7 w-7" />, tone: "bg-orange-50 text-orange-500" },
-                    { label: "已处理", value: Math.max(handledCommunicationCount, 27), icon: <CheckCircle2 className="h-7 w-7" />, tone: "bg-emerald-50 text-emerald-500" },
-                    { label: "沟通总数", value: Math.max(handledCommunicationCount + waitingCommunicationCount, 32), icon: <UsersRound className="h-7 w-7" />, tone: "bg-blue-50 text-blue-500" },
+                    { label: "待回复", value: waitingCommunicationCount, icon: <MessageSquareText className="h-7 w-7" />, tone: "bg-violet-50 text-violet-600", badge: waitingCommunicationCount > 0 ? `${waitingCommunicationCount}` : "" },
+                    { label: "待处理", value: classContext.pendingReviews.length + classContext.todayAbnormalChildren.length, icon: <Clock3 className="h-7 w-7" />, tone: "bg-orange-50 text-orange-500" },
+                    { label: "已处理", value: handledCommunicationCount, icon: <CheckCircle2 className="h-7 w-7" />, tone: "bg-emerald-50 text-emerald-500" },
+                    { label: "沟通总数", value: handledCommunicationCount + waitingCommunicationCount + sentCommunicationItems.length, icon: <UsersRound className="h-7 w-7" />, tone: "bg-blue-50 text-blue-500" },
                   ].map((item, index) => (
                     <div key={item.label} className={`relative flex flex-col items-center justify-center gap-1 text-center sm:flex-row sm:gap-3 sm:text-left ${index > 0 ? "border-l border-[#e8edf6]" : ""}`}>
                       <span className={`relative flex h-14 w-14 items-center justify-center rounded-full ${item.tone}`}>
@@ -934,56 +1060,107 @@ export default function TeacherAgentPage() {
                 </div>
 
                 <div className="mt-6 flex items-center justify-between border-b border-[#e7edf6]">
-                  <div className="flex gap-10">
-                    {["待回复 (3)", "沟通记录", "我发起的"].map((tab, index) => (
-                      <button key={tab} type="button" className={`pb-4 text-xl font-bold ${index === 0 ? "border-b-4 border-violet-600 text-violet-600" : "text-[#6f7a96]"}`}>
-                        {tab}
+                  <div className="flex flex-wrap gap-6 sm:gap-10">
+                    {[
+                      { key: "pending" as const, label: `待回复 (${waitingCommunicationCount})` },
+                      { key: "history" as const, label: `沟通记录 (${handledCommunicationCount})` },
+                      { key: "mine" as const, label: `我发起的 (${sentCommunicationItems.length})` },
+                    ].map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        className={`pb-4 text-lg font-bold sm:text-xl ${communicationTab === tab.key ? "border-b-4 border-violet-600 text-violet-600" : "text-[#6f7a96]"}`}
+                        onClick={() => setCommunicationTab(tab.key)}
+                      >
+                        {tab.label}
                       </button>
                     ))}
                   </div>
-                  <button type="button" className="mb-3 inline-flex items-center gap-2 text-base font-semibold text-[#6f7a96]">
-                    筛选
+                  <button
+                    type="button"
+                    className={`mb-3 inline-flex items-center gap-2 text-base font-semibold ${communicationOnlyAttention ? "text-violet-600" : "text-[#6f7a96]"}`}
+                    onClick={() => setCommunicationOnlyAttention((prev) => !prev)}
+                    aria-pressed={communicationOnlyAttention}
+                  >
+                    {communicationOnlyAttention ? "仅看重点" : "筛选"}
                     <Filter className="h-5 w-5" />
                   </button>
                 </div>
 
                 <div className="mt-4 space-y-4">
-                  {[
-                    ["张阳的妈妈", "张阳　3岁2个月", "老师您好，最近发现张阳午睡时容易出汗，是不是穿得有点多了？谢谢~", "待回复", "10分钟前", "👩🏻"],
-                    ["刘睿的爸爸", "刘睿　3岁4个月", "老师，孩子今天回来说明在幼儿园搭了很高的积木塔，表现棒棒的，辛苦老师啦！", "待回复", "25分钟前", "👨🏻"],
-                    ["许安的妈妈", "许安　3岁3个月", "老师好，许安明天需要带美术作品回家吗？", "待处理", "1小时前", "👩"],
-                  ].map(([name, child, content, status, time, avatar], index) => (
-                    <article key={name} className="rounded-[1.35rem] border border-[#e0e7f5] bg-white px-4 py-4 shadow-[0_12px_32px_rgb(70_88_140_/_0.045)] sm:px-6">
+                  {communicationItems.length > 0 ? (
+                    communicationItems.map((item) => (
+                    <article key={item.id} className="rounded-[1.35rem] border border-[#e0e7f5] bg-white px-4 py-4 shadow-[0_12px_32px_rgb(70_88_140_/_0.045)] sm:px-6">
                       <div className="grid grid-cols-[auto_1fr_auto] gap-4">
                         <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-[#f2f5fb] text-4xl">
-                          {avatar}
-                          <span className="absolute right-0 top-0 h-3.5 w-3.5 rounded-full bg-red-500 ring-2 ring-white" />
+                          {item.avatar}
+                          {item.status === "待回复" ? <span className="absolute right-0 top-0 h-3.5 w-3.5 rounded-full bg-red-500 ring-2 ring-white" /> : null}
                         </span>
                         <div className="min-w-0">
-                          <h2 className="truncate text-2xl font-bold text-[#16213f]">{name}</h2>
-                          <p className="mt-1 text-base font-semibold text-[#7a86a4]">{child}</p>
+                          <h2 className="truncate text-2xl font-bold text-[#16213f]">{item.senderName}</h2>
+                          <p className="mt-1 text-base font-semibold text-[#7a86a4]">{item.childLabel}</p>
                         </div>
                         <div className="text-right">
-                          <span className="rounded-full bg-orange-50 px-3 py-1 text-sm font-bold text-orange-500">{status}</span>
-                          <p className="mt-3 text-base font-semibold text-[#8a96b2]">{time}</p>
+                          <span className={`rounded-full px-3 py-1 text-sm font-bold ${item.status === "待回复" ? "bg-orange-50 text-orange-500" : item.status === "我发起" ? "bg-blue-50 text-blue-500" : "bg-emerald-50 text-emerald-500"}`}>{item.status}</span>
+                          <p className="mt-3 text-base font-semibold text-[#8a96b2]">{item.timeLabel}</p>
                         </div>
                       </div>
-                      <p className="mt-4 rounded-[0.9rem] bg-[#f3f6fb] px-4 py-3 text-base font-medium leading-7 text-[#53617f]">{content}</p>
+                      <p className="mt-4 rounded-[0.9rem] bg-[#f3f6fb] px-4 py-3 text-base font-medium leading-7 text-[#53617f]">{item.content}</p>
+                      {expandedCommunicationId === item.id ? (
+                        <div className="mt-4 rounded-[0.9rem] border border-violet-100 bg-violet-50/40 p-3">
+                          <textarea
+                            value={communicationDrafts[item.id] ?? ""}
+                            onChange={(event) =>
+                              setCommunicationDrafts((prev) => ({
+                                ...prev,
+                                [item.id]: event.target.value,
+                              }))
+                            }
+                            className="min-h-28 w-full resize-y rounded-[0.8rem] border border-violet-100 bg-white px-3 py-2 text-sm leading-6 text-[#293653] outline-none focus:border-violet-300"
+                            placeholder="输入给家长的回复内容"
+                          />
+                          <div className="mt-3 flex justify-end">
+                            <Button type="button" variant="premium" className="rounded-full" onClick={() => sendCommunicationReply(item)}>
+                              <Send className="mr-2 h-4 w-4" />
+                              发送本地回复
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="mt-4 grid grid-cols-[1fr_1fr_auto] gap-3">
-                        <Button type="button" variant="outline" className="h-12 rounded-full border-violet-100 text-base font-bold text-violet-600" onClick={() => void runWorkflow("communication")} disabled={isLoading}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-12 rounded-full border-violet-100 text-base font-bold text-violet-600"
+                          onClick={() => (item.status === "待回复" ? prepareCommunicationReply(item) : setExpandedCommunicationId((prev) => (prev === item.id ? null : item.id)))}
+                        >
                           <MessageSquareText className="mr-2 h-5 w-5" />
-                          {index === 2 ? "标记已处理" : "回复家长"}
+                          {item.status === "待回复" ? "回复家长" : "查看记录"}
                         </Button>
-                        <Button type="button" variant="outline" className="h-12 rounded-full border-blue-100 bg-blue-50/40 text-base font-bold text-blue-500" onClick={() => void runWorkflow("communication")} disabled={isLoading}>
+                        <Button type="button" variant="outline" className="h-12 rounded-full border-blue-100 bg-blue-50/40 text-base font-bold text-blue-500" onClick={() => runCommunicationSuggestion(item)} disabled={isLoading}>
                           <Lightbulb className="mr-2 h-5 w-5" />
                           沟通建议
                         </Button>
-                        <Button type="button" variant="outline" size="icon" className="h-12 w-12 rounded-full">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-12 w-12 rounded-full"
+                          onClick={() => (item.status === "待回复" ? markCommunicationHandled(item) : setExpandedCommunicationId((prev) => (prev === item.id ? null : item.id)))}
+                          aria-label={item.status === "待回复" ? "标记已处理" : "展开沟通记录"}
+                        >
                           <ChevronDown className="h-5 w-5" />
                         </Button>
                       </div>
                     </article>
-                  ))}
+                    ))
+                  ) : (
+                    <EmptyState
+                      icon={<MessageSquareText className="h-6 w-6" />}
+                      title={communicationOnlyAttention ? "当前没有重点沟通项" : "当前没有待展示的沟通记录"}
+                      description="这里只展示当前班级真实反馈、待沟通儿童和本地发送记录。"
+                    />
+                  )}
                 </div>
 
                 <div className="mt-5 rounded-[1.25rem] border border-violet-100 bg-[linear-gradient(135deg,#ffffff_0%,#f5f3ff_60%,#eef6ff_100%)] p-5">
@@ -994,16 +1171,25 @@ export default function TeacherAgentPage() {
                     </Button>
                   </div>
                   <div className="mt-4 rounded-[0.9rem] border border-violet-100 bg-white/82 p-4">
-                    <p className="text-sm font-bold text-violet-600">就“孩子午睡出汗”给家长的回复建议</p>
+                    <p className="text-sm font-bold text-violet-600">基于当前选中幼儿的回复建议</p>
                     <p className="mt-2 text-base font-medium leading-7 text-[#53617f]">
-                      {currentResult?.summary ?? "您好，感谢您对孩子的关注！午睡出汗可能与室温或穿着有关，我们会注意调整环境，建议您给孩子穿透气的衣物并随身带一件薄外套。如有其他情况，欢迎您随时告诉我～"}
+                      {currentResult?.summary ?? "先选择一条待回复沟通项，或点击“沟通建议”生成可复核的话术。无真实待沟通数据时不会显示模拟家长消息。"}
                     </p>
                   </div>
                 </div>
 
-                <Button type="button" variant="premium" className="mt-6 h-14 w-full rounded-[1rem] text-lg font-bold" onClick={() => void runWorkflow("communication")} disabled={isLoading}>
+                <Button
+                  type="button"
+                  variant="premium"
+                  className="mt-6 h-14 w-full rounded-[1rem] text-lg font-bold"
+                  onClick={() => {
+                    const target = communicationItems[0];
+                    if (target) sendCommunicationReply(target);
+                  }}
+                  disabled={isLoading || communicationItems.length === 0}
+                >
                   <Send className="mr-2 h-5 w-5" />
-                  发送消息
+                  发送当前回复
                 </Button>
               </section>
               <section className="hidden">
@@ -1527,7 +1713,7 @@ export default function TeacherAgentPage() {
                       <div key={draft.draftId} className="rounded-lg border border-slate-100 bg-white p-4">
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-semibold text-slate-900">{draft.draftType.toUpperCase()} 草稿</p>
-                          <span className="text-xs text-slate-500">{getDraftSyncStatusLabel(draft.syncStatus)}</span>
+                          <span className="text-xs text-slate-500">{getDraftSyncStatusLabel(draft.syncStatus, isLocalOnlyMobileDraft(draft) ? "local" : draft.persistenceScope)}</span>
                         </div>
                         {(() => {
                           const voicePayload = readTeacherVoiceDraftPayload(draft.structuredPayload);
@@ -1621,7 +1807,7 @@ export default function TeacherAgentPage() {
                               </Badge>
                             ) : null}
                             <Badge variant="outline">
-                              {getDraftSyncStatusLabel(item.draft.syncStatus)}
+                              {getDraftSyncStatusLabel(item.draft.syncStatus, isLocalOnlyMobileDraft(item.draft) ? "local" : item.draft.persistenceScope)}
                             </Badge>
                           </div>
                           {item.previewSummary ? (

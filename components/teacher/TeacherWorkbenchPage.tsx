@@ -36,22 +36,31 @@ import { useApp } from "@/lib/store";
 
 const DESIGN_DATE = "4月26日 星期五";
 
-const desktopTasks = [
-  { title: "晨检登记", detail: "请完成一批儿童晨检登记", status: "未完成", tone: "red" as const },
-  { title: "饮食记录", detail: "记录今日上午点、午餐情况", status: "未完成", tone: "blue" as const },
-  { title: "成长记录", detail: "记录幼儿日常表现或精彩瞬间", status: "进行中", tone: "amber" as const },
-  { title: "家园沟通", detail: "7条家长消息待回复", status: "未完成", tone: "violet" as const },
-  { title: "消毒记录", detail: "记录班级消毒情况", status: "已完成", tone: "green" as const, checked: true },
-];
+type WorkbenchTask = {
+  title: string;
+  detail: string;
+  status: string;
+  tone: "red" | "blue" | "amber" | "violet" | "green";
+  checked?: boolean;
+  href?: string;
+  disabled?: boolean;
+};
 
-const timelineItems = [
-  { time: "08:00", title: "入园签到", value: "19人已签到", image: "✓", tone: "violet" },
-  { time: "08:30", title: "晨检完成", value: "19人完成", image: "✓", tone: "green" },
-  { time: "09:00", title: "早操活动", value: "全员参与", image: "🏃", tone: "red" },
-  { time: "10:30", title: "区域活动", value: "自主游戏中", image: "🧩", tone: "blue" },
-  { time: "11:00", title: "午餐时间", value: "18人已用餐", image: "🍱", tone: "amber" },
-  { time: "13:00", title: "午睡时间", value: "18人午睡中", image: "🛏️", tone: "violet" },
-];
+type PriorityChild = {
+  name: string;
+  note: string;
+  tags: string[];
+  time: string;
+  avatar: string;
+};
+
+type TimelineItem = {
+  time: string;
+  title: string;
+  value: string;
+  image: string;
+  tone: "violet" | "green" | "red" | "blue" | "amber";
+};
 
 export default function TeacherWorkbenchPage() {
   const {
@@ -83,38 +92,85 @@ export default function TeacherWorkbenchPage() {
   }
 
   const className = currentUser.className ?? "小一班";
-  const visualClassSize = Math.max(visibleChildren.length, className === "晨曦班" ? 28 : 21);
-  const visualAttendance = Math.max(presentChildren.length, className === "晨曦班" ? 19 : 19);
-  const abnormalCount = Math.max(viewModel.todayAbnormalChildren.length, 3);
-  const waitingMessages = Math.max(viewModel.parentsToCommunicate.length, 7);
-  const pendingRecords = Math.max(
-    viewModel.pendingReviews.length + viewModel.uncheckedMorningChecks.length + viewModel.todayAbnormalChildren.length,
-    18
-  );
-  const highPriorityChildren = [
+  const visualClassSize = visibleChildren.length;
+  const visualAttendance = presentChildren.length;
+  const absentCount = Math.max(visualClassSize - visualAttendance, 0);
+  const attendanceRate = visualClassSize > 0 ? `${Math.round((visualAttendance / visualClassSize) * 100)}%` : "0%";
+  const abnormalCount = viewModel.todayAbnormalChildren.length;
+  const waitingMessages = viewModel.parentsToCommunicate.length;
+  const pendingMorningChecks = viewModel.uncheckedMorningChecks.length;
+  const pendingReviews = viewModel.pendingReviews.length;
+  const pendingRecords = pendingReviews + pendingMorningChecks + abnormalCount;
+  const desktopTasks: WorkbenchTask[] = [
     {
-      name: viewModel.todayAbnormalChildren[0]?.child.name ?? "乐乐",
-      note: viewModel.todayAbnormalChildren[0]
-        ? `体温 ${viewModel.todayAbnormalChildren[0].record.temperature}℃`
-        : "体温 37.9℃",
-      tags: ["体温异常", "咳嗽"],
-      time: "08:30 晨检",
-      avatar: "👦🏻",
+      title: "晨检登记",
+      detail: pendingMorningChecks > 0 ? `${pendingMorningChecks}名在园儿童待完成晨检` : "今日晨检已完成",
+      status: pendingMorningChecks > 0 ? "待处理" : "已完成",
+      tone: pendingMorningChecks > 0 ? "red" : "green",
+      href: "/health",
+      checked: pendingMorningChecks === 0,
     },
     {
-      name: viewModel.pendingReviews[0]?.child.name ?? "小然",
-      note: viewModel.pendingReviews[0]?.record.category ?? "今日午餐食量较少",
-      tags: ["食欲不佳"],
-      time: "11:10 饮食记录",
-      avatar: "👧🏻",
+      title: "饮食记录",
+      detail: "进入饮食页补充今日餐点情况",
+      status: "去记录",
+      tone: "blue",
+      href: "/diet",
     },
     {
-      name: viewModel.parentsToCommunicate[0]?.child.name ?? "豆豆",
-      note: viewModel.parentsToCommunicate[0]?.reason ?? "入园时有哭闹",
-      tags: ["情绪波动"],
-      time: "今日需重点关注",
-      avatar: "👦",
+      title: "成长记录",
+      detail: pendingReviews > 0 ? `${pendingReviews}条成长观察待复查` : "记录幼儿日常表现或精彩瞬间",
+      status: pendingReviews > 0 ? "待复查" : "去记录",
+      tone: "amber",
+      href: "/growth",
     },
+    {
+      title: "家园沟通",
+      detail: waitingMessages > 0 ? `${waitingMessages}位家长待沟通` : "当前暂无待沟通家长",
+      status: waitingMessages > 0 ? "待回复" : "已清空",
+      tone: "violet",
+      href: "/teacher/agent?action=communication",
+      checked: waitingMessages === 0,
+    },
+    {
+      title: "消毒记录",
+      detail: "当前版本暂未开放教师端消毒记录入口",
+      status: "暂未开放",
+      tone: "green",
+      disabled: true,
+    },
+  ];
+  const highPriorityChildren: PriorityChild[] = [
+    ...viewModel.todayAbnormalChildren.map((item) => ({
+      name: item.child.name,
+      note: `体温 ${item.record.temperature}℃ · ${item.record.mood} · ${item.record.handMouthEye}`,
+      tags: ["晨检异常"],
+      time: item.record.date,
+      avatar: item.child.gender === "女" ? "👧🏻" : "👦🏻",
+    })),
+    ...viewModel.pendingReviews.map((item) => ({
+      name: item.child.name,
+      note: item.record.followUpAction ?? item.record.description,
+      tags: [item.record.category],
+      time: item.record.reviewDate ?? "待复查",
+      avatar: item.child.gender === "女" ? "👧🏻" : "👦🏻",
+    })),
+    ...viewModel.parentsToCommunicate.map((item) => ({
+      name: item.child.name,
+      note: item.reason,
+      tags: ["家园沟通"],
+      time: "待沟通",
+      avatar: item.child.gender === "女" ? "👧🏻" : "👦🏻",
+    })),
+  ].slice(0, 5);
+  const completedMorningChecks = Math.max(visualAttendance - pendingMorningChecks, 0);
+  const timelineItems: TimelineItem[] = [
+    { time: "08:00", title: "入园签到", value: `${visualAttendance}人已签到`, image: "✓", tone: "violet" },
+    { time: "08:30", title: "晨检完成", value: `${completedMorningChecks}人完成`, image: "✓", tone: "green" },
+    { time: "09:00", title: "早操活动", value: visualAttendance > 0 ? `${visualAttendance}人可参与` : "暂无出勤", image: "🏃", tone: "red" },
+    { time: "10:30", title: "区域活动", value: pendingReviews > 0 ? `${pendingReviews}项需观察` : "暂无待复查", image: "🧩", tone: "blue" },
+    { time: "11:00", title: "午餐记录", value: "进入饮食页记录", image: "🍱", tone: "amber" },
+    { time: "13:00", title: "午睡观察", value: abnormalCount > 0 ? `${abnormalCount}人需关注` : "暂无异常", image: "🛏️", tone: "violet" },
   ];
 
   return (
@@ -123,8 +179,11 @@ export default function TeacherWorkbenchPage() {
         abnormalCount={abnormalCount}
         className={className}
         currentUserName={currentUser.name}
+        desktopTasks={desktopTasks}
         highPriorityChildren={highPriorityChildren}
         pendingRecords={pendingRecords}
+        pendingMorningChecks={pendingMorningChecks}
+        timelineItems={timelineItems}
         visualAttendance={visualAttendance}
         visualClassSize={visualClassSize}
         waitingMessages={waitingMessages}
@@ -133,7 +192,11 @@ export default function TeacherWorkbenchPage() {
         abnormalCount={abnormalCount}
         className={className}
         currentUserName={currentUser.name}
+        absentCount={absentCount}
+        attendanceRate={attendanceRate}
+        highPriorityChildren={highPriorityChildren}
         pendingRecords={pendingRecords}
+        pendingMorningChecks={pendingMorningChecks}
         visualAttendance={visualAttendance}
         visualClassSize={visualClassSize}
         waitingMessages={waitingMessages}
@@ -146,8 +209,11 @@ function DesktopWorkbench({
   abnormalCount,
   className,
   currentUserName,
+  desktopTasks,
   highPriorityChildren,
   pendingRecords,
+  pendingMorningChecks,
+  timelineItems,
   visualAttendance,
   visualClassSize,
   waitingMessages,
@@ -155,12 +221,27 @@ function DesktopWorkbench({
   abnormalCount: number;
   className: string;
   currentUserName: string;
-  highPriorityChildren: Array<{ name: string; note: string; tags: string[]; time: string; avatar: string }>;
+  desktopTasks: WorkbenchTask[];
+  highPriorityChildren: PriorityChild[];
   pendingRecords: number;
+  pendingMorningChecks: number;
+  timelineItems: TimelineItem[];
   visualAttendance: number;
   visualClassSize: number;
   waitingMessages: number;
 }) {
+  const riskTips = [
+    ...(abnormalCount > 0
+      ? [["晨检异常提醒", `${abnormalCount}名儿童今日晨检异常`, "建议复测并同步家长。"]]
+      : []),
+    ...(pendingMorningChecks > 0
+      ? [["晨检补录提醒", `${pendingMorningChecks}名在园儿童未完成晨检`, "请进入晨检页补齐记录。"]]
+      : []),
+    ...(waitingMessages > 0
+      ? [["家园沟通提醒", `${waitingMessages}位家长待沟通`, "请进入家园沟通处理。"]]
+      : []),
+  ];
+
   return (
     <div className="hidden space-y-3.5 lg:block">
       <PixelPanel className="p-3.5">
@@ -191,7 +272,7 @@ function DesktopWorkbench({
             <PixelMetricCard label="在园人数" value={`${visualAttendance}人`} subLabel={`应到 ${visualClassSize}人`} tone="violet" icon={<UsersRound className="h-6 w-6" />} />
             <PixelMetricCard label="待处理记录" value={`${pendingRecords}条`} subLabel="晨检/饮食/成长" tone="blue" icon={<ClipboardCheck className="h-6 w-6" />} />
             <PixelMetricCard label="异常儿童" value={`${abnormalCount}人`} subLabel="需关注" tone="orange" icon={<AlertTriangle className="h-6 w-6" />} />
-            <PixelMetricCard label="未回复家长消息" value={`${waitingMessages}条`} subLabel="较昨日 +3" tone="green" icon={<MessageSquareText className="h-6 w-6" />} />
+            <PixelMetricCard label="未回复家长消息" value={`${waitingMessages}条`} subLabel="真实待沟通" tone="green" icon={<MessageSquareText className="h-6 w-6" />} />
           </div>
         </div>
       </PixelPanel>
@@ -200,7 +281,7 @@ function DesktopWorkbench({
         <PixelPanel className="p-3.5">
           <PixelSectionTitle
             title="今日待办"
-            meta="14项待办"
+            meta={`${pendingRecords + waitingMessages}项待办`}
             action={<PixelTextButton href="/teacher/agent?action=weekly-summary">查看全部</PixelTextButton>}
           />
           <div className="mt-3 rounded-[1rem] border border-[#eef2f8] px-3">
@@ -226,13 +307,13 @@ function DesktopWorkbench({
         <PixelPanel className="p-3.5">
           <PixelSectionTitle
             title="高优先级儿童"
-            meta={`${abnormalCount}人`}
+            meta={`${highPriorityChildren.length}人`}
             action={<PixelTextButton href="/teacher/high-risk-consultation">查看全部</PixelTextButton>}
           />
           <div className="mt-3 space-y-2.5">
-            {highPriorityChildren.map((child) => (
+            {highPriorityChildren.length > 0 ? highPriorityChildren.map((child) => (
               <Link
-                key={child.name}
+                key={`${child.name}-${child.time}-${child.tags.join("-")}-${child.note}`}
                 href="/teacher/high-risk-consultation"
                 className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[0.9rem] border border-rose-100 bg-rose-50/35 px-3 py-2.5"
               >
@@ -248,7 +329,11 @@ function DesktopWorkbench({
                 </span>
                 <span className="text-xs font-semibold text-[#8290ad]">{child.time}</span>
               </Link>
-            ))}
+            )) : (
+              <div className="rounded-[0.9rem] border border-slate-100 bg-slate-50 px-3 py-6 text-center text-sm font-semibold text-[#7a86a4]">
+                当前没有高优先级儿童
+              </div>
+            )}
           </div>
         </PixelPanel>
       </div>
@@ -275,12 +360,9 @@ function DesktopWorkbench({
         </PixelPanel>
 
         <PixelPanel className="p-4">
-          <PixelSectionTitle title="风险提示" meta="2项需关注" action={<PixelTextButton href="/teacher/high-risk-consultation">查看全部</PixelTextButton>} />
+          <PixelSectionTitle title="风险提示" meta={`${riskTips.length}项需关注`} action={<PixelTextButton href="/teacher/high-risk-consultation">查看全部</PixelTextButton>} />
           <div className="mt-3 space-y-2.5">
-            {[
-              ["天气变化提醒", "未来24小时降温明显，注意增减衣物", "建议加强晨检，预防呼吸道感染"],
-              ["卫生消毒提醒", "本周消毒记录有2项未完成", "请及时补充消毒记录"],
-            ].map(([title, detail, action]) => (
+            {riskTips.length > 0 ? riskTips.map(([title, detail, action]) => (
               <div key={title} className="rounded-[0.95rem] border border-rose-100 bg-rose-50/45 p-3.5">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="mt-0.5 h-4 w-4 text-rose-500" />
@@ -291,7 +373,11 @@ function DesktopWorkbench({
                   </div>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="rounded-[0.95rem] border border-emerald-100 bg-emerald-50/45 p-3.5 text-sm font-semibold text-emerald-700">
+                当前没有需要额外关注的风险提示
+              </div>
+            )}
           </div>
         </PixelPanel>
 
@@ -309,7 +395,7 @@ function DesktopWorkbench({
 
       <div className="grid gap-3.5 sm:grid-cols-4">
         <BottomStat label="今日异常儿童" value={abnormalCount} tone="border-l-amber-400" />
-        <BottomStat label="未完成晨检" value={2} tone="border-l-sky-400" />
+        <BottomStat label="未完成晨检" value={pendingMorningChecks} tone="border-l-sky-400" />
         <BottomStat label="待处理记录" value={pendingRecords} tone="border-l-violet-400" />
         <BottomStat label="待沟通家长" value={waitingMessages} tone="border-l-emerald-400" />
       </div>
@@ -318,22 +404,66 @@ function DesktopWorkbench({
 }
 
 function MobileWorkbench({
+  absentCount,
   abnormalCount,
+  attendanceRate,
   className,
   currentUserName,
+  highPriorityChildren,
   pendingRecords,
+  pendingMorningChecks,
   visualAttendance,
   visualClassSize,
   waitingMessages,
 }: {
+  absentCount: number;
   abnormalCount: number;
+  attendanceRate: string;
   className: string;
   currentUserName: string;
+  highPriorityChildren: PriorityChild[];
   pendingRecords: number;
+  pendingMorningChecks: number;
   visualAttendance: number;
   visualClassSize: number;
   waitingMessages: number;
 }) {
+  const notificationCount = pendingRecords + waitingMessages;
+  const mobileAlerts = [
+    ...highPriorityChildren.slice(0, 3).map((child) => ({
+      avatar: child.avatar,
+      title: child.name,
+      tag: child.tags[0] ?? "关注",
+      detail: child.note,
+      meta: child.time,
+      href: child.tags.includes("家园沟通") ? "/teacher/agent?action=communication" : "/teacher/high-risk-consultation",
+    })),
+    ...(pendingMorningChecks > 0
+      ? [
+          {
+            avatar: "📋",
+            title: "晨检未完成",
+            tag: `${pendingMorningChecks}`,
+            detail: `${pendingMorningChecks}名儿童未完成`,
+            meta: "",
+            href: "/health",
+          },
+        ]
+      : []),
+    ...(waitingMessages > 0
+      ? [
+          {
+            avatar: "💬",
+            title: "家园沟通未回复",
+            tag: `${waitingMessages}`,
+            detail: `${waitingMessages}位家长待沟通`,
+            meta: "",
+            href: "/teacher/agent?action=communication",
+          },
+        ]
+      : []),
+  ].slice(0, 5);
+
   return (
     <div className="space-y-5 lg:hidden">
       <div className="flex items-center justify-between gap-4">
@@ -347,10 +477,10 @@ function MobileWorkbench({
           </div>
         </div>
         <div className="flex gap-3">
-          <button type="button" className="relative flex h-12 w-12 items-center justify-center rounded-full border border-[#dce5f4] bg-white">
+          <Link href={waitingMessages > 0 ? "/teacher/agent?action=communication" : "/teacher/agent?action=weekly-summary"} className="relative flex h-12 w-12 items-center justify-center rounded-full border border-[#dce5f4] bg-white">
             <Bell className="h-6 w-6 text-[#27324d]" />
-            <span className="absolute right-1 top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">3</span>
-          </button>
+            {notificationCount > 0 ? <span className="absolute right-1 top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">{notificationCount}</span> : null}
+          </Link>
         </div>
       </div>
 
@@ -372,47 +502,43 @@ function MobileWorkbench({
       <PixelPanel className="rounded-[1.45rem] p-6">
         <PixelSectionTitle title="今日概览" meta="更新于 08:30" />
         <div className="mt-6 grid grid-cols-4 gap-3 text-center">
-          <MobileMetric icon={<CheckCircle2 className="h-6 w-6" />} value={visualAttendance} label="今日出勤" sub="77.8%" tone="green" />
-          <MobileMetric icon={<UsersRound className="h-6 w-6" />} value={8} label="今日缺勤" sub="22.2%" tone="orange" />
-          <MobileMetric icon={<HeartPulse className="h-6 w-6" />} value={Math.max(abnormalCount, 5)} label="健康异常" sub="需关注" tone="red" />
-          <MobileMetric icon={<ClipboardCheck className="h-6 w-6" />} value={0} label="待完成任务" sub="查看" tone="violet" />
+          <MobileMetric icon={<CheckCircle2 className="h-6 w-6" />} value={visualAttendance} label="今日出勤" sub={attendanceRate} tone="green" />
+          <MobileMetric icon={<UsersRound className="h-6 w-6" />} value={absentCount} label="今日缺勤" sub={visualClassSize > 0 ? `${Math.round((absentCount / visualClassSize) * 100)}%` : "0%"} tone="orange" />
+          <MobileMetric icon={<HeartPulse className="h-6 w-6" />} value={abnormalCount} label="健康异常" sub="需关注" tone="red" />
+          <MobileMetric icon={<ClipboardCheck className="h-6 w-6" />} value={pendingRecords} label="待完成任务" sub="查看" tone="violet" />
         </div>
       </PixelPanel>
 
       <PixelPanel className="rounded-[1.45rem] border-rose-100 bg-rose-50/35 p-5">
         <PixelSectionTitle
           title="紧急提醒"
-          meta={<span className="rounded-full bg-red-500 px-2 py-0.5 text-white">5</span>}
+          meta={<span className="rounded-full bg-red-500 px-2 py-0.5 text-white">{mobileAlerts.length}</span>}
           action={<PixelTextButton href="/teacher/high-risk-consultation">查看全部</PixelTextButton>}
         />
         <div className="mt-4 overflow-hidden rounded-[1rem] border border-rose-100 bg-white/78">
-          {[
-            ["👦🏻", "乐乐", "发热", "体温 38.2°C", "08:20 晨检"],
-            ["👧🏻", "果果", "过敏", "牛奶 · 坚果", "饮食需关注"],
-            ["📋", "晨检未完成", "3", "3名儿童未完成", ""],
-            ["💬", "家园沟通未回复", "2", "2条新消息", ""],
-            ["🏥", "健康材料待解析", "1", "更新于今日", ""],
-          ].map(([avatar, title, tag, detail, meta]) => (
-            <Link key={title} href={title.includes("沟通") ? "/teacher/agent?action=communication" : title.includes("材料") ? "/teacher/health-file-bridge" : "/teacher/high-risk-consultation"} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-rose-100/80 px-4 py-3 last:border-b-0">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-50 text-xl">{avatar}</span>
+          {mobileAlerts.length > 0 ? mobileAlerts.map((item) => (
+            <Link key={`${item.title}-${item.tag}-${item.meta}-${item.detail}`} href={item.href} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-rose-100/80 px-4 py-3 last:border-b-0">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-50 text-xl">{item.avatar}</span>
               <span>
                 <span className="flex items-center gap-2">
-                  <b className="text-lg text-[#172345]">{title}</b>
-                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-sm font-bold text-red-500">{tag}</span>
+                  <b className="text-lg text-[#172345]">{item.title}</b>
+                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-sm font-bold text-red-500">{item.tag}</span>
                 </span>
-                <span className="mt-1 block text-sm font-medium text-[#6d7895]">{detail}</span>
+                <span className="mt-1 block text-sm font-medium text-[#6d7895]">{item.detail}</span>
               </span>
               <span className="flex items-center gap-2 text-sm font-semibold text-[#6d7895]">
-                {meta}
+                {item.meta}
                 <ChevronRight className="h-5 w-5" />
               </span>
             </Link>
-          ))}
+          )) : (
+            <div className="px-4 py-8 text-center text-sm font-semibold text-[#7a86a4]">当前没有紧急提醒</div>
+          )}
         </div>
       </PixelPanel>
 
       <PixelPanel className="rounded-[1.45rem] p-5">
-        <PixelSectionTitle title="快速入口" action={<span className="text-sm font-bold text-violet-600">自定义 ✎</span>} />
+        <PixelSectionTitle title="快速入口" action={<button type="button" disabled className="text-sm font-bold text-slate-400">自定义暂未开放</button>} />
         <div className="mt-5 grid grid-cols-3 gap-4">
           <MobileQuick href="/health" icon={<Thermometer className="h-9 w-9" />} title="晨检" subtitle="体温 · 异常 · 缺勤" tone="violet" />
           <MobileQuick href="/diet" icon={<Utensils className="h-9 w-9" />} title="饮食记录" subtitle="膳食 · 过敏 · 喂养" tone="green" />
