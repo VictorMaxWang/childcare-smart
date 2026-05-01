@@ -18,9 +18,11 @@ import {
   type BrainForwardResult,
   type BrainTransport,
 } from "@/lib/server/brain-client";
+import { getCurrentSessionUser } from "@/lib/auth/account-server";
 
 export const runtime = "nodejs";
 const DEFAULT_PARENT_STORYBOOK_BRAIN_TIMEOUT_MS = 45_000;
+const ROLE_PARENT = "家长";
 
 function resolveParentStoryBookBrainTimeoutMs() {
   const rawValue =
@@ -182,6 +184,17 @@ function isDemoSeedRequest(payload: ParentStoryBookRequest) {
   return payload.requestSource?.startsWith("parent-storybook-demo-seed:") ?? false;
 }
 
+function resolveRequestChildId(payload: ParentStoryBookRequest) {
+  if (typeof payload.childId === "string" && payload.childId.trim()) {
+    return payload.childId.trim();
+  }
+  const snapshotChild = payload.snapshot.child;
+  if (isRecord(snapshotChild) && typeof snapshotChild.id === "string" && snapshotChild.id.trim()) {
+    return snapshotChild.id.trim();
+  }
+  return "";
+}
+
 function buildLocalStoryBookFallback(input: {
   payload: ParentStoryBookRequest;
   brainForward?: BrainForwardResult;
@@ -253,6 +266,37 @@ export async function POST(request: Request) {
       { status: 400, headers: buildCacheHeaders("bypass") }
     );
   }
+
+  const requestedChildId = resolveRequestChildId(payload);
+  const sessionUser = await getCurrentSessionUser();
+  if (!sessionUser) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401, headers: buildCacheHeaders("bypass") }
+    );
+  }
+  if (sessionUser.role !== ROLE_PARENT) {
+    return NextResponse.json(
+      { error: "Parent role required" },
+      { status: 403, headers: buildCacheHeaders("bypass") }
+    );
+  }
+  if (!requestedChildId || !(sessionUser.childIds ?? []).includes(requestedChildId)) {
+    return NextResponse.json(
+      { error: "Child is not authorized for current parent" },
+      { status: 403, headers: buildCacheHeaders("bypass") }
+    );
+  }
+  if (isDemoSeedRequest(payload) && sessionUser.accountKind !== "demo") {
+    return NextResponse.json(
+      { error: "Demo seed storybooks are only available to demo parent accounts" },
+      { status: 403, headers: buildCacheHeaders("bypass") }
+    );
+  }
+  payload = {
+    ...payload,
+    childId: requestedChildId,
+  };
 
   const bypassCache = shouldBypassStoryCache(request);
   const cacheKey = buildParentStoryBookRequestCacheKey(payload);

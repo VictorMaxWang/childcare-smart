@@ -11,6 +11,7 @@ function createId(prefix: string) {
 
 export function emptyInstitutionSnapshot(): AppStateSnapshot {
   return {
+    demoPersistenceSchemaVersion: "d01-v1",
     children: [],
     attendance: [],
     meals: [],
@@ -23,6 +24,11 @@ export function emptyInstitutionSnapshot(): AppStateSnapshot {
     mobileDrafts: [],
     reminders: [],
     tasks: [],
+    messages: [],
+    conversations: [],
+    healthMaterials: [],
+    nutritionMenus: [],
+    storybooks: [],
     updatedAt: new Date().toISOString(),
   };
 }

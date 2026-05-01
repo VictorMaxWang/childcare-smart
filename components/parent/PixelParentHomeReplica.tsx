@@ -48,6 +48,12 @@ export interface ParentPixelGrowthImage {
   src: string;
 }
 
+export interface ParentPixelTrendPoint {
+  day: string;
+  temp: number | null;
+  mood: number | null;
+}
+
 export interface PixelParentHomeReplicaProps {
   todayText: string;
   currentUserName: string;
@@ -71,6 +77,7 @@ export interface PixelParentHomeReplicaProps {
   whyRecommended: string;
   teacherFocus: string;
   growthImages: ParentPixelGrowthImage[];
+  trendPoints: ParentPixelTrendPoint[];
   hasPendingFeedback: boolean;
 }
 
@@ -89,16 +96,6 @@ const toneClassMap: Record<ParentPixelTone, string> = {
   violet: "bg-violet-50 text-violet-600",
   sky: "bg-sky-50 text-sky-600",
 };
-
-const trendPoints = [
-  { day: "4/20", temp: 36.5, mood: 3.4 },
-  { day: "4/21", temp: 37.0, mood: 3.8 },
-  { day: "4/22", temp: 37.2, mood: 3.5 },
-  { day: "4/23", temp: 36.8, mood: 4.0 },
-  { day: "4/24", temp: 36.7, mood: 3.7 },
-  { day: "4/25", temp: 36.5, mood: 3.8 },
-  { day: "4/26", temp: 36.7, mood: 3.9 },
-];
 
 export default function PixelParentHomeReplica({
   todayText,
@@ -123,18 +120,12 @@ export default function PixelParentHomeReplica({
   whyRecommended,
   teacherFocus,
   growthImages,
+  trendPoints,
   hasPendingFeedback,
 }: PixelParentHomeReplicaProps) {
-  const displayImages =
-    growthImages.length > 0
-      ? growthImages.slice(0, 4)
-      : [
-          {
-            id: "pixel-strip",
-            title: "成长瞬间",
-            src: "/pixel-replica/parent/parent-home-growth-strip.png",
-          },
-        ];
+  const displayImages = growthImages.slice(0, 4);
+  const temperaturePoints = trendPoints.filter((point) => typeof point.temp === "number");
+  const moodPoints = trendPoints.filter((point) => typeof point.mood === "number");
 
   return (
     <div className="mx-auto max-w-[72rem] min-w-0 pb-24">
@@ -261,7 +252,7 @@ export default function PixelParentHomeReplica({
               </Link>
             </div>
             <div className="mt-5 space-y-3">
-              {reminders.map((item, index) => (
+              {reminders.length > 0 ? reminders.map((item, index) => (
                 <div
                   key={item.id}
                   className="relative flex items-center gap-3 rounded-[22px] bg-slate-50/80 px-4 py-4"
@@ -277,7 +268,11 @@ export default function PixelParentHomeReplica({
                   <span className="min-w-0 flex-1 truncate text-slate-600">{item.content}</span>
                   {item.unread ? <span className="h-3 w-3 rounded-full bg-red-500" /> : null}
                 </div>
-              ))}
+              )) : (
+                <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50/80 px-4 py-5 text-sm text-slate-500">
+                  当前孩子暂无老师反馈或日常提醒。
+                </div>
+              )}
             </div>
           </section>
 
@@ -338,24 +333,30 @@ export default function PixelParentHomeReplica({
                 <ChevronRight className="h-4 w-4" />
               </Link>
             </div>
-            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {displayImages.map((item) => (
-                <Link
-                  key={item.id}
-                  href={storybookHref}
-                  className="relative aspect-[4/3] overflow-hidden rounded-[18px] bg-slate-100 shadow-sm"
-                >
-                  <Image
-                    src={item.src}
-                    alt={item.title}
-                    fill
-                    unoptimized={item.src.startsWith("/pixel-replica/")}
-                    className="object-cover"
-                    sizes="220px"
-                  />
-                </Link>
-              ))}
-            </div>
+            {displayImages.length > 0 ? (
+              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {displayImages.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={storybookHref}
+                    className="relative aspect-[4/3] overflow-hidden rounded-[18px] bg-slate-100 shadow-sm"
+                  >
+                    <Image
+                      src={item.src}
+                      alt={item.title}
+                      fill
+                      unoptimized={item.src.startsWith("/pixel-replica/")}
+                      className="object-cover"
+                      sizes="220px"
+                    />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-5 rounded-[18px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-500">
+                当前孩子还没有带图片的成长记录，生成绘本前不会用固定示例图覆盖空状态。
+              </div>
+            )}
           </section>
         </div>
 
@@ -375,35 +376,59 @@ export default function PixelParentHomeReplica({
                 <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-emerald-500" />体温(°C)</span>
                 <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-violet-500" />情绪</span>
               </div>
-              <svg viewBox="0 0 320 150" className="h-40 w-full overflow-visible">
-                {[35, 36, 37, 38].map((value, index) => (
-                  <g key={value}>
-                    <line x1="28" x2="310" y1={130 - index * 30} y2={130 - index * 30} stroke="#e5e7eb" />
-                    <text x="0" y={134 - index * 30} className="fill-slate-400 text-[11px]">{value}.0</text>
-                  </g>
-                ))}
-                <polyline
-                  points={trendPoints.map((point, index) => `${40 + index * 43},${130 - (point.temp - 35) * 30}`).join(" ")}
-                  fill="none"
-                  stroke="#10b981"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-                <polyline
-                  points={trendPoints.map((point, index) => `${40 + index * 43},${130 - (point.mood - 2.6) * 24}`).join(" ")}
-                  fill="none"
-                  stroke="#8b5cf6"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-                {trendPoints.map((point, index) => (
-                  <g key={point.day}>
-                    <circle cx={40 + index * 43} cy={130 - (point.temp - 35) * 30} r="4" fill="#fff" stroke="#10b981" strokeWidth="3" />
-                    <circle cx={40 + index * 43} cy={130 - (point.mood - 2.6) * 24} r="4" fill="#fff" stroke="#8b5cf6" strokeWidth="3" />
-                    <text x={31 + index * 43} y="153" className="fill-slate-500 text-[10px]">{point.day}</text>
-                  </g>
-                ))}
-              </svg>
+              {temperaturePoints.length > 0 || moodPoints.length > 0 ? (
+                <svg viewBox="0 0 320 150" className="h-40 w-full overflow-visible">
+                  {[35, 36, 37, 38].map((value, index) => (
+                    <g key={value}>
+                      <line x1="28" x2="310" y1={130 - index * 30} y2={130 - index * 30} stroke="#e5e7eb" />
+                      <text x="0" y={134 - index * 30} className="fill-slate-400 text-[11px]">{value}.0</text>
+                    </g>
+                  ))}
+                  {temperaturePoints.length > 0 ? (
+                    <polyline
+                      points={trendPoints
+                        .map((point, index) =>
+                          typeof point.temp === "number" ? `${40 + index * 43},${130 - (point.temp - 35) * 30}` : null
+                        )
+                        .filter(Boolean)
+                        .join(" ")}
+                      fill="none"
+                      stroke="#10b981"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                  ) : null}
+                  {moodPoints.length > 0 ? (
+                    <polyline
+                      points={trendPoints
+                        .map((point, index) =>
+                          typeof point.mood === "number" ? `${40 + index * 43},${130 - (point.mood - 2.6) * 24}` : null
+                        )
+                        .filter(Boolean)
+                        .join(" ")}
+                      fill="none"
+                      stroke="#8b5cf6"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                  ) : null}
+                  {trendPoints.map((point, index) => (
+                    <g key={point.day}>
+                      {typeof point.temp === "number" ? (
+                        <circle cx={40 + index * 43} cy={130 - (point.temp - 35) * 30} r="4" fill="#fff" stroke="#10b981" strokeWidth="3" />
+                      ) : null}
+                      {typeof point.mood === "number" ? (
+                        <circle cx={40 + index * 43} cy={130 - (point.mood - 2.6) * 24} r="4" fill="#fff" stroke="#8b5cf6" strokeWidth="3" />
+                      ) : null}
+                      <text x={31 + index * 43} y="153" className="fill-slate-500 text-[10px]">{point.day}</text>
+                    </g>
+                  ))}
+                </svg>
+              ) : (
+                <div className="flex h-40 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-sm text-slate-500">
+                  近 7 天还没有晨检或情绪记录。
+                </div>
+              )}
             </div>
           </section>
 

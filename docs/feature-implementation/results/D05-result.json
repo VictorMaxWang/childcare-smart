@@ -1,0 +1,97 @@
+{
+  "taskId": "D05",
+  "title": "health-material-consultation",
+  "status": "completed",
+  "assignedGaps": ["D05-G01", "D05-G02", "D05-G03", "D05-G04", "D05-G05"],
+  "completedFindingIds": [
+    "C14-001",
+    "C14-002",
+    "C14-003",
+    "C14-004",
+    "C14-005",
+    "C11-005",
+    "C11-006",
+    "C20-001",
+    "C20-008",
+    "C20-012",
+    "C22-012",
+    "C22-013",
+    "C22-014"
+  ],
+  "notCompletedFindingIds": [],
+  "implementation": {
+    "fileSelection": "supported",
+    "localDemoParsing": true,
+    "localDemoParsingLabel": "本地演示解析",
+    "parseTaskStatuses": ["pending", "processing", "completed", "failed"],
+    "parseResultPersistence": "D01 healthMaterials",
+    "consultationPersistence": "D01 consultations",
+    "consultationWorkflowStatuses": ["pending", "in-progress", "resolved"],
+    "directorSummary": "admin and admin agent read D01 local consultations",
+    "parentHealthSummary": "parent-visible summary and follow-up hints only",
+    "realBackendRequired": false
+  },
+  "changedFiles": {
+    "added": [
+      "tests/bug-bash/d05-health-consultation.spec.ts",
+      "docs/feature-implementation/results/D05-result.md",
+      "docs/feature-implementation/results/D05-result.json"
+    ],
+    "modified": [
+      "lib/demo-data/types.ts",
+      "lib/persistence/snapshot.ts",
+      "lib/persistence/state-scope.ts",
+      "lib/demo-data/actions.ts",
+      "lib/demo-data/demo-data.test.ts",
+      "lib/store.tsx",
+      "lib/communication/home-school.ts",
+      "app/admin/page.tsx",
+      "app/teacher/health-file-bridge/page.tsx",
+      "app/teacher/high-risk-consultation/page.tsx",
+      "app/api/ai/high-risk-consultation/feed/route.ts",
+      "app/parent/page.tsx"
+    ]
+  },
+  "checks": {
+    "typecheck": "passed",
+    "unit": "passed: node --import ./scripts/register-test-path-loader.mjs --test ./lib/demo-data/*.test.ts",
+    "lint": "passed",
+    "build": "passed",
+    "bugbashSmoke": "passed",
+    "browserOrPlaywright": "passed"
+  },
+  "browserOrPlaywright": {
+    "tool": "Playwright",
+    "testPath": "tests/bug-bash/d05-health-consultation.spec.ts",
+    "baseUrl": "http://127.0.0.1:3000",
+    "screenshots": "artifacts/feature-implementation/D05/",
+    "currentScreenshotSet": [
+      "01-li-health-material-ready.png",
+      "02-li-local-demo-parse-result.png",
+      "03-li-parse-persists-after-refresh.png",
+      "04-li-consultation-created.png",
+      "05-li-consultation-note-status-refresh.png",
+      "06-zhou-consultation-scope-isolated.png",
+      "07-chen-director-home-summary.png",
+      "08-chen-director-agent-consultation-summary.png",
+      "09-lin-parent-health-summary.png"
+    ],
+    "coverage": [
+      "empty feed does not inject demo items",
+      "processing parse task status observed",
+      "saved parse result persists after refresh",
+      "consultation sourceMaterialId bound to material",
+      "consultation note and resolved workflow status persist after refresh",
+      "unrelated teacher scope cannot see the D05 record",
+      "director /admin and /admin/agent show the D05 consultation",
+      "parent page shows parent-visible health summary"
+    ],
+    "result": "passed"
+  },
+  "notes": [
+    "本阶段未接真实 OCR、真实医疗 AI 或真实后端数据库。",
+    "健康材料解析明确标识为本地演示解析。",
+    "业务成功以 D01 demo persistence 写入结果为准，不以 AI/fallback response 作为跨端同步成功依据。",
+    "未修改 docs/feature-audit/INCOMPLETE_FEATURES.json。"
+  ]
+}

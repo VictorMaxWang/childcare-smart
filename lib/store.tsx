@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { normalizeAppStateSnapshot, type AppStateSnapshot } from "@/lib/persistence/snapshot";
 import {
   filterChildrenForSessionUser,
+  mergeScopedSnapshotForSessionUser,
   scopeSnapshotForSessionUser,
 } from "@/lib/persistence/state-scope";
 import type { ConsultationResult, MobileDraft, MobileDraftSyncStatus, ReminderItem } from "@/lib/ai/types";
@@ -29,6 +30,34 @@ import { materializeTasksFromLegacy, pickActiveTask } from "@/lib/tasks/task-mod
 import type { CanonicalTask, TaskOwnerRole } from "@/lib/tasks/types";
 import { buildDemoConsultationResults } from "@/lib/demo/demo-consultations";
 import { filterRemotePersistableMobileDrafts } from "@/lib/mobile/local-draft-cache";
+import {
+  buildDemoNamespaceForInstitution,
+  buildLegacyDemoUserNamespace,
+  getCurrentDemoContext,
+} from "@/lib/demo-data/persistence";
+import {
+  addConsultationNote as addDemoConsultationNote,
+  createConsultation as createDemoConsultation,
+  createDailyRecord,
+  createHealthMaterial as createDemoHealthMaterial,
+  failHealthParseResult as failDemoHealthParseResult,
+  generateStorybookFromGrowthRecords,
+  saveConsultationResult as saveDemoConsultationResult,
+  saveHealthParseResult as saveDemoHealthParseResult,
+  markMessageRead as markDemoMessageRead,
+  replyMessage as replyDemoMessage,
+  sendMessage as sendDemoMessage,
+  updateConsultationStatus as updateDemoConsultationStatus,
+  updateDailyRecord,
+  updateHealthMaterialParseStatus as updateDemoHealthMaterialParseStatus,
+} from "@/lib/demo-data/actions";
+import { mutateAppSnapshot } from "@/lib/demo-data/store";
+import type {
+  ConsultationWorkflowStatus,
+  HealthMaterialParseStatus,
+  MutationResult,
+} from "@/lib/demo-data/types";
+import type { ParentStoryBookResponse } from "@/lib/ai/types";
 
 export type Role = AccountRole;
 export type GuardianFeedback = SharedGuardianFeedback;
@@ -66,7 +95,6 @@ export const BEHAVIOR_CATEGORIES: BehaviorCategory[] = [
 export const MEAL_TYPES: MealType[] = ["早餐", "午餐", "晚餐", "加餐"];
 export const FOOD_CATEGORY_OPTIONS: FoodCategory[] = ["蔬果", "蛋白", "主食", "奶制品", "饮品", "其他"];
 export const INSTITUTION_NAME = "春芽普惠托育中心";
-const DEMO_DATASET_VERSION = "v4-demo-recovery-hotfix";
 
 const TODAY = getLocalToday();
 const UNAUTHENTICATED_USER: User = {
@@ -279,6 +307,12 @@ export interface BulkPreviewItem {
   excluded: boolean;
 }
 
+export interface BulkMealTemplateResult {
+  applied: string[];
+  blocked: string[];
+  failed: Array<{ childId: string; error?: string }>;
+}
+
 export interface AddGrowthRecordInput {
   childId: string;
   category: BehaviorCategory;
@@ -293,9 +327,27 @@ export interface AddGrowthRecordInput {
 
 export interface PersistAppSnapshotResult {
   status: "saved" | "local_only" | "failed";
+  syncStatus?: "remote_synced" | "local_only" | "failed";
   message: string;
   persistedAt: string;
   error?: string;
+}
+
+export interface HomeSchoolMutationResult<T = unknown> extends PersistAppSnapshotResult {
+  data?: T;
+}
+
+export interface SendHomeSchoolMessageInput {
+  childId: string;
+  classId?: string;
+  content: string;
+  conversationId?: string;
+}
+
+export interface ReplyHomeSchoolMessageInput {
+  messageId?: string;
+  conversationId?: string;
+  content: string;
 }
 
 interface AppContextType {
@@ -314,12 +366,33 @@ interface AppContextType {
   attendanceRecords: AttendanceRecord[];
   getAttendanceByDate: (date: string, childId?: string) => AttendanceRecord[];
   getTodayAttendance: () => AttendanceRecord[];
-  markAttendance: (input: Omit<AttendanceRecord, "id">) => void;
-  toggleTodayAttendance: (childId: string) => void;
+  markAttendance: (input: Omit<AttendanceRecord, "id">) => PersistAppSnapshotResult;
+  toggleTodayAttendance: (childId: string) => PersistAppSnapshotResult;
 
   healthCheckRecords: HealthCheckRecord[];
-  upsertHealthCheck: (input: Omit<HealthCheckRecord, "id" | "date" | "checkedBy" | "checkedByRole"> & { date?: string }) => void;
+  upsertHealthCheck: (input: Omit<HealthCheckRecord, "id" | "date" | "checkedBy" | "checkedByRole"> & { date?: string }) => PersistAppSnapshotResult;
   getTodayHealthCheck: (childId: string) => HealthCheckRecord | undefined;
+  healthMaterials: AppStateSnapshot["healthMaterials"];
+  createHealthMaterialTask: (input: {
+    childId: string;
+    filename: string;
+    fileType: string;
+    description?: string;
+    parseResult?: Record<string, unknown>;
+  }) => MutationResult<AppStateSnapshot["healthMaterials"][number] | undefined>;
+  updateHealthMaterialTaskStatus: (input: {
+    materialId: string;
+    status: HealthMaterialParseStatus;
+    error?: string;
+  }) => MutationResult<AppStateSnapshot["healthMaterials"][number] | undefined>;
+  saveHealthMaterialParseResult: (input: {
+    materialId: string;
+    parseResult: Record<string, unknown>;
+  }) => MutationResult<AppStateSnapshot["healthMaterials"][number] | undefined>;
+  failHealthMaterialParseResult: (input: {
+    materialId: string;
+    error: string;
+  }) => MutationResult<AppStateSnapshot["healthMaterials"][number] | undefined>;
 
   taskCheckInRecords: TaskCheckInRecord[];
   checkInTask: (childId: string, taskId: string, date: string) => void;
@@ -327,16 +400,16 @@ interface AppContextType {
 
   presentChildren: Child[];
 
-  addChild: (child: NewChildInput) => void;
+  addChild: (child: NewChildInput) => PersistAppSnapshotResult;
   removeChild: (id: string) => void;
 
   mealRecords: MealRecord[];
-  upsertMealRecord: (input: UpsertMealRecordInput) => void;
-  bulkApplyMealTemplate: (input: BulkMealTemplateInput) => { applied: string[]; blocked: string[] };
+  upsertMealRecord: (input: UpsertMealRecordInput) => PersistAppSnapshotResult;
+  bulkApplyMealTemplate: (input: BulkMealTemplateInput) => BulkMealTemplateResult;
   previewBulkMealTemplate: (input: Pick<BulkMealTemplateInput, "foods" | "excludedChildIds" | "onlyChildIds">) => BulkPreviewItem[];
 
   growthRecords: GrowthRecord[];
-  addGrowthRecord: (input: AddGrowthRecordInput) => void;
+  addGrowthRecord: (input: AddGrowthRecordInput) => PersistAppSnapshotResult;
 
   guardianFeedbacks: GuardianFeedback[];
   addGuardianFeedback: (input: GuardianFeedbackInput) => void;
@@ -345,14 +418,72 @@ interface AppContextType {
   mobileDrafts: MobileDraft[];
   reminders: ReminderItem[];
   tasks: CanonicalTask[];
+  messages: AppStateSnapshot["messages"];
+  conversations: AppStateSnapshot["conversations"];
+  nutritionMenus: AppStateSnapshot["nutritionMenus"];
+  storybooks: AppStateSnapshot["storybooks"];
   upsertInterventionCard: (card: InterventionCard) => void;
   upsertConsultation: (consultation: ConsultationResult) => void;
+  createConsultationRecord: (input: {
+    childId: string;
+    riskLevel: "low" | "medium" | "high";
+    notes?: string;
+    assignedTo?: string;
+    summary?: string;
+    sourceMaterialId?: string;
+    workflowStatus?: ConsultationWorkflowStatus;
+  }) => MutationResult<ConsultationResult | undefined>;
+  saveConsultationRecord: (input: {
+    childId: string;
+    consultation: ConsultationResult;
+    workflowStatus?: ConsultationWorkflowStatus;
+    sourceMaterialId?: string;
+  }) => MutationResult<ConsultationResult | undefined>;
+  addConsultationRecordNote: (input: {
+    consultationId: string;
+    note: string;
+  }) => MutationResult<ConsultationResult | undefined>;
+  updateConsultationRecordStatus: (input: {
+    consultationId: string;
+    status: ConsultationWorkflowStatus;
+  }) => MutationResult<ConsultationResult | undefined>;
   upsertTask: (task: CanonicalTask) => void;
   saveMobileDraft: (draft: MobileDraft) => void;
   markMobileDraftSyncStatus: (draftId: string, syncStatus: MobileDraftSyncStatus) => void;
   persistAppSnapshotNow: (
     override?: Partial<AppStateSnapshot>
   ) => Promise<PersistAppSnapshotResult>;
+  sendHomeSchoolMessage: (
+    input: SendHomeSchoolMessageInput
+  ) => HomeSchoolMutationResult<AppStateSnapshot["messages"][number] | undefined>;
+  replyHomeSchoolMessage: (
+    input: ReplyHomeSchoolMessageInput
+  ) => HomeSchoolMutationResult<AppStateSnapshot["messages"][number] | undefined>;
+  markHomeSchoolMessageRead: (
+    messageId: string
+  ) => HomeSchoolMutationResult<AppStateSnapshot["messages"][number] | undefined>;
+  updateHomeSchoolConversationStatus: (
+    conversationId: string,
+    status: AppStateSnapshot["conversations"][number]["status"]
+  ) => HomeSchoolMutationResult<AppStateSnapshot["conversations"][number] | undefined>;
+  sendParentMessage: (input: {
+    childId: string;
+    content: string;
+    receiverRole?: AppStateSnapshot["messages"][number]["receiverRole"];
+    targetRole?: AppStateSnapshot["messages"][number]["targetRole"];
+    conversationId?: string;
+  }) => MutationResult<AppStateSnapshot["messages"][number] | undefined>;
+  markParentReminderRead: (reminderId: string) => MutationResult<ReminderItem | undefined>;
+  updateParentReminderStatus: (
+    reminderId: string,
+    status: ReminderItem["status"]
+  ) => MutationResult<ReminderItem | undefined>;
+  saveReminderRecord: (reminder: ReminderItem) => MutationResult<ReminderItem | undefined>;
+  saveParentStorybook: (input: {
+    childId: string;
+    response: ParentStoryBookResponse;
+    sourceRecordIds?: string[];
+  }) => MutationResult<AppStateSnapshot["storybooks"][number] | undefined>;
   upsertReminder: (reminder: ReminderItem) => void;
   updateReminderStatus: (reminderId: string, status: ReminderItem["status"]) => void;
   getTasksForChild: (childId: string, ownerRole?: TaskOwnerRole) => CanonicalTask[];
@@ -385,6 +516,11 @@ const STORAGE_KEYS = {
   mobileDrafts: "mobile-drafts.v1",
   reminders: "reminders.v1",
   tasks: "tasks.v1",
+  messages: "messages.v1",
+  conversations: "conversations.v1",
+  healthMaterials: "health-materials.v1",
+  nutritionMenus: "nutrition-menus.v1",
+  storybooks: "storybooks.v1",
 } as const;
 
 function readStorage<T>(key: string, fallback: T): T {
@@ -449,7 +585,28 @@ function readScopedSnapshot(namespace: string, fallbackSnapshot: AppStateSnapsho
       buildScopedStorageKey(namespace, "tasks"),
       fallbackSnapshot.tasks
     ),
+    messages: readStorage<AppStateSnapshot["messages"]>(
+      buildScopedStorageKey(namespace, "messages"),
+      fallbackSnapshot.messages
+    ),
+    conversations: readStorage<AppStateSnapshot["conversations"]>(
+      buildScopedStorageKey(namespace, "conversations"),
+      fallbackSnapshot.conversations
+    ),
+    healthMaterials: readStorage<AppStateSnapshot["healthMaterials"]>(
+      buildScopedStorageKey(namespace, "healthMaterials"),
+      fallbackSnapshot.healthMaterials
+    ),
+    nutritionMenus: readStorage<AppStateSnapshot["nutritionMenus"]>(
+      buildScopedStorageKey(namespace, "nutritionMenus"),
+      fallbackSnapshot.nutritionMenus
+    ),
+    storybooks: readStorage<AppStateSnapshot["storybooks"]>(
+      buildScopedStorageKey(namespace, "storybooks"),
+      fallbackSnapshot.storybooks
+    ),
     updatedAt: fallbackSnapshot.updatedAt,
+    demoPersistenceSchemaVersion: fallbackSnapshot.demoPersistenceSchemaVersion,
   } satisfies AppStateSnapshot;
 
   return normalizeAppStateSnapshot(snapshot) ?? fallbackSnapshot;
@@ -468,6 +625,11 @@ function writeScopedSnapshot(namespace: string, snapshot: AppStateSnapshot) {
   writeStorage(buildScopedStorageKey(namespace, "mobileDrafts"), snapshot.mobileDrafts);
   writeStorage(buildScopedStorageKey(namespace, "reminders"), snapshot.reminders);
   writeStorage(buildScopedStorageKey(namespace, "tasks"), snapshot.tasks);
+  writeStorage(buildScopedStorageKey(namespace, "messages"), snapshot.messages);
+  writeStorage(buildScopedStorageKey(namespace, "conversations"), snapshot.conversations);
+  writeStorage(buildScopedStorageKey(namespace, "healthMaterials"), snapshot.healthMaterials);
+  writeStorage(buildScopedStorageKey(namespace, "nutritionMenus"), snapshot.nutritionMenus);
+  writeStorage(buildScopedStorageKey(namespace, "storybooks"), snapshot.storybooks);
 }
 
 function buildScopedStorageKey(namespace: string, key: keyof typeof STORAGE_KEYS) {
@@ -482,6 +644,16 @@ function buildRemotePersistableSnapshot(snapshot: AppStateSnapshot): AppStateSna
         ...snapshot,
         mobileDrafts,
       };
+}
+
+function mapDemoMutationResult(result: MutationResult<unknown>): PersistAppSnapshotResult {
+  return {
+    status: result.status === "remote_synced" ? "saved" : result.status,
+    syncStatus: result.status,
+    message: result.message,
+    persistedAt: result.persistedAt,
+    error: result.error,
+  };
 }
 
 const GIRL_AVATARS = ["👧", "🧒", "👶"];
@@ -2012,6 +2184,7 @@ function getLatestSnapshotDate(snapshot: AppStateSnapshot): string | null {
 
 function cloneDemoSnapshotTemplate(): AppStateSnapshot {
   return {
+    demoPersistenceSchemaVersion: "d01-v1",
     children: ALL_INITIAL_CHILDREN.map((child) => ({
       ...child,
       allergies: [...child.allergies],
@@ -2040,6 +2213,11 @@ function cloneDemoSnapshotTemplate(): AppStateSnapshot {
     mobileDrafts: [],
     reminders: [],
     tasks: [],
+    messages: [],
+    conversations: [],
+    healthMaterials: [],
+    nutritionMenus: [],
+    storybooks: [],
     updatedAt: new Date().toISOString(),
   };
 }
@@ -2121,7 +2299,7 @@ function buildDemoReminderItems(
   childMap: Map<string, Child>
 ): ReminderItem[] {
   const familyStatusByChildId: Record<string, ReminderItem["status"]> = {
-    "c-1": "done",
+    "c-1": "pending",
     "c-8": "acknowledged",
     "c-11": "acknowledged",
     "c-14": "acknowledged",
@@ -2287,10 +2465,38 @@ function buildDemoMobileDrafts(
   return drafts;
 }
 
+function mergeScaffoldRecords<T>(
+  scaffoldRecords: T[],
+  storedRecords: T[],
+  getKey: (record: T) => string | undefined | null
+): T[] {
+  const merged = new Map<string, T>();
+  const recordsWithoutKey: T[] = [];
+
+  const addRecord = (record: T) => {
+    const key = getKey(record);
+    if (key) {
+      merged.set(key, record);
+      return;
+    }
+    recordsWithoutKey.push(record);
+  };
+
+  scaffoldRecords.forEach(addRecord);
+  storedRecords.forEach(addRecord);
+
+  return [...merged.values(), ...recordsWithoutKey];
+}
+
 function applyDemoNarrativeScaffold(snapshot: AppStateSnapshot): AppStateSnapshot {
   const childMap = new Map(snapshot.children.map((child) => [child.id, child] as const));
-  const consultations = buildDemoConsultationResults();
-  const interventionCards = consultations
+  const scaffoldConsultations = buildDemoConsultationResults();
+  const consultations = mergeScaffoldRecords(
+    scaffoldConsultations,
+    snapshot.consultations,
+    (consultation) => consultation.consultationId
+  );
+  const scaffoldInterventionCards = consultations
     .map((consultation) => {
       const child = childMap.get(consultation.childId);
       if (!child) return null;
@@ -2302,9 +2508,22 @@ function applyDemoNarrativeScaffold(snapshot: AppStateSnapshot): AppStateSnapsho
       });
     })
     .filter((card): card is InterventionCard => Boolean(card));
+  const interventionCards = mergeScaffoldRecords(
+    scaffoldInterventionCards,
+    snapshot.interventionCards,
+    (card) => card.id
+  );
   const feedback = linkDemoFeedbackToNarrative(snapshot.feedback, interventionCards, consultations);
-  const reminders = buildDemoReminderItems(interventionCards, consultations, childMap);
+  const scaffoldReminders = buildDemoReminderItems(interventionCards, consultations, childMap);
+  const reminders = mergeScaffoldRecords(scaffoldReminders, snapshot.reminders, (reminder) => reminder.reminderId);
+  const scaffoldMobileDrafts = buildDemoMobileDrafts(consultations, childMap);
+  const mobileDrafts = mergeScaffoldRecords(
+    scaffoldMobileDrafts,
+    snapshot.mobileDrafts,
+    (draft) => draft.draftId
+  );
   const scaffoldTasks = materializeTasksFromLegacy({
+    existingTasks: snapshot.tasks,
     interventionCards,
     consultations,
     reminders,
@@ -2317,7 +2536,7 @@ function applyDemoNarrativeScaffold(snapshot: AppStateSnapshot): AppStateSnapsho
     feedback,
     interventionCards,
     consultations,
-    mobileDrafts: buildDemoMobileDrafts(consultations, childMap),
+    mobileDrafts,
     reminders,
     tasks: scaffoldTasks,
     updatedAt: new Date().toISOString(),
@@ -2576,7 +2795,6 @@ function hydrateDemoSnapshotForToday(snapshot: AppStateSnapshot, targetToday = g
     meals: attachDemoMealPhotos(keepRecordsOnPresentDays(snapshot.meals, attendanceLookup)),
     growth: attachDemoGrowthMedia(snapshot.growth),
     health: keepRecordsOnPresentDays(snapshot.health, attendanceLookup),
-    tasks: [],
   });
 
   return validateDemoSnapshotCoverage(shiftDemoSnapshotDates(normalizedSnapshot, targetToday), targetToday);
@@ -4473,7 +4691,13 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const [mobileDrafts, setMobileDrafts] = useState<MobileDraft[]>([]);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [tasks, setTasks] = useState<CanonicalTask[]>([]);
+  const [messages, setMessages] = useState<AppStateSnapshot["messages"]>([]);
+  const [conversations, setConversations] = useState<AppStateSnapshot["conversations"]>([]);
+  const [healthMaterials, setHealthMaterials] = useState<AppStateSnapshot["healthMaterials"]>([]);
+  const [nutritionMenus, setNutritionMenus] = useState<AppStateSnapshot["nutritionMenus"]>([]);
+  const [storybooks, setStorybooks] = useState<AppStateSnapshot["storybooks"]>([]);
   const lastSyncedSnapshotKeyRef = useRef<string | null>(null);
+  const fullDemoSnapshotRef = useRef<AppStateSnapshot | null>(null);
   const isAuthenticated = currentUser.id !== UNAUTHENTICATED_USER.id;
   const isDemoUser = isAuthenticated && currentUser.accountKind === "demo";
   const isNormalUser = isAuthenticated && currentUser.accountKind === "normal";
@@ -4481,7 +4705,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     isNormalUser && currentUser.institutionId
       ? `normal:${currentUser.institutionId}:${currentUser.role}:${currentUser.id}`
       : isDemoUser
-        ? `demo:${DEMO_DATASET_VERSION}:${currentUser.id}`
+        ? buildDemoNamespaceForInstitution(currentUser.institutionId)
         : null;
   const snapshotStateRef = useRef({
     children: [] as Child[],
@@ -4496,6 +4720,11 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     mobileDrafts: [] as MobileDraft[],
     reminders: [] as ReminderItem[],
     tasks: [] as CanonicalTask[],
+    messages: [] as AppStateSnapshot["messages"],
+    conversations: [] as AppStateSnapshot["conversations"],
+    healthMaterials: [] as AppStateSnapshot["healthMaterials"],
+    nutritionMenus: [] as AppStateSnapshot["nutritionMenus"],
+    storybooks: [] as AppStateSnapshot["storybooks"],
   });
 
   snapshotStateRef.current = {
@@ -4511,12 +4740,37 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     mobileDrafts,
     reminders,
     tasks,
+    messages,
+    conversations,
+    healthMaterials,
+    nutritionMenus,
+    storybooks,
   };
 
   const applySnapshot = useCallback((snapshot: AppStateSnapshot) => {
+    const normalizedMeals = normalizeRecords(snapshot.meals);
+    snapshotStateRef.current = {
+      children: snapshot.children,
+      attendance: snapshot.attendance,
+      meals: normalizedMeals,
+      growth: snapshot.growth,
+      feedback: snapshot.feedback,
+      health: snapshot.health,
+      taskCheckIns: snapshot.taskCheckIns,
+      interventionCards: snapshot.interventionCards,
+      consultations: snapshot.consultations,
+      mobileDrafts: snapshot.mobileDrafts,
+      reminders: snapshot.reminders,
+      tasks: snapshot.tasks,
+      messages: snapshot.messages,
+      conversations: snapshot.conversations,
+      healthMaterials: snapshot.healthMaterials,
+      nutritionMenus: snapshot.nutritionMenus,
+      storybooks: snapshot.storybooks,
+    };
     setChildrenList(snapshot.children);
     setAttendanceRecords(snapshot.attendance);
-    setMealRecords(normalizeRecords(snapshot.meals));
+    setMealRecords(normalizedMeals);
     setGrowthRecords(snapshot.growth);
     setGuardianFeedbacks(snapshot.feedback);
     setHealthCheckRecords(snapshot.health);
@@ -4526,6 +4780,11 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     setMobileDrafts(snapshot.mobileDrafts);
     setReminders(snapshot.reminders);
     setTasks(snapshot.tasks);
+    setMessages(snapshot.messages);
+    setConversations(snapshot.conversations);
+    setHealthMaterials(snapshot.healthMaterials);
+    setNutritionMenus(snapshot.nutritionMenus);
+    setStorybooks(snapshot.storybooks);
   }, []);
 
   const buildSnapshotWithOverride = useCallback(
@@ -4542,9 +4801,59 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       mobileDrafts: override?.mobileDrafts ?? snapshotStateRef.current.mobileDrafts,
       reminders: override?.reminders ?? snapshotStateRef.current.reminders,
       tasks: override?.tasks ?? snapshotStateRef.current.tasks,
+      messages: override?.messages ?? snapshotStateRef.current.messages,
+      conversations: override?.conversations ?? snapshotStateRef.current.conversations,
+      healthMaterials: override?.healthMaterials ?? snapshotStateRef.current.healthMaterials,
+      nutritionMenus: override?.nutritionMenus ?? snapshotStateRef.current.nutritionMenus,
+      storybooks: override?.storybooks ?? snapshotStateRef.current.storybooks,
       updatedAt: override?.updatedAt ?? new Date().toISOString(),
+      demoPersistenceSchemaVersion: override?.demoPersistenceSchemaVersion ?? "d01-v1",
     }),
     []
+  );
+
+  const getD01Context = useCallback(
+    () => getCurrentDemoContext(currentUser),
+    [currentUser]
+  );
+
+  const finishD01Mutation = useCallback(
+    (result: MutationResult<unknown>): PersistAppSnapshotResult => {
+      if (result.status !== "failed") {
+        if (currentUser.accountKind === "demo") {
+          fullDemoSnapshotRef.current = result.snapshot;
+        }
+        applySnapshot(scopeSnapshotForSessionUser(result.snapshot, currentUser));
+      }
+
+      return mapDemoMutationResult(result);
+    },
+    [applySnapshot, currentUser]
+  );
+
+  const finishD01DataMutation = useCallback(
+    <T,>(result: MutationResult<T>): MutationResult<T> => {
+      if (result.status !== "failed") {
+        if (currentUser.accountKind === "demo") {
+          fullDemoSnapshotRef.current = result.snapshot;
+        }
+        applySnapshot(scopeSnapshotForSessionUser(result.snapshot, currentUser));
+      }
+
+      return result;
+    },
+    [applySnapshot, currentUser]
+  );
+
+  const finishHomeSchoolMutation = useCallback(
+    <T,>(result: MutationResult<T>): HomeSchoolMutationResult<T> => {
+      const nextResult = finishD01DataMutation(result);
+      return {
+        ...mapDemoMutationResult(nextResult),
+        data: nextResult.data,
+      };
+    },
+    [finishD01DataMutation]
   );
 
   useEffect(() => {
@@ -4575,6 +4884,11 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         mobileDrafts,
         reminders,
         tasks,
+        messages,
+        conversations,
+        healthMaterials,
+        nutritionMenus,
+        storybooks,
       }),
     [
       buildSnapshotWithOverride,
@@ -4590,6 +4904,11 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       mobileDrafts,
       reminders,
       tasks,
+      messages,
+      conversations,
+      healthMaterials,
+      nutritionMenus,
+      storybooks,
     ]
   );
 
@@ -4601,23 +4920,6 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     () => JSON.stringify(remotePersistableSnapshot),
     [remotePersistableSnapshot]
   );
-
-  const isSnapshotEffectivelyEmpty = useCallback((snapshot: AppStateSnapshot) => {
-    return (
-      snapshot.children.length === 0 &&
-      snapshot.attendance.length === 0 &&
-      snapshot.meals.length === 0 &&
-      snapshot.growth.length === 0 &&
-      snapshot.feedback.length === 0 &&
-      snapshot.health.length === 0 &&
-      snapshot.taskCheckIns.length === 0 &&
-      snapshot.interventionCards.length === 0 &&
-      snapshot.consultations.length === 0 &&
-      snapshot.mobileDrafts.length === 0 &&
-      snapshot.reminders.length === 0 &&
-      snapshot.tasks.length === 0
-    );
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -4673,13 +4975,25 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
       if (isDemoUser) {
         lastSyncedSnapshotKeyRef.current = null;
-        const rawDemoSnapshot = readScopedSnapshot(
-          currentStorageNamespace ?? `demo:${currentUser.id}`,
-          buildFreshDemoSnapshot(getLocalToday())
-        );
+        const freshSnapshot = buildFreshDemoSnapshot(getLocalToday());
+        const rawDemoSnapshot = readScopedSnapshot(currentStorageNamespace ?? buildDemoNamespaceForInstitution(currentUser.institutionId), freshSnapshot);
+        const legacyNamespace = buildLegacyDemoUserNamespace(currentUser);
+        const legacyDemoSnapshot =
+          legacyNamespace && currentStorageNamespace
+            ? mergeScopedSnapshotForSessionUser({
+                currentSnapshot: rawDemoSnapshot,
+                incomingSnapshot: readScopedSnapshot(legacyNamespace, rawDemoSnapshot),
+                user: currentUser,
+              })
+            : rawDemoSnapshot;
         const demoSnapshot =
-          normalizeAppStateSnapshot(rawDemoSnapshot) ?? buildFreshDemoSnapshot(getLocalToday());
-        applySnapshot(scopeSnapshotForSessionUser(hydrateDemoSnapshotForToday(demoSnapshot), currentUser));
+          normalizeAppStateSnapshot(legacyDemoSnapshot) ?? freshSnapshot;
+        const hydratedDemoSnapshot = hydrateDemoSnapshotForToday(demoSnapshot);
+        fullDemoSnapshotRef.current = hydratedDemoSnapshot;
+        if (currentStorageNamespace) {
+          writeScopedSnapshot(currentStorageNamespace, hydratedDemoSnapshot);
+        }
+        applySnapshot(scopeSnapshotForSessionUser(hydratedDemoSnapshot, currentUser));
         if (active) {
           setDataLoading(false);
         }
@@ -4713,7 +5027,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         if (!active || !data.ok || data.isDemo) {
           return;
         }
-        if (!data.snapshot || isSnapshotEffectivelyEmpty(data.snapshot)) {
+        if (!data.snapshot) {
           return;
         }
 
@@ -4734,7 +5048,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [authLoading, applySnapshot, currentStorageNamespace, currentUser, isAuthenticated, isDemoUser, isSnapshotEffectivelyEmpty]);
+  }, [authLoading, applySnapshot, currentStorageNamespace, currentUser, isAuthenticated, isDemoUser]);
 
   const persistAppSnapshotNow = useCallback(
     async (override?: Partial<AppStateSnapshot>): Promise<PersistAppSnapshotResult> => {
@@ -4744,12 +5058,23 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       const persistedAt = new Date().toISOString();
 
       if (currentStorageNamespace) {
-        writeScopedSnapshot(currentStorageNamespace, snapshot);
+        if (isDemoUser) {
+          const mergedSnapshot = mergeScopedSnapshotForSessionUser({
+            currentSnapshot: fullDemoSnapshotRef.current ?? buildFreshDemoSnapshot(getLocalToday()),
+            incomingSnapshot: snapshot,
+            user: currentUser,
+          });
+          fullDemoSnapshotRef.current = mergedSnapshot;
+          writeScopedSnapshot(currentStorageNamespace, mergedSnapshot);
+        } else {
+          writeScopedSnapshot(currentStorageNamespace, snapshot);
+        }
       }
 
       if (!isNormalUser) {
         return {
           status: "local_only",
+          syncStatus: "local_only",
           message: isDemoUser
             ? "当前账号仅做本地 fallback 保存。"
             : "当前账号仅保留本地状态。",
@@ -4767,10 +5092,11 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         if (response.ok) {
           lastSyncedSnapshotKeyRef.current = snapshotKey;
           return {
-            status: "saved",
-            message: "已确认并保存。",
-            persistedAt,
-          };
+          status: "saved",
+          syncStatus: "remote_synced",
+          message: "已确认并保存。",
+          persistedAt,
+        };
         }
 
         const data = (await response.json().catch(() => null)) as
@@ -4778,6 +5104,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
           | null;
         return {
           status: "failed",
+          syncStatus: "failed",
           message: "远端保存失败，已保留本地。",
           persistedAt,
           error: data?.error ?? "remote_snapshot_save_failed",
@@ -4785,6 +5112,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       } catch (error) {
         return {
           status: "failed",
+          syncStatus: "failed",
           message: "远端保存失败，已保留本地。",
           persistedAt,
           error:
@@ -4797,6 +5125,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     [
       buildSnapshotWithOverride,
       currentStorageNamespace,
+      currentUser,
       isDemoUser,
       isNormalUser,
     ]
@@ -4807,8 +5136,19 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       return;
     }
 
+    if (isDemoUser) {
+      const mergedSnapshot = mergeScopedSnapshotForSessionUser({
+        currentSnapshot: fullDemoSnapshotRef.current ?? buildFreshDemoSnapshot(getLocalToday()),
+        incomingSnapshot: remoteSnapshot,
+        user: currentUser,
+      });
+      fullDemoSnapshotRef.current = mergedSnapshot;
+      writeScopedSnapshot(currentStorageNamespace, mergedSnapshot);
+      return;
+    }
+
     writeScopedSnapshot(currentStorageNamespace, remoteSnapshot);
-  }, [authLoading, currentStorageNamespace, dataLoading, remoteSnapshot]);
+  }, [authLoading, currentStorageNamespace, currentUser, dataLoading, isDemoUser, remoteSnapshot]);
 
   useEffect(() => {
     if (authLoading || dataLoading || !isNormalUser || lastSyncedSnapshotKeyRef.current === remoteSnapshotKey) {
@@ -4989,17 +5329,30 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     }
   }, [applySnapshot]);
 
-  const addChild = useCallback((child: NewChildInput) => {
+  const addChild = useCallback((child: NewChildInput): PersistAppSnapshotResult => {
+    const context = getD01Context();
     const avatars = child.gender === "女" ? GIRL_AVATARS : BOY_AVATARS;
-    setChildrenList((prev) => [
-      ...prev,
-      {
-        ...child,
-        id: createClientId("c"),
-        avatar: avatars[Math.floor(Math.random() * avatars.length)],
-      },
-    ]);
-  }, []);
+    const nextChild: Child = {
+      ...child,
+      id: createClientId("c"),
+      avatar: avatars[Math.floor(Math.random() * avatars.length)],
+    };
+
+    return finishD01Mutation(
+      mutateAppSnapshot(
+        context,
+        (snapshot) => ({
+          ...snapshot,
+          children: [...snapshot.children, nextChild],
+          updatedAt: context.now(),
+        }),
+        {
+          operation: "child.write",
+          data: (snapshot) => snapshot.children.find((item) => item.id === nextChild.id),
+        }
+      )
+    );
+  }, [finishD01Mutation, getD01Context]);
 
   const removeChild = useCallback((id: string) => {
     setChildrenList((prev) => prev.filter((child) => child.id !== id));
@@ -5016,23 +5369,46 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     setTasks((prev) => prev.filter((task) => task.childId !== id));
   }, []);
 
-  const markAttendance = useCallback((input: Omit<AttendanceRecord, "id">) => {
-    setAttendanceRecords((prev) => {
-      const existing = prev.find((record) => record.childId === input.childId && record.date === input.date);
-      if (!existing) {
-        return [...prev, { ...input, id: createClientId("a") }];
-      }
-      return prev.map((record) => (record.id === existing.id ? { ...existing, ...input } : record));
-    });
-  }, []);
+  const markAttendance = useCallback((input: Omit<AttendanceRecord, "id">): PersistAppSnapshotResult => {
+    const context = getD01Context();
 
-  const toggleTodayAttendance = useCallback((childId: string) => {
+    return finishD01Mutation(
+      mutateAppSnapshot(
+        context,
+        (snapshot) => {
+          const existing = snapshot.attendance.find(
+            (record) => record.childId === input.childId && record.date === input.date
+          );
+          const nextRecord: AttendanceRecord = existing
+            ? { ...existing, ...input }
+            : { ...input, id: createClientId("a") };
+
+          return {
+            ...snapshot,
+            attendance: existing
+              ? snapshot.attendance.map((record) => (record.id === existing.id ? nextRecord : record))
+              : [...snapshot.attendance, nextRecord],
+            updatedAt: context.now(),
+          };
+        },
+        {
+          requiredChildId: input.childId,
+          operation: "attendance.write",
+          data: (snapshot) =>
+            snapshot.attendance.find(
+              (record) => record.childId === input.childId && record.date === input.date
+            ),
+        }
+      )
+    );
+  }, [finishD01Mutation, getD01Context]);
+
+  const toggleTodayAttendance = useCallback((childId: string): PersistAppSnapshotResult => {
     const existing = todayAttendanceMap.get(childId);
     if (!existing) {
-      markAttendance({ childId, date: TODAY, isPresent: true, checkInAt: "08:30", checkOutAt: "17:10" });
-      return;
+      return markAttendance({ childId, date: TODAY, isPresent: true, checkInAt: "08:30", checkOutAt: "17:10" });
     }
-    markAttendance({
+    return markAttendance({
       ...existing,
       isPresent: !existing.isPresent,
       absenceReason: existing.isPresent ? "临时请假" : undefined,
@@ -5041,22 +5417,56 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     });
   }, [markAttendance, todayAttendanceMap]);
 
-  const upsertMealRecord = useCallback((input: UpsertMealRecordInput) => {
-    setMealRecords((prev) => {
-      const existing = prev.find(
+  const upsertMealRecord = useCallback((input: UpsertMealRecordInput): PersistAppSnapshotResult => {
+    const context = getD01Context();
+    const existing = mealRecords.find(
+      (record) =>
+        record.childId === input.childId && record.date === input.date && record.meal === input.meal
+    );
+    const payload: Record<string, unknown> = {
+      ...input,
+      nutritionScore: calcNutritionScore(input.foods, input.waterMl, input.preference),
+      aiEvaluation: input.aiEvaluation ?? existing?.aiEvaluation,
+    };
+
+    let mutationResult: MutationResult;
+    if (existing) {
+      mutationResult = updateDailyRecord({
+        context,
+        childId: input.childId,
+        type: "diet",
+        recordId: existing.id,
+        payload,
+      });
+    } else {
+      const createResult = createDailyRecord({
+        context,
+        childId: input.childId,
+        type: "diet",
+        payload,
+      });
+
+      if (createResult.status === "failed") {
+        return finishD01Mutation(createResult);
+      }
+
+      const createdRecord = createResult.snapshot.meals.find(
         (record) =>
           record.childId === input.childId && record.date === input.date && record.meal === input.meal
       );
-      const next: MealRecord = {
-        ...(existing ?? { id: createClientId("m") }),
-        ...input,
-        nutritionScore: calcNutritionScore(input.foods, input.waterMl, input.preference),
-        aiEvaluation: input.aiEvaluation ?? existing?.aiEvaluation,
-      };
-      if (!existing) return [...prev, next];
-      return prev.map((record) => (record.id === existing.id ? next : record));
-    });
-  }, []);
+      mutationResult = createdRecord
+        ? updateDailyRecord({
+            context,
+            childId: input.childId,
+            type: "diet",
+            recordId: createdRecord.id,
+            payload,
+          })
+        : createResult;
+    }
+
+    return finishD01Mutation(mutationResult);
+  }, [finishD01Mutation, getD01Context, mealRecords]);
 
   const previewBulkMealTemplate = useCallback((
     input: Pick<BulkMealTemplateInput, "foods" | "excludedChildIds" | "onlyChildIds">
@@ -5076,7 +5486,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     return base;
   }, [presentChildren]);
 
-  const bulkApplyMealTemplate = useCallback((input: BulkMealTemplateInput) => {
+  const bulkApplyMealTemplate = useCallback((input: BulkMealTemplateInput): BulkMealTemplateResult => {
     const preview = previewBulkMealTemplate({
       foods: input.foods,
       excludedChildIds: input.excludedChildIds,
@@ -5084,38 +5494,76 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     });
     const applied: string[] = [];
     const blocked: string[] = [];
+    const failed: Array<{ childId: string; error?: string }> = [];
 
     preview.forEach((item) => {
       if (item.excluded || item.blockedByAllergy) {
         blocked.push(item.childId);
         return;
       }
-      upsertMealRecord({ ...input, childId: item.childId });
+      const result = upsertMealRecord({ ...input, childId: item.childId });
+      if (result.status === "failed") {
+        failed.push({ childId: item.childId, error: result.error ?? result.message });
+        return;
+      }
       applied.push(item.childId);
     });
 
-    return { applied, blocked };
+    return { applied, blocked, failed };
   }, [previewBulkMealTemplate, upsertMealRecord]);
 
-  const addGrowthRecord = useCallback((input: AddGrowthRecordInput) => {
-    setGrowthRecords((prev) => [
-      {
-        id: createClientId("g"),
-        childId: input.childId,
-        createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-        recorder: currentUser.name,
-        recorderRole: currentUser.role,
-        category: input.category,
-        tags: input.tags,
-        description: input.description,
-        needsAttention: input.needsAttention,
-        followUpAction: input.followUpAction,
-        reviewDate: input.reviewDate,
-        reviewStatus: input.reviewStatus ?? (input.needsAttention ? "待复查" : "已完成"),
-      },
-      ...prev,
-    ]);
-  }, [currentUser.name, currentUser.role]);
+  const addGrowthRecord = useCallback((input: AddGrowthRecordInput): PersistAppSnapshotResult => {
+    const context = getD01Context();
+    const payload: Record<string, unknown> = {
+      category: input.category,
+      tags: input.tags,
+      description: input.description,
+      needsAttention: input.needsAttention,
+      followUpAction: input.followUpAction,
+      reviewDate: input.reviewDate,
+      reviewStatus: input.reviewStatus ?? (input.needsAttention ? "待复查" : "已完成"),
+      selectedIndicators: input.selectedIndicators,
+      mediaUrls: [],
+    };
+
+    const createResult = createDailyRecord({
+      context,
+      childId: input.childId,
+      type: "growth",
+      payload,
+    });
+    if (createResult.status === "failed") {
+      return finishD01Mutation(createResult);
+    }
+
+    const createdRecord = createResult.snapshot.growth.find(
+      (record) =>
+        record.childId === input.childId &&
+        record.description === input.description &&
+        record.recorder === currentUser.name
+    );
+    let mutationResult: MutationResult<unknown> = createdRecord
+      ? updateDailyRecord({
+          context,
+          childId: input.childId,
+          type: "growth",
+          recordId: createdRecord.id,
+          payload: {
+            ...payload,
+            createdAt: createdRecord.createdAt,
+          },
+        })
+      : createResult;
+
+    if (mutationResult.status !== "failed") {
+      const storybookResult = generateStorybookFromGrowthRecords(input.childId, context);
+      if (storybookResult.status !== "failed") {
+        mutationResult = storybookResult;
+      }
+    }
+
+    return finishD01Mutation(mutationResult);
+  }, [currentUser.name, finishD01Mutation, getD01Context]);
 
   const addGuardianFeedback = useCallback((input: GuardianFeedbackInput) => {
     setGuardianFeedbacks((prev) => {
@@ -5181,6 +5629,362 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     });
   }, []);
 
+  const createHealthMaterialTask = useCallback(
+    (input: {
+      childId: string;
+      filename: string;
+      fileType: string;
+      description?: string;
+      parseResult?: Record<string, unknown>;
+    }) =>
+      finishD01DataMutation(
+        createDemoHealthMaterial({
+          context: getD01Context(),
+          ...input,
+        })
+      ),
+    [finishD01DataMutation, getD01Context]
+  );
+
+  const updateHealthMaterialTaskStatus = useCallback(
+    (input: { materialId: string; status: HealthMaterialParseStatus; error?: string }) =>
+      finishD01DataMutation(
+        updateDemoHealthMaterialParseStatus({
+          context: getD01Context(),
+          ...input,
+        })
+      ),
+    [finishD01DataMutation, getD01Context]
+  );
+
+  const saveHealthMaterialParseResult = useCallback(
+    (input: { materialId: string; parseResult: Record<string, unknown> }) =>
+      finishD01DataMutation(
+        saveDemoHealthParseResult({
+          context: getD01Context(),
+          ...input,
+        })
+      ),
+    [finishD01DataMutation, getD01Context]
+  );
+
+  const failHealthMaterialParseResult = useCallback(
+    (input: { materialId: string; error: string }) =>
+      finishD01DataMutation(
+        failDemoHealthParseResult({
+          context: getD01Context(),
+          ...input,
+        })
+      ),
+    [finishD01DataMutation, getD01Context]
+  );
+
+  const createConsultationRecord = useCallback(
+    (input: {
+      childId: string;
+      riskLevel: "low" | "medium" | "high";
+      notes?: string;
+      assignedTo?: string;
+      summary?: string;
+      sourceMaterialId?: string;
+      workflowStatus?: ConsultationWorkflowStatus;
+    }) =>
+      finishD01DataMutation(
+        createDemoConsultation({
+          context: getD01Context(),
+          ...input,
+        })
+      ),
+    [finishD01DataMutation, getD01Context]
+  );
+
+  const saveConsultationRecord = useCallback(
+    (input: {
+      childId: string;
+      consultation: ConsultationResult;
+      workflowStatus?: ConsultationWorkflowStatus;
+      sourceMaterialId?: string;
+    }) =>
+      finishD01DataMutation(
+        saveDemoConsultationResult({
+          context: getD01Context(),
+          ...input,
+        })
+      ),
+    [finishD01DataMutation, getD01Context]
+  );
+
+  const addConsultationRecordNote = useCallback(
+    (input: { consultationId: string; note: string }) =>
+      finishD01DataMutation(
+        addDemoConsultationNote({
+          context: getD01Context(),
+          ...input,
+        })
+      ),
+    [finishD01DataMutation, getD01Context]
+  );
+
+  const updateConsultationRecordStatus = useCallback(
+    (input: { consultationId: string; status: ConsultationWorkflowStatus }) =>
+      finishD01DataMutation(
+        updateDemoConsultationStatus({
+          context: getD01Context(),
+          ...input,
+        })
+      ),
+    [finishD01DataMutation, getD01Context]
+  );
+
+  const sendHomeSchoolMessage = useCallback(
+    (input: SendHomeSchoolMessageInput) =>
+      finishHomeSchoolMutation(
+        sendDemoMessage({
+          context: getD01Context(),
+          childId: input.childId,
+          classId: input.classId,
+          content: input.content,
+          conversationId: input.conversationId ?? `conv-${input.childId}-home-school`,
+          receiverRole: "teacher",
+          targetRole: "teacher",
+        })
+      ),
+    [finishHomeSchoolMutation, getD01Context]
+  );
+
+  const replyHomeSchoolMessage = useCallback(
+    (input: ReplyHomeSchoolMessageInput) =>
+      finishHomeSchoolMutation(
+        replyDemoMessage({
+          context: getD01Context(),
+          ...input,
+        })
+      ),
+    [finishHomeSchoolMutation, getD01Context]
+  );
+
+  const markHomeSchoolMessageRead = useCallback(
+    (messageId: string) =>
+      finishHomeSchoolMutation(
+        markDemoMessageRead({
+          context: getD01Context(),
+          messageId,
+        })
+      ),
+    [finishHomeSchoolMutation, getD01Context]
+  );
+
+  const updateHomeSchoolConversationStatus = useCallback(
+    (
+      conversationId: string,
+      status: AppStateSnapshot["conversations"][number]["status"]
+    ): HomeSchoolMutationResult<AppStateSnapshot["conversations"][number] | undefined> => {
+      const context = getD01Context();
+      const currentSnapshot = buildSnapshotWithOverride();
+      const currentConversation = currentSnapshot.conversations.find(
+        (item) => item.conversationId === conversationId
+      );
+
+      if (!currentConversation) {
+        return {
+          status: "failed",
+          syncStatus: "failed",
+          message: "Conversation update rejected because the conversation was not found.",
+          persistedAt: context.now(),
+          error: "missing_conversation",
+        };
+      }
+
+      return finishHomeSchoolMutation(
+        mutateAppSnapshot(
+          context,
+          (snapshot) => ({
+            ...snapshot,
+            conversations: snapshot.conversations.map((conversation) =>
+              conversation.conversationId === conversationId
+                ? { ...conversation, status, updatedAt: context.now() }
+                : conversation
+            ),
+            updatedAt: context.now(),
+          }),
+          {
+            requiredChildId: currentConversation.childId,
+            operation: "message.write",
+            data: (snapshot) =>
+              snapshot.conversations.find((conversation) => conversation.conversationId === conversationId),
+          }
+        )
+      );
+    },
+    [buildSnapshotWithOverride, finishHomeSchoolMutation, getD01Context]
+  );
+
+  const sendParentMessage = useCallback(
+    (input: {
+      childId: string;
+      content: string;
+      receiverRole?: AppStateSnapshot["messages"][number]["receiverRole"];
+      targetRole?: AppStateSnapshot["messages"][number]["targetRole"];
+      conversationId?: string;
+    }) =>
+      finishD01DataMutation(
+        sendDemoMessage({
+          context: getD01Context(),
+          ...input,
+        })
+      ),
+    [finishD01DataMutation, getD01Context]
+  );
+
+  const updateParentReminderStatus = useCallback(
+    (reminderId: string, status: ReminderItem["status"]): MutationResult<ReminderItem | undefined> => {
+      const context = getD01Context();
+      const currentSnapshot = buildSnapshotWithOverride();
+      const currentReminder = currentSnapshot.reminders.find((item) => item.reminderId === reminderId);
+      const requiredChildId = currentReminder?.childId ?? currentReminder?.targetId;
+
+      if (!currentReminder || !requiredChildId) {
+        return {
+          status: "failed",
+          snapshot: currentSnapshot,
+          persistedAt: context.now(),
+          message: "Reminder update rejected because no child scope was found.",
+          error: currentReminder ? "missing_child_id" : "missing_reminder",
+        };
+      }
+
+      return finishD01DataMutation(
+        mutateAppSnapshot(
+          context,
+          (snapshot) => ({
+            ...snapshot,
+            reminders: snapshot.reminders.map((reminder) =>
+              reminder.reminderId === reminderId
+                ? ({
+                    ...reminder,
+                    status,
+                    ...(status === "acknowledged" || status === "done" ? { readAt: context.now() } : {}),
+                  } as ReminderItem)
+                : reminder
+            ),
+            updatedAt: context.now(),
+          }),
+          {
+            requiredChildId,
+            operation: "reminder.write",
+            data: (snapshot) => snapshot.reminders.find((item) => item.reminderId === reminderId),
+          }
+        )
+      );
+    },
+    [buildSnapshotWithOverride, finishD01DataMutation, getD01Context]
+  );
+
+  const markParentReminderRead = useCallback(
+    (reminderId: string) => updateParentReminderStatus(reminderId, "acknowledged"),
+    [updateParentReminderStatus]
+  );
+
+  const saveReminderRecord = useCallback(
+    (reminder: ReminderItem): MutationResult<ReminderItem | undefined> => {
+      const context = getD01Context();
+      const requiredChildId = reminder.childId ?? reminder.targetId;
+
+      if (!requiredChildId) {
+        return {
+          status: "failed",
+          snapshot: buildSnapshotWithOverride(),
+          persistedAt: context.now(),
+          message: "Reminder write rejected because no child scope was found.",
+          error: "missing_child_id",
+        };
+      }
+
+      return finishD01DataMutation(
+        mutateAppSnapshot(
+          context,
+          (snapshot) => {
+            const existingIndex = snapshot.reminders.findIndex((item) => item.reminderId === reminder.reminderId);
+            const nextReminder: ReminderItem = {
+              ...reminder,
+              childId: reminder.childId ?? requiredChildId,
+            };
+            const reminders =
+              existingIndex === -1
+                ? [nextReminder, ...snapshot.reminders]
+                : snapshot.reminders.map((item, index) =>
+                    index === existingIndex ? { ...item, ...nextReminder } : item
+                  );
+
+            return {
+              ...snapshot,
+              reminders,
+              updatedAt: context.now(),
+            };
+          },
+          {
+            requiredChildId,
+            operation: "reminder.write",
+            data: (snapshot) => snapshot.reminders.find((item) => item.reminderId === reminder.reminderId),
+          }
+        )
+      );
+    },
+    [buildSnapshotWithOverride, finishD01DataMutation, getD01Context]
+  );
+
+  const saveParentStorybook = useCallback(
+    (input: {
+      childId: string;
+      response: ParentStoryBookResponse;
+      sourceRecordIds?: string[];
+    }): MutationResult<AppStateSnapshot["storybooks"][number] | undefined> => {
+      const context = getD01Context();
+      const storybookId = input.response.storyId || createClientId("storybook");
+      const generatedAt = input.response.generatedAt || context.now();
+      const sourceRecordIds =
+        input.sourceRecordIds ??
+        snapshotStateRef.current.growth
+          .filter((record) => record.childId === input.childId)
+          .map((record) => record.id);
+
+      return finishD01DataMutation(
+        mutateAppSnapshot(
+          context,
+          (snapshot) => {
+            const storybook = {
+              storybookId,
+              childId: input.childId,
+              sourceRecordIds,
+              pages: [
+                {
+                  kind: "parent-storybook-response",
+                  response: input.response,
+                },
+              ],
+              generatedAt,
+            } satisfies AppStateSnapshot["storybooks"][number];
+
+            return {
+              ...snapshot,
+              storybooks: [
+                storybook,
+                ...snapshot.storybooks.filter((item) => item.storybookId !== storybookId),
+              ],
+              updatedAt: context.now(),
+            };
+          },
+          {
+            requiredChildId: input.childId,
+            operation: "storybook.write",
+            data: (snapshot) => snapshot.storybooks.find((item) => item.storybookId === storybookId),
+          }
+        )
+      );
+    },
+    [finishD01DataMutation, getD01Context]
+  );
+
   const saveMobileDraft = useCallback((draft: MobileDraft) => {
     setMobileDrafts((prev) => {
       const existingIndex = prev.findIndex((item) => item.draftId === draft.draftId);
@@ -5240,43 +6044,66 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const getConsultationsForChild = useCallback((childId: string) => {
     return consultations
       .filter((item) => item.childId === childId)
-      .sort((left, right) => right.generatedAt.localeCompare(left.generatedAt));
+      .sort((left, right) => {
+        const leftUpdatedAt = (left as { updatedAt?: string }).updatedAt ?? left.generatedAt;
+        const rightUpdatedAt = (right as { updatedAt?: string }).updatedAt ?? right.generatedAt;
+        return rightUpdatedAt.localeCompare(leftUpdatedAt);
+      });
   }, [consultations]);
 
   const getLatestConsultationForChild = useCallback((childId: string) => {
     return consultations
       .filter((item) => item.childId === childId)
-      .sort((left, right) => right.generatedAt.localeCompare(left.generatedAt))[0];
+      .sort((left, right) => {
+        const leftUpdatedAt = (left as { updatedAt?: string }).updatedAt ?? left.generatedAt;
+        const rightUpdatedAt = (right as { updatedAt?: string }).updatedAt ?? right.generatedAt;
+        return rightUpdatedAt.localeCompare(leftUpdatedAt);
+      })[0];
   }, [consultations]);
 
   const getLatestConsultations = useCallback(() => {
-    return [...consultations].sort((left, right) => right.generatedAt.localeCompare(left.generatedAt));
+    return [...consultations].sort((left, right) => {
+      const leftUpdatedAt = (left as { updatedAt?: string }).updatedAt ?? left.generatedAt;
+      const rightUpdatedAt = (right as { updatedAt?: string }).updatedAt ?? right.generatedAt;
+      return rightUpdatedAt.localeCompare(leftUpdatedAt);
+    });
   }, [consultations]);
 
   const getTodayHealthCheck = useCallback((childId: string) => {
     return todayHealthCheckMap.get(childId);
   }, [todayHealthCheckMap]);
 
-  const upsertHealthCheck = useCallback((input: Omit<HealthCheckRecord, "id" | "date" | "checkedBy" | "checkedByRole"> & { date?: string }) => {
-    setHealthCheckRecords((prev) => {
-      const existingIndex = prev.findIndex((record) => record.childId === input.childId && record.date === (input.date || TODAY));
-      if (existingIndex > -1) {
-        const next = [...prev];
-        next[existingIndex] = { ...next[existingIndex], ...input };
-        return next;
-      }
-      return [
-        {
-          ...input,
-          id: createClientId("hc"),
-          date: input.date || TODAY,
-          checkedBy: currentUser.name,
-          checkedByRole: currentUser.role,
-        },
-        ...prev,
-      ];
-    });
-  }, [currentUser.name, currentUser.role]);
+  const upsertHealthCheck = useCallback((
+    input: Omit<HealthCheckRecord, "id" | "date" | "checkedBy" | "checkedByRole"> & { date?: string }
+  ): PersistAppSnapshotResult => {
+    const context = getD01Context();
+    const date = input.date || TODAY;
+    const existing = healthCheckRecords.find(
+      (record) => record.childId === input.childId && record.date === date
+    );
+    const payload: Record<string, unknown> = {
+      ...input,
+      date,
+      checkedBy: currentUser.name,
+      checkedByRole: currentUser.role,
+    };
+    const result = existing
+      ? updateDailyRecord({
+          context,
+          childId: input.childId,
+          type: "morning-check",
+          recordId: existing.id,
+          payload,
+        })
+      : createDailyRecord({
+          context,
+          childId: input.childId,
+          type: "morning-check",
+          payload,
+        });
+
+    return finishD01Mutation(result);
+  }, [currentUser.name, currentUser.role, finishD01Mutation, getD01Context, healthCheckRecords]);
 
   const getTaskCheckIns = useCallback((childId: string, date?: string) => {
     return taskCheckInRecords.filter((record) => record.childId === childId && (!date || record.date === date));
@@ -5494,9 +6321,13 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
     const snapshot = buildFreshDemoSnapshot(getLocalToday());
     lastSyncedSnapshotKeyRef.current = null;
-    applySnapshot(snapshot);
+    fullDemoSnapshotRef.current = snapshot;
+    if (currentStorageNamespace) {
+      writeScopedSnapshot(currentStorageNamespace, snapshot);
+    }
+    applySnapshot(scopeSnapshotForSessionUser(snapshot, currentUser));
     return { remoteSynced: false };
-  }, [applySnapshot, isDemoUser]);
+  }, [applySnapshot, currentStorageNamespace, currentUser, isDemoUser]);
 
   const contextValue = useMemo<AppContextType>(() => ({
     demoAccounts,
@@ -5518,6 +6349,11 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     todayHealthCheckMap,
     upsertHealthCheck,
     getTodayHealthCheck,
+    healthMaterials,
+    createHealthMaterialTask,
+    updateHealthMaterialTaskStatus,
+    saveHealthMaterialParseResult,
+    failHealthMaterialParseResult,
     taskCheckInRecords,
     checkInTask,
     getTaskCheckIns,
@@ -5537,12 +6373,29 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     mobileDrafts,
     reminders,
     tasks,
+    messages,
+    conversations,
+    nutritionMenus,
+    storybooks,
     upsertInterventionCard,
     upsertConsultation,
+    createConsultationRecord,
+    saveConsultationRecord,
+    addConsultationRecordNote,
+    updateConsultationRecordStatus,
     upsertTask,
     saveMobileDraft,
     markMobileDraftSyncStatus,
     persistAppSnapshotNow,
+    sendHomeSchoolMessage,
+    replyHomeSchoolMessage,
+    markHomeSchoolMessageRead,
+    updateHomeSchoolConversationStatus,
+    sendParentMessage,
+    markParentReminderRead,
+    updateParentReminderStatus,
+    saveReminderRecord,
+    saveParentStorybook,
     upsertReminder,
     updateReminderStatus,
     getTasksForChild,
@@ -5577,6 +6430,11 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     todayHealthCheckMap,
     upsertHealthCheck,
     getTodayHealthCheck,
+    healthMaterials,
+    createHealthMaterialTask,
+    updateHealthMaterialTaskStatus,
+    saveHealthMaterialParseResult,
+    failHealthMaterialParseResult,
     taskCheckInRecords,
     checkInTask,
     getTaskCheckIns,
@@ -5596,12 +6454,29 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     mobileDrafts,
     reminders,
     tasks,
+    messages,
+    conversations,
+    nutritionMenus,
+    storybooks,
     upsertInterventionCard,
     upsertConsultation,
+    createConsultationRecord,
+    saveConsultationRecord,
+    addConsultationRecordNote,
+    updateConsultationRecordStatus,
     upsertTask,
     saveMobileDraft,
     markMobileDraftSyncStatus,
     persistAppSnapshotNow,
+    sendHomeSchoolMessage,
+    replyHomeSchoolMessage,
+    markHomeSchoolMessageRead,
+    updateHomeSchoolConversationStatus,
+    sendParentMessage,
+    markParentReminderRead,
+    updateParentReminderStatus,
+    saveReminderRecord,
+    saveParentStorybook,
     upsertReminder,
     updateReminderStatus,
     getTasksForChild,

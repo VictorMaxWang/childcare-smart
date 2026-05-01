@@ -3,6 +3,7 @@ import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
 
 type SnapshotChild = AppStateSnapshot["children"][number];
 type SnapshotReminder = AppStateSnapshot["reminders"][number];
+type SnapshotNutritionMenu = AppStateSnapshot["nutritionMenus"][number];
 
 const ROLE_PARENT = "家长";
 const ROLE_TEACHER = "教师";
@@ -86,6 +87,29 @@ function replaceScopedItems<T>(
   return [...preservedItems, ...scopedIncomingItems];
 }
 
+function mergeItemsByKey<T>(
+  currentItems: T[],
+  incomingItems: T[],
+  readKey: (item: T) => string | null | undefined
+) {
+  const merged = new Map<string, T>();
+  const withoutKey: T[] = [];
+
+  const add = (item: T) => {
+    const key = readKey(item);
+    if (!key) {
+      withoutKey.push(item);
+      return;
+    }
+    merged.set(key, item);
+  };
+
+  currentItems.forEach(add);
+  incomingItems.forEach(add);
+
+  return [...merged.values(), ...withoutKey];
+}
+
 function readReminderChildId(reminder: SnapshotReminder) {
   if (reminder.childId) {
     return reminder.childId;
@@ -94,11 +118,39 @@ function readReminderChildId(reminder: SnapshotReminder) {
   return reminder.targetRole === "parent" ? reminder.targetId : undefined;
 }
 
+function resolveAuthorizedClassNameSet(children: SnapshotChild[], authorizedChildIds: Set<string>) {
+  return new Set(
+    children
+      .filter((child) => authorizedChildIds.has(child.id))
+      .map((child) => child.className)
+      .filter((className): className is string => Boolean(className))
+  );
+}
+
+function filterMenusForScope(
+  items: SnapshotNutritionMenu[],
+  authorizedClassNames: Set<string>
+) {
+  return items.filter((item) => authorizedClassNames.has(item.classId));
+}
+
+function replaceScopedMenus(
+  currentItems: SnapshotNutritionMenu[],
+  incomingItems: SnapshotNutritionMenu[],
+  authorizedClassNames: Set<string>
+) {
+  return [
+    ...currentItems.filter((item) => !authorizedClassNames.has(item.classId)),
+    ...filterMenusForScope(incomingItems, authorizedClassNames),
+  ];
+}
+
 export function scopeSnapshotForSessionUser(
   snapshot: AppStateSnapshot,
   user: Pick<SessionUser, "role" | "id" | "institutionId" | "className" | "childIds">
 ) {
   const authorizedChildIds = resolveAuthorizedChildIdSet(user, snapshot.children);
+  const authorizedClassNames = resolveAuthorizedClassNameSet(snapshot.children, authorizedChildIds);
 
   return {
     ...snapshot,
@@ -118,6 +170,11 @@ export function scopeSnapshotForSessionUser(
     mobileDrafts: filterByChildId(snapshot.mobileDrafts, authorizedChildIds, (item) => item.childId),
     reminders: filterByChildId(snapshot.reminders, authorizedChildIds, readReminderChildId),
     tasks: filterByChildId(snapshot.tasks, authorizedChildIds, (item) => item.childId),
+    messages: filterByChildId(snapshot.messages, authorizedChildIds, (item) => item.childId),
+    conversations: filterByChildId(snapshot.conversations, authorizedChildIds, (item) => item.childId),
+    healthMaterials: filterByChildId(snapshot.healthMaterials, authorizedChildIds, (item) => item.childId),
+    nutritionMenus: filterMenusForScope(snapshot.nutritionMenus, authorizedClassNames),
+    storybooks: filterByChildId(snapshot.storybooks, authorizedChildIds, (item) => item.childId),
   } satisfies AppStateSnapshot;
 }
 
@@ -130,10 +187,63 @@ export function mergeScopedSnapshotForSessionUser(params: {
   const scopedIncomingSnapshot = scopeSnapshotForSessionUser(incomingSnapshot, user);
 
   if (user.role === ROLE_ADMIN) {
-    return scopedIncomingSnapshot;
+    return {
+      ...currentSnapshot,
+      children: mergeItemsByKey(currentSnapshot.children, scopedIncomingSnapshot.children, (item) => item.id),
+      attendance: mergeItemsByKey(currentSnapshot.attendance, scopedIncomingSnapshot.attendance, (item) => item.id),
+      meals: mergeItemsByKey(currentSnapshot.meals, scopedIncomingSnapshot.meals, (item) => item.id),
+      growth: mergeItemsByKey(currentSnapshot.growth, scopedIncomingSnapshot.growth, (item) => item.id),
+      feedback: mergeItemsByKey(currentSnapshot.feedback, scopedIncomingSnapshot.feedback, (item) => item.id),
+      health: mergeItemsByKey(currentSnapshot.health, scopedIncomingSnapshot.health, (item) => item.id),
+      taskCheckIns: mergeItemsByKey(currentSnapshot.taskCheckIns, scopedIncomingSnapshot.taskCheckIns, (item) => item.id),
+      interventionCards: mergeItemsByKey(
+        currentSnapshot.interventionCards,
+        scopedIncomingSnapshot.interventionCards,
+        (item) => item.id
+      ),
+      consultations: mergeItemsByKey(
+        currentSnapshot.consultations,
+        scopedIncomingSnapshot.consultations,
+        (item) => item.consultationId
+      ),
+      mobileDrafts: mergeItemsByKey(
+        currentSnapshot.mobileDrafts,
+        scopedIncomingSnapshot.mobileDrafts,
+        (item) => item.draftId
+      ),
+      reminders: mergeItemsByKey(
+        currentSnapshot.reminders,
+        scopedIncomingSnapshot.reminders,
+        (item) => item.reminderId
+      ),
+      tasks: mergeItemsByKey(currentSnapshot.tasks, scopedIncomingSnapshot.tasks, (item) => item.taskId),
+      messages: mergeItemsByKey(currentSnapshot.messages, scopedIncomingSnapshot.messages, (item) => item.messageId),
+      conversations: mergeItemsByKey(
+        currentSnapshot.conversations,
+        scopedIncomingSnapshot.conversations,
+        (item) => item.conversationId
+      ),
+      healthMaterials: mergeItemsByKey(
+        currentSnapshot.healthMaterials,
+        scopedIncomingSnapshot.healthMaterials,
+        (item) => item.materialId
+      ),
+      nutritionMenus: mergeItemsByKey(
+        currentSnapshot.nutritionMenus,
+        scopedIncomingSnapshot.nutritionMenus,
+        (item) => item.menuId
+      ),
+      storybooks: mergeItemsByKey(
+        currentSnapshot.storybooks,
+        scopedIncomingSnapshot.storybooks,
+        (item) => item.storybookId
+      ),
+      updatedAt: scopedIncomingSnapshot.updatedAt,
+    } satisfies AppStateSnapshot;
   }
 
   const authorizedChildIds = resolveAuthorizedChildIdSet(user, currentSnapshot.children);
+  const authorizedClassNames = resolveAuthorizedClassNameSet(currentSnapshot.children, authorizedChildIds);
 
   return {
     ...currentSnapshot,
@@ -206,6 +316,35 @@ export function mergeScopedSnapshotForSessionUser(params: {
     tasks: replaceScopedItems(
       currentSnapshot.tasks,
       scopedIncomingSnapshot.tasks,
+      authorizedChildIds,
+      (item) => item.childId
+    ),
+    messages: replaceScopedItems(
+      currentSnapshot.messages,
+      scopedIncomingSnapshot.messages,
+      authorizedChildIds,
+      (item) => item.childId
+    ),
+    conversations: replaceScopedItems(
+      currentSnapshot.conversations,
+      scopedIncomingSnapshot.conversations,
+      authorizedChildIds,
+      (item) => item.childId
+    ),
+    healthMaterials: replaceScopedItems(
+      currentSnapshot.healthMaterials,
+      scopedIncomingSnapshot.healthMaterials,
+      authorizedChildIds,
+      (item) => item.childId
+    ),
+    nutritionMenus: replaceScopedMenus(
+      currentSnapshot.nutritionMenus,
+      scopedIncomingSnapshot.nutritionMenus,
+      authorizedClassNames
+    ),
+    storybooks: replaceScopedItems(
+      currentSnapshot.storybooks,
+      scopedIncomingSnapshot.storybooks,
       authorizedChildIds,
       (item) => item.childId
     ),

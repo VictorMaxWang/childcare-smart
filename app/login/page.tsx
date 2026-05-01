@@ -509,8 +509,15 @@ export default function LoginPage() {
                   />
                   记住登录
                 </label>
-                <button type="button" className={styles.forgotButton}>
-                  忘记密码？
+                <button
+                  type="button"
+                  className={styles.forgotButton}
+                  disabled
+                  aria-disabled="true"
+                  title="密码找回暂未开放"
+                  data-testid="d07-forgot-password-disabled"
+                >
+                  密码找回暂未开放
                 </button>
               </div>
 

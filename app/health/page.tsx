@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, MessageSquareText, Search, Thermometer, Users, Utensils } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Activity, AlertTriangle, CheckCircle2, HeartPulse, MessageSquareText, Search, ShieldAlert, Thermometer, Users, Utensils } from "lucide-react";
 import {
   CartesianGrid,
   Cell,
@@ -28,13 +29,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StatusTag } from "@/components/ui/status-tag";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { PermissionState } from "@/components/ui/state-block";
 import { buildRecentLocalDateRange, getLocalToday, isDateWithinLastDays } from "@/lib/date";
 import { toast } from "sonner";
 
 import { HEALTH_MOOD_OPTIONS, HAND_MOUTH_EYE_OPTIONS, TEMPERATURE_THRESHOLD } from "@/lib/mock/health";
 import { getAgeText } from "@/lib/store";
 import EmptyState from "@/components/EmptyState";
+import { useParentD01Data } from "@/components/parent/useParentD01Data";
+import { MetricCard } from "@/components/ui/metric-card";
 
 const TEMPLATE_REMARKS = {
   NORMAL: "体温正常，情绪稳定",
@@ -47,8 +49,14 @@ const TEMPERATURE_MAX = 42;
 
 export default function HealthPage() {
   const { presentChildren, healthCheckRecords, upsertHealthCheck, currentUser, visibleChildren } = useApp();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const childFromQuery = searchParams.get("child");
+  const parentD01 = useParentD01Data(childFromQuery);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "abnormal" | "unchecked">("all");
+  const isParent = currentUser.role === "家长";
   
   // Dialog State
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
@@ -58,6 +66,23 @@ export default function HealthPage() {
   const [handMouthEye, setHandMouthEye] = useState<"正常" | "异常">("正常");
   const [remark, setRemark] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isParent || !parentD01.selectedChildId || parentD01.invalidChildId || childFromQuery === parentD01.selectedChildId) {
+      return;
+    }
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("child", parentD01.selectedChildId);
+    router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+  }, [
+    childFromQuery,
+    isParent,
+    parentD01.invalidChildId,
+    parentD01.selectedChildId,
+    pathname,
+    router,
+    searchParams,
+  ]);
 
   // Computed data — use visibleChildren so admin/teacher can see all children, not just present ones
   const childData = useMemo(() => {
@@ -206,7 +231,7 @@ export default function HealthPage() {
     const isTempAbnormal = tempNum >= TEMPERATURE_THRESHOLD;
     const isAbnormal = isTempAbnormal || handMouthEye === "异常" || mood.includes("哭闹");
 
-    upsertHealthCheck({
+    const saveResult = upsertHealthCheck({
       childId: selectedChildId,
       temperature: tempNum,
       mood,
@@ -216,32 +241,221 @@ export default function HealthPage() {
     });
 
     const childName = childData.find((child) => child.id === selectedChildId)?.name ?? "该幼儿";
+    if (saveResult.status === "failed") {
+      toast.error("晨检记录保存失败", {
+        description: saveResult.message,
+      });
+      return;
+    }
+
+    const persistenceNote =
+      saveResult.status === "local_only"
+        ? "已写入共享演示数据，刷新和切换角色仍可查看。"
+        : "已写入当前数据层，刷新后保留。";
     if (isAbnormal) {
       toast.warning("晨检记录已保存", {
-        description: `${childName} 已标记为异常状态，请及时复核并通知家长。`,
+        description: `${childName} 已标记为异常状态，请及时复核并通知家长。${persistenceNote}`,
       });
     } else {
       toast.success("晨检记录已保存", {
-        description: `${childName} 的今日晨检状态已更新。`,
+        description: `${childName} 的今日晨检状态已更新。${persistenceNote}`,
       });
     }
 
     setIsDialogOpen(false);
   };
   
-  if (currentUser.role === "家长") {
+if (isParent) {
+    const parentChild = parentD01.selectedChild;
+    const parentHealthRecords = (parentD01.parentHomeData?.dailyRecords ?? [])
+      .filter((record) => record.type === "morning-check")
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    const latestHealthRecord = parentHealthRecords[0] ?? null;
+    const abnormalHealthRecords = parentHealthRecords.filter((record) => Boolean(record.payload.isAbnormal));
+    const healthMaterials = parentD01.parentHomeData?.healthMaterials ?? [];
+    const consultations = parentD01.parentHomeData?.consultations ?? [];
+
+    if (parentD01.invalidChildId) {
+      return (
+        <div className="app-page flex min-h-[70vh] items-center justify-center page-enter">
+          <EmptyState
+            icon={<ShieldAlert className="h-6 w-6" />}
+            title="无法查看该孩子的健康管理"
+            description="当前家长账号没有该 childId 的授权，系统不会自动回退到其他孩子。"
+          />
+        </div>
+      );
+    }
+
+    if (!parentChild || !parentD01.parentHomeData) {
+      return (
+        <div className="app-page flex min-h-[70vh] items-center justify-center page-enter">
+          <EmptyState
+            icon={<HeartPulse className="h-6 w-6" />}
+            title="暂无可查看的健康数据"
+            description="当前账号还没有关联孩子，或 D01 store 中没有健康记录。"
+          />
+        </div>
+      );
+    }
+
     return (
-      <div className="app-page flex min-h-[70vh] items-center justify-center page-enter">
-        <PermissionState
-          className="w-full max-w-2xl"
-          title="当前账号无法操作晨检"
-          description="家长端可以查看孩子状态和老师反馈，但晨检录入由园所和教师端完成。"
-          action={
-            <Button variant="outline" onClick={() => window.location.assign("/parent")}>
-              返回家长首页
+      <div className="app-page max-w-[76rem] page-enter">
+        <section className="mb-5 overflow-hidden rounded-2xl border border-rose-100 bg-[linear-gradient(135deg,#fff1f2_0%,#ffffff_50%,#ecfeff_100%)] p-4 shadow-[0_20px_58px_rgb(244_63_94_/_0.10)] sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="info" className="rounded-full px-3 py-1">
+                  {parentChild.name}
+                </Badge>
+                <Badge variant="secondary" className="rounded-full px-3 py-1">
+                  {parentChild.className}
+                </Badge>
+                <Badge variant={abnormalHealthRecords.length > 0 ? "warning" : "success"} className="rounded-full px-3 py-1">
+                  异常 {abnormalHealthRecords.length} 条
+                </Badge>
+              </div>
+              <h1 className="mt-4 flex items-center gap-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                <HeartPulse className="h-7 w-7 text-rose-500" />
+                健康管理
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                家长端只读展示晨检、健康材料和高风险会诊摘要，数据按 childId 从 D01 store 读取。
+              </p>
+            </div>
+            <Button type="button" variant="outline" className="rounded-2xl" onClick={() => router.push(`/parent?child=${parentChild.id}`)}>
+              返回首页
             </Button>
-          }
-        />
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-4">
+            <MetricCard label="晨检记录" value={`${parentHealthRecords.length} 条`} icon={<Thermometer className="h-5 w-5" />} tone="info" />
+            <MetricCard
+              label="异常记录"
+              value={`${abnormalHealthRecords.length} 条`}
+              icon={<AlertTriangle className="h-5 w-5" />}
+              tone={abnormalHealthRecords.length > 0 ? "warning" : "success"}
+            />
+            <MetricCard label="健康材料" value={`${healthMaterials.length} 份`} icon={<Activity className="h-5 w-5" />} tone="primary" />
+            <MetricCard label="会诊摘要" value={`${consultations.length} 条`} icon={<Users className="h-5 w-5" />} tone="neutral" />
+          </div>
+        </section>
+
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <Card className="rounded-lg">
+            <CardHeader>
+              <CardTitle className="text-lg">晨检与异常记录</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {parentHealthRecords.length === 0 ? (
+                <EmptyState
+                  icon={<Thermometer className="h-6 w-6" />}
+                  title="暂无晨检记录"
+                  description="当前 childId 在 D01 store 中还没有晨检数据。"
+                />
+              ) : null}
+              {parentHealthRecords.map((record) => {
+                const temperature = typeof record.payload.temperature === "number" ? record.payload.temperature : null;
+                const moodText = typeof record.payload.mood === "string" ? record.payload.mood : "未记录";
+                const handMouthEye = typeof record.payload.handMouthEye === "string" ? record.payload.handMouthEye : "未记录";
+                const remark = typeof record.payload.remark === "string" ? record.payload.remark : "暂无备注";
+                const isAbnormal = Boolean(record.payload.isAbnormal);
+                return (
+                  <article key={record.recordId} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={isAbnormal ? "destructive" : "success"}>{isAbnormal ? "异常" : "正常"}</Badge>
+                          <Badge variant="secondary">{record.createdAt}</Badge>
+                          <Badge variant="outline">记录人：{record.createdBy}</Badge>
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-slate-700">
+                          体温 {temperature === null ? "--" : `${temperature.toFixed(1)}°C`}，情绪 {moodText}，手口眼 {handMouthEye}
+                        </p>
+                        <p className="mt-2 rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{remark}</p>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </CardContent>
+          </Card>
+
+          <div className="space-y-5">
+            <Card className="rounded-lg">
+              <CardHeader>
+                <CardTitle className="text-lg">最近状态</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm text-slate-600">
+                {latestHealthRecord ? (
+                  <>
+                    <p className="font-semibold text-slate-900">{latestHealthRecord.createdAt}</p>
+                    <p>
+                      体温：
+                      {typeof latestHealthRecord.payload.temperature === "number"
+                        ? `${latestHealthRecord.payload.temperature.toFixed(1)}°C`
+                        : "--"}
+                    </p>
+                    <p>情绪：{typeof latestHealthRecord.payload.mood === "string" ? latestHealthRecord.payload.mood : "未记录"}</p>
+                    <p>手口眼：{typeof latestHealthRecord.payload.handMouthEye === "string" ? latestHealthRecord.payload.handMouthEye : "未记录"}</p>
+                  </>
+                ) : (
+                  <p>暂无晨检状态。</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-lg">
+              <CardHeader>
+                <CardTitle className="text-lg">健康材料</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {healthMaterials.length === 0 ? (
+                  <EmptyState
+                    icon={<Activity className="h-6 w-6" />}
+                    title="暂无健康材料"
+                    description="当前孩子还没有上传或解析的健康材料。"
+                  />
+                ) : null}
+                {healthMaterials.map((material) => (
+                  <div key={material.materialId} className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-semibold text-slate-900">{material.filename}</p>
+                      <Badge variant={material.parseStatus === "completed" ? "success" : material.parseStatus === "failed" ? "destructive" : "secondary"}>
+                        {material.parseStatus}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-slate-500">{material.description ?? "暂无说明"}</p>
+                    {material.parseResult ? (
+                      <pre className="mt-2 max-h-32 overflow-auto rounded-xl bg-white p-2 text-xs text-slate-500">
+                        {JSON.stringify(material.parseResult, null, 2)}
+                      </pre>
+                    ) : null}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-lg">
+              <CardHeader>
+                <CardTitle className="text-lg">会诊摘要</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {consultations.length === 0 ? <p className="text-sm text-slate-500">暂无会诊摘要。</p> : null}
+                {consultations.slice(0, 3).map((consultation) => (
+                  <div key={consultation.consultationId} className="rounded-2xl border border-amber-100 bg-amber-50/60 p-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={consultation.riskLevel === "high" ? "destructive" : "warning"}>{consultation.riskLevel}</Badge>
+                      <span className="text-xs text-amber-700">{consultation.generatedAt}</span>
+                    </div>
+                    <p className="mt-2 leading-6 text-slate-700">{consultation.summary}</p>
+                    <p className="mt-2 text-xs text-slate-500">家庭建议：{consultation.homeAction}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -315,7 +529,7 @@ export default function HealthPage() {
               { label: "快速录入", detail: "批量晨检", icon: Users, action: () => setFilterStatus("unchecked") },
               { label: "体温登记", detail: "批量录入", icon: Thermometer, action: () => setFilterStatus("unchecked") },
               { label: "健康小贴士", detail: "今日建议", icon: Activity, action: () => window.location.assign("/teacher/agent?action=communication") },
-              { label: "导出记录", detail: "今日晨报", icon: CheckCircle2, action: () => setFilterStatus("all") },
+              { label: "查看全部", detail: "重置筛选", icon: CheckCircle2, action: () => setFilterStatus("all") },
             ].map((item) => {
               const Icon = item.icon;
               return (

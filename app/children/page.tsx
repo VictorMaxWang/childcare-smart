@@ -10,6 +10,7 @@ import {
   type Child,
   type Gender,
   type Guardian,
+  type PersistAppSnapshotResult,
   useApp,
 } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
@@ -42,19 +43,29 @@ import { Textarea } from "@/components/ui/textarea";
 import { TeacherActionTile, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import { toast } from "sonner";
 
+const CHILD_ARCHIVE_DISABLED_REASON = "删除/归档暂未开放";
+
+function getPersistDescription(result: PersistAppSnapshotResult, prefix = "") {
+  if (result.status === "local_only") {
+    return `${prefix}已写入共享演示数据，刷新后保留。`;
+  }
+  if (result.status === "saved") {
+    return `${prefix}已写入当前数据层，刷新后保留。`;
+  }
+  return result.error ?? result.message ?? "保存失败，请稍后重试。";
+}
+
 export default function ChildrenPage() {
   const {
     currentUser,
     visibleChildren,
     getTodayAttendance,
     addChild,
-    removeChild,
     toggleTodayAttendance,
   } = useApp();
 
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
@@ -143,8 +154,9 @@ export default function ChildrenPage() {
       phone: form.guardianPhone.trim() || "待补充",
     };
 
-    addChild({
-      name: form.name.trim(),
+    const childName = form.name.trim();
+    const result = addChild({
+      name: childName,
       nickname: form.nickname.trim(),
       birthDate: form.birthDate,
       gender: form.gender,
@@ -161,11 +173,34 @@ export default function ChildrenPage() {
       parentUserId: currentUser.role === "家长" ? currentUser.id : undefined,
     });
 
+    if (result.status === "failed") {
+      const message = getPersistDescription(result);
+      setError(message);
+      toast.error("幼儿档案保存失败", {
+        description: message,
+      });
+      return;
+    }
+
     setOpen(false);
     toast.success("幼儿档案已保存", {
-      description: `${form.name.trim()} 已加入档案列表。`,
+      description: getPersistDescription(result, `${childName} 已加入档案列表。`),
     });
     resetForm();
+  }
+
+  function handleToggleAttendance(child: Child) {
+    const result = toggleTodayAttendance(child.id);
+    if (result.status === "failed") {
+      toast.error("出勤状态保存失败", {
+        description: getPersistDescription(result),
+      });
+      return;
+    }
+
+    toast.success(`已切换 ${child.name} 的今日出勤状态`, {
+      description: getPersistDescription(result),
+    });
   }
 
   return (
@@ -196,6 +231,7 @@ export default function ChildrenPage() {
                 disabled={!canManage}
                 variant="premium"
                 className="min-h-11 rounded-2xl"
+                data-testid="d07-open-add-child"
               >
                 <UserPlus className="mr-2 h-4 w-4" />
                 {canManage ? "新增幼儿档案" : "家长端仅可查看"}
@@ -343,7 +379,7 @@ export default function ChildrenPage() {
                   const attendance = attendanceMap.get(child.id);
                   const isPresent = attendance?.isPresent ?? false;
                   return (
-                    <tr key={child.id} className="transition hover:bg-slate-50/80">
+                    <tr key={child.id} className="transition hover:bg-slate-50/80" data-testid={`d07-child-row-${child.id}`}>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-xl">
@@ -400,15 +436,20 @@ export default function ChildrenPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  toggleTodayAttendance(child.id);
-                                  toast.success(`已切换 ${child.name} 的今日出勤状态`);
-                                }}
+                                onClick={() => handleToggleAttendance(child)}
+                                data-testid={`d07-attendance-toggle-${child.id}`}
                               >
                                 切换出勤
                               </Button>
-                              <Button variant="ghost" size="sm" onClick={() => setDeleteId(child.id)}>
-                                删除
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled
+                                aria-disabled="true"
+                                title={CHILD_ARCHIVE_DISABLED_REASON}
+                                data-testid={`d07-archive-disabled-${child.id}`}
+                              >
+                                归档暂未开放
                               </Button>
                             </>
                           ) : (
@@ -433,11 +474,7 @@ export default function ChildrenPage() {
                   canManage={canManage}
                   attendance={attendance}
                   onOpenDetails={() => setSelectedDetailId(child.id)}
-                  onDelete={() => setDeleteId(child.id)}
-                  onToggleAttendance={() => {
-                    toggleTodayAttendance(child.id);
-                    toast.success(`已切换 ${child.name} 的今日出勤状态`);
-                  }}
+                  onToggleAttendance={() => handleToggleAttendance(child)}
                 />
               );
             })}
@@ -457,6 +494,7 @@ export default function ChildrenPage() {
                 value={form.name}
                 onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
                 aria-invalid={Boolean(error && !form.name.trim())}
+                data-testid="d07-child-name"
               />
             </FormField>
             <FormField label="昵称" description="可选，用于教师和家长日常识别。">
@@ -501,6 +539,7 @@ export default function ChildrenPage() {
                 value={form.guardianName}
                 onChange={(event) => setForm((prev) => ({ ...prev, guardianName: event.target.value }))}
                 aria-invalid={Boolean(error && !form.guardianName.trim())}
+                data-testid="d07-child-guardian"
               />
             </FormField>
             <FormField label="关系 / 联系电话" description="电话可后续补充，系统会保留监护人关系。">
@@ -546,40 +585,7 @@ export default function ChildrenPage() {
             <Button variant="outline" onClick={() => (setOpen(false), resetForm())}>
               取消
             </Button>
-            <Button onClick={handleSubmit}>保存档案</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(deleteId)} onOpenChange={(value) => !value && setDeleteId(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>确认删除档案</DialogTitle>
-            <DialogDescription>删除后会同时清除该幼儿的出勤、饮食、成长与反馈记录，请谨慎操作。</DialogDescription>
-          </DialogHeader>
-          <div className="flex items-start gap-3 rounded-lg border border-(--danger-border) bg-(--danger-soft) p-3 text-sm leading-6 text-(--danger-foreground)">
-            <Trash2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p>这是不可恢复操作。请只在确认档案确实需要移除时继续。</p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>
-              取消
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (deleteId) {
-                  const childName = visibleChildren.find((item) => item.id === deleteId)?.name ?? "该幼儿";
-                  removeChild(deleteId);
-                  toast.success("档案已删除", {
-                    description: `${childName} 及其关联记录已从当前视图移除。`,
-                  });
-                }
-                setDeleteId(null);
-              }}
-            >
-              确认删除
-            </Button>
+            <Button onClick={handleSubmit} data-testid="d07-save-child">保存档案</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -684,7 +690,6 @@ function ChildArchiveCard({
   canManage,
   attendance,
   onOpenDetails,
-  onDelete,
   onToggleAttendance,
 }: {
   child: Child;
@@ -696,7 +701,6 @@ function ChildArchiveCard({
     absenceReason?: string;
   };
   onOpenDetails: () => void;
-  onDelete: () => void;
   onToggleAttendance: () => void;
 }) {
   const ageBand = getAgeBandFromBirthDate(child.birthDate);
@@ -724,8 +728,17 @@ function ChildArchiveCard({
           <div className="flex flex-col items-end gap-2">
             <Badge variant={isPresent ? "success" : "secondary"}>{isPresent ? "今日出勤" : "今日缺勤"}</Badge>
             {canManage ? (
-              <button aria-label={`删除 ${child.name} 的档案`} onClick={onDelete} className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-500">
+              <button
+                type="button"
+                aria-label={`${child.name} 的档案删除/归档暂未开放`}
+                aria-disabled="true"
+                disabled
+                title={CHILD_ARCHIVE_DISABLED_REASON}
+                className="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1 text-xs font-medium text-slate-400"
+                data-testid={`d07-archive-disabled-mobile-${child.id}`}
+              >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
+                暂未开放
               </button>
             ) : null}
           </div>
@@ -773,7 +786,7 @@ function ChildArchiveCard({
             查看详情
           </Button>
           {canManage ? (
-            <Button variant="outline" onClick={onToggleAttendance}>
+            <Button variant="outline" onClick={onToggleAttendance} data-testid={`d07-attendance-toggle-mobile-${child.id}`}>
               切换为{isPresent ? "缺勤" : "出勤"}
             </Button>
           ) : null}

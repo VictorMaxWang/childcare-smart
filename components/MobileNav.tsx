@@ -45,6 +45,7 @@ const ICON_MAP: Record<PrimaryNavIconKey, LucideIcon> = {
   file: FileText,
   feedback: Bell,
   storybook: BookHeart,
+  reminders: Bell,
 };
 
 const ROLE_BADGE_MAP: Record<AccountRole, RoleBadgeRole> = {
@@ -69,7 +70,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
   const panelRef = useRef<HTMLElement>(null);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const wasOpenRef = useRef(false);
-  const navGroups = buildPrimaryNavGroups(currentUser.role, { childId: currentUser.childIds?.[0] ?? "c-1" });
+  const navGroups = buildPrimaryNavGroups(currentUser.role, { childId: currentUser.childIds?.[0] });
 
   const close = () => setOpen(false);
 

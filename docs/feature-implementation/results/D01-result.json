@@ -1,0 +1,68 @@
+{
+  "taskId": "D01",
+  "title": "core-data-layer",
+  "status": "complete",
+  "assignedGaps": ["D01-G01", "D01-G02", "D01-G03", "D01-G04", "D01-G05"],
+  "implemented": {
+    "dataLayer": true,
+    "persistence": "localStorage for demo, /api/state retained for normal accounts",
+    "demoSeed": true,
+    "refreshPersistence": true,
+    "crossRoleClosure": true,
+    "sharedDemoNamespace": "demo:v5-d01-shared-demo:institution:{institutionId}",
+    "schemaVersion": "d01-v1"
+  },
+  "newCapabilities": {
+    "messages": "send/list/reply/mark-read backed by shared demo snapshot buckets",
+    "dailyRecords": "morning-check, diet and growth actions mapped to existing health/meals/growth buckets",
+    "healthMaterials": "create, parse and save parse result in healthMaterials bucket",
+    "consultations": "create/list/add-note/update-status over existing consultations bucket with D01 metadata",
+    "reminders": "list and mark read over reminders bucket",
+    "nutritionMenus": "class-scoped list over nutritionMenus bucket",
+    "storybooks": "list and generate from growth records over storybooks bucket",
+    "dashboards": "director metrics, teacher workbench data and parent home data derived from current snapshot"
+  },
+  "changedFiles": {
+    "added": [
+      "lib/demo-data/actions.ts",
+      "lib/demo-data/demo-data.test.ts",
+      "lib/demo-data/ids.ts",
+      "lib/demo-data/index.ts",
+      "lib/demo-data/migration.ts",
+      "lib/demo-data/persistence.ts",
+      "lib/demo-data/seed.ts",
+      "lib/demo-data/selectors.ts",
+      "lib/demo-data/store.ts",
+      "lib/demo-data/types.ts",
+      "tests/bug-bash/d01-regression.spec.ts"
+    ],
+    "modified": [
+      "lib/agent/parent-trend.ts",
+      "lib/persistence/bootstrap.ts",
+      "lib/persistence/snapshot.ts",
+      "lib/persistence/state-scope.ts",
+      "lib/store.tsx",
+      "docs/feature-implementation/API_OR_LOCAL_STORE_DECISIONS.md",
+      "docs/feature-implementation/DATA_MODEL_SPEC.md",
+      "docs/feature-implementation/DEMO_PERSISTENCE_SPEC.md",
+      "docs/feature-implementation/IMPLEMENTATION_LOG.md",
+      "docs/feature-implementation/results/D01-result.json",
+      "docs/feature-implementation/results/D01-result.md"
+    ]
+  },
+  "checks": {
+    "lint": "passed",
+    "build": "passed",
+    "typecheck": "passed",
+    "unit": "passed: node --import ./scripts/register-test-path-loader.mjs --test ./lib/demo-data/*.test.ts",
+    "playwrightD01": "passed: BUGBASH_BASE_URL=http://127.0.0.1:3000 npx playwright test tests/bug-bash/d01-regression.spec.ts --config=playwright.bugbash.config.ts --project=chromium --reporter=line",
+    "bugbashSmoke": "passed: BUGBASH_BASE_URL=http://127.0.0.1:3000 npm run bugbash:smoke"
+  },
+  "notes": [
+    "D01 did not modify docs/feature-audit/INCOMPLETE_FEATURES.json.",
+    "D01 did not modify docs/feature-implementation/IMPLEMENTATION_STATUS.md.",
+    "Existing useApp method names remain available; demo writes now merge into the shared institution snapshot.",
+    "Normal accounts still use /api/state and receive syncStatus metadata from persistAppSnapshotNow."
+  ],
+  "readyForParallelTasks": ["D02", "D03", "D04", "D05", "D06"]
+}

@@ -1,0 +1,14 @@
+{
+  "taskId": "D06",
+  "title": "director-dashboard-reports",
+  "status": "pending",
+  "assignedGaps": ["D06-G01", "D06-G02", "D06-G03"],
+  "changedFiles": [],
+  "checks": {
+    "lint": "not-run",
+    "build": "not-run",
+    "browserOrPlaywright": "not-run"
+  },
+  "notes": "Do not start until D01 is complete."
+}
+

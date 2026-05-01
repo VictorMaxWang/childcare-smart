@@ -1,0 +1,81 @@
+{
+  "taskId": "D08",
+  "title": "tests-browser-regression",
+  "status": "completed-with-known-bugbash-smoke-failure",
+  "assignedGaps": ["D08-G01", "D08-G02", "D08-G03"],
+  "filesChanged": {
+    "added": [
+      "playwright.feature.config.ts",
+      "tests/feature-completion/helpers.ts",
+      "tests/feature-completion/communication-flow.spec.ts",
+      "tests/feature-completion/teacher-records-persistence.spec.ts",
+      "tests/feature-completion/parent-features.spec.ts",
+      "tests/feature-completion/health-consultation.spec.ts",
+      "tests/feature-completion/director-summary.spec.ts",
+      "tests/feature-completion/visual-only-safety.spec.ts",
+      "docs/feature-implementation/results/D08-result.md",
+      "docs/feature-implementation/results/D08-result.json"
+    ],
+    "modified": ["package.json"]
+  },
+  "scripts": {
+    "feature:smoke": "playwright test tests/feature-completion --config=playwright.feature.config.ts",
+    "feature:communication": "playwright test tests/feature-completion/communication-flow.spec.ts tests/feature-completion/parent-features.spec.ts --config=playwright.feature.config.ts",
+    "feature:persistence": "playwright test tests/feature-completion/teacher-records-persistence.spec.ts tests/feature-completion/health-consultation.spec.ts tests/feature-completion/visual-only-safety.spec.ts --config=playwright.feature.config.ts"
+  },
+  "commands": {
+    "lint": {
+      "command": "npm run lint",
+      "status": "passed"
+    },
+    "build": {
+      "command": "npm run build",
+      "status": "passed"
+    },
+    "featureSmoke": {
+      "command": "FEATURE_BASE_URL=http://127.0.0.1:3330 npm run feature:smoke",
+      "status": "passed",
+      "summary": "9 passed"
+    },
+    "bugbashSmoke": {
+      "command": "BUGBASH_BASE_URL=http://127.0.0.1:3330 npm run bugbash:smoke",
+      "status": "failed",
+      "summary": "B26 real-user smoke reported 27 issues; see artifacts/bug-bash/B26/b26-smoke-results.json."
+    },
+    "browserUse": {
+      "command": "Browser Use node_repl setup",
+      "status": "blocked",
+      "summary": "Node runtime v22.20.0 is below the Browser Use node_repl requirement >=22.22.0."
+    }
+  },
+  "coverage": {
+    "communicationRoundTrip": true,
+    "teacherRecordRefreshPersistence": true,
+    "teacherRecordsParentVisibility": true,
+    "healthMaterialParseSaveConsultation": true,
+    "healthConsultationDirectorParentVisibility": true,
+    "parentChildParamPersistence": true,
+    "demoSeedIsolationFromRealApi": true,
+    "mockDraftExcludedFromRemotePersistence": true,
+    "directorSummaryUsesStore": true,
+    "visualOnlySafety": true,
+    "loginNextUnauthorizedGuard": true,
+    "mobileParentCorePath": true
+  },
+  "artifacts": {
+    "root": "artifacts/feature-implementation/D08",
+    "playwrightOutput": "artifacts/feature-implementation/D08/playwright-output",
+    "playwrightReport": "artifacts/feature-implementation/D08/playwright-report"
+  },
+  "knownLimitations": [
+    "Browser Use regression was not executed because local Node is v22.20.0 and the Browser Use node_repl requires >=22.22.0.",
+    "D06 remains pending, so director-summary assertions cover current admin store communication and consultation visibility rather than future weekly-report or quality-metric behavior.",
+    "Real backend, real OCR/ASR, and real LLM provider contracts remain outside D08; assertions use D01 demo persistence.",
+    "bugbash:smoke still fails in B26 with 27 legacy/infra console-resource issues on production localhost, while D08 feature:smoke passes."
+  ],
+  "notes": [
+    "Did not modify docs/feature-audit/INCOMPLETE_FEATURES.json.",
+    "Feature tests support FEATURE_BASE_URL first, then BUGBASH_BASE_URL, then http://127.0.0.1:3330.",
+    "playwright.feature.config.ts skips webServer when an explicit base URL is supplied, skip flags are set, or .next/dev/lock exists."
+  ]
+}

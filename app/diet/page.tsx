@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   Camera,
@@ -29,6 +30,7 @@ import {
   type MealRecord,
   type MealType,
   type PreferenceStatus,
+  type PersistAppSnapshotResult,
   useApp,
 } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
@@ -37,12 +39,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { MetricCard } from "@/components/ui/metric-card";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getLocalToday } from "@/lib/date";
 import { getHydrationDisplayState } from "@/lib/hydration-display";
 import { cn } from "@/lib/utils";
 import EmptyState from "@/components/EmptyState";
+import { useParentD01Data } from "@/components/parent/useParentD01Data";
 import { toast } from "sonner";
 
 const TODAY = getLocalToday();
@@ -134,6 +138,21 @@ function createFoodId(prefix: string) {
   return `${prefix}-${Date.now()}`;
 }
 
+function formatMenuMealLines(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => formatMenuMealLines(item));
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return ["未填写"];
+    return entries.map(([key, item]) => `${key}：${formatMenuMealLines(item).join("、")}`);
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return [String(value)];
+  }
+  return ["未填写"];
+}
+
 export default function DietPage() {
   const {
     currentUser,
@@ -147,6 +166,12 @@ export default function DietPage() {
     getSmartInsights,
     getTodayAttendance,
   } = useApp();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const childFromQuery = searchParams.get("child");
+  const parentD01 = useParentD01Data(childFromQuery);
+  const isParent = currentUser.role === "家长";
 
   const [selectedChildId, setSelectedChildId] = useState<string>("");
 
@@ -179,6 +204,23 @@ export default function DietPage() {
       setSelectedChildId(defaultSelectedChildId);
     }
   }, [defaultSelectedChildId, selectedChildId, visibleChildren]);
+
+  useEffect(() => {
+    if (!isParent || !parentD01.selectedChildId || parentD01.invalidChildId || childFromQuery === parentD01.selectedChildId) {
+      return;
+    }
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("child", parentD01.selectedChildId);
+    router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+  }, [
+    childFromQuery,
+    isParent,
+    parentD01.invalidChildId,
+    parentD01.selectedChildId,
+    pathname,
+    router,
+    searchParams,
+  ]);
 
   const resolvedSelectedChildId =
     visibleChildren.some((child) => child.id === selectedChildId) ? selectedChildId : defaultSelectedChildId;
@@ -236,10 +278,10 @@ export default function DietPage() {
     return { applicable, blocked, excluded };
   }, [bulkPreview]);
 
-  function saveMealRecord(meal: MealType, patch: Partial<MealRecord>) {
-    if (!selectedChild) return;
+  function saveMealRecord(meal: MealType, patch: Partial<MealRecord>): PersistAppSnapshotResult | null {
+    if (!selectedChild) return null;
     const existing = selectedChildMeals[meal];
-    upsertMealRecord({
+    const result = upsertMealRecord({
       childId: selectedChild.id,
       date: TODAY,
       meal,
@@ -252,6 +294,12 @@ export default function DietPage() {
       recordedBy: currentUser.name,
       recordedByRole: currentUser.role,
     });
+    if (result.status === "failed") {
+      toast.error("饮食记录保存失败", {
+        description: result.message,
+      });
+    }
+    return result;
   }
 
   async function runDietEvaluation(meal: MealType) {
@@ -307,16 +355,21 @@ export default function DietPage() {
       }
 
       const data = (await response.json()) as DietEvaluationResponse;
-      saveMealRecord(meal, {
+      const saveResult = saveMealRecord(meal, {
         aiEvaluation: {
           ...data.evaluation,
           generatedAt: new Date().toISOString(),
           model: data.model,
         },
       });
+      if (!saveResult || saveResult.status === "failed") {
+        return;
+      }
 
       toast.success("AI 营养建议已生成", {
-        description: `${meal}评分 ${data.evaluation.mealScore} 分（${data.source === "ai" ? "AI" : "规则兜底"}）。`,
+        description: `${meal}评分 ${data.evaluation.mealScore} 分（${data.source === "ai" ? "AI" : "规则兜底"}）。${
+          saveResult.status === "local_only" ? "已写入共享演示数据，刷新后保留。" : "已写入当前数据层，刷新后保留。"
+        }`,
       });
     } catch {
       toast.error("暂时无法生成建议，请稍后重试。");
@@ -373,8 +426,15 @@ export default function DietPage() {
       recordedByRole: currentUser.role,
     });
 
+    if (result.failed.length > 0) {
+      toast.error("批量录入部分失败", {
+        description: `成功 ${result.applied.length} 人，失败 ${result.failed.length} 人，拦截/排除 ${result.blocked.length} 人。`,
+      });
+      return;
+    }
+
     toast.success("批量录入已完成", {
-      description: `成功 ${result.applied.length} 人，拦截/排除 ${result.blocked.length} 人。`,
+      description: `成功 ${result.applied.length} 人，拦截/排除 ${result.blocked.length} 人。已写入共享演示数据，刷新后保留。`,
     });
   }
 
@@ -411,9 +471,17 @@ export default function DietPage() {
       }));
       setBulkFoods((prev) => [...prev, ...normalizedFoods]);
       setBulkVisionModel(data.model);
-      toast.success("识别成功", {
-        description: `已为你添加 ${normalizedFoods.length} 种食物，使用模型 ${data.model}。`,
-      });
+      const toastOptions = {
+        description:
+          data.source === "ai"
+            ? `已为你添加 ${normalizedFoods.length} 种食物，使用模型 ${data.model}。`
+            : `已为你添加 ${normalizedFoods.length} 种可编辑食物，来源为规则兜底结果。`,
+      };
+      if (data.source === "ai") {
+        toast.success("图片识别结果已加入待录入餐单", toastOptions);
+      } else {
+        toast.warning("已生成可编辑餐单草稿", toastOptions);
+      }
     } catch {
       toast.error("识别失败", {
         description: "抱歉，无法识别图片中的食物，请重试或手动添加。",
@@ -426,6 +494,163 @@ export default function DietPage() {
 
   function toggleExcludeChild(id: string) {
     setBulkExcludedChildIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  }
+
+  if (isParent) {
+    const parentChild = parentD01.selectedChild;
+    const parentMenus = [...(parentD01.parentHomeData?.nutritionMenus ?? [])].sort((left, right) => right.date.localeCompare(left.date));
+    const parentDietRecords = (parentD01.parentHomeData?.dailyRecords ?? [])
+      .filter((record) => record.type === "diet")
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    const latestMenu = parentMenus[0] ?? null;
+
+    if (parentD01.invalidChildId) {
+      return (
+        <div className="app-page flex min-h-[70vh] items-center justify-center page-enter">
+          <EmptyState
+            icon={<ShieldAlert className="h-6 w-6" />}
+            title="无法查看该孩子的营养餐谱"
+            description="当前家长账号没有该 childId 的授权，系统不会自动回退到其他孩子。"
+          />
+        </div>
+      );
+    }
+
+    if (!parentChild || !parentD01.parentHomeData) {
+      return (
+        <div className="app-page flex min-h-[70vh] items-center justify-center page-enter">
+          <EmptyState
+            icon={<Salad className="h-6 w-6" />}
+            title="暂无可查看的餐谱数据"
+            description="当前账号还没有关联孩子，或 D01 store 中没有餐谱/饮食记录。"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="app-page max-w-[76rem] page-enter">
+        <section className="mb-5 overflow-hidden rounded-2xl border border-emerald-100 bg-[linear-gradient(135deg,#ecfdf5_0%,#ffffff_50%,#fff7ed_100%)] p-4 shadow-[0_20px_58px_rgb(16_185_129_/_0.10)] sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="success" className="rounded-full px-3 py-1">
+                  {parentChild.name}
+                </Badge>
+                <Badge variant="secondary" className="rounded-full px-3 py-1">
+                  {parentChild.className}
+                </Badge>
+                <Badge variant="info" className="rounded-full px-3 py-1">
+                  D01 演示餐谱
+                </Badge>
+              </div>
+              <h1 className="mt-4 flex items-center gap-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                <ChefHat className="h-7 w-7 text-emerald-500" />
+                营养餐谱
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                按孩子所在班级和日期展示餐谱，并关联该孩子的饮食记录。没有后端餐谱时使用 D01 demo menu 明确标注为演示数据。
+              </p>
+            </div>
+            <Button type="button" variant="outline" className="rounded-2xl" onClick={() => router.push(`/parent?child=${parentChild.id}`)}>
+              返回首页
+            </Button>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <MetricCard label="餐谱天数" value={`${parentMenus.length} 天`} icon={<ChefHat className="h-5 w-5" />} tone="success" />
+            <MetricCard label="饮食记录" value={`${parentDietRecords.length} 条`} icon={<Salad className="h-5 w-5" />} tone="primary" />
+            <MetricCard label="最近餐谱" value={latestMenu?.date ? formatDisplayDate(latestMenu.date) : "暂无"} icon={<CheckCircle2 className="h-5 w-5" />} tone="info" />
+          </div>
+        </section>
+
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <Card className="rounded-lg">
+            <CardHeader>
+              <CardTitle className="text-lg">班级餐谱</CardTitle>
+              <CardDescription>只显示 {parentChild.className} 可见餐谱。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {parentMenus.length === 0 ? (
+                <EmptyState
+                  icon={<ChefHat className="h-6 w-6" />}
+                  title="暂无餐谱"
+                  description="D01 store 中当前班级还没有餐谱数据。"
+                />
+              ) : null}
+              {parentMenus.map((menu) => (
+                <article key={menu.menuId} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-slate-950">{formatDisplayDate(menu.date)}</p>
+                      <p className="mt-1 text-xs text-slate-500">班级：{menu.classId}</p>
+                    </div>
+                    <Badge variant="info">演示餐谱</Badge>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {Object.entries(menu.meals).map(([mealName, mealValue]) => (
+                      <div key={`${menu.menuId}-${mealName}`} className="rounded-2xl bg-emerald-50/60 p-3">
+                        <p className="text-sm font-semibold text-emerald-800">{mealName}</p>
+                        <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                          {formatMenuMealLines(mealValue).map((line, index) => (
+                            <li key={`${menu.menuId}-${mealName}-${index}`}>{line}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-lg">
+            <CardHeader>
+              <CardTitle className="text-lg">饮食记录关联</CardTitle>
+              <CardDescription>来自 D01 dailyRecords 的 diet 记录。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {parentDietRecords.length === 0 ? (
+                <EmptyState
+                  icon={<Salad className="h-6 w-6" />}
+                  title="暂无饮食记录"
+                  description="当前 childId 还没有老师录入的饮食记录。"
+                />
+              ) : null}
+              {parentDietRecords.slice(0, 8).map((record) => {
+                const payload = record.payload;
+                const meal = typeof payload.meal === "string" ? payload.meal : "餐次";
+                const waterMl = typeof payload.waterMl === "number" ? payload.waterMl : null;
+                const score = typeof payload.nutritionScore === "number" ? payload.nutritionScore : null;
+                const foods = Array.isArray(payload.foods) ? payload.foods : [];
+                return (
+                  <div key={record.recordId} className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-semibold text-slate-900">{record.createdAt} · {meal}</p>
+                      <Badge variant={score !== null && score >= 80 ? "success" : "secondary"}>{score === null ? "--" : `${score} 分`}</Badge>
+                    </div>
+                    <p className="mt-2 text-slate-500">饮水：{waterMl === null ? "--" : `${waterMl} ml`}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {foods.length === 0 ? <span className="text-xs text-slate-400">暂无食物明细</span> : null}
+                      {foods.map((food, index) => {
+                        const item = food && typeof food === "object" ? (food as Record<string, unknown>) : {};
+                        const name = typeof item.name === "string" ? item.name : `食物 ${index + 1}`;
+                        const amount = typeof item.amount === "string" ? item.amount : "";
+                        return (
+                          <span key={`${record.recordId}-food-${index}`} className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">
+                            {name}{amount ? ` · ${amount}` : ""}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -1072,7 +1297,7 @@ function MealEditorCard({
 }: {
   meal: MealType;
   record?: MealRecord;
-  onSave: (patch: Partial<MealRecord>) => void;
+  onSave: (patch: Partial<MealRecord>) => PersistAppSnapshotResult | null;
   onGenerateEvaluation: () => void;
   evaluating: boolean;
 }) {
@@ -1166,9 +1391,17 @@ function MealEditorCard({
       }));
       setVisionFoods(normalizedFoods);
       setVisionModel(data.model);
-      toast.success("图片识别完成", {
-        description: `识别到 ${normalizedFoods.length} 项食物，可继续修改后录入。`,
-      });
+      const toastOptions = {
+        description:
+          data.source === "ai"
+            ? `识别到 ${normalizedFoods.length} 项食物，可继续修改后录入。`
+            : `规则兜底生成 ${normalizedFoods.length} 项可编辑食物，请确认后再录入。`,
+      };
+      if (data.source === "ai") {
+        toast.success("图片识别结果已生成", toastOptions);
+      } else {
+        toast.warning("已生成可编辑识别草稿", toastOptions);
+      }
     } catch {
       toast.error("图片识别失败，请重试或改用手动录入。");
     } finally {
@@ -1191,7 +1424,7 @@ function MealEditorCard({
       return;
     }
 
-    onSave({
+    const saveResult = onSave({
       foods: [
         ...foods,
         ...cleaned.map((item) => ({
@@ -1204,12 +1437,17 @@ function MealEditorCard({
       allergyReaction,
       waterMl: Number(waterMl) || 0,
     });
+    if (!saveResult || saveResult.status === "failed") {
+      return;
+    }
     setVisionFoods([]);
-    toast.success("识别食物已录入本餐记录。");
+    toast.success("识别食物已录入本餐记录。", {
+      description: saveResult.status === "local_only" ? "已写入共享演示数据，刷新后保留。" : "已写入当前数据层，刷新后保留。",
+    });
   }
 
   return (
-    <Card className="rounded-lg border-slate-100 shadow-sm">
+    <Card className="rounded-lg border-slate-100 shadow-sm" data-testid={`meal-card-${meal}`}>
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -1284,7 +1522,7 @@ function MealEditorCard({
           <FormField label="摄入量">
             <div className="flex gap-2">
               <Input value={foodAmount} onChange={(event) => setFoodAmount(event.target.value)} placeholder="摄入量" />
-              <Button size="icon" variant="outline" onClick={() => addFood()} aria-label={`添加${meal}食物`}>
+              <Button size="icon" variant="outline" onClick={() => addFood()} aria-label={`添加${meal}食物`} data-testid={`add-food-${meal}`}>
                 <Plus className="h-4 w-4" />
               </Button>
             </div>

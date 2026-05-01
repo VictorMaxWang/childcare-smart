@@ -544,6 +544,11 @@
   font-weight: 800;
 }
 
+.forgotButton:disabled {
+  cursor: not-allowed;
+  color: #8a93ad;
+}
+
 .primaryButton {
   display: flex;
   width: 100%;

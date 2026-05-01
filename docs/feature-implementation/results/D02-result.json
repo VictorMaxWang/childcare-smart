@@ -1,0 +1,94 @@
+{
+  "taskId": "D02",
+  "title": "home-school-communication-loop",
+  "status": "complete",
+  "fixedFindingIds": [
+    "C10-002",
+    "C11-001",
+    "C13-001",
+    "C13-002",
+    "C13-003",
+    "C13-004",
+    "C13-005",
+    "C13-006",
+    "C15-001",
+    "C15-007",
+    "C20-002",
+    "C20-003",
+    "C23-001",
+    "C23-006"
+  ],
+  "remainingFindingIds": [],
+  "implemented": {
+    "parentSend": true,
+    "parentStructuredFeedbackWritesConversation": true,
+    "teacherView": true,
+    "teacherReply": true,
+    "parentSeeReplyAfterRefresh": true,
+    "directorSummary": true,
+    "directorMarkHandledPersistence": true,
+    "childClassIsolation": true,
+    "persistence": "D01 shared demo snapshot buckets: messages, conversations"
+  },
+  "backendStillNeeded": [
+    "GET conversations/messages with server-side institution, class, child, parent, and teacher scope checks",
+    "POST message send",
+    "POST teacher reply",
+    "POST mark message read",
+    "POST mark conversation handled",
+    "Attachment upload and attachment metadata APIs"
+  ],
+  "changedFiles": {
+    "added": [
+      "lib/communication/home-school.ts",
+      "lib/communication/home-school.test.ts",
+      "tests/bug-bash/d02-communication-loop.spec.ts"
+    ],
+    "modified": [
+      "lib/store.tsx",
+      "app/parent/agent/page.tsx",
+      "components/parent/ParentStructuredFeedbackComposer.tsx",
+      "app/teacher/agent/page.tsx",
+      "app/admin/page.tsx",
+      "components/admin/pixel-replica/DirectorDashboardReplica.tsx",
+      "app/health/page.tsx",
+      "docs/feature-implementation/results/D02-result.md",
+      "docs/feature-implementation/results/D02-result.json"
+    ]
+  },
+  "checks": {
+    "lint": {
+      "status": "passed",
+      "command": "npm run lint",
+      "notes": "Passed with existing warnings in app/parent/page.tsx and components/parent/useParentD01Data.ts."
+    },
+    "build": {
+      "status": "passed",
+      "command": "npm run build"
+    },
+    "unit": {
+      "status": "passed",
+      "command": "node --import ./scripts/register-test-path-loader.mjs --test ./lib/communication/home-school.test.ts"
+    },
+    "browserOrPlaywright": {
+      "status": "passed",
+      "command": "BUGBASH_BASE_URL=http://127.0.0.1:3332 npx playwright test tests/bug-bash/d02-communication-loop.spec.ts --config=playwright.bugbash.config.ts --project=chromium --reporter=line",
+      "screenshots": [
+        "artifacts/feature-implementation/D02/01-parent-send.png",
+        "artifacts/feature-implementation/D02/02-parent-refresh.png",
+        "artifacts/feature-implementation/D02/03-li-teacher-sees-parent.png",
+        "artifacts/feature-implementation/D02/04-li-teacher-reply.png",
+        "artifacts/feature-implementation/D02/05-li-teacher-reply-refresh.png",
+        "artifacts/feature-implementation/D02/06-zhou-class-isolation.png",
+        "artifacts/feature-implementation/D02/07-parent-sees-reply.png",
+        "artifacts/feature-implementation/D02/08-admin-summary-handled.png",
+        "artifacts/feature-implementation/D02/09-admin-summary-refresh.png"
+      ]
+    },
+    "bugbashSmoke": {
+      "status": "failed_infra_timeout",
+      "command": "npm run bugbash:smoke",
+      "notes": "Default run stopped because .next/dev/lock existed and 127.0.0.1:3330 was unreachable. Explicit BUGBASH_BASE_URL against a local next start reached the test but timed out at 720s with Playwright trace artifact ENOENT."
+    }
+  }
+}
