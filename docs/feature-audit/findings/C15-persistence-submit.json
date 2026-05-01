@@ -1,0 +1,704 @@
+[
+  {
+    "findingId": "C15-001",
+    "title": "家长端今晚反馈提交无真实写 API，demo 成功实际是本地设备状态",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "parent-feedback-submit",
+    "role": "parent",
+    "demoAccount": "林妈妈",
+    "route": "/parent/agent?child=c-1#feedback",
+    "viewport": "desktop",
+    "featureStatus": "not-persisted",
+    "userStory": "家长提交反馈后应持久化并同步给老师。",
+    "reproSteps": [
+      "填写反馈",
+      "点击提交今晚反馈",
+      "刷新",
+      "新上下文重登林妈妈",
+      "切换李老师查看沟通页"
+    ],
+    "expected": "提交请求 2xx，刷新/重登/老师端均可见。",
+    "actual": "提交阶段写 API：无；刷新同上下文 localStorage 未保留；新上下文 不可见；教师端 不可见。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C10-parent/parent-feedback-after-submit-2026-05-01T00-16-43-468Z.png",
+        "artifacts/feature-audit/C10-parent/teacher-after-parent-feedback-switch-2026-05-01T00-16-43-468Z.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width.",
+        "warning: Image with src \"/demo-meals/breakfast-sandwich-real.svg\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "POST /api/ai/suggestions net::ERR_ABORTED",
+        "POST /api/ai/weekly-report net::ERR_ABORTED",
+        "GET /parent?child=c-1&_rsc=ho1x0 net::ERR_ABORTED",
+        "POST /api/ai/parent-storybook net::ERR_ABORTED",
+        "GET /login?next=%2Fdiet&_rsc=vkpue net::ERR_ABORTED"
+      ],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/parent/agent/page.tsx",
+        "lib/store.tsx"
+      ],
+      "apiEndpoints": [
+        "/api/state (normal only; demo skipped)"
+      ],
+      "codeSignals": [
+        "persistAppSnapshotNow returns local_only for demo user"
+      ]
+    },
+    "dataPersistenceResult": "lost-after-refresh",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "实现 guardian feedback POST/GET，教师沟通页读取同一后端记录。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Browser Use node_repl failed before execution because system Node C:\\Program Files\\nodejs\\node.exe is v22.20.0; plugin requires >= v22.22.0. Audit executed with Playwright Chromium real-browser fallback against local dev server."
+  },
+  {
+    "findingId": "C15-002",
+    "title": "家长端稍后提醒/日常提醒标记没有提交按钮对应的远端持久化",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "parent-reminder-submit",
+    "role": "parent",
+    "demoAccount": "林妈妈",
+    "route": "/parent/agent?child=c-1#feedback",
+    "viewport": "desktop",
+    "featureStatus": "not-persisted",
+    "userStory": "家长标记提醒后应刷新保留并可被教师/任务流识别。",
+    "reproSteps": [
+      "进入反馈页",
+      "点击稍后提醒",
+      "刷新"
+    ],
+    "expected": "应有提醒状态 PATCH/POST，刷新保持。",
+    "actual": "稍后提醒只更新前端 reminders 状态，未观察到 /api 写请求；且函数未调用 persistAppSnapshotNow。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C10-parent/parent-feedback-after-submit-2026-05-01T00-16-43-468Z.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width.",
+        "warning: Image with src \"/demo-meals/breakfast-sandwich-real.svg\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "POST /api/ai/suggestions net::ERR_ABORTED",
+        "POST /api/ai/weekly-report net::ERR_ABORTED",
+        "GET /parent?child=c-1&_rsc=ho1x0 net::ERR_ABORTED",
+        "POST /api/ai/parent-storybook net::ERR_ABORTED",
+        "GET /login?next=%2Fdiet&_rsc=vkpue net::ERR_ABORTED"
+      ],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/parent/agent/page.tsx",
+        "lib/store.tsx"
+      ],
+      "apiEndpoints": [],
+      "codeSignals": [
+        "snoozeFamilyReminder -> updateReminderStatus only"
+      ]
+    },
+    "dataPersistenceResult": "lost-after-refresh",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "新增 reminder status update API，并在按钮处显示同步失败状态。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Browser Use node_repl failed before execution because system Node C:\\Program Files\\nodejs\\node.exe is v22.20.0; plugin requires >= v22.22.0. Audit executed with Playwright Chromium real-browser fallback against local dev server."
+  },
+  {
+    "findingId": "C15-003",
+    "title": "成长绘本重新生成/保存状态依赖 API + 本地缓存，缺少用户可见持久保存/分享提交",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "parent-storybook-submit",
+    "role": "parent",
+    "demoAccount": "林妈妈",
+    "route": "/parent/storybook?child=c-1",
+    "viewport": "desktop",
+    "featureStatus": "partial",
+    "userStory": "家长重新生成、保存或分享绘本后状态应持久化。",
+    "reproSteps": [
+      "进入成长绘本",
+      "点击重新生成",
+      "刷新页面"
+    ],
+    "expected": "生成结果应保存为可再次读取的后端版本，分享/保存可验证。",
+    "actual": "重新生成点击 成功触发；请求 POST /api/ai/parent-storybook -> 200；本地 storybook cache keys=0。未发现分享/保存提交按钮真实链路。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C10-parent/parent-storybook-after-regen-click-2026-05-01T00-16-43-468Z.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width.",
+        "warning: Image with src \"/demo-meals/breakfast-sandwich-real.svg\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "POST /api/ai/suggestions net::ERR_ABORTED",
+        "POST /api/ai/weekly-report net::ERR_ABORTED",
+        "GET /parent?child=c-1&_rsc=ho1x0 net::ERR_ABORTED",
+        "POST /api/ai/parent-storybook net::ERR_ABORTED",
+        "GET /login?next=%2Fdiet&_rsc=vkpue net::ERR_ABORTED"
+      ],
+      "networkRequests": [
+        "POST /api/ai/parent-storybook -> 200",
+        "GET /api/ai/parent-storybook/media/4a3a30a6441fda4b82ce117a876b4fef14fbb436 -> 200",
+        "GET /api/ai/parent-storybook/media/d1d783c9e67958fedeafecb39e03a6f81b837bdb -> 200",
+        "POST /api/ai/parent-storybook -> 200"
+      ],
+      "sourceFiles": [
+        "app/parent/storybook/page.tsx",
+        "components/parent/StoryBookViewer.tsx"
+      ],
+      "apiEndpoints": [
+        "/api/ai/parent-storybook"
+      ],
+      "codeSignals": [
+        "readParentStoryBookCache/persistParentStoryBookCache in client page"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "real-api",
+    "recommendedImplementation": "补后端 storybook version/save/share 接口并暴露保存结果。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": true,
+    "notes": "Browser Use node_repl failed before execution because system Node C:\\Program Files\\nodejs\\node.exe is v22.20.0; plugin requires >= v22.22.0. Audit executed with Playwright Chromium real-browser fallback against local dev server."
+  },
+  {
+    "findingId": "C15-004",
+    "title": "教师晨检记录保存显示成功但 demo 下没有真实持久化 API",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-health-save",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/health",
+    "viewport": "desktop",
+    "featureStatus": "fake-success",
+    "userStory": "教师保存晨检后应写入后端，刷新和换账号仍可见。",
+    "reproSteps": [
+      "李老师进入 /health",
+      "打开晨检弹窗",
+      "填写备注",
+      "保存记录",
+      "刷新"
+    ],
+    "expected": "应有健康记录写 API，刷新/重登持久化。",
+    "actual": "保存后页面提示 未捕获成功文案；写请求 无；localStorage 未含测试备注；刷新页面 正文未直接显示测试备注。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C15-persistence-submit/teacher-health-after-save-2026-05-01T00-16-43-468Z.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width.",
+        "GET /teacher?_rsc=5c339 net::ERR_ABORTED",
+        "POST /api/ai/weekly-report net::ERR_ABORTED"
+      ],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/health/page.tsx",
+        "lib/store.tsx"
+      ],
+      "apiEndpoints": [
+        "/api/state (normal only; demo not called)"
+      ],
+      "codeSignals": [
+        "handleSaveHealthCheck calls upsertHealthCheck and toast.success directly"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "实现 health-check save API；demo 本地保存应标注本地模式，避免成功提示误导。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Browser Use node_repl failed before execution because system Node C:\\Program Files\\nodejs\\node.exe is v22.20.0; plugin requires >= v22.22.0. Audit executed with Playwright Chromium real-browser fallback against local dev server."
+  },
+  {
+    "findingId": "C15-005",
+    "title": "教师饮食单餐/批量录入保存没有远端写入，成功 toast 可能误导",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-diet-save",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/diet",
+    "viewport": "desktop",
+    "featureStatus": "fake-success",
+    "userStory": "教师录入饮食后应持久化并可被家长/园长读取。",
+    "reproSteps": [
+      "李老师进入 /diet",
+      "尝试单餐保存和批量录入",
+      "观察网络和刷新"
+    ],
+    "expected": "应有 diet records 写 API；批量确认后跨角色可见。",
+    "actual": "单餐阶段写请求 无；批量阶段写请求 无；页面成功文案 未稳定出现；localStorage 未确认测试食物。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C15-persistence-submit/teacher-diet-after-single-save-2026-05-01T00-16-43-468Z.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width.",
+        "GET /teacher?_rsc=5c339 net::ERR_ABORTED",
+        "POST /api/ai/weekly-report net::ERR_ABORTED"
+      ],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/diet/page.tsx",
+        "lib/store.tsx"
+      ],
+      "apiEndpoints": [
+        "/api/ai/diet-evaluation (AI only, not record save)"
+      ],
+      "codeSignals": [
+        "saveMealRecord calls upsertMealRecord",
+        "confirmApplyBulkTemplate calls bulkApplyMealTemplate then toast.success"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "新增 meal record single/bulk save API，并将 AI 营养建议与餐次记录一起持久化。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Browser Use node_repl failed before execution because system Node C:\\Program Files\\nodejs\\node.exe is v22.20.0; plugin requires >= v22.22.0. Audit executed with Playwright Chromium real-browser fallback against local dev server."
+  },
+  {
+    "findingId": "C15-006",
+    "title": "教师成长记录保存仅写本地 store，没有真实 API",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-growth-save",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/growth",
+    "viewport": "desktop",
+    "featureStatus": "fake-success",
+    "userStory": "教师保存成长观察后应进入真实成长档案并同步给家长。",
+    "reproSteps": [
+      "李老师进入 /growth",
+      "填写描述",
+      "保存记录",
+      "刷新"
+    ],
+    "expected": "应有 growth record 写 API，刷新/重登/家长端可见。",
+    "actual": "保存后写请求 无；localStorage 未含测试成长记录；刷新正文 可见。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C15-persistence-submit/teacher-growth-after-save-2026-05-01T00-16-43-468Z.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width.",
+        "GET /teacher?_rsc=5c339 net::ERR_ABORTED",
+        "POST /api/ai/weekly-report net::ERR_ABORTED"
+      ],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/growth/page.tsx",
+        "lib/store.tsx"
+      ],
+      "apiEndpoints": [],
+      "codeSignals": [
+        "submitRecord calls addGrowthRecord then toast.success"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "实现 growth records POST/GET，并按 childId 权限同步到家长端。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Browser Use node_repl failed before execution because system Node C:\\Program Files\\nodejs\\node.exe is v22.20.0; plugin requires >= v22.22.0. Audit executed with Playwright Chromium real-browser fallback against local dev server."
+  },
+  {
+    "findingId": "C15-007",
+    "title": "教师家园沟通回复是本地 React 状态，刷新即丢失",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-communication-reply",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/teacher/agent?action=communication",
+    "viewport": "desktop",
+    "featureStatus": "not-persisted",
+    "userStory": "教师回复家长消息后应发送并持久化。",
+    "reproSteps": [
+      "打开教师沟通页",
+      "点击回复家长",
+      "输入安全测试回复",
+      "发送本地回复",
+      "刷新"
+    ],
+    "expected": "应有消息发送 API、发送中/失败/成功状态，刷新后仍在历史中。",
+    "actual": "发送阶段写请求 无；发送后页面 显示测试回复；刷新后 丢失。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C15-persistence-submit/teacher-communication-after-reply-2026-05-01T00-16-43-468Z.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width.",
+        "GET /teacher?_rsc=5c339 net::ERR_ABORTED",
+        "POST /api/ai/weekly-report net::ERR_ABORTED"
+      ],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/teacher/agent/page.tsx"
+      ],
+      "apiEndpoints": [],
+      "codeSignals": [
+        "sendCommunicationReply creates sentItem and setSentCommunicationItems only"
+      ]
+    },
+    "dataPersistenceResult": "lost-after-refresh",
+    "apiIntegrationResult": "no-api",
+    "recommendedImplementation": "实现 communication replies API 与消息状态机，刷新从后端读历史。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Browser Use node_repl failed before execution because system Node C:\\Program Files\\nodejs\\node.exe is v22.20.0; plugin requires >= v22.22.0. Audit executed with Playwright Chromium real-browser fallback against local dev server."
+  },
+  {
+    "findingId": "C15-008",
+    "title": "健康材料解析可以调用 AI 接口，但“归档完成/确认无误”没有真实保存动作",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-health-file-upload",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/teacher/health-file-bridge",
+    "viewport": "desktop",
+    "featureStatus": "partial",
+    "userStory": "教师上传健康材料解析后应核对并归档为健康档案。",
+    "reproSteps": [
+      "选择安全测试 PDF",
+      "填写说明",
+      "点击开始结构化解析",
+      "查看归档/待处理区"
+    ],
+    "expected": "解析后应有确认归档按钮和后端写入健康档案接口。",
+    "actual": "解析请求 POST /api/ai/health-file-bridge -> 200；页面出现 确认无误，归档文案，但未发现可点击归档提交按钮或保存请求。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C15-persistence-submit/teacher-health-file-after-parse-2026-05-01T00-16-43-468Z.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width.",
+        "GET /teacher?_rsc=5c339 net::ERR_ABORTED",
+        "POST /api/ai/weekly-report net::ERR_ABORTED"
+      ],
+      "networkRequests": [
+        "POST /api/ai/health-file-bridge -> 200"
+      ],
+      "sourceFiles": [
+        "app/teacher/health-file-bridge/page.tsx",
+        "app/api/ai/health-file-bridge/route.ts"
+      ],
+      "apiEndpoints": [
+        "/api/ai/health-file-bridge"
+      ],
+      "codeSignals": [
+        "handleSubmit only setResult(body)",
+        "归档完成 is progress display, no archive handler"
+      ]
+    },
+    "dataPersistenceResult": "no-submit",
+    "apiIntegrationResult": "real-api",
+    "recommendedImplementation": "在解析结果后增加人工确认归档动作，写入 health document/health record 后端表。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Browser Use node_repl failed before execution because system Node C:\\Program Files\\nodejs\\node.exe is v22.20.0; plugin requires >= v22.22.0. Audit executed with Playwright Chromium real-browser fallback against local dev server."
+  },
+  {
+    "findingId": "C15-009",
+    "title": "高风险会诊生成结果写入本地 store，跨角色同步声明缺少真实持久化证据",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-high-risk-consultation",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/teacher/high-risk-consultation",
+    "viewport": "desktop",
+    "featureStatus": "partial",
+    "userStory": "教师发起会诊后，结果应同步教师、家长、园长并持久化。",
+    "reproSteps": [
+      "打开高风险会诊",
+      "填写补充说明",
+      "点击一键生成会诊",
+      "观察网络和后续提醒"
+    ],
+    "expected": "会诊完成后应有持久化写入和跨角色读取证据。",
+    "actual": "会诊请求 POST /api/ai/high-risk-consultation/stream -> 200；页面文案 声称已同步三端；后续提醒点击后没有观察到写 API。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C15-persistence-submit/teacher-consultation-after-generate-2026-05-01T00-16-43-468Z.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width.",
+        "GET /teacher?_rsc=5c339 net::ERR_ABORTED",
+        "POST /api/ai/weekly-report net::ERR_ABORTED"
+      ],
+      "networkRequests": [
+        "POST /api/ai/high-risk-consultation/stream -> 200"
+      ],
+      "sourceFiles": [
+        "app/teacher/high-risk-consultation/page.tsx",
+        "lib/store.tsx"
+      ],
+      "apiEndpoints": [
+        "/api/ai/high-risk-consultation/stream",
+        "/api/ai/high-risk-consultation"
+      ],
+      "codeSignals": [
+        "done handler calls upsertConsultation/upsertInterventionCard/upsertReminder local store",
+        "message says synced across roles"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "real-api",
+    "recommendedImplementation": "会诊完成后调用 consultation persistence API，并让园长/家长端从同一后端读取。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Browser Use node_repl failed before execution because system Node C:\\Program Files\\nodejs\\node.exe is v22.20.0; plugin requires >= v22.22.0. Audit executed with Playwright Chromium real-browser fallback against local dev server."
+  },
+  {
+    "findingId": "C15-010",
+    "title": "园长 AI 建议可请求但建议处理/派单依赖通知事件后端，可用性不稳定",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "director-ai-dispatch",
+    "role": "director",
+    "demoAccount": "陈园长",
+    "route": "/admin/agent",
+    "viewport": "desktop",
+    "featureStatus": "partial",
+    "userStory": "园长处理 AI 建议/风险项后应生成派单并可更新状态。",
+    "reproSteps": [
+      "陈园长进入 /admin/agent",
+      "触发建议/派单/处理按钮",
+      "观察 notification-events 请求"
+    ],
+    "expected": "派单创建和状态更新应走真实后端并刷新保留。",
+    "actual": "AI/建议请求 无；派单/处理请求 无；页面 显示通知派单暂不可用。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C15-persistence-submit/director-agent-after-action-2026-05-01T00-16-43-468Z.png",
+        "artifacts/feature-audit/C15-persistence-submit/director-dispatch-after-click-2026-05-01T00-16-43-468Z.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "GET /api/ai/high-risk-consultation/feed?limit=4&escalated_only=true net::ERR_ABORTED",
+        "POST /api/ai/weekly-report net::ERR_ABORTED"
+      ],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/admin/agent/page.tsx",
+        "lib/agent/use-admin-consultation-workspace.ts",
+        "app/api/admin/notification-events/route.ts"
+      ],
+      "apiEndpoints": [
+        "/api/ai/admin-agent",
+        "/api/admin/notification-events"
+      ],
+      "codeSignals": [
+        "createNotification/updateNotificationStatus depend on notification-events backend",
+        "GET/POST/PATCH can return unavailable response on DB config errors"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "unknown",
+    "recommendedImplementation": "确保 notification-events 本地/演示环境有可写持久层，并在 UI 上区分派单不可用与成功。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Browser Use node_repl failed before execution because system Node C:\\Program Files\\nodejs\\node.exe is v22.20.0; plugin requires >= v22.22.0. Audit executed with Playwright Chromium real-browser fallback against local dev server."
+  },
+  {
+    "findingId": "C15-011",
+    "title": "园长周报可生成/刷新但没有保存为周报记录的提交链路",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "director-weekly-report-save",
+    "role": "director",
+    "demoAccount": "陈园长",
+    "route": "/admin/agent?action=weekly-report",
+    "viewport": "desktop",
+    "featureStatus": "partial",
+    "userStory": "园长生成周报后应能保存、复查和再次打开历史周报。",
+    "reproSteps": [
+      "进入周报分析",
+      "点击生成/重新生成",
+      "刷新页面"
+    ],
+    "expected": "周报生成后应保存到后端并支持历史读取。",
+    "actual": "周报阶段请求 POST /api/ai/admin-agent -> 200；页面有周报内容/规则兜底，但未发现保存周报按钮或持久化请求。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C15-persistence-submit/director-weekly-after-generate-2026-05-01T00-16-43-468Z.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "GET /api/ai/high-risk-consultation/feed?limit=4&escalated_only=true net::ERR_ABORTED",
+        "POST /api/ai/weekly-report net::ERR_ABORTED"
+      ],
+      "networkRequests": [
+        "POST /api/ai/admin-agent -> 200"
+      ],
+      "sourceFiles": [
+        "app/admin/agent/page.tsx",
+        "app/api/ai/weekly-report/route.ts"
+      ],
+      "apiEndpoints": [
+        "/api/ai/weekly-report"
+      ],
+      "codeSignals": [
+        "weekly report generation is AI route result, no save handler observed"
+      ]
+    },
+    "dataPersistenceResult": "no-submit",
+    "apiIntegrationResult": "real-api",
+    "recommendedImplementation": "明确周报是否需要归档；若需要，新增 weekly reports save/list API。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": true,
+    "notes": "Browser Use node_repl failed before execution because system Node C:\\Program Files\\nodejs\\node.exe is v22.20.0; plugin requires >= v22.22.0. Audit executed with Playwright Chromium real-browser fallback against local dev server."
+  },
+  {
+    "findingId": "C15-012",
+    "title": "幼儿档案新增显示保存成功但 demo 下仅本地持久化，编辑功能未开放",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "shared-children-create-edit",
+    "role": "shared",
+    "demoAccount": "陈园长",
+    "route": "/children",
+    "viewport": "desktop",
+    "featureStatus": "fake-success",
+    "userStory": "管理员新增/编辑幼儿档案后应真实保存，刷新和相关角色可见。",
+    "reproSteps": [
+      "陈园长进入 /children",
+      "点击新增幼儿档案",
+      "填写安全测试幼儿",
+      "保存档案",
+      "打开删除确认但不确认"
+    ],
+    "expected": "新增/编辑应有后端写 API；删除应二次确认；编辑可用。",
+    "actual": "新增阶段写请求 无；页面 未稳定显示新增幼儿；localStorage 未确认。删除确认弹窗已打开但未点击最终删除；详情里显示“编辑档案（暂未开放）”。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C15-persistence-submit/director-children-after-add-2026-05-01T00-16-43-468Z.png",
+        "artifacts/feature-audit/C15-persistence-submit/director-children-delete-modal-not-confirmed-2026-05-01T00-16-43-468Z.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "GET /api/ai/high-risk-consultation/feed?limit=4&escalated_only=true net::ERR_ABORTED",
+        "POST /api/ai/weekly-report net::ERR_ABORTED"
+      ],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/children/page.tsx",
+        "lib/store.tsx"
+      ],
+      "apiEndpoints": [
+        "/api/state (normal only; demo not called)"
+      ],
+      "codeSignals": [
+        "handleSubmit calls addChild then toast.success",
+        "edit button text is 暂未开放",
+        "delete action is destructive and was not confirmed"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "新增 children create/update APIs；启用编辑表单；demo 本地保存明确标识。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Browser Use node_repl failed before execution because system Node C:\\Program Files\\nodejs\\node.exe is v22.20.0; plugin requires >= v22.22.0. Audit executed with Playwright Chromium real-browser fallback against local dev server."
+  },
+  {
+    "findingId": "C15-013",
+    "title": "共享健康/成长/饮食表单共用本地 store 保存模型，缺少统一提交持久化层",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "shared-record-forms",
+    "role": "shared",
+    "demoAccount": "李老师",
+    "route": "/health; /growth; /diet",
+    "viewport": "desktop",
+    "featureStatus": "fake-success",
+    "userStory": "表单、弹窗、抽屉内提交按钮应真实保存并跨角色读取。",
+    "reproSteps": [
+      "分别在 /health、/growth、/diet 执行保存",
+      "记录网络",
+      "刷新页面"
+    ],
+    "expected": "每类记录有独立写 API 或统一记录 API，错误态明确。",
+    "actual": "三个页面保存阶段均未观察到业务记录写 API：health=无；growth=无；diet=无。成功 toast 先出现，本地存储承担持久化。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C15-persistence-submit/teacher-health-after-save-2026-05-01T00-16-43-468Z.png",
+        "artifacts/feature-audit/C15-persistence-submit/teacher-growth-after-save-2026-05-01T00-16-43-468Z.png",
+        "artifacts/feature-audit/C15-persistence-submit/teacher-diet-after-single-save-2026-05-01T00-16-43-468Z.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width.",
+        "GET /teacher?_rsc=5c339 net::ERR_ABORTED",
+        "POST /api/ai/weekly-report net::ERR_ABORTED"
+      ],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/health/page.tsx",
+        "app/growth/page.tsx",
+        "app/diet/page.tsx",
+        "lib/store.tsx"
+      ],
+      "apiEndpoints": [],
+      "codeSignals": [
+        "upsertHealthCheck/addGrowthRecord/upsertMealRecord are in-memory state setters",
+        "demo persistAppSnapshotNow skips remote /api/state"
+      ]
+    },
+    "dataPersistenceResult": "persisted",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "抽象统一 record persistence layer；保存按钮按 API 结果展示成功/失败，并增加刷新/跨角色 E2E。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Browser Use node_repl failed before execution because system Node C:\\Program Files\\nodejs\\node.exe is v22.20.0; plugin requires >= v22.22.0. Audit executed with Playwright Chromium real-browser fallback against local dev server."
+  }
+]

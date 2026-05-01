@@ -1,0 +1,329 @@
+{
+  "auditId": "C21",
+  "title": "数据模型、权限、参数、角色隔离扫描",
+  "generatedAt": "2026-05-01",
+  "findings": [
+  {
+    "findingId": "C21-001",
+    "severity": "F0",
+    "featureStatus": "permission-incomplete",
+    "title": "Teacher and high-risk AI APIs trust client supplied role and child scope",
+    "risk": "A caller can post arbitrary currentUser, visibleChildren, and targetChildId payloads to teacher-agent or high-risk consultation endpoints. The local fallback path builds class and child context from the request body instead of a server-derived teacher session, so class isolation can be bypassed if the brain proxy is unavailable or returns no response.",
+    "affectedAreas": ["teacher", "consultation", "role guard", "class isolation"],
+    "evidence": {
+      "sourceFiles": [
+        {
+          "file": "app/api/ai/teacher-agent/route.ts",
+          "lineStart": 35,
+          "lineEnd": 70,
+          "notes": "Validation only checks payload shape, including currentUser and visibleChildren, then builds context from the payload."
+        },
+        {
+          "file": "app/api/ai/high-risk-consultation/route.ts",
+          "lineStart": 30,
+          "lineEnd": 90,
+          "notes": "Validation accepts targetChildId, currentUser, and visibleChildren from the request body before resolving child context."
+        },
+        {
+          "file": "lib/agent/teacher-agent.ts",
+          "lineStart": 307,
+          "lineEnd": 431,
+          "notes": "Class context uses payload.visibleChildren as the authorized child set."
+        }
+      ]
+    },
+    "recommendedImplementation": "Add server-side teacher route guard helpers that load getCurrentSessionUser, require role=teacher, load the institution snapshot on the server, scope it through filterChildrenForSessionUser, and reject targetChildId values not in that class-scoped set. Do not accept currentUser or visibleChildren as authority from the client."
+  },
+  {
+    "findingId": "C21-002",
+    "severity": "F0",
+    "featureStatus": "permission-incomplete",
+    "title": "Admin AI endpoints do not require an admin session before using institution payload",
+    "risk": "Admin agent and admin-quality endpoints can be invoked without a server-side admin role check. The admin-agent fallback path validates only request shape and builds institution-wide priority data from client-provided visibleChildren and records.",
+    "affectedAreas": ["admin", "director", "role guard", "institution scope"],
+    "evidence": {
+      "sourceFiles": [
+        {
+          "file": "app/api/ai/admin-agent/route.ts",
+          "lineStart": 38,
+          "lineEnd": 57,
+          "notes": "Payload validation accepts currentUser, visibleChildren, and operational records from the client."
+        },
+        {
+          "file": "app/api/ai/admin-agent/route.ts",
+          "lineStart": 151,
+          "lineEnd": 190,
+          "notes": "POST parses payload and calls forwardBrainRequest/buildAdminAgentContext without getCurrentSessionUser."
+        },
+        {
+          "file": "app/api/ai/admin-quality-metrics/route.ts",
+          "lineStart": 20,
+          "lineEnd": 42,
+          "notes": "Endpoint forwards/falls back without an admin session guard."
+        }
+      ]
+    },
+    "recommendedImplementation": "Add a reusable requireAdminSession guard for all director/admin AI APIs. Build admin visibleChildren and records from server-scoped institution state, or verify the submitted payload exactly matches the server-authorized institution scope before using it."
+  },
+  {
+    "findingId": "C21-003",
+    "severity": "F0",
+    "featureStatus": "permission-incomplete",
+    "title": "Parent storybook API lacks child access guard and allows demoSeed fallback before authorization",
+    "risk": "The storybook POST route does not call requireParentChildAccess. A request with requestSource starting parent-storybook-demo-seed: returns a local demo story before any parent/child authorization, mixing demo seed behavior into the real API surface.",
+    "affectedAreas": ["parent", "storybook", "demoSeed", "child isolation"],
+    "evidence": {
+      "sourceFiles": [
+        {
+          "file": "app/api/ai/parent-storybook/route.ts",
+          "lineStart": 181,
+          "lineEnd": 183,
+          "notes": "Demo seed requests are identified by requestSource prefix."
+        },
+        {
+          "file": "app/api/ai/parent-storybook/route.ts",
+          "lineStart": 237,
+          "lineEnd": 277,
+          "notes": "Route parses the body and returns demo seed fallback without requireParentChildAccess."
+        },
+        {
+          "file": "lib/agent/parent-storybook-demo-seeds.ts",
+          "lineStart": 590,
+          "lineEnd": 596,
+          "notes": "Default demo seed is tied to u-parent and c-1."
+        }
+      ]
+    },
+    "recommendedImplementation": "Call requireParentChildAccess(payload.childId) before cache lookup, demoSeed handling, or brain forwarding. Restrict demoSeed execution to authenticated demo accounts and ensure demo responses cannot be requested for non-demo parent sessions."
+  },
+  {
+    "findingId": "C21-004",
+    "severity": "F0",
+    "featureStatus": "permission-incomplete",
+    "title": "Health file bridge and teacher voice APIs accept childId without server scope validation",
+    "risk": "Health-file writeback and teacher voice endpoints consume childId directly from JSON/form data. Without a server-derived teacher/admin/parent scope check, a caller can attach file analysis or voice-derived data to a child outside the current account's authorized class or family.",
+    "affectedAreas": ["health", "teacher", "child selector", "writeback"],
+    "evidence": {
+      "sourceFiles": [
+        {
+          "file": "app/api/ai/health-file-bridge/route.ts",
+          "lineStart": 111,
+          "lineEnd": 116,
+          "notes": "Writeback uses payload.childId."
+        },
+        {
+          "file": "app/api/ai/health-file-bridge/route.ts",
+          "lineStart": 152,
+          "lineEnd": 185,
+          "notes": "POST parses payload and returns bridge response without session scope guard."
+        },
+        {
+          "file": "app/api/ai/teacher-voice-understand/route.ts",
+          "lineStart": 40,
+          "lineEnd": 81,
+          "notes": "Form data childId is accepted into teacher voice context."
+        },
+        {
+          "file": "app/api/ai/teacher-voice-upload/route.ts",
+          "lineStart": 16,
+          "lineEnd": 62,
+          "notes": "Upload endpoint forwards childId and targetRole from form data."
+        }
+      ]
+    },
+    "recommendedImplementation": "Introduce scoped child validation for every endpoint that accepts childId. For teacher routes, require role=teacher and validate childId against the server-scoped class children; for parent routes, reuse requireParentChildAccess; for admin routes, validate institutionId membership."
+  },
+  {
+    "findingId": "C21-005",
+    "severity": "F1",
+    "featureStatus": "hardcoded-id-risk",
+    "title": "Parent navigation falls back to hard-coded childId c-1",
+    "risk": "Parent navigation and mobile tabs default to c-1 when currentUser.childIds is missing. A normal parent account with a different child, or a transient session load state, can receive URLs containing the demo child id and cause confusing or unauthorized-looking child parameters.",
+    "affectedAreas": ["parent", "menu config", "child selector", "query"],
+    "evidence": {
+      "sourceFiles": [
+        {
+          "file": "lib/navigation/primary-nav.ts",
+          "lineStart": 36,
+          "lineEnd": 69,
+          "notes": "DEFAULT_PARENT_CHILD_ID is c-1 and parentPath appends child query."
+        },
+        {
+          "file": "components/Navbar.tsx",
+          "lineStart": 212,
+          "lineEnd": 219,
+          "notes": "Shell nav uses currentUser.childIds?.[0] ?? c-1."
+        },
+        {
+          "file": "components/MobileNav.tsx",
+          "lineStart": 64,
+          "lineEnd": 72,
+          "notes": "Mobile drawer uses currentUser.childIds?.[0] ?? c-1."
+        },
+        {
+          "file": "components/Navbar.tsx",
+          "lineStart": 554,
+          "lineEnd": 568,
+          "notes": "Mobile bottom tab builder defaults childId to c-1."
+        }
+      ]
+    },
+    "recommendedImplementation": "Remove c-1 as a global parent fallback. Build parent nav from the scoped parent feed or authenticated childIds only; omit child query until a valid child is known, or redirect to a child selector/error state when no authorized child exists."
+  },
+  {
+    "findingId": "C21-006",
+    "severity": "F1",
+    "featureStatus": "permission-incomplete",
+    "title": "Shared record routes rely on UI gating and scoped client state instead of route-level role policy",
+    "risk": "/children, /health, /growth, and /diet are treated as shared protected paths with no required role. Individual pages hide or disable actions based on currentUser.role, but route-access does not define which roles can read or mutate each shared workflow.",
+    "affectedAreas": ["teacher", "admin", "director", "shared pages", "role guard"],
+    "evidence": {
+      "sourceFiles": [
+        {
+          "file": "lib/auth/route-access.ts",
+          "lineStart": 10,
+          "lineEnd": 13,
+          "notes": "Shared protected paths are known app paths."
+        },
+        {
+          "file": "lib/auth/route-access.ts",
+          "lineStart": 29,
+          "lineEnd": 53,
+          "notes": "getRequiredRoleForPath returns null for shared record routes."
+        },
+        {
+          "file": "app/children/page.tsx",
+          "lineStart": 75,
+          "lineEnd": 83,
+          "notes": "Management permission is decided in UI with currentUser.role."
+        },
+        {
+          "file": "app/health/page.tsx",
+          "lineStart": 232,
+          "lineEnd": 249,
+          "notes": "Parent restriction is rendered as a page-level permission state."
+        }
+      ]
+    },
+    "recommendedImplementation": "Define explicit route-level and action-level policy for each shared page. Separate read permission from mutation permission, and enforce mutation scope in server/API paths rather than only disabling buttons or filtering visibleChildren on the client."
+  },
+  {
+    "findingId": "C21-007",
+    "severity": "F1",
+    "featureStatus": "data-model-incomplete",
+    "title": "Class and account scope use className/childIds but lack stable classId teacherId parentId relationships",
+    "risk": "SessionUser and snapshot scoping do not model stable classId, teacherId, or parentId relationships. Teacher scope compares className strings, and parent scope relies on childIds/parentUserId, which is fragile for renamed classes, duplicate class names, or multi-teacher/multi-parent assignments.",
+    "affectedAreas": ["data model", "teacher", "parent", "class selector", "role isolation"],
+    "evidence": {
+      "sourceFiles": [
+        {
+          "file": "lib/auth/accounts.ts",
+          "lineStart": 6,
+          "lineEnd": 14,
+          "notes": "SessionUser has className and childIds, but no classId, teacherId, or parentId relation model."
+        },
+        {
+          "file": "lib/persistence/state-scope.ts",
+          "lineStart": 21,
+          "lineEnd": 40,
+          "notes": "Teacher scope uses child.className === user.className; parent scope uses childIds or parentUserId."
+        },
+        {
+          "file": "lib/auth/accounts.ts",
+          "lineStart": 39,
+          "lineEnd": 81,
+          "notes": "Demo institution/user/parent childIds are hard-coded for the seed account set."
+        }
+      ]
+    },
+    "recommendedImplementation": "Add stable institutionId/classId/userId relationship tables or snapshot fields. Scope teacher access by classId membership and parent access by parent-child binding records; keep className as display text only."
+  },
+  {
+    "findingId": "C21-008",
+    "severity": "F2",
+    "featureStatus": "parameter-passing-incomplete",
+    "title": "Client login redirect preserves query but can drop hash fragments",
+    "risk": "sanitizeNextPath and resolveAuthorizedRedirectPath preserve hash when next is present, but the client-side unauthenticated redirect in AppShell builds next from pathname and search only. Hash-driven targets such as parent feedback can be lost during that path.",
+    "affectedAreas": ["login next", "query/hash", "feedback"],
+    "evidence": {
+      "sourceFiles": [
+        {
+          "file": "components/Navbar.tsx",
+          "lineStart": 147,
+          "lineEnd": 154,
+          "notes": "Unauthenticated client redirect uses window.location.pathname + window.location.search, omitting window.location.hash."
+        },
+        {
+          "file": "lib/auth/route-access.ts",
+          "lineStart": 74,
+          "lineEnd": 111,
+          "notes": "sanitizeNextPath can preserve hash if it is included in next."
+        },
+        {
+          "file": "app/parent/agent/page.tsx",
+          "lineStart": 359,
+          "lineEnd": 370,
+          "notes": "Parent agent preserves hash when normalizing child query, so the loss is isolated to login redirect construction."
+        }
+      ]
+    },
+    "recommendedImplementation": "When AppShell builds next for unauthenticated users, include window.location.hash. Add regression coverage for /parent/agent?child=<id>#feedback through login."
+  },
+  {
+    "findingId": "C21-009",
+    "severity": "F1",
+    "featureStatus": "demo-seed-risk",
+    "title": "High-risk consultation feed exposes demo fallback without session scoped filtering",
+    "risk": "The consultation feed endpoint returns demo feed items when the brain response is empty or unavailable. The fallback does not derive scope from the current session, so demo high-risk child data can appear in real API responses.",
+    "affectedAreas": ["admin", "teacher", "consultation", "demoSeed"],
+    "evidence": {
+      "sourceFiles": [
+        {
+          "file": "app/api/ai/high-risk-consultation/feed/route.ts",
+          "lineStart": 14,
+          "lineEnd": 23,
+          "notes": "Fallback feed is built from demo consultations using query limit/escalated_only."
+        },
+        {
+          "file": "app/api/ai/high-risk-consultation/feed/route.ts",
+          "lineStart": 34,
+          "lineEnd": 61,
+          "notes": "Demo fallback is returned when remote feed is empty or unavailable."
+        }
+      ]
+    },
+    "recommendedImplementation": "Require an admin/teacher session and filter fallback/feed items to the server-authorized institution/class. In non-demo accounts, return an empty scoped result or 503 instead of demo children."
+  },
+  {
+    "findingId": "C21-010",
+    "severity": "F2",
+    "featureStatus": "scope-positive-with-gaps",
+    "title": "State snapshot and localStorage have useful account scoping but should not be treated as full authorization",
+    "risk": "The state API scopes snapshots by session user, and localStorage keys include normal/demo namespace. This reduces accidental local data pollution, but other APIs still bypass the same server-side scope model.",
+    "affectedAreas": ["localStorage", "state", "role isolation"],
+    "evidence": {
+      "sourceFiles": [
+        {
+          "file": "app/api/state/route.ts",
+          "lineStart": 30,
+          "lineEnd": 62,
+          "notes": "GET loads current session user and scopes snapshot before returning."
+        },
+        {
+          "file": "app/api/state/route.ts",
+          "lineStart": 77,
+          "lineEnd": 130,
+          "notes": "PUT rejects demo writes and merges incoming data through mergeScopedSnapshotForSessionUser."
+        },
+        {
+          "file": "lib/store.tsx",
+          "lineStart": 4480,
+          "lineEnd": 4485,
+          "notes": "Local storage namespace includes account kind, institution, role, and user id."
+        }
+      ]
+    },
+    "recommendedImplementation": "Keep the existing snapshot/localStorage scoping, and reuse the same session-derived scope checks in AI and writeback routes. Do not rely on localStorage namespace as an authorization boundary."
+  }
+  ]
+}

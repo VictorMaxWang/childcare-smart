@@ -1,0 +1,716 @@
+[
+  {
+    "findingId": "C14-001",
+    "title": "健康材料解析有文件控件但不上传二进制，只把文件元数据和预览文字送入 mock/fallback 解析",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "health-material-parser",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/teacher/health-file-bridge",
+    "viewport": "desktop",
+    "featureStatus": "mock-only",
+    "userStory": "作为教师，我希望上传健康材料后系统真实解析图片/PDF，并保存可复核结果。",
+    "reproSteps": [
+      "李老师登录后进入 /teacher/health-file-bridge",
+      "空提交验证错误态",
+      "选择合成 PDF 文件并填写 OCR 预览",
+      "点击开始结构化解析",
+      "刷新页面复核结果是否保留"
+    ],
+    "expected": "应上传真实文件二进制或文件 URL 到后端 upload/parse API，解析结果可保存，刷新后可按 childId 查询。",
+    "actual": "文件控件存在 accept=image/*,.pdf|image/*,.pdf; 空提交提示=true; 提交请求为 POST /api/ai/health-file-bridge -> 200 (next-json-fallback) reason=brain-fetch-typeerror。请求体只包含 name/mimeType/sizeBytes/previewText，没有真实文件内容。刷新后解析结果消失。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C14-health-materials/02-health-file-before-upload.png",
+        "artifacts/feature-audit/C14-health-materials/03-health-file-empty-submit-error.png",
+        "artifacts/feature-audit/C14-health-materials/04-health-file-after-parse.png",
+        "artifacts/feature-audit/C14-health-materials/05-health-file-after-refresh.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: Image with src \"/pixel-replica/visual-cards/director-ai-decoration-card.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading"
+      ],
+      "networkRequests": [
+        {
+          "label": "C14-health-materials",
+          "method": "POST",
+          "url": "/api/ai/health-file-bridge",
+          "status": 200,
+          "transport": "next-json-fallback",
+          "target": "/api/v1/agents/health-file-bridge",
+          "fallbackReason": "brain-fetch-typeerror",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": "{\"childId\":\"c-1\",\"sourceRole\":\"teacher\",\"files\":[{\"fileId\":\"1d3d2f1c-6024-4d9e-8491-ca2664a5eb09\",\"name\":\"c14-synthetic-health-note.pdf\",\"mimeType\":\"application/pdf\",\"sizeBytes\":91,\"previewText\":\"C14 合成材料：体温 38.1℃，建议明早复查，未包含可执行用药授权。\",\"meta\":{\"lastModified\":1777593576860}}],\"requestSource\":\"teacher-health-file-bridge-page\",\"optionalNotes\":\"C14 审计补充：只使用合成材料，不含真实儿童或医疗信息。\"}"
+        }
+      ],
+      "sourceFiles": [
+        "app/teacher/health-file-bridge/page.tsx",
+        "app/api/ai/health-file-bridge/route.ts",
+        "lib/agent/health-file-bridge.ts",
+        "backend/app/services/health_file_bridge_service.py"
+      ],
+      "apiEndpoints": [
+        "/api/ai/health-file-bridge",
+        "/api/v1/agents/health-file-bridge",
+        "/api/v1/memory/health-file-bridge-writeback"
+      ],
+      "codeSignals": [
+        "toUploadMeta 只构造 fileId/name/mimeType/sizeBytes/previewText",
+        "Next route 在 brain 不可用时返回 fallback:true,mock:true,liveReadyButNotVerified:true",
+        "backend service disclaimer 明确不做 verified binary OCR 或 diagnosis/writeback"
+      ]
+    },
+    "dataPersistenceResult": "lost-after-refresh",
+    "apiIntegrationResult": "mock-only",
+    "recommendedImplementation": "新增真实文件 upload API 与解析作业 API，保存解析结果到 child health material 表；当前 fallback 结果必须标注演示，不应写入真实健康数据。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "healthSubmitClicked=true; afterTextSample=智慧托育平台 普惠托育智慧管理平台 教师工作台 AI 助手 风险会诊 健康材料 幼儿档案 晨检与健康 成长行为 6 👩‍🏫 李老师 向阳班 教师端 退出 2 教师端 健康材料整理 / 外部健康材料解析 健康材料解析 上传外部健康材料，先提取事实、风险和后续提醒，再由老师完成核对与归档。 返回教师工作台 AI 智能解析 拖拽文件到此处，或点击上传 支持 JPG、PNG、PDF，单次最多 10 个文件，大小不超过 20MB 最近上传记录 全部文件 c14-synthetic-health-note.pdf application/pdf · 91 B 本地兜底结果 解析与核对流程 1 上传材料 选择或拖拽健康材料 2 AI 解析 提取关键信息 3 人工核对 确认信息准确性 4 归档完成 生成健康档案 👦 林小; refreshTextSample=智慧托育平台 普惠托育智慧管理平台 教师工作台 AI 助手 风险会诊 健康材料 幼儿档案 晨检与健康 成长行为 6 👩‍🏫 李老师 向阳班 教师端 退出 2 教师端 健康材料整理 / 外部健康材料解析 健康材料解析 上传外部健康材料，先提取事实、风险和后续提醒，再由老师完成核对与归档。 返回教师工作台 AI 智能解析 拖拽文件到此处，或点击上传 支持 JPG、PNG、PDF，单次最多 10 个文件，大小不超过 20MB 最近上传记录"
+  },
+  {
+    "findingId": "C14-002",
+    "title": "高风险会诊可生成结果但同步提示超出实际能力，结果只进入本地 demo 状态",
+    "severity": "F0",
+    "status": "open",
+    "featureArea": "high-risk-consultation",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/teacher/high-risk-consultation",
+    "viewport": "desktop",
+    "featureStatus": "fake-success",
+    "userStory": "作为教师，我希望发起高风险会诊后，结果真实保存并同步到家长端和园长端。",
+    "reproSteps": [
+      "李老师进入 /teacher/high-risk-consultation",
+      "填写教师补充",
+      "点击一键生成会诊",
+      "查看流式结果和同步提示",
+      "刷新页面，再切到陈园长查看汇总"
+    ],
+    "expected": "会诊应调用真实后端流程，保存 consultation、intervention card、reminder，并让园长端和家长端基于同一后端数据看到新结果。",
+    "actual": "会诊流请求为 POST /api/ai/high-risk-consultation/stream -> 200 (next-stream-fallback) reason=brain-fetch-typeerror; GET /api/ai/high-risk-consultation/feed?limit=4&escalated_only=true -> FAILED; GET /api/admin/notification-events -> 200; GET /api/admin/notification-events -> 200; GET /api/ai/high-risk-consultation/feed?limit=4&escalated_only=true -> 200 (next-json-fallback) reason=brain-fetch-typeerror; GET /api/ai/high-risk-consultation/feed?limit=4&escalated_only=true -> FAILED; GET /api/admin/notification-events -> 200; GET /api/admin/notification-events -> 200; GET /api/ai/high-risk-consultation/feed?limit=4&escalated_only=true -> 200 (next-json-fallback) reason=brain-fetch-typeerror；页面提示会诊完成/同步，但 demo 账号远端状态只 local_only。刷新后仍回到待启动视图或本地状态，陈园长端显示的是 feed/demo 汇总，不是刚生成的跨账号后端记录。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C14-health-materials/06-consultation-before-start.png",
+        "artifacts/feature-audit/C14-health-materials/07-consultation-after-generation.png",
+        "artifacts/feature-audit/C14-health-materials/10-consultation-after-refresh.png",
+        "artifacts/feature-audit/C14-health-materials/12-director-home-consultation-summary.png",
+        "artifacts/feature-audit/C14-health-materials/13-director-agent-consultation-feed.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: Image with src \"/pixel-replica/visual-cards/director-ai-decoration-card.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading"
+      ],
+      "networkRequests": [
+        {
+          "label": "C14-health-materials",
+          "method": "POST",
+          "url": "/api/ai/high-risk-consultation/stream",
+          "status": 200,
+          "transport": "next-stream-fallback",
+          "target": "/api/v1/agents/consultations/high-risk/stream",
+          "fallbackReason": "brain-fetch-typeerror",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": "{\"currentUser\":{\"id\":\"u-teacher\",\"name\":\"李老师\",\"username\":\"demo-teacher-li\",\"role\":\"教师\",\"avatar\":\"👩‍🏫\",\"institutionId\":\"inst-1\",\"className\":\"向阳班\",\"accountKind\":\"demo\",\"description\":\"教师端 · 向阳班晨检、饮食、成长记录\"},\"visibleChildren\":[{\"id\":\"c-1\",\"name\":\"林小雨\",\"nickname\":\"小雨\",\"birthDate\":\"2023-08-12\",\"gender\":\"女\",\"allergies\":[\"牛奶\",\"芒果\"],\"heightCm\":96,\"weightKg\":14.2,\"guardians\":[{\"name\":\"林妈妈\",\"relation\":\"母亲\",\"phone\":\"138****1024\"}],\"institutionId\":\"inst-1\",\"className\":\"向阳班\",\"specialNotes\":\"午睡前容易情绪波动，需要安抚绘本。\",\"avatar\":\"👧\",\"parentUserId\":\"u-parent\"},{\"id\":\"c-2\",\"name\":\"张浩然\",\"nickname\":\"浩浩\",\"birthDate\":\"202"
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/ai/high-risk-consultation/feed?limit=4&escalated_only=true",
+          "status": "FAILED",
+          "failure": "net::ERR_ABORTED",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/admin/notification-events",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/admin/notification-events",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/ai/high-risk-consultation/feed?limit=4&escalated_only=true",
+          "status": 200,
+          "transport": "next-json-fallback",
+          "target": "/api/v1/agents/consultations/high-risk/feed?limit=4&escalated_only=true",
+          "fallbackReason": "brain-fetch-typeerror",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/ai/high-risk-consultation/feed?limit=4&escalated_only=true",
+          "status": "FAILED",
+          "failure": "net::ERR_ABORTED",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/admin/notification-events",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/admin/notification-events",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/ai/high-risk-consultation/feed?limit=4&escalated_only=true",
+          "status": 200,
+          "transport": "next-json-fallback",
+          "target": "/api/v1/agents/consultations/high-risk/feed?limit=4&escalated_only=true",
+          "fallbackReason": "brain-fetch-typeerror",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        }
+      ],
+      "sourceFiles": [
+        "app/teacher/high-risk-consultation/page.tsx",
+        "app/api/ai/high-risk-consultation/stream/route.ts",
+        "app/api/ai/high-risk-consultation/route.ts",
+        "lib/store.tsx"
+      ],
+      "apiEndpoints": [
+        "/api/ai/high-risk-consultation/stream",
+        "/api/ai/high-risk-consultation",
+        "/api/state"
+      ],
+      "codeSignals": [
+        "runConsultation done 后调用 upsertConsultation/upsertInterventionCard/upsertReminder",
+        "stream fallback 会内部请求 Next JSON route",
+        "页面文案：已同步教师端、家长端和园长端",
+        "demo 账号不执行 /api/state 远端写入"
+      ]
+    },
+    "dataPersistenceResult": "lost-after-refresh",
+    "apiIntegrationResult": "mock-only",
+    "recommendedImplementation": "建立 consultation create/save/detail/feed API，并让教师、家长、园长读取同一记录；在后端未完成前移除“已同步”成功文案或改为“本地演示结果”。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "consultationStarted=true; afterTextSample=智慧托育平台 普惠托育智慧管理平台 教师工作台 AI 助手 风险会诊 健康材料 幼儿档案 晨检与健康 成长行为 6 👩‍🏫 李老师 向阳班 教师端 退出 教师工作台 高风险 高风险儿童一键会诊 按长期画像、最近会诊、当前建议分阶段流式展示，适合移动端录屏。 返回教师工作台 发起会诊 / 邀请专家 会诊流程 已完成 1 发起会诊 2 专家响应 3 方案讨论 4 生成建议 待处理会诊 3 来自当前班级数据 在会诊中 0 来自当前班级数据 本周完成会诊 1 来自当前班级数据 高风险儿童 5 来自当前班级数据 未回复家长消息 3 来自当前班级数据 全部 待处理 进行中 已完成 常规展示 详细查看 高风险 向阳班 · 林小雨 向阳班 2岁8个月 · 出生于 2023/08/12 待复查 3 项 近 7 天存在持续关注观察 最近家长反馈为“今晚反馈” 风险概览 4 成长观察 4 行为发展 0 健康状况 3 家庭反馈 查看完整档案 编辑风; refreshTextSample=智慧托育平台 普惠托育智慧管理平台 教师工作台 AI 助手 风险会诊 健康材料 幼儿档案 晨检与健康 成长行为 6 👩‍🏫 李老师 向阳班 教师端 退出 教师工作台 高风险 高风险儿童一键会诊 按长期画像、最近会诊、当前建议分阶段流式展示，适合移动端录屏。 返回教师工作台 发起会诊 / 邀请专家 会诊流程 待启动 1 发起会诊 2 专家响应 3 方案讨论 4 生成建议 待处理会诊 3 来自当前班级数据 在会诊中 0 来自当前班级数据 本周完成会诊 0 来自当前班级数据 高风险儿童 5 来自当前班级数据 未回复家"
+  },
+  {
+    "findingId": "C14-003",
+    "title": "会诊讨论记录和加入后续提醒是前端本地状态，刷新后不可追溯",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "consultation-notes-actions",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/teacher/high-risk-consultation",
+    "viewport": "desktop",
+    "featureStatus": "not-persisted",
+    "userStory": "作为教师，我希望会诊建议、讨论记录和后续提醒能保存并用于后续处理。",
+    "reproSteps": [
+      "会诊生成后在会议讨论与记录输入 C14 审计测试讨论记录",
+      "点击发送",
+      "点击加入后续提醒",
+      "刷新页面查看记录和提醒"
+    ],
+    "expected": "讨论记录和后续提醒应写入会诊处理记录 API，刷新和换账号后可追踪。",
+    "actual": "讨论发送=true，提醒按钮点击=true；记录立即出现在页面，但代码只 setDiscussionNotes；加入后续提醒调用 upsertReminder。本轮未观察到保存讨论/处理记录的 API。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C14-health-materials/08-consultation-discussion-sent.png",
+        "artifacts/feature-audit/C14-health-materials/09-consultation-after-reminder.png",
+        "artifacts/feature-audit/C14-health-materials/10-consultation-after-refresh.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: Image with src \"/pixel-replica/visual-cards/director-ai-decoration-card.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading"
+      ],
+      "networkRequests": [
+        {
+          "label": "C14-health-materials",
+          "method": "POST",
+          "url": "/api/ai/high-risk-consultation/stream",
+          "status": 200,
+          "transport": "next-stream-fallback",
+          "target": "/api/v1/agents/consultations/high-risk/stream",
+          "fallbackReason": "brain-fetch-typeerror",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": "{\"currentUser\":{\"id\":\"u-teacher\",\"name\":\"李老师\",\"username\":\"demo-teacher-li\",\"role\":\"教师\",\"avatar\":\"👩‍🏫\",\"institutionId\":\"inst-1\",\"className\":\"向阳班\",\"accountKind\":\"demo\",\"description\":\"教师端 · 向阳班晨检、饮食、成长记录\"},\"visibleChildren\":[{\"id\":\"c-1\",\"name\":\"林小雨\",\"nickname\":\"小雨\",\"birthDate\":\"2023-08-12\",\"gender\":\"女\",\"allergies\":[\"牛奶\",\"芒果\"],\"heightCm\":96,\"weightKg\":14.2,\"guardians\":[{\"name\":\"林妈妈\",\"relation\":\"母亲\",\"phone\":\"138****1024\"}],\"institutionId\":\"inst-1\",\"className\":\"向阳班\",\"specialNotes\":\"午睡前容易情绪波动，需要安抚绘本。\",\"avatar\":\"👧\",\"parentUserId\":\"u-parent\"},{\"id\":\"c-2\",\"name\":\"张浩然\",\"nickname\":\"浩浩\",\"birthDate\":\"202"
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/ai/high-risk-consultation/feed?limit=4&escalated_only=true",
+          "status": "FAILED",
+          "failure": "net::ERR_ABORTED",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/admin/notification-events",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/admin/notification-events",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/ai/high-risk-consultation/feed?limit=4&escalated_only=true",
+          "status": 200,
+          "transport": "next-json-fallback",
+          "target": "/api/v1/agents/consultations/high-risk/feed?limit=4&escalated_only=true",
+          "fallbackReason": "brain-fetch-typeerror",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/ai/high-risk-consultation/feed?limit=4&escalated_only=true",
+          "status": "FAILED",
+          "failure": "net::ERR_ABORTED",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/admin/notification-events",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/admin/notification-events",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/ai/high-risk-consultation/feed?limit=4&escalated_only=true",
+          "status": 200,
+          "transport": "next-json-fallback",
+          "target": "/api/v1/agents/consultations/high-risk/feed?limit=4&escalated_only=true",
+          "fallbackReason": "brain-fetch-typeerror",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        }
+      ],
+      "sourceFiles": [
+        "app/teacher/high-risk-consultation/page.tsx",
+        "lib/store.tsx"
+      ],
+      "apiEndpoints": [
+        "/api/state"
+      ],
+      "codeSignals": [
+        "sendDiscussionNote 只 setDiscussionNotes",
+        "addFollowUpReminder 只 upsertReminder 并 setStreamMessage",
+        "demo persist/localStorage 不能跨账号同步"
+      ]
+    },
+    "dataPersistenceResult": "lost-after-refresh",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "新增 consultation notes/actions API，发送讨论、添加建议、加入后续提醒都应写入后端并绑定 consultationId。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "discussionTextSample=智慧托育平台 普惠托育智慧管理平台 教师工作台 AI 助手 风险会诊 健康材料 幼儿档案 晨检与健康 成长行为 6 👩‍🏫 李老师 向阳班 教师端 退出 教师工作台 高风险 高风险儿童一键会诊 按长期画像、最近会诊、当前建议分阶段流式展示，适合移动端录屏。 返回教师工作台 发起会诊 / 邀请专家 会诊流程 已完成 1 发起会诊 2 专家响应 3 方案讨论 4 生成建议 待处理会诊 3 来自当前班级数据 在会诊中 0 来自当前班级数据 本周完成会诊 1 来自当前班级数据 高"
+  },
+  {
+    "findingId": "C14-004",
+    "title": "园长端高风险会诊汇总优先使用静态 demo feed，不能证明看到教师新发起会诊",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "director-consultation-summary",
+    "role": "director",
+    "demoAccount": "陈园长",
+    "route": "/admin; /admin/agent",
+    "viewport": "desktop",
+    "featureStatus": "mock-only",
+    "userStory": "作为园长，我希望看到教师发起的高风险会诊汇总并继续派单处理。",
+    "reproSteps": [
+      "李老师发起会诊",
+      "退出并登录陈园长",
+      "打开 /admin 和 /admin/agent",
+      "观察高风险会诊汇总和网络请求"
+    ],
+    "expected": "园长端应查询真实 consultation feed，包含刚才教师端创建的记录，并支持派单/处理状态同步。",
+    "actual": "园长端请求记录为 GET /api/ai/high-risk-consultation/feed?limit=4&escalated_only=true -> FAILED; GET /api/admin/notification-events -> 200; GET /api/admin/notification-events -> 200; GET /api/ai/high-risk-consultation/feed?limit=4&escalated_only=true -> 200 (next-json-fallback) reason=brain-fetch-typeerror; GET /api/ai/high-risk-consultation/feed?limit=4&escalated_only=true -> FAILED; GET /api/admin/notification-events -> 200; GET /api/admin/notification-events -> 200; GET /api/ai/high-risk-consultation/feed?limit=4&escalated_only=true -> 200 (next-json-fallback) reason=brain-fetch-typeerror；feed route 在 brain 不可用时返回 buildDemoConsultationFeedItems，页面未能证明包含刚创建的李老师会诊。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C14-health-materials/12-director-home-consultation-summary.png",
+        "artifacts/feature-audit/C14-health-materials/13-director-agent-consultation-feed.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: Image with src \"/pixel-replica/visual-cards/director-ai-decoration-card.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading"
+      ],
+      "networkRequests": [
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/ai/high-risk-consultation/feed?limit=4&escalated_only=true",
+          "status": "FAILED",
+          "failure": "net::ERR_ABORTED",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/admin/notification-events",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/admin/notification-events",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/ai/high-risk-consultation/feed?limit=4&escalated_only=true",
+          "status": 200,
+          "transport": "next-json-fallback",
+          "target": "/api/v1/agents/consultations/high-risk/feed?limit=4&escalated_only=true",
+          "fallbackReason": "brain-fetch-typeerror",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/ai/high-risk-consultation/feed?limit=4&escalated_only=true",
+          "status": "FAILED",
+          "failure": "net::ERR_ABORTED",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/admin/notification-events",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/admin/notification-events",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/api/ai/high-risk-consultation/feed?limit=4&escalated_only=true",
+          "status": 200,
+          "transport": "next-json-fallback",
+          "target": "/api/v1/agents/consultations/high-risk/feed?limit=4&escalated_only=true",
+          "fallbackReason": "brain-fetch-typeerror",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        }
+      ],
+      "sourceFiles": [
+        "app/admin/page.tsx",
+        "app/admin/agent/page.tsx",
+        "lib/agent/use-admin-consultation-feed.ts",
+        "app/api/ai/high-risk-consultation/feed/route.ts",
+        "lib/demo/demo-consultations.ts"
+      ],
+      "apiEndpoints": [
+        "/api/ai/high-risk-consultation/feed",
+        "/api/admin/notification-events"
+      ],
+      "codeSignals": [
+        "feed route fallbackItems=buildDemoConsultationFeedItems",
+        "useAdminConsultationWorkspace 会在 feed unavailable/empty 时合成本地 view",
+        "demo_consultations provenance source=mock"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "mock-only",
+    "recommendedImplementation": "实现园长 consultation feed/detail/dispatch API；fallback demo feed 只作为演示，并在 UI 中标记，不应与真实会诊汇总混用。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "directorHomeSample=智慧托育平台 普惠托育智慧管理平台 全园运营 园所首页 6 👩‍💼 陈园长 机构管理员 园长端 退出 全园运营、风险优先级与数据决策 工作台 园所首页 数据总览 业务记录 幼儿档案 晨检与健康 成长行为 饮食记录 协同入口 AI 助手 周报分析 👩‍💼 陈园长 机构管理员 退出登录 春芽普惠托育中心 · 5月1日星期五 您好，陈园长 数据统计周期：近 7 天。以园长数据看板为主体，保留儿童档案与闭环管理入口。 导出周报 暂未开放 分享周报 暂未开放 刷新数据 本周机构核心摘要 正在生成本周运营摘要... 出; directorAgentSample=智慧托育平台 普惠托育智慧管理平台 全园运营 AI 助手 6 👩‍💼 陈园长 机构管理员 园长端 退出 全园运营、风险优先级与数据决策 工作台 园所首页 数据总览 业务记录 幼儿档案 晨检与健康 成长行为 饮食记录 协同入口 AI 助手 周报分析 👩‍💼 陈园长 机构管理员 退出登录 园长 AI 助手 · 春芽普惠托育中心 从识别问题，到生成动作，再到派单闭环 基于近 7 天数据分析，识别重点问题、生成建议动作、承接派单状态并保留周报入口。 使用说明 暂未开放 周报工作区 重新生成 机构问题 0类 AI 分"
+  },
+  {
+    "findingId": "C14-005",
+    "title": "李老师/周老师班级视角有前端隔离，但健康材料与会诊缺少后端权限证据",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "teacher-consultation-permission",
+    "role": "teacher",
+    "demoAccount": "李老师 | 周老师",
+    "route": "/teacher/high-risk-consultation; /teacher/health-file-bridge",
+    "viewport": "desktop",
+    "featureStatus": "permission-incomplete",
+    "userStory": "作为教师，我只能处理自己班级儿童的健康材料和高风险会诊。",
+    "reproSteps": [
+      "李老师访问健康材料与会诊页",
+      "退出登录周老师",
+      "进入 /teacher/high-risk-consultation",
+      "对比班级和儿童范围"
+    ],
+    "expected": "前端和后端都应按 teacher class/institution/childId 授权，提交、解析、会诊、保存均需拒绝越权 childId。",
+    "actual": "周老师页面显示样本包含 晨曦班，说明前端可见数据随账号变化；但本轮 API payload 由前端 snapshot 传入，未观察到后端基于 session 对 childId/classId 的强制校验证据。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C14-health-materials/01-teacher-li-home.png",
+        "artifacts/feature-audit/C14-health-materials/11-zhou-consultation-class-scope.png"
+      ],
+      "consoleErrors": [
+        "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "warning: Image with src \"/_next/static/media/login-left-replica.26ef4a3b.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading",
+        "warning: Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior",
+        "warning: Image with src \"/pixel-replica/visual-cards/director-ai-decoration-card.png\" was detected as the Largest Contentful Paint (LCP). Please add the `loading=\"eager\"` property if this image is above the fold.\nRead more: https://nextjs.org/docs/app/api-reference/components/image#loading"
+      ],
+      "networkRequests": [
+        {
+          "label": "C14-health-materials",
+          "method": "POST",
+          "url": "/api/auth/demo-login",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": "{\"accountId\":\"u-teacher\"}"
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/teacher/health-file-bridge",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/teacher/health-file-bridge",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/teacher/high-risk-consultation",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/teacher/high-risk-consultation",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/teacher/high-risk-consultation?_rsc=dz56m",
+          "status": 307,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "POST",
+          "url": "/api/auth/demo-login",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": "{\"accountId\":\"u-teacher2\"}"
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/teacher/high-risk-consultation",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "GET",
+          "url": "/teacher/high-risk-consultation?_rsc=dz56m",
+          "status": 307,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": ""
+        },
+        {
+          "label": "C14-health-materials",
+          "method": "POST",
+          "url": "/api/auth/demo-login",
+          "status": 200,
+          "transport": "",
+          "target": "",
+          "fallbackReason": "",
+          "storybookCache": "",
+          "demoSeed": "",
+          "postData": "{\"accountId\":\"u-admin\"}"
+        }
+      ],
+      "sourceFiles": [
+        "lib/store.tsx",
+        "app/api/ai/health-file-bridge/route.ts",
+        "app/api/ai/high-risk-consultation/route.ts",
+        "lib/persistence/state-scope.ts"
+      ],
+      "apiEndpoints": [
+        "/api/ai/health-file-bridge",
+        "/api/ai/high-risk-consultation"
+      ],
+      "codeSignals": [
+        "visibleChildren 在前端按 currentUser 过滤",
+        "health-file-bridge request 可携带 childId，但 Next API 未读取 session 校验 teacher child access",
+        "high-risk consultation route 校验 payload shape 后使用传入 visibleChildren"
+      ]
+    },
+    "dataPersistenceResult": "not-applicable",
+    "apiIntegrationResult": "unknown",
+    "recommendedImplementation": "在健康材料和会诊 API 层引入 session-based child/class authorization，拒绝 payload 越权；补充李/周跨班 childId 负向测试。",
+    "backendNeeded": true,
+    "frontendNeeded": false,
+    "productDecisionNeeded": false,
+    "notes": "zhouTextSample=智慧托育平台 普惠托育智慧管理平台 教师工作台 AI 助手 风险会诊 健康材料 幼儿档案 晨检与健康 成长行为 6 👩‍🏫 周老师 晨曦班 教师端 退出 教师工作台 高风险 高风险儿童一键会诊 按长期画像、最近会诊、当前建议分阶段流式展示，适合移动端录屏。 返回教师工作台 发起会诊 / 邀请专家 会诊流程 待启动 1 发起会诊 2 专家响应 3 方案讨论 4 生成建议 待处理会诊 0 来自当前班级数据 在会诊中 0 来自当前班级数据 本周完成会诊 0 来自当前班级数据 高风险儿童 5 来自当前班级数据 未回复家"
+  }
+]

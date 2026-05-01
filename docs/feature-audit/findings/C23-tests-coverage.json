@@ -1,0 +1,223 @@
+[
+  {
+    "findingId": "C23-001",
+    "title": "家长发消息、教师回复、家长查看回复缺少跨角色自动化闭环测试",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "parent-teacher-communication",
+    "role": "parent,teacher",
+    "routes": ["/parent/agent?child=c-1#feedback", "/teacher/agent?action=communication"],
+    "featureStatus": "partial",
+    "coverageStatus": "missing-e2e",
+    "currentCoverage": [
+      "tests/bug-bash/real-user-smoke.spec.ts checks role login, home/menu navigation, refresh, white screen, mobile overflow and image failures.",
+      "lib/feedback/normalize.test.ts and lib/feedback/consumption.test.ts cover structured feedback normalization and selection helpers.",
+      "app/api/ai/follow-up/route.test.ts covers follow-up route fallback and task-aware feedback selection."
+    ],
+    "missingCoverage": [
+      "No Playwright scenario submits parent feedback/message, switches to teacher, sends a teacher reply, switches back to parent and verifies visibility after refresh.",
+      "No assertion that a send action calls a durable API instead of only mutating local component/store state.",
+      "No fixture proving teacher replies are child/task scoped and visible to the same parent child context."
+    ],
+    "recommendedImplementation": "Add tests/e2e/communication-roundtrip.spec.ts. Drive parent login, submit a unique test message for a non-default child where possible, assert network write, teacher visibility, teacher reply, parent visibility after reload, and failure state when the write API returns non-2xx.",
+    "suggestedTestFiles": ["tests/e2e/communication-roundtrip.spec.ts"],
+    "browserUseAutomation": "Scenario is automatable, but current audit should prefer Playwright because Browser Use has been unstable in this workspace due the local Node runtime mismatch."
+  },
+  {
+    "findingId": "C23-002",
+    "title": "教师健康材料上传解析缺少 UI 上传、Next route 和刷新持久化测试",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "teacher-health-file-bridge",
+    "role": "teacher",
+    "routes": ["/teacher/health-file-bridge", "/api/ai/health-file-bridge"],
+    "featureStatus": "mock-only",
+    "coverageStatus": "partial-helper-backend-only",
+    "currentCoverage": [
+      "lib/agent/health-file-bridge.test.ts covers local extraction helper behavior, risk items, contraindications and writeback contract.",
+      "backend/tests/test_health_file_bridge_endpoint.py and backend/tests/test_health_file_bridge_service.py cover FastAPI-side endpoint/service behavior.",
+      "Visual capture specs include /teacher/health-file-bridge screenshots."
+    ],
+    "missingCoverage": [
+      "No Playwright file upload flow verifies selected file metadata, preview text, POST body, result cards, fallback/mock badges and validation errors.",
+      "No Next route test for app/api/ai/health-file-bridge/route.ts.",
+      "No test proves parsed result/writeback survives refresh or is intentionally not persisted."
+    ],
+    "recommendedImplementation": "Add tests/e2e/teacher-health-consultation.spec.ts for UI upload and app/api/ai/health-file-bridge/route.test.ts for route contract. Use a small fixture file and mock route responses to assert childId/sourceRole/fileKind/files payload and persistence behavior.",
+    "suggestedTestFiles": ["tests/e2e/teacher-health-consultation.spec.ts", "app/api/ai/health-file-bridge/route.test.ts"],
+    "browserUseAutomation": "UI upload and route interception are automatable with Playwright; OCR/medical interpretation quality itself should not be treated as deterministic."
+  },
+  {
+    "findingId": "C23-003",
+    "title": "高风险会诊缺少前端 stream、done 写回、刷新和跨端同步测试",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "high-risk-consultation",
+    "role": "teacher,director,parent",
+    "routes": [
+      "/teacher/high-risk-consultation",
+      "/api/ai/high-risk-consultation",
+      "/api/ai/high-risk-consultation/stream",
+      "/api/ai/high-risk-consultation/feed"
+    ],
+    "featureStatus": "partial",
+    "coverageStatus": "backend-covered-ui-missing",
+    "currentCoverage": [
+      "backend/tests/test_high_risk_consultation_stream.py covers FastAPI SSE status/text/ui/done events and JSON/SSE parity.",
+      "lib/consultation/normalize-result.test.ts, lib/consultation/trace-view-model.test.ts and lib/consultation/evidence-display.test.ts cover trace/result helpers.",
+      "Visual capture specs include /teacher/high-risk-consultation."
+    ],
+    "missingCoverage": [
+      "No Playwright scenario starts consultation from teacher UI and verifies stream status, summary card, follow-up card, done event and final state.",
+      "No Next route test for app/api/ai/high-risk-consultation/stream/route.ts or feed route.",
+      "No reload/cross-role verification that consultation results appear in teacher history, parent follow-up context and director feed."
+    ],
+    "recommendedImplementation": "Add tests/e2e/teacher-health-consultation.spec.ts for UI stream behavior and app/api/ai/high-risk-consultation/stream/route.test.ts for Next proxy/SSE contract. Assert canonical done payload, provider trace, fallback labels, writeback and refresh semantics.",
+    "suggestedTestFiles": ["tests/e2e/teacher-health-consultation.spec.ts", "app/api/ai/high-risk-consultation/stream/route.test.ts"],
+    "browserUseAutomation": "Stream UI can be automated with Playwright response mocking. Real provider latency and expert-content quality should be mocked and verified through contract fields."
+  },
+  {
+    "findingId": "C23-004",
+    "title": "家长成长绘本 child 参数和 demoSeed 边界缺少页面级测试",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "parent-storybook",
+    "role": "parent",
+    "routes": ["/parent/storybook?child=c-1", "/api/ai/parent-storybook"],
+    "featureStatus": "partial",
+    "coverageStatus": "helper-api-covered-page-gap",
+    "currentCoverage": [
+      "lib/agent/parent-storybook-demo-seeds.test.ts covers demo seed resolver and request-shape preservation.",
+      "lib/agent/parent-storybook.test.ts covers local storybook generation helper behavior.",
+      "app/api/ai/parent-storybook/route.test.ts covers intended remote proxy/cache behavior, but it failed in the ad-hoc batch run.",
+      "components/parent/StoryBookViewer.test.tsx covers viewer helper/runtime copy behavior, with failures in current batch."
+    ],
+    "missingCoverage": [
+      "No Playwright test opens /parent/storybook with different child query values and asserts generated POST childId/snapshot child.",
+      "No page-level test proves demoSeed is only applied for allowed demo context and does not accidentally enter real API/persistence.",
+      "No browser refresh test proves selected child and cached story state remain scoped."
+    ],
+    "recommendedImplementation": "Add tests/e2e/parent-storybook-child-demo-seed.spec.ts. Route-intercept /api/ai/parent-storybook, assert childId/requestSource/demoSeed fields for c-1 and another authorized child, verify unsupported child falls back safely, and assert no real persistence call for demo seed preview.",
+    "suggestedTestFiles": ["tests/e2e/parent-storybook-child-demo-seed.spec.ts"],
+    "browserUseAutomation": "Child query and network contract are automatable. Generated image/audio quality and exact media content are not stable automation targets."
+  },
+  {
+    "findingId": "C23-005",
+    "title": "mock draft 不进入真实持久化缺少回归测试",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "teacher-drafts-persistence",
+    "role": "teacher",
+    "routes": ["/teacher/agent", "/api/state"],
+    "featureStatus": "partial",
+    "coverageStatus": "missing-unit-and-e2e",
+    "currentCoverage": [
+      "lib/persistence/snapshot.test.ts covers snapshot normalization and structured feedback materialization.",
+      "lib/store.tsx filters remote-persistable mobile drafts through filterRemotePersistableMobileDrafts, but no dedicated test was found for that boundary."
+    ],
+    "missingCoverage": [
+      "No unit test proves mock/local-only/mobile drafts are excluded from remote snapshot payload.",
+      "No UI test confirms teacher mock draft appears locally but does not call real persistence.",
+      "No negative assertion around /api/state payload contents for mock drafts."
+    ],
+    "recommendedImplementation": "Add lib/mobile/local-draft-cache.test.ts for filterRemotePersistableMobileDrafts and add a Playwright persistence test that creates a mock draft, intercepts /api/state, and asserts the draft is omitted from remote payload while still visible locally.",
+    "suggestedTestFiles": ["lib/mobile/local-draft-cache.test.ts", "tests/e2e/persistence-submit-refresh.spec.ts"],
+    "browserUseAutomation": "Fully automatable by intercepting /api/state and inspecting request JSON."
+  },
+  {
+    "findingId": "C23-006",
+    "title": "家长反馈 child 不硬编码缺少非默认孩子 UI 测试",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "parent-feedback-child-scope",
+    "role": "parent,teacher",
+    "routes": ["/parent/agent?child=c-1#feedback", "/teacher/agent?action=communication"],
+    "featureStatus": "partial",
+    "coverageStatus": "missing-child-scope-e2e",
+    "currentCoverage": [
+      "lib/feedback/normalize.test.ts covers childId preservation in normalized structured feedback.",
+      "lib/persistence/snapshot.test.ts covers structured feedback records with childId.",
+      "app/parent/agent/page.tsx contains a runtime guard that rejects mismatched input.childId and selectedFeed.child.id."
+    ],
+    "missingCoverage": [
+      "No browser test submits feedback for a non-c-1 child and inspects payload/local store/teacher communication list.",
+      "No test catches accidental hard-coded c-1 in links, selected child state, feedback composer props or teacher filters.",
+      "No cross-account test checks child isolation for parent feedback."
+    ],
+    "recommendedImplementation": "Extend tests/e2e/communication-roundtrip.spec.ts or persistence-submit-refresh.spec.ts to select a second authorized child, submit unique feedback, assert request/localStorage childId, reload, and verify only the matching child appears in teacher communication context.",
+    "suggestedTestFiles": ["tests/e2e/communication-roundtrip.spec.ts", "tests/e2e/persistence-submit-refresh.spec.ts"],
+    "browserUseAutomation": "Fully automatable if demo data exposes more than one authorized child for the parent; otherwise seed a fixture state."
+  },
+  {
+    "findingId": "C23-007",
+    "title": "园长看板和教师工作台空/零状态缺少可断言测试",
+    "severity": "F3",
+    "status": "open",
+    "featureArea": "zero-empty-states",
+    "role": "director,teacher",
+    "routes": ["/admin", "/teacher"],
+    "featureStatus": "partial",
+    "coverageStatus": "visual-only",
+    "currentCoverage": [
+      "app/admin/page.tsx renders EmptyState when visibleChildren.length === 0.",
+      "components/teacher/TeacherWorkbenchPage.tsx renders EmptyState when visibleChildren.length === 0 and has zero-count copy for alerts/risks.",
+      "tests/visual/capture-visual-parity-round5.spec.ts captures generic empty/permission/loading states and some filtered empty lists."
+    ],
+    "missingCoverage": [
+      "No component or browser assertion locks the exact admin empty-state title/action when institution data is empty.",
+      "No test locks teacher workbench zero-state metrics, no-risk copy and no-visible-children branch.",
+      "Visual screenshots do not fail on missing semantic state unless paired with assertions."
+    ],
+    "recommendedImplementation": "Add tests/e2e/zero-states-and-route-guards.spec.ts using seeded empty snapshots for admin and teacher, then assert empty-state titles, action links and zero metrics. Keep visual captures as supplemental evidence only.",
+    "suggestedTestFiles": ["tests/e2e/zero-states-and-route-guards.spec.ts"],
+    "browserUseAutomation": "Fully automatable with seeded localStorage or mocked /api/state snapshot."
+  },
+  {
+    "findingId": "C23-008",
+    "title": "表单保存后刷新持久化缺少端到端回归测试",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "form-submit-refresh-persistence",
+    "role": "director,teacher,parent",
+    "routes": ["/children", "/health", "/diet", "/growth", "/parent/agent?child=c-1#feedback", "/teacher/agent"],
+    "featureStatus": "partial",
+    "coverageStatus": "missing-e2e",
+    "currentCoverage": [
+      "lib/persistence/snapshot.test.ts covers normalization only, not UI submit and reload.",
+      "tests/bug-bash/real-user-smoke.spec.ts reloads role home/menu routes but does not submit forms.",
+      "C10/C11/C15 audit evidence previously found several save flows are local-only or not cross-role visible."
+    ],
+    "missingCoverage": [
+      "No Playwright flow saves child profile, health check, meal, growth record, parent feedback, reminder or teacher draft and verifies after reload.",
+      "No negative test distinguishes local-only demo save from real remote persistence.",
+      "No failure-state test for persistence API returning 4xx/5xx."
+    ],
+    "recommendedImplementation": "Add tests/e2e/persistence-submit-refresh.spec.ts. Use unique tokens per flow, intercept /api/state where appropriate, reload, optionally new browser context/login, and assert saved data presence or explicit local-only warning.",
+    "suggestedTestFiles": ["tests/e2e/persistence-submit-refresh.spec.ts"],
+    "browserUseAutomation": "Fully automatable with Playwright. Cross-device persistence needs either a real backend test environment or mocked /api/state fixture."
+  },
+  {
+    "findingId": "C23-009",
+    "title": "权限和 /login?next 缺少 route guard、proxy 和浏览器重定向测试",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "auth-route-guards",
+    "role": "all",
+    "routes": ["/login?next=...", "/admin", "/teacher", "/parent", "/health", "/diet", "/growth", "/children"],
+    "featureStatus": "permission-incomplete",
+    "coverageStatus": "missing-unit-and-e2e",
+    "currentCoverage": [
+      "lib/auth/route-access.ts implements sanitizeNextPath, resolveAuthorizedRedirectPath and role access rules.",
+      "proxy.ts verifies session cookie and redirects unauthenticated users to /login?next=path.",
+      "tests/bug-bash/real-user-smoke.spec.ts tolerates /api/auth/session 401 and checks role home navigation, but does not assert next/guard rules."
+    ],
+    "missingCoverage": [
+      "No unit test for sanitizeNextPath against external URL, // URL, /api, /_next, /login loop, unknown path, query and hash preservation.",
+      "No proxy test for invalid/expired session cookie, missing role, unauthorized role redirect and accessDenied param.",
+      "No browser test that unauthenticated deep link redirects to /login?next=... and successful login returns to authorized next path."
+    ],
+    "recommendedImplementation": "Add lib/auth/route-access.test.ts and proxy.test.ts for pure guard/proxy logic, plus tests/e2e/zero-states-and-route-guards.spec.ts for unauthenticated deep links and role-specific /login?next behavior.",
+    "suggestedTestFiles": ["lib/auth/route-access.test.ts", "proxy.test.ts", "tests/e2e/zero-states-and-route-guards.spec.ts"],
+    "browserUseAutomation": "Fully automatable with Playwright. Cookie signing tests should stay in unit/proxy tests rather than Browser Use."
+  }
+]

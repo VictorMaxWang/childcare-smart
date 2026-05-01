@@ -1,0 +1,347 @@
+[
+  {
+    "findingId": "C13-001",
+    "title": "家长提交家园反馈只写入本账号本地状态，未形成可跨角色读取的消息",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "parent-communication",
+    "role": "parent",
+    "demoAccount": "林妈妈",
+    "route": "/parent/agent?child=c-1#feedback",
+    "viewport": "desktop",
+    "featureStatus": "backend-missing",
+    "userStory": "作为家长，我希望从家园沟通入口提交反馈后，教师和园长能在对应工作台看到同一条消息。",
+    "reproSteps": [
+      "从 /login 选择林妈妈登录进入家长端。",
+      "进入 /parent/agent?child=c-1#feedback。",
+      "填写非敏感测试内容 C13-parent-feedback-2026-04-30T23-54-44-366Z 并点击提交反馈。",
+      "观察网络请求、页面提示、localStorage 和刷新后的可见性。",
+      "退出后分别登录李老师、周老师、陈园长检查是否能看到该反馈。"
+    ],
+    "expected": "提交应调用真实家园沟通/反馈发送 API，记录包含 parentId、childId、classId、body、status、createdAt，并能被对应教师和园长读取。",
+    "actual": "点击提交后未出现消息发送 API 或 /api/state PUT；只触发 /api/ai/suggestions 和 /api/ai/parent-message-reflexion。测试内容写入林妈妈 demo 命名空间 localStorage，页面显示当前设备/已记录类提示，但刷新后反馈正文没有作为沟通记录展示，教师和园长账号也看不到该内容。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C13-chat-communication/parent-feedback-before-submit.png",
+        "artifacts/feature-audit/C13-chat-communication/parent-submit-after-click.png",
+        "artifacts/feature-audit/C13-chat-communication/parent-submit-after-refresh.png",
+        "artifacts/feature-audit/C13-chat-communication/teacher-li-communication-mode-open.png",
+        "artifacts/feature-audit/C13-chat-communication/director-agent-feedback-dispatch.png"
+      ],
+      "consoleErrors": [
+        "无家园沟通提交相关 console error；清 cookie 重新登录时可见 /api/auth/session 401，属于未登录探测。"
+      ],
+      "networkRequests": [
+        "POST http://127.0.0.1:3000/api/ai/suggestions 200",
+        "POST http://127.0.0.1:3000/api/ai/parent-message-reflexion 200",
+        "未观察到 POST/PUT 家园消息、反馈发送、thread、reply 或 /api/state 写入请求"
+      ],
+      "sourceFiles": [
+        "app/parent/agent/page.tsx:852",
+        "app/parent/agent/page.tsx:868",
+        "app/parent/agent/page.tsx:901",
+        "lib/store.tsx:4484",
+        "lib/store.tsx:4739",
+        "lib/store.tsx:5120"
+      ],
+      "apiEndpoints": [
+        "/api/ai/suggestions",
+        "/api/ai/parent-message-reflexion",
+        "/api/state"
+      ],
+      "codeSignals": [
+        "submitStructuredFeedback 调用 addGuardianFeedback 后仅执行 persistAppSnapshotNow。",
+        "demo 用户的 currentStorageNamespace 为 demo:${DEMO_DATASET_VERSION}:${currentUser.id}，林妈妈写入 u-parent 本地命名空间。",
+        "demo 持久化路径不会把反馈写到服务端共享消息模型，跨账号不可见。"
+      ]
+    },
+    "dataPersistenceResult": "lost-after-refresh",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "新增真实 familyCommunication/guardianFeedback 消息模型和发送接口，提交时写服务端并返回持久化消息；前端刷新后从列表 API 读取，并按 childId/classId/role 过滤。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": true,
+    "notes": "localStorage 中能看到测试正文，但这是林妈妈本机、本账号 demo 数据；它不能证明家园沟通闭环成立。需要产品确认结构化晚间反馈是否就是教师端家园沟通消息，还是应生成独立 message thread。"
+  },
+  {
+    "findingId": "C13-002",
+    "title": "教师家长沟通列表由班级上下文合成，未读取家长真实提交消息",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-communication",
+    "role": "teacher",
+    "demoAccount": "李老师 | 周老师",
+    "route": "/teacher/agent?action=communication",
+    "viewport": "desktop",
+    "featureStatus": "mock-only",
+    "userStory": "作为教师，我希望在家园沟通中看到本班家长提交的真实消息，并能按孩子、班级、未读状态筛选。",
+    "reproSteps": [
+      "林妈妈提交 C13-parent-feedback-2026-04-30T23-54-44-366Z 后退出。",
+      "从 /login 登录李老师，进入 /teacher/agent?action=communication。",
+      "检查待回复、沟通记录、我发起的列表是否出现林妈妈刚提交的内容。",
+      "退出后登录周老师进入相同路由，检查晨曦班是否隔离向阳班内容。"
+    ],
+    "expected": "李老师应通过消息列表 API 看到林妈妈对 c-1 的反馈；周老师不应看到向阳班消息；列表应包含 read/unread、childId、classId、senderRole 等字段。",
+    "actual": "李老师沟通模式显示 3 条待回复项目，但未出现林妈妈刚提交的测试消息。列表来自 classContext.visibleChildren 和 classContext.weeklyFeedbacks 合成的待沟通项，不是消息列表 API。周老师显示晨曦班上下文且未看到向阳班测试内容，班级隔离视觉上成立，但这是因为根本没有共享消息进入教师端。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C13-chat-communication/teacher-li-communication-mode-open.png",
+        "artifacts/feature-audit/C13-chat-communication/teacher-zhou-communication-mode.png"
+      ],
+      "consoleErrors": [
+        "无教师沟通列表相关 console error。"
+      ],
+      "networkRequests": [
+        "加载沟通模式时可见 POST /api/ai/teacher-agent 200 和若干 AI/weekly-report 请求",
+        "未观察到 GET 家园消息列表、feedback thread、conversation 或 unread 列表 API"
+      ],
+      "sourceFiles": [
+        "app/teacher/agent/page.tsx:833",
+        "app/teacher/agent/page.tsx:835",
+        "app/teacher/agent/page.tsx:836",
+        "app/teacher/agent/page.tsx:856",
+        "app/teacher/agent/page.tsx:886"
+      ],
+      "apiEndpoints": [
+        "/api/ai/teacher-agent"
+      ],
+      "codeSignals": [
+        "allPendingCommunicationItems 由 classContext.visibleChildren 中缺少 weeklyFeedback 的孩子生成。",
+        "feedbackCommunicationItems 由 classContext.weeklyFeedbacks 映射生成。",
+        "communicationItemsByTab 在 pending/history/mine 三个本地数组之间切换，没有远端消息列表读取。"
+      ]
+    },
+    "dataPersistenceResult": "not-applicable",
+    "apiIntegrationResult": "mock-only",
+    "recommendedImplementation": "教师端应从服务端 conversation/message/guardianFeedback 列表 API 读取真实消息，并在查询参数或 session 范围中强制 classId、childId、role 过滤。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": true,
+    "notes": "周老师隔离检查没有发现跨班泄漏，但这是在没有真实消息流入的前提下成立；不能视为真实权限模型已完成。"
+  },
+  {
+    "findingId": "C13-003",
+    "title": "教师回复点击后只进入本地“我发起的”，无网络请求且刷新丢失",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-communication",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/teacher/agent?action=communication",
+    "viewport": "desktop",
+    "featureStatus": "fake-success",
+    "userStory": "作为教师，我希望回复家长消息后，回复真实发送给家长并在刷新、重新登录后保留。",
+    "reproSteps": [
+      "李老师进入 /teacher/agent?action=communication。",
+      "展开待回复沟通项，输入 C13-teacher-local-reply-2026-04-30T23-58-26-304Z。",
+      "点击发送本地回复。",
+      "观察网络请求、我发起的列表、刷新后状态。",
+      "重新登录林妈妈检查是否收到教师回复。"
+    ],
+    "expected": "发送应调用真实 reply API，出现发送中/成功/失败状态；成功后刷新仍可见，家长端重新登录后能读取该回复。",
+    "actual": "点击后页面立即把回复放入“我发起的”，但 networkAfterReply 为空，没有发送/回复 API；刷新后该回复消失，“我发起的”归零；林妈妈重新登录后看不到教师回复。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C13-chat-communication/teacher-reply-targeted-draft-filled.png",
+        "artifacts/feature-audit/C13-chat-communication/teacher-reply-targeted-after-send.png",
+        "artifacts/feature-audit/C13-chat-communication/teacher-reply-targeted-after-refresh.png",
+        "artifacts/feature-audit/C13-chat-communication/parent-recheck-after-teacher-reply.png"
+      ],
+      "consoleErrors": [
+        "无教师回复相关 console error。"
+      ],
+      "networkRequests": [
+        "点击发送本地回复后的 networkAfterReply: []",
+        "未观察到 POST/PUT /reply、/messages、/conversation 或 /api/state 请求"
+      ],
+      "sourceFiles": [
+        "app/teacher/agent/page.tsx:911",
+        "app/teacher/agent/page.tsx:918",
+        "app/teacher/agent/page.tsx:929",
+        "app/teacher/agent/page.tsx:930",
+        "app/teacher/agent/page.tsx:1123"
+      ],
+      "apiEndpoints": [],
+      "codeSignals": [
+        "sendCommunicationReply 构造 sentItem 后调用 setSentCommunicationItems。",
+        "sendCommunicationReply 同时更新 setProcessedCommunicationIds、清空 draft、切换到 mine tab。",
+        "发送按钮文案为发送本地回复，没有 fetch、persistAppSnapshotNow 或服务端同步。"
+      ]
+    },
+    "dataPersistenceResult": "lost-after-refresh",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "实现 teacher reply API，保存 reply 与原始 parent message/thread 的关联；前端发送时使用 pending/sent/failed 状态，失败可重试，刷新后从服务端恢复。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "按钮文案包含“本地”，但用户故事是家园沟通回复；当前 UI 把回复放入“我发起的”容易让用户误以为已经完成发送。"
+  },
+  {
+    "findingId": "C13-004",
+    "title": "家长无法回看教师回复，家长-教师消息闭环不存在",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "parent-communication",
+    "role": "shared",
+    "demoAccount": "林妈妈 | 李老师",
+    "route": "/parent/agent?child=c-1#feedback",
+    "viewport": "desktop",
+    "featureStatus": "backend-missing",
+    "userStory": "作为家长，我希望重新登录后能看到教师对我反馈的回复，并区分已读/未读。",
+    "reproSteps": [
+      "李老师在家长沟通模式输入并点击发送本地回复。",
+      "刷新教师页确认回复丢失。",
+      "退出教师账号，重新从 /login 登录林妈妈。",
+      "进入家长端沟通/反馈入口，查找 C13-teacher-local-reply-2026-04-30T23-58-26-304Z。"
+    ],
+    "expected": "家长端应通过真实消息列表 API 读取教师回复，显示发送人、时间、childId/thread、已读状态，并在刷新和重新登录后保留。",
+    "actual": "林妈妈重新登录后没有看到教师回复，也没有出现家长消息列表/会话列表 API。教师回复本身没有服务端提交，因此跨角色闭环断开。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C13-chat-communication/parent-recheck-after-teacher-reply.png",
+        "artifacts/feature-audit/C13-chat-communication/teacher-reply-targeted-after-refresh.png"
+      ],
+      "consoleErrors": [
+        "无家长回看回复相关 console error。"
+      ],
+      "networkRequests": [
+        "家长重新登录回看未观察到 GET conversation/message/reply 列表 API",
+        "教师发送阶段未观察到 reply API，导致家长侧无可读取数据"
+      ],
+      "sourceFiles": [
+        "app/parent/agent/page.tsx:735",
+        "app/parent/agent/page.tsx:852",
+        "app/teacher/agent/page.tsx:911",
+        "lib/store.tsx:4484"
+      ],
+      "apiEndpoints": [],
+      "codeSignals": [
+        "家长端反馈入口主要处理本地 draft/structured feedback 和 AI 表达生成，没有 conversation/reply 列表读取。",
+        "教师端回复只保存在当前 React state，刷新后清空。"
+      ]
+    },
+    "dataPersistenceResult": "no-submit",
+    "apiIntegrationResult": "no-api",
+    "recommendedImplementation": "统一家长端和教师端的 conversation/thread 读取接口；家长端进入家园沟通时读取该 childId 下消息和 reply，并支持 read/unread 状态更新。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": true,
+    "notes": "这是 C13 闭环验收的核心失败点：家长发消息、教师收消息、教师回复、家长收回复四步没有共享数据模型串起来。"
+  },
+  {
+    "findingId": "C13-005",
+    "title": "园长端反馈汇总未接入家长真实提交内容，处理动作走通知事件而非家园沟通模型",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "director-communication",
+    "role": "director",
+    "demoAccount": "陈园长",
+    "route": "/admin | /admin/agent",
+    "viewport": "desktop",
+    "featureStatus": "partial",
+    "userStory": "作为园长，我希望查看家园反馈汇总、打开详情并处理需要跟进的家长沟通事项。",
+    "reproSteps": [
+      "林妈妈提交 C13 测试反馈后退出。",
+      "从 /login 登录陈园长，进入 /admin。",
+      "检查首页反馈汇总是否包含测试内容。",
+      "进入 /admin/agent 查看反馈风险/派单区，尝试查看或处理。",
+      "观察网络请求与页面是否显示家长原始反馈。"
+    ],
+    "expected": "园长应能从真实反馈/消息 API 读取家长提交内容，按班级/孩子/风险聚合，并能标记、派单或查看详情。",
+    "actual": "园长端有反馈汇总和反馈风险 UI，也调用 /api/admin/notification-events，但未显示林妈妈测试反馈。当前处理模型是通知事件/派单工作台，不是家长-教师-园长共享的家园沟通消息模型。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C13-chat-communication/director-home-feedback-summary.png",
+        "artifacts/feature-audit/C13-chat-communication/director-agent-feedback-dispatch.png",
+        "artifacts/feature-audit/C13-chat-communication/director-agent-after-action-attempt.png"
+      ],
+      "consoleErrors": [
+        "无园长反馈汇总相关 console error。"
+      ],
+      "networkRequests": [
+        "GET http://127.0.0.1:3000/api/admin/notification-events 200",
+        "POST http://127.0.0.1:3000/api/ai/high-risk-consultation/feed 200",
+        "POST http://127.0.0.1:3000/api/ai/admin-agent 200",
+        "未观察到读取林妈妈家园沟通消息的 feedback/message 列表 API"
+      ],
+      "sourceFiles": [
+        "lib/agent/use-admin-consultation-workspace.ts:210",
+        "lib/agent/use-admin-consultation-workspace.ts:268"
+      ],
+      "apiEndpoints": [
+        "/api/admin/notification-events",
+        "/api/ai/high-risk-consultation/feed",
+        "/api/ai/admin-agent"
+      ],
+      "codeSignals": [
+        "园长处理动作 create/update notification-events，属于通知事件工作台。",
+        "浏览器证据显示园长端 hasFeedbackSummary/hasFeedbackRiskItems 为 true，但 seesParentTestMessage 为 false。"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "real-api",
+    "recommendedImplementation": "将家园反馈消息纳入园长可查询的聚合 API；通知事件可作为处理结果，但应关联原始 message/thread/childId/classId，并提供详情与处理状态。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": true,
+    "notes": "园长端不是纯 UI，存在真实 notification-events API；缺口是它没有接入本轮家长提交的家园沟通数据。"
+  },
+  {
+    "findingId": "C13-006",
+    "title": "AI 沟通建议有真实 AI 请求，但未闭环到回复插入、发送和持久化",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "teacher-ai-communication",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/teacher/agent?action=communication",
+    "viewport": "desktop",
+    "featureStatus": "partial",
+    "userStory": "作为教师，我希望 AI 根据当前家长消息生成沟通建议，并能一键插入回复草稿或发送前编辑。",
+    "reproSteps": [
+      "李老师进入 /teacher/agent?action=communication。",
+      "点击待回复项上的 AI 沟通建议按钮。",
+      "观察是否调用 AI API、是否生成建议、是否插入当前回复草稿。",
+      "继续尝试发送并刷新验证是否保留。"
+    ],
+    "expected": "AI 建议应基于当前真实消息生成，并明确处于建议/草稿状态；插入草稿和实际发送应分离，发送后走真实 reply API。",
+    "actual": "点击 AI 建议会调用 POST /api/ai/teacher-agent 200，并显示 AI 草稿/建议；但建议不是基于真实家长消息列表，未自动插入当前回复输入框，也不负责发送或持久化。家长端 /api/ai/parent-message-reflexion 只生成家长表达，不等同消息发送。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C13-chat-communication/teacher-ai-suggestion-from-communication-item.png",
+        "artifacts/feature-audit/C13-chat-communication/ai-suggestion-teacher-guide-after-click.png"
+      ],
+      "consoleErrors": [
+        "无 AI 沟通建议相关 console error。"
+      ],
+      "networkRequests": [
+        "POST http://127.0.0.1:3000/api/ai/teacher-agent 200",
+        "POST http://127.0.0.1:3000/api/ai/parent-message-reflexion 200",
+        "AI 建议后未观察到 reply/send API"
+      ],
+      "sourceFiles": [
+        "app/teacher/agent/page.tsx:691",
+        "app/teacher/agent/page.tsx:935",
+        "app/teacher/agent/page.tsx:937",
+        "app/teacher/agent/page.tsx:1140",
+        "app/parent/agent/page.tsx:563"
+      ],
+      "apiEndpoints": [
+        "/api/ai/teacher-agent",
+        "/api/ai/parent-message-reflexion"
+      ],
+      "codeSignals": [
+        "runCommunicationSuggestion 调用 runWorkflow(\"communication\")，runWorkflow POST /api/ai/teacher-agent。",
+        "AI 结果与 sendCommunicationReply 的本地发送逻辑没有持久化连接。",
+        "parent-message-reflexion 只用于表达润色/反思，不是家园消息发送接口。"
+      ]
+    },
+    "dataPersistenceResult": "not-applicable",
+    "apiIntegrationResult": "real-api",
+    "recommendedImplementation": "AI 建议应接收真实 message/thread 上下文，提供明确的插入草稿动作；发送仍调用 reply API，并在 UI 上区分 AI 建议、草稿、已发送三种状态。",
+    "backendNeeded": false,
+    "frontendNeeded": true,
+    "productDecisionNeeded": true,
+    "notes": "AI 请求本身是真实的，但它当前只能辅助生成文案，不能证明家园沟通消息闭环存在。"
+  }
+]
