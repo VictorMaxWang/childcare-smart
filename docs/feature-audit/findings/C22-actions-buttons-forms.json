@@ -1,0 +1,265 @@
+[
+  {
+    "id": "C22-001",
+    "severity": "F2",
+    "category": "no-onClick",
+    "page": "登录页",
+    "route": "/login",
+    "file": "app/login/page.tsx",
+    "lines": "509-512",
+    "label": "忘记密码？",
+    "handler": "none",
+    "evidence": [
+      "按钮使用 type=\"button\"，仅有 className 和展示文案，没有 onClick、Link、form submit 或禁用说明。",
+      "同页登录、注册、体验账号入口已确认分别调用 useApp.login、register、loginWithDemo，并最终走 /api/auth/*；问题只限忘记密码入口。"
+    ],
+    "expectedBehavior": "入口应跳转到密码找回流程、打开找回表单，或明确禁用/隐藏，避免看起来可点击但没有动作。"
+  },
+  {
+    "id": "C22-002",
+    "severity": "F2",
+    "category": "no-onClick",
+    "page": "教师端工作台",
+    "route": "/teacher/agent",
+    "file": "app/teacher/agent/page.tsx",
+    "lines": "1029-1032",
+    "label": "班级名称 + ChevronDown",
+    "handler": "none",
+    "evidence": [
+      "按钮展示当前班级并带 ChevronDown 图标，但没有 onClick、aria-expanded、Select/Menu 或导航行为。",
+      "视觉上像班级下拉切换器，实际只能静态展示。"
+    ],
+    "expectedBehavior": "若支持切班，应接入班级选择菜单并刷新上下文；若不支持，应改为静态文本或禁用态。"
+  },
+  {
+    "id": "C22-003",
+    "severity": "F1",
+    "category": "fake-success,no-api-submit",
+    "page": "儿童档案",
+    "route": "/children",
+    "file": "app/children/page.tsx",
+    "lines": "131-168,549",
+    "label": "保存档案",
+    "handler": "handleSubmit",
+    "evidence": [
+      "handleSubmit 校验后调用 addChild 并显示 toast.success(\"幼儿档案已保存\")。",
+      "处理函数内未发现 fetch、server action、persistAppSnapshotNow 或其他远端持久化调用。"
+    ],
+    "expectedBehavior": "保存档案应调用真实创建/更新 API 或显式持久化快照，并根据远端结果展示成功、失败或本地模式提示。"
+  },
+  {
+    "id": "C22-004",
+    "severity": "F1",
+    "category": "fake-success,local-state-only",
+    "page": "儿童档案",
+    "route": "/children",
+    "file": "app/children/page.tsx",
+    "lines": "402-405,436-439",
+    "label": "切换出勤",
+    "handler": "toggleTodayAttendance + toast.success",
+    "evidence": [
+      "列表和卡片里的出勤切换都只调用 toggleTodayAttendance(child.id) 后立即 toast.success。",
+      "没有出勤 API、持久化快照或失败回滚逻辑。"
+    ],
+    "expectedBehavior": "出勤状态变更应写入出勤记录后端或快照持久化，并在失败时恢复 UI 状态。"
+  },
+  {
+    "id": "C22-005",
+    "severity": "F0",
+    "category": "dangerous-delete,fake-success",
+    "page": "儿童档案",
+    "route": "/children",
+    "file": "app/children/page.tsx",
+    "lines": "557-581",
+    "label": "确认删除",
+    "handler": "removeChild(deleteId) + toast.success",
+    "evidence": [
+      "删除确认文案说明会同时清除该幼儿的出勤、饮食、成长与反馈记录。",
+      "确认后直接调用 removeChild(deleteId) 并显示 toast.success(\"档案已删除\")，没有服务端删除、持久化确认、撤销或二次校验。"
+    ],
+    "expectedBehavior": "危险删除应走后端事务或软删除接口，返回成功后再更新 UI，并提供失败处理、审计记录和可恢复策略。"
+  },
+  {
+    "id": "C22-006",
+    "severity": "F1",
+    "category": "fake-success,no-api-submit",
+    "page": "健康 / 晨检",
+    "route": "/health",
+    "file": "app/health/page.tsx",
+    "lines": "182-230,845-846",
+    "label": "保存记录",
+    "handler": "handleSaveHealthCheck",
+    "evidence": [
+      "handleSaveHealthCheck 写入 upsertHealthCheck 后弹出 toast.success(\"晨检记录已保存\") 或 warning。",
+      "函数内未发现 fetch、persistAppSnapshotNow、server action 或错误回滚。"
+    ],
+    "expectedBehavior": "晨检保存应持久化到健康记录 API 或统一快照 API，并区分远端成功、本地暂存和失败。"
+  },
+  {
+    "id": "C22-007",
+    "severity": "F1",
+    "category": "fake-success,no-api-submit",
+    "page": "成长记录",
+    "route": "/growth",
+    "file": "app/growth/page.tsx",
+    "lines": "161-189,503-505",
+    "label": "保存记录",
+    "handler": "submitRecord",
+    "evidence": [
+      "submitRecord 调用 addGrowthRecord 后立即 toast.success(\"成长记录已保存\") 并清空表单。",
+      "处理函数未调用远端 API 或 persistAppSnapshotNow。"
+    ],
+    "expectedBehavior": "成长记录应写入后端或持久化快照，失败时保留表单内容并提示用户。"
+  },
+  {
+    "id": "C22-008",
+    "severity": "F1",
+    "category": "fake-success,no-api-submit",
+    "page": "饮食记录",
+    "route": "/diet",
+    "file": "app/diet/page.tsx",
+    "lines": "239-255,360-379,915",
+    "label": "单餐录入 / 批量录入 / 确认录入",
+    "handler": "saveMealRecord, confirmApplyBulkTemplate",
+    "evidence": [
+      "saveMealRecord 只调用 upsertMealRecord 更新本地 store。",
+      "confirmApplyBulkTemplate 调用 bulkApplyMealTemplate 后 toast.success(\"批量录入已完成\")。",
+      "核心饮食保存链路没有 fetch、persistAppSnapshotNow 或失败回滚。"
+    ],
+    "expectedBehavior": "单餐和批量饮食录入应调用 meal record API 或统一快照持久化，并对部分成功/失败给出可追踪结果。"
+  },
+  {
+    "id": "C22-009",
+    "severity": "F1",
+    "category": "upload-parse-gap,fake-success",
+    "page": "饮食图片识别",
+    "route": "/diet",
+    "file": "app/diet/page.tsx",
+    "lines": "381-425,1136-1172,1180-1208,1378",
+    "label": "拍照 / 上传餐盘图片 -> 确定录入",
+    "handler": "handleBulkVisionUpload, handleVisionUpload, confirmVisionFoods",
+    "evidence": [
+      "图片识别阶段真实调用 /api/ai/vision-meal。",
+      "识别结果确认录入时走 confirmVisionFoods -> onSave -> saveMealRecord，最终仍只写本地 store 并 toast.success(\"识别食物已录入本餐记录。\")。"
+    ],
+    "expectedBehavior": "图片解析结果确认后应和普通餐食记录一样持久化，不能只停留在本地 UI 状态。"
+  },
+  {
+    "id": "C22-010",
+    "severity": "F1",
+    "category": "reply-message-gap,local-state-only",
+    "page": "教师端家园沟通",
+    "route": "/teacher/agent?action=communication",
+    "file": "app/teacher/agent/page.tsx",
+    "lines": "907-934,1123-1125,1149-1152,1185-1192",
+    "label": "发送本地回复 / 发送当前回复 / 标记已处理",
+    "handler": "sendCommunicationReply, markCommunicationHandled",
+    "evidence": [
+      "sendCommunicationReply 只创建 sentItem 并 setSentCommunicationItems、setProcessedCommunicationIds、清空本地 draft。",
+      "markCommunicationHandled 只 setProcessedCommunicationIds 并切换 tab。",
+      "没有消息发送 API、已读/已处理持久化 API 或刷新后恢复逻辑。"
+    ],
+    "expectedBehavior": "回复应创建真实沟通消息，标记已处理应持久化消息状态，并能被家长端/教师端重新读取。"
+  },
+  {
+    "id": "C22-011",
+    "severity": "F2",
+    "category": "local-state-only",
+    "page": "家长端家园沟通 / 提醒",
+    "route": "/parent/agent#feedback",
+    "file": "app/parent/agent/page.tsx",
+    "lines": "852-925,1301-1302,2049-2050",
+    "label": "稍后提醒",
+    "handler": "snoozeFamilyReminder",
+    "evidence": [
+      "结构化反馈 submitStructuredFeedback 已调用 persistAppSnapshotNow，可视为有持久化尝试。",
+      "snoozeFamilyReminder 只调用 updateReminderStatus(reminderId, \"snoozed\") 并设置本地 feedbackStatus，文案也说明保存在本地。",
+      "该分支没有 persistAppSnapshotNow 或提醒状态 API。"
+    ],
+    "expectedBehavior": "稍后提醒/标记状态应与反馈提交一样持久化，或明确显示本地暂存模式。"
+  },
+  {
+    "id": "C22-012",
+    "severity": "F1",
+    "category": "upload-parse-gap,no-archive-submit",
+    "page": "教师端健康材料解析",
+    "route": "/teacher/health-file-bridge",
+    "file": "app/teacher/health-file-bridge/page.tsx",
+    "lines": "169-176,203-222,311-313,431-536,554-625",
+    "label": "上传图片 / PDF、开始结构化解析、确认无误归档",
+    "handler": "handleFileChange, handleSubmit",
+    "evidence": [
+      "handleFileChange 将 File 转为 toUploadMeta(file, index, previewText.trim()) 并 setFiles，未上传二进制文件到存储。",
+      "handleSubmit 调用 /api/ai/health-file-bridge 解析元数据和补充文本，返回结果只 setResult。",
+      "页面展示“确认无误，归档”“归档完成”等流程文案，但解析结果区没有真实归档/保存按钮或写入健康档案 API。"
+    ],
+    "expectedBehavior": "材料上传应接入真实文件上传或明确仅做文本解析；解析后应提供人工确认归档动作并写入健康档案/提醒记录。"
+  },
+  {
+    "id": "C22-013",
+    "severity": "F1",
+    "category": "reply-message-gap,local-state-only",
+    "page": "教师端高风险会诊",
+    "route": "/teacher/high-risk-consultation",
+    "file": "app/teacher/high-risk-consultation/page.tsx",
+    "lines": "566-570,608-610,786-818",
+    "label": "讨论发送 / 发起会诊邀请 / 侧栏动作",
+    "handler": "sendDiscussionNote, setShowSetupSections, setSideActionMessage",
+    "evidence": [
+      "sendDiscussionNote 只把输入内容 prepend 到 discussionNotes 并清空输入。",
+      "发起会诊 / 邀请专家按钮只 setShowSetupSections(true)。",
+      "侧栏后续动作只定位输入区并 setSideActionMessage，没有邀请、消息、任务或派单 API。"
+    ],
+    "expectedBehavior": "会诊讨论和专家邀请应写入真实会诊消息/邀请/任务模型，并支持刷新后读取。"
+  },
+  {
+    "id": "C22-014",
+    "severity": "F1",
+    "category": "local-state-only,no-api-submit",
+    "page": "教师端高风险会诊",
+    "route": "/teacher/high-risk-consultation",
+    "file": "app/teacher/high-risk-consultation/page.tsx",
+    "lines": "469-490,532-542",
+    "label": "会诊生成结果同步、加入后续提醒",
+    "handler": "runConsultation stream done, addFollowUpReminder",
+    "evidence": [
+      "会诊生成本身使用 /api/ai/high-risk-consultation/stream。",
+      "stream done 后调用 upsertConsultation、upsertInterventionCard、upsertReminder 并显示“已同步教师端、家长端和园长端”。",
+      "addFollowUpReminder 也只 upsertReminder 并 setStreamMessage；未看到持久化 API 或 persistAppSnapshotNow。"
+    ],
+    "expectedBehavior": "AI 生成结果和后续提醒应持久化到会诊/干预/提醒后端，再显示跨端同步成功。"
+  },
+  {
+    "id": "C22-015",
+    "severity": "F2",
+    "category": "export-share-gap,static-detail",
+    "page": "园长端周报",
+    "route": "/admin/agent?mode=weekly",
+    "file": "components/admin/pixel-replica/DirectorWeeklyReportReplica.tsx",
+    "lines": "109-117,237,269-283",
+    "label": "导出周报 / 分享周报 / 查看反馈详情",
+    "handler": "ReplicaUnavailableButton",
+    "evidence": [
+      "导出周报和分享周报使用 ReplicaUnavailableButton。",
+      "查看反馈详情也使用 ReplicaUnavailableButton。",
+      "同组件里的重新生成周报 onRerun 和派单 onCreateDispatch 是真实动作，已排除。"
+    ],
+    "expectedBehavior": "导出/分享应实现文件生成、下载或分享链接；查看详情应跳转到反馈详情或打开可交互明细。未实现时应避免展示成主要可用动作。"
+  },
+  {
+    "id": "C22-016",
+    "severity": "F2",
+    "category": "share-export-missing",
+    "page": "家长端成长绘本",
+    "route": "/parent/storybook",
+    "file": "app/parent/storybook/page.tsx",
+    "lines": "340-343,472-481",
+    "label": "绘本生成后的保存 / 分享 / 导出",
+    "handler": "onGenerate, onRetry",
+    "evidence": [
+      "绘本生成和重试入口真实调用 /api/ai/parent-storybook。",
+      "扫描该页面动作入口未发现保存、分享或导出按钮；生成结果主要依赖本地 cache 与页面状态。"
+    ],
+    "expectedBehavior": "若绘本是可留存内容，应提供版本保存、分享或导出链路；若只是临时预览，应在 UI 中明确。"
+  }
+]

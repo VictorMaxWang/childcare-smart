@@ -1,0 +1,725 @@
+[
+  {
+    "findingId": "C20-001",
+    "title": "高风险会诊显示已同步三端，但 fallback 结果只写入前端 store",
+    "severity": "F0",
+    "status": "open",
+    "featureArea": "high-risk-consultation",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/teacher/high-risk-consultation",
+    "viewport": "code",
+    "featureStatus": "fake-success",
+    "userStory": "作为教师，我希望发起高风险会诊后，教师、家长和园长都能读取同一条真实会诊记录。",
+    "reproSteps": [
+      "扫描 app/teacher/high-risk-consultation/page.tsx 的 done 事件处理。",
+      "扫描 app/api/ai/high-risk-consultation/stream/route.ts 的本地 SSE fallback。",
+      "扫描 lib/store.tsx 的 upsertConsultation/upsertInterventionCard 写入路径。"
+    ],
+    "expected": "会诊完成后应调用后端 consultation 持久化接口，三端从同一后端记录读取，并按 API 结果展示同步状态。",
+    "actual": "SSE fallback 可以生成 renderable result；页面随后 setResult、upsertConsultation、upsertInterventionCard、markMobileDraftSyncStatus，并显示会诊完成已同步教师端、家长端和园长端，但没有 feature-specific 保存 API。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/teacher/high-risk-consultation/page.tsx:469",
+        "app/teacher/high-risk-consultation/page.tsx:471",
+        "app/teacher/high-risk-consultation/page.tsx:472",
+        "app/teacher/high-risk-consultation/page.tsx:490",
+        "app/api/ai/high-risk-consultation/stream/route.ts:49",
+        "app/api/ai/high-risk-consultation/route.ts:211",
+        "lib/store.tsx:5171"
+      ],
+      "apiEndpoints": [
+        "POST /api/ai/high-risk-consultation/stream",
+        "POST /api/ai/high-risk-consultation"
+      ],
+      "codeSignals": [
+        "stream fallback uses setTimeout(push, 80) to simulate staged SSE output",
+        "providerTrace sets transport next-json-fallback / realProvider false / fallback true",
+        "done handler mutates React/local app store only",
+        "success copy says synced to teacher, parent and director sides"
+      ]
+    },
+    "dataPersistenceResult": "lost-after-refresh",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "Add consultation create/update/read APIs, persist the generated consultation and intervention card transactionally, and only show cross-role sync success after the write succeeds.",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "This is the highest-risk fake success because it claims multi-role synchronization for a clinical/risk workflow."
+  },
+  {
+    "findingId": "C20-002",
+    "title": "教师家园沟通回复只进入 React state，没有 send/reply API",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-communication",
+    "role": "teacher",
+    "demoAccount": "李老师 | 周老师",
+    "route": "/teacher/agent?action=communication",
+    "viewport": "code",
+    "featureStatus": "fake-success",
+    "userStory": "作为教师，我希望回复家长消息后，家长能收到并且刷新后仍可查看。",
+    "reproSteps": [
+      "扫描 app/teacher/agent/page.tsx 的 communication state。",
+      "扫描 sendCommunicationReply 函数。",
+      "确认发送路径没有 fetch、mutation 或持久化调用。"
+    ],
+    "expected": "教师回复应调用 reply/send API，保存 message thread，并按 childId/classId/session 做权限校验。",
+    "actual": "sendCommunicationReply 构造 sentItem 后只调用 setSentCommunicationItems、setProcessedCommunicationIds、setCommunicationDrafts 和 setCommunicationTab；页面按钮文案包含本地回复。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/teacher/agent/page.tsx:145",
+        "app/teacher/agent/page.tsx:150",
+        "app/teacher/agent/page.tsx:911",
+        "app/teacher/agent/page.tsx:929",
+        "app/teacher/agent/page.tsx:1123",
+        "app/teacher/agent/page.tsx:1187"
+      ],
+      "apiEndpoints": [],
+      "codeSignals": [
+        "communicationDrafts, processedCommunicationIds and sentCommunicationItems are component state",
+        "sendCommunicationReply has no fetch/request/mutation call",
+        "sent item id is generated from childId plus Date.now",
+        "UI exposes local reply flow instead of persisted conversation"
+      ]
+    },
+    "dataPersistenceResult": "lost-after-refresh",
+    "apiIntegrationResult": "no-api",
+    "recommendedImplementation": "Implement conversation/reply POST and list APIs, bind replies to real parent feedback/message records, and reload thread state from the backend.",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "C13 browser audit already observed the same behavior; C20 records the code-level cause."
+  },
+  {
+    "findingId": "C20-003",
+    "title": "家长结构化反馈提交用本地 store 和通用快照，不是家园沟通 API",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "parent-feedback",
+    "role": "parent",
+    "demoAccount": "林妈妈",
+    "route": "/parent/agent?child=c-1#feedback",
+    "viewport": "code",
+    "featureStatus": "fake-success",
+    "userStory": "作为家长，我希望提交今晚反馈后，教师端能读取同一条真实反馈并继续回复。",
+    "reproSteps": [
+      "扫描 app/parent/agent/page.tsx 的 submitStructuredFeedback。",
+      "扫描 lib/store.tsx 的 addGuardianFeedback 和 persistAppSnapshotNow。",
+      "确认没有 guardian-feedback/message feature API。"
+    ],
+    "expected": "反馈提交应调用专用 guardian feedback/message API，并能跨账号读取、回复和审计。",
+    "actual": "submitStructuredFeedback 先 flushSync 写 addGuardianFeedback/checkInTask/reminder 状态，再调用 persistAppSnapshotNow；demo 用户只 local_only，普通用户也只保存整个 /api/state snapshot。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/parent/agent/page.tsx:868",
+        "app/parent/agent/page.tsx:885",
+        "app/parent/agent/page.tsx:901",
+        "lib/store.tsx:5120",
+        "lib/store.tsx:4739",
+        "lib/store.tsx:4750"
+      ],
+      "apiEndpoints": [
+        "PUT /api/state"
+      ],
+      "codeSignals": [
+        "feedback save path mutates guardianFeedbacks in app store",
+        "demo account returns local_only instead of remote persistence",
+        "generic snapshot persistence is used in place of a feedback/thread API",
+        "status copy still says feedback submitted or recorded"
+      ]
+    },
+    "dataPersistenceResult": "lost-after-refresh",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "Create POST/GET guardian feedback APIs and connect teacher communication to those records instead of relying on scoped localStorage/snapshot state.",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": true,
+    "notes": "Product should decide whether structured tonight feedback is also a communication message or a separate feedback object with linked replies."
+  },
+  {
+    "findingId": "C20-004",
+    "title": "晨检记录保存只调用 upsertHealthCheck 本地状态",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "health",
+    "role": "teacher",
+    "demoAccount": "李老师 | 周老师",
+    "route": "/health",
+    "viewport": "code",
+    "featureStatus": "fake-success",
+    "userStory": "作为教师，我希望晨检体温、情绪和异常状态保存到真实晨检台账。",
+    "reproSteps": [
+      "扫描 app/health/page.tsx 的 handleSaveHealthCheck。",
+      "扫描 lib/store.tsx 的 upsertHealthCheck。",
+      "确认保存按钮路径没有 health-check API。"
+    ],
+    "expected": "晨检保存应调用健康记录写入接口，并返回保存失败、权限失败和冲突处理状态。",
+    "actual": "handleSaveHealthCheck 校验后调用 upsertHealthCheck，并立即 toast 成功/警告；upsertHealthCheck 只 setHealthCheckRecords。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/health/page.tsx:182",
+        "app/health/page.tsx:209",
+        "app/health/page.tsx:220",
+        "app/health/page.tsx:224",
+        "lib/store.tsx:5260"
+      ],
+      "apiEndpoints": [],
+      "codeSignals": [
+        "no fetch/request/mutation in save path",
+        "toast says record saved before any backend write",
+        "store write creates local client id with createClientId('hc')"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "no-api",
+    "recommendedImplementation": "Add health-check POST/PUT APIs and make success toast conditional on backend success; keep optimistic UI only with rollback/error state.",
+    "backendNeeded": false,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Counted as no-api/local-state-only record save. Backend gap is covered in shared persistence findings."
+  },
+  {
+    "findingId": "C20-005",
+    "title": "饮食单餐和批量录入保存只写本地 mealRecords",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "diet-nutrition",
+    "role": "teacher",
+    "demoAccount": "李老师 | 周老师",
+    "route": "/diet",
+    "viewport": "code",
+    "featureStatus": "fake-success",
+    "userStory": "作为教师，我希望单餐、批量餐单和 AI 营养建议保存到真实饮食记录。",
+    "reproSteps": [
+      "扫描 app/diet/page.tsx 的 saveMealRecord、confirmApplyBulkTemplate 和 runDietEvaluation。",
+      "扫描 lib/store.tsx 的 upsertMealRecord/bulkApplyMealTemplate。",
+      "确认保存路径没有 meal record API。"
+    ],
+    "expected": "餐食保存、批量应用和 AI 营养建议应写入后端饮食记录，并支持刷新、跨角色查看和错误处理。",
+    "actual": "单餐保存和批量应用调用 upsertMealRecord/bulkApplyMealTemplate；AI 营养建议调用 /api/ai/diet-evaluation 后仍通过 saveMealRecord 写本地记录。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/diet/page.tsx:239",
+        "app/diet/page.tsx:274",
+        "app/diet/page.tsx:310",
+        "app/diet/page.tsx:363",
+        "app/diet/page.tsx:376",
+        "lib/store.tsx:5044",
+        "lib/store.tsx:5079"
+      ],
+      "apiEndpoints": [
+        "POST /api/ai/diet-evaluation",
+        "POST /api/ai/vision-meal"
+      ],
+      "codeSignals": [
+        "AI endpoints analyze/generate only; record write remains local",
+        "bulkApplyMealTemplate loops local preview and calls upsertMealRecord",
+        "toast.success reports batch completion without a backend write"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "no-api",
+    "recommendedImplementation": "Add meal record create/update/bulk APIs and persist AI evaluation metadata with the meal record.",
+    "backendNeeded": false,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Vision and diet analysis APIs exist, but they do not make the meal save itself real."
+  },
+  {
+    "findingId": "C20-006",
+    "title": "成长记录保存只调用 addGrowthRecord 本地状态",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "growth",
+    "role": "teacher",
+    "demoAccount": "李老师 | 周老师",
+    "route": "/growth",
+    "viewport": "code",
+    "featureStatus": "fake-success",
+    "userStory": "作为教师，我希望成长观察记录保存到真实台账并同步给家长端。",
+    "reproSteps": [
+      "扫描 app/growth/page.tsx 的 submitRecord。",
+      "扫描 lib/store.tsx 的 addGrowthRecord。",
+      "确认没有 growth record POST/PUT。"
+    ],
+    "expected": "成长记录应通过后端 API 保存，并绑定 childId、recorder、media、复查状态和权限范围。",
+    "actual": "submitRecord 调用 addGrowthRecord 后 toast 成长记录已保存；addGrowthRecord 只 setGrowthRecords 并生成本地 id。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/growth/page.tsx:161",
+        "app/growth/page.tsx:170",
+        "app/growth/page.tsx:180",
+        "lib/store.tsx:5100"
+      ],
+      "apiEndpoints": [],
+      "codeSignals": [
+        "no fetch/request/mutation in submitRecord",
+        "record id comes from createClientId('g')",
+        "success toast is not tied to backend acknowledgement"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "no-api",
+    "recommendedImplementation": "Add growth-record POST/GET APIs and use server response as the source of truth for new records.",
+    "backendNeeded": false,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Media upload is not part of this save path."
+  },
+  {
+    "findingId": "C20-007",
+    "title": "幼儿档案新增/删除走本地 store，编辑入口暂未开放",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "children",
+    "role": "director",
+    "demoAccount": "陈园长",
+    "route": "/children",
+    "viewport": "code",
+    "featureStatus": "fake-success",
+    "userStory": "作为园长，我希望新增、删除和编辑幼儿档案都保存到真实档案系统。",
+    "reproSteps": [
+      "扫描 app/children/page.tsx 的 handleSubmit 和删除按钮。",
+      "扫描 lib/store.tsx 的 addChild/removeChild。",
+      "确认编辑按钮 disabled 且无 children API。"
+    ],
+    "expected": "幼儿档案新增、删除和编辑应调用后端 children API，并带机构、班级、家长绑定校验。",
+    "actual": "handleSubmit 调用 addChild 后 toast 幼儿档案已保存；removeChild 级联删除本地数组；详情编辑按钮 disabled 并显示暂未开放。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/children/page.tsx:131",
+        "app/children/page.tsx:146",
+        "app/children/page.tsx:164",
+        "app/children/page.tsx:573",
+        "app/children/page.tsx:670",
+        "lib/store.tsx:4995",
+        "lib/store.tsx:5004"
+      ],
+      "apiEndpoints": [],
+      "codeSignals": [
+        "addChild appends to childrenList with local generated id",
+        "removeChild deletes related local records in memory",
+        "edit profile button is disabled with 暂未开放"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "no-api",
+    "recommendedImplementation": "Add children create/update/delete APIs with institution scoping and replace local cascade deletion with server-confirmed operations.",
+    "backendNeeded": false,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "This is counted as fake success because the UI says saved while no feature-specific write API is called."
+  },
+  {
+    "findingId": "C20-008",
+    "title": "健康材料解析发送文件元数据和预览文字，fallback 标记为 mock",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "health-file-bridge",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/teacher/health-file-bridge",
+    "viewport": "code",
+    "featureStatus": "mock-only",
+    "userStory": "作为教师，我希望上传图片或 PDF 后，系统解析真实文件内容并归档到健康档案。",
+    "reproSteps": [
+      "扫描 app/teacher/health-file-bridge/page.tsx 的 file 处理和 handleSubmit。",
+      "扫描 app/api/ai/health-file-bridge/route.ts 的 fallback 构造。",
+      "确认结果页没有真实归档提交动作。"
+    ],
+    "expected": "健康材料应上传真实二进制或对象存储 fileId，解析结果经人工确认后保存到健康档案。",
+    "actual": "前端把 File 转为 name/mimeType/sizeBytes/previewText 元数据；API 在 brain 不可用时返回 source next-local-extractor、fallback true、mock true、liveReadyButNotVerified true；页面只 setResult。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/teacher/health-file-bridge/page.tsx:75",
+        "app/teacher/health-file-bridge/page.tsx:190",
+        "app/teacher/health-file-bridge/page.tsx:203",
+        "app/teacher/health-file-bridge/page.tsx:222",
+        "app/api/ai/health-file-bridge/route.ts:149",
+        "app/api/ai/health-file-bridge/route.ts:165"
+      ],
+      "apiEndpoints": [
+        "POST /api/ai/health-file-bridge"
+      ],
+      "codeSignals": [
+        "file payload contains metadata and optional previewText, not binary file bytes",
+        "fallback response explicitly sets fallback true and mock true",
+        "persistHealthFileBridgeWriteback skips when brain base URL is missing",
+        "parsed result is held in component state"
+      ]
+    },
+    "dataPersistenceResult": "no-submit",
+    "apiIntegrationResult": "mock-only",
+    "recommendedImplementation": "Add real upload, parse job, confirm/archive APIs and store parsed evidence with source file references.",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "This overlaps C14 behaviorally; this finding captures the code-level mock/fallback signals."
+  },
+  {
+    "findingId": "C20-009",
+    "title": "教师语音/OCR 草稿入口使用 buildMock 和 placeholder provider",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-draft-copilot",
+    "role": "teacher",
+    "demoAccount": "李老师 | 周老师",
+    "route": "/teacher/agent",
+    "viewport": "code",
+    "featureStatus": "mock-only",
+    "userStory": "作为教师，我希望语音速记和 OCR 草稿来自真实 ASR/OCR 解析，并能可靠同步。",
+    "reproSteps": [
+      "扫描 app/teacher/agent/page.tsx 的 createVoiceDraft/createOcrDraft。",
+      "扫描 lib/mobile/voice-input.ts 和 lib/mobile/ocr-input.ts。",
+      "扫描 ASR/OCR/TTS provider resolver。"
+    ],
+    "expected": "语音/OCR 草稿应通过真实上传、ASR/OCR/understanding API 生成，并区分本地草稿和已同步记录。",
+    "actual": "教师页快捷入口直接调用 buildMockVoiceDraft/buildMockOcrDraft；OCR/TTS 的 real provider 仍返回 mock text/script；Vivo ASR 有凭据时也是 stub/mock path。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/teacher/agent/page.tsx:314",
+        "app/teacher/agent/page.tsx:327",
+        "app/teacher/agent/page.tsx:335",
+        "lib/mobile/voice-input.ts:12",
+        "lib/mobile/ocr-input.ts:4",
+        "lib/ai/providers/ocr-provider.ts:37",
+        "lib/ai/providers/asr-provider.ts:72",
+        "lib/ai/providers/tts-provider.ts:32"
+      ],
+      "apiEndpoints": [
+        "POST /api/ai/teacher-voice-upload",
+        "POST /api/ai/teacher-voice-understand"
+      ],
+      "codeSignals": [
+        "buildMockVoiceDraft creates local voice content",
+        "buildMockOcrDraft creates local OCR text and fields",
+        "RealPlaceholderOcrProvider and RealPlaceholderTtsProvider return fallback text/script",
+        "VivoAsrStubProvider mode remains mock"
+      ]
+    },
+    "dataPersistenceResult": "not-applicable",
+    "apiIntegrationResult": "mock-only",
+    "recommendedImplementation": "Replace quick mock draft creation with real upload/understanding flows, or label these buttons as demo seed actions until real providers are wired.",
+    "backendNeeded": false,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "The API routes can return 200, but provider outputs are explicitly mock/stub in the scanned code paths."
+  },
+  {
+    "findingId": "C20-010",
+    "title": "家长趋势查询在 brain 不可用时直接 503，缺少本地或后端实现",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "parent-trend-query",
+    "role": "parent",
+    "demoAccount": "林妈妈",
+    "route": "/parent/agent?intent=query_trend",
+    "viewport": "code",
+    "featureStatus": "backend-missing",
+    "userStory": "作为家长，我希望查看孩子近期趋势时能得到稳定的趋势图和解释。",
+    "reproSteps": [
+      "扫描 app/parent/agent/page.tsx 的 submitTrendQuery。",
+      "扫描 app/api/ai/parent-trend-query/route.ts。",
+      "确认 fallback 不生成趋势结果。"
+    ],
+    "expected": "趋势查询应有可用后端或本地规则 fallback，并返回结构化趋势结果、空态或错误态。",
+    "actual": "前端调用 /api/ai/parent-trend-query；当 brain proxy 没有 response 时，route 返回 503 和趋势解读暂时不可用，不生成趋势数据。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/parent/agent/page.tsx:657",
+        "app/parent/agent/page.tsx:671",
+        "app/api/ai/parent-trend-query/route.ts:20",
+        "app/api/ai/parent-trend-query/route.ts:31",
+        "components/parent/TrendLineChart.tsx:101"
+      ],
+      "apiEndpoints": [
+        "POST /api/ai/parent-trend-query"
+      ],
+      "codeSignals": [
+        "route forwards to brain endpoint and returns 503 on unavailable fallback",
+        "error detail says no available trend result",
+        "chart copy says backend trend service is not connected"
+      ]
+    },
+    "dataPersistenceResult": "not-applicable",
+    "apiIntegrationResult": "unknown",
+    "recommendedImplementation": "Implement a deterministic trend-query backend/fallback using existing health, diet, growth and feedback records, then reserve 503 for true outages.",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Backend-missing risk is explicit and user-visible."
+  },
+  {
+    "findingId": "C20-011",
+    "title": "成长绘本 demoSeed 请求被隔离成本地 fallback 故事",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "parent-storybook",
+    "role": "parent",
+    "demoAccount": "林妈妈",
+    "route": "/parent/storybook?child=c-1&demoSeed=recording-c1-bedtime",
+    "viewport": "code",
+    "featureStatus": "mock-only",
+    "userStory": "作为家长，我希望成长绘本生成来自真实孩子记录和真实媒体生成/缓存。",
+    "reproSteps": [
+      "扫描 app/api/ai/parent-storybook/route.ts 的 demoSeed 分支。",
+      "扫描 parent storybook cache/fallback metadata。",
+      "确认 demoSeed 不走远端生成。"
+    ],
+    "expected": "非调试路径应请求真实 storybook generation，并清晰标注 fallback/demo media。",
+    "actual": "requestSource 以 parent-storybook-demo-seed 开头时直接返回 fallbackReason demo-seed-isolated；brain 不可用或返回异常时也 buildLocalStoryBookFallback 并以 200 返回。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/api/ai/parent-storybook/route.ts:185",
+        "app/api/ai/parent-storybook/route.ts:194",
+        "app/api/ai/parent-storybook/route.ts:216",
+        "app/api/ai/parent-storybook/route.ts:262",
+        "components/parent/StoryBookViewer.tsx:1470",
+        "lib/agent/parent-storybook-demo-seeds.ts:1"
+      ],
+      "apiEndpoints": [
+        "POST /api/ai/parent-storybook"
+      ],
+      "codeSignals": [
+        "isDemoSeedRequest bypasses remote generation",
+        "response header x-smartchildcare-storybook-demo-seed is set to isolated",
+        "fallback story marks transport next-json-fallback",
+        "viewer supports demoSeed-driven generation path"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "mock-only",
+    "recommendedImplementation": "Keep demoSeed only for tests/storybook demos; production parent route should not auto-bypass remote generation without a visible fallback label.",
+    "backendNeeded": false,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "The route has real proxy capability, but the demoSeed path is explicitly mock/fallback."
+  },
+  {
+    "findingId": "C20-012",
+    "title": "园长高风险会诊 feed 在后端空/不可用时返回 demo consultation feed",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "admin-consultation-feed",
+    "role": "director",
+    "demoAccount": "陈园长",
+    "route": "/admin | /admin/agent",
+    "viewport": "code",
+    "featureStatus": "mock-only",
+    "userStory": "作为园长，我希望看到教师真实发起并升级的会诊 feed，而不是演示补位数据。",
+    "reproSteps": [
+      "扫描 app/api/ai/high-risk-consultation/feed/route.ts。",
+      "扫描 lib/agent/use-admin-consultation-workspace.ts 的 fallback badge。",
+      "确认 fallback feed 由 demo-consultations 构造。"
+    ],
+    "expected": "园长会诊 feed 应读取后端会诊表；后端为空时显示真实空态，不应静默用演示数据伪装。",
+    "actual": "route 在 brain response 空 items 或 unavailable 时返回 buildDemoConsultationFeedItems；workspace badge 会显示演示兜底/本地兜底。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/api/ai/high-risk-consultation/feed/route.ts:3",
+        "app/api/ai/high-risk-consultation/feed/route.ts:19",
+        "app/api/ai/high-risk-consultation/feed/route.ts:36",
+        "app/api/ai/high-risk-consultation/feed/route.ts:53",
+        "lib/agent/use-admin-consultation-workspace.ts:50",
+        "lib/demo/demo-consultations.ts:1"
+      ],
+      "apiEndpoints": [
+        "GET /api/ai/high-risk-consultation/feed"
+      ],
+      "codeSignals": [
+        "imports buildDemoConsultationFeedItems",
+        "empty backend feed returns fallback true with demo items",
+        "unavailable backend feed returns fallback true with demo items",
+        "badge labels include 演示兜底 and 本地兜底"
+      ]
+    },
+    "dataPersistenceResult": "unknown",
+    "apiIntegrationResult": "mock-only",
+    "recommendedImplementation": "Return real empty/unavailable states separately from demo data; only inject demo feed in explicitly demo routes or seeded test mode.",
+    "backendNeeded": false,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "This can mask missing backend consultation persistence."
+  },
+  {
+    "findingId": "C20-013",
+    "title": "园长 pixel replica 看板包含静态图表与档案行，属于 visual/mock metrics",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "director-dashboard-mock-metrics",
+    "role": "director",
+    "demoAccount": "陈园长",
+    "route": "/admin | /admin/agent",
+    "viewport": "code",
+    "featureStatus": "visual-only",
+    "userStory": "作为园长，我希望看板指标、班级分布和档案行来自真实机构数据。",
+    "reproSteps": [
+      "扫描 components/admin/pixel-replica/directorReplicaData.ts。",
+      "扫描 app/admin/page.tsx 和 app/admin/agent/page.tsx 对 replica 组件的使用。",
+      "确认存在硬编码 chart/data rows。"
+    ],
+    "expected": "看板视觉复刻可以保留，但业务指标应使用 view model 或后端数据，静态示例应清晰标记。",
+    "actual": "directorReplicaData 导出固定 assets、trendTabs、chartLabels、weeklyTrendSeries、classDistribution、childArchiveRows、weeklyPendingRows 等静态数据。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "app/admin/page.tsx:6",
+        "app/admin/agent/page.tsx:6",
+        "components/admin/pixel-replica/directorReplicaData.ts:1",
+        "components/admin/pixel-replica/directorReplicaData.ts:9",
+        "components/admin/pixel-replica/directorReplicaData.ts:11",
+        "components/admin/pixel-replica/directorReplicaData.ts:23"
+      ],
+      "apiEndpoints": [],
+      "codeSignals": [
+        "pixel replica assets are fixed public images",
+        "chart labels and trend series are hard-coded",
+        "child archive rows use names such as 乐乐 and 小米 independent of visibleChildren",
+        "replica components mix real view model props with static decorative/mock data"
+      ]
+    },
+    "dataPersistenceResult": "not-applicable",
+    "apiIntegrationResult": "mock-only",
+    "recommendedImplementation": "Move static replica values behind clearly labeled demo-only fixtures or replace them with computed values from admin view models.",
+    "backendNeeded": false,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "Counted as both visual-only and mock-only dashboard metrics."
+  },
+  {
+    "findingId": "C20-014",
+    "title": "周报预览有生成 API，但没有保存/归档周报接口",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "weekly-report",
+    "role": "teacher | director | parent",
+    "demoAccount": "李老师 | 陈园长 | 林妈妈",
+    "route": "/teacher/agent?action=weekly-summary | /admin/agent?action=weekly-report",
+    "viewport": "code",
+    "featureStatus": "backend-missing",
+    "userStory": "作为教师或园长，我希望生成周报后能保存为历史周报并分享/回看。",
+    "reproSteps": [
+      "扫描 lib/agent/weekly-report-client.ts。",
+      "扫描 app/api/ai/weekly-report/route.ts。",
+      "扫描 admin/teacher pages对 weeklyReport 的状态缓存。"
+    ],
+    "expected": "周报生成后应支持 save/list/detail/share API，至少明确这是临时预览。",
+    "actual": "fetchWeeklyReport 只 POST /api/ai/weekly-report 并校验返回结构；页面使用 Map/useState 缓存预览结果，没有 weekly report save/list endpoint。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "lib/agent/weekly-report-client.ts:80",
+        "lib/agent/weekly-report-client.ts:92",
+        "app/api/ai/weekly-report/route.ts:32",
+        "app/admin/page.tsx:35",
+        "app/admin/page.tsx:121",
+        "app/teacher/agent/page.tsx:54"
+      ],
+      "apiEndpoints": [
+        "POST /api/ai/weekly-report",
+        "POST /api/ai/admin-agent"
+      ],
+      "codeSignals": [
+        "weekly report client has fetch/generate only",
+        "admin page caches report in weeklyReportCacheRef Map",
+        "no save/report archive route found in scanned code",
+        "source meta supports fallback/mock but not persistence"
+      ]
+    },
+    "dataPersistenceResult": "no-submit",
+    "apiIntegrationResult": "no-api",
+    "recommendedImplementation": "Define whether weekly reports are artifacts; if yes, add save/list/detail APIs and UI states for unsaved/generated/saved.",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": true,
+    "notes": "Generation can be real or fallback; persistence is the missing backend capability."
+  },
+  {
+    "findingId": "C20-015",
+    "title": "家长反馈附件/语音图片补充是 disabled 占位入口",
+    "severity": "F2",
+    "status": "open",
+    "featureArea": "parent-feedback-attachments",
+    "role": "parent",
+    "demoAccount": "林妈妈",
+    "route": "/parent/agent?child=c-1#feedback",
+    "viewport": "code",
+    "featureStatus": "visual-only",
+    "userStory": "作为家长，我希望反馈时能上传语音、图片或视频补充，让老师看到原始上下文。",
+    "reproSteps": [
+      "扫描 components/parent/ParentStructuredFeedbackComposer.tsx。",
+      "确认附件按钮 disabled。",
+      "确认提交 payload 的 attachments 为空对象。"
+    ],
+    "expected": "附件入口应有 upload API、进度/失败状态和已上传文件引用；未开放时应避免呈现为可用功能。",
+    "actual": "桌面视觉块显示上传照片/视频但按钮 disabled；另一分支说明语音和图片后续任务接入，本轮只保留占位入口不上传文件；handleSubmit 固定 attachments: {}。",
+    "evidence": {
+      "screenshots": [],
+      "consoleErrors": [],
+      "networkRequests": [],
+      "sourceFiles": [
+        "components/parent/ParentStructuredFeedbackComposer.tsx:250",
+        "components/parent/ParentStructuredFeedbackComposer.tsx:528",
+        "components/parent/ParentStructuredFeedbackComposer.tsx:535",
+        "components/parent/ParentStructuredFeedbackComposer.tsx:867",
+        "components/parent/ParentStructuredFeedbackComposer.tsx:870",
+        "components/parent/ParentStructuredFeedbackComposer.tsx:873"
+      ],
+      "apiEndpoints": [],
+      "codeSignals": [
+        "attachments are submitted as empty object",
+        "photo/video add button is disabled",
+        "copy says voice and image supplements will be connected later",
+        "disabled buttons say 语音补充 稍后开放 and 图片补充 稍后开放"
+      ]
+    },
+    "dataPersistenceResult": "no-submit",
+    "apiIntegrationResult": "no-api",
+    "recommendedImplementation": "Either hide/label attachment upload as not launched, or add parent feedback attachment upload APIs and persist attachment refs with feedback.",
+    "backendNeeded": false,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "This is visual-only because the UI surface exists but business behavior is intentionally disabled."
+  }
+]

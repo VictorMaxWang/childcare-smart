@@ -1,0 +1,369 @@
+[
+  {
+    "findingId": "C11-001",
+    "title": "家园沟通回复显示已发送但没有真实提交和持久化",
+    "severity": "F0",
+    "status": "open",
+    "featureArea": "teacher-communication",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/teacher/agent?action=communication",
+    "viewport": "desktop",
+    "featureStatus": "fake-success",
+    "userStory": "作为教师，我希望能回复家长消息，并让家长端刷新后看到该回复。",
+    "reproSteps": [
+      "以李老师登录并进入 /teacher/agent?action=communication。",
+      "打开待回复家长消息，点击 AI 沟通建议，再点击发送当前回复。",
+      "观察网络请求、我发起列表和待回复计数。",
+      "刷新教师端，再切换到林妈妈家长端验证是否能看到教师回复。"
+    ],
+    "expected": "发送回复时应调用真实消息提交接口，成功后刷新仍保留，林妈妈家长端能看到对应回复。",
+    "actual": "页面显示我发起列表增加 1 条、待回复减少 1 条，但未捕获任何教师回复提交接口；刷新后该回复状态丢失，林妈妈家长端也看不到本次回复。AI 建议本身会请求 /api/ai/teacher-agent，但发送回复只改当前页面状态。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C11-teacher/li-communication-before-send.png",
+        "artifacts/feature-audit/C11-teacher/li-communication-after-send.png",
+        "artifacts/feature-audit/C11-teacher/parent-agent-after-teacher-record.png"
+      ],
+      "consoleErrors": [],
+      "networkRequests": [
+        {
+          "method": "POST",
+          "url": "/api/ai/teacher-agent",
+          "status": 200,
+          "purpose": "仅用于生成 AI 沟通建议，不是回复提交"
+        },
+        {
+          "method": "POST",
+          "url": "teacher reply submit endpoint",
+          "status": "not observed",
+          "purpose": "点击发送当前回复后没有对应提交请求"
+        }
+      ],
+      "sourceFiles": [
+        "app/teacher/agent/page.tsx"
+      ],
+      "apiEndpoints": [
+        "/api/ai/teacher-agent"
+      ],
+      "codeSignals": [
+        "sendCommunicationReply 只更新 sentCommunicationItems、processedCommunicationIds、communicationDrafts 和 communicationTab。",
+        "未发现回复写入 store、/api/state 或消息后端接口。"
+      ]
+    },
+    "dataPersistenceResult": "lost-after-refresh",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "新增教师家园沟通回复提交接口和消息持久化模型；发送成功后写入当前班级/儿童/家长线程，并让家长端从同一数据源读取。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "本轮使用唯一文本发送验证；发送后的成功态属于页面内 fake success。"
+  },
+  {
+    "findingId": "C11-002",
+    "title": "晨检记录只保存到教师本地命名空间，未进入共享后端或家长端",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-health-check",
+    "role": "teacher",
+    "demoAccount": "李老师 | 周老师 | 林妈妈验证",
+    "route": "/health",
+    "viewport": "desktop",
+    "featureStatus": "backend-missing",
+    "userStory": "作为教师，我希望新增或编辑晨检记录后，同班数据刷新保留，并能同步到对应家长端。",
+    "reproSteps": [
+      "李老师进入 /health，为林小雨保存包含 C11-LI-mom4ydej-HEALTH 的晨检备注。",
+      "刷新 /health，检查教师端是否保留。",
+      "退出并以周老师登录，确认晨曦班不可见李老师班级儿童和李老师记录。",
+      "以周老师保存 C11-ZHOU-mom4ydej-HEALTH，并检查与李老师隔离。",
+      "切换林妈妈家长端，检查首页和家长 AI 页是否看到教师新增晨检。"
+    ],
+    "expected": "晨检保存应调用真实后端写接口；刷新和重新登录保留；教师之间按班级隔离；林妈妈能看到林小雨对应记录。",
+    "actual": "记录写入 scoped localStorage：childcare.demo:v4-demo-recovery-hotfix:u-teacher.health.v3 和 u-teacher2.health.v3。未观察到 /api/state 写入，家长端看不到李老师新增的晨检 token。周老师界面隔离正确，但这是本地命名空间隔离，不是共享后端隔离。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C11-teacher/li-health-after-save.png",
+        "artifacts/feature-audit/C11-teacher/li-health-after-refresh.png",
+        "artifacts/feature-audit/C11-teacher/zhou-health-isolation.png",
+        "artifacts/feature-audit/C11-teacher/zhou-health-after-save.png",
+        "artifacts/feature-audit/C11-teacher/parent-after-teacher-record.png"
+      ],
+      "consoleErrors": [
+        "Recharts warning: The width(-1) and height(-1) of chart should be greater than 0."
+      ],
+      "networkRequests": [
+        {
+          "method": "PUT",
+          "url": "/api/state",
+          "status": "not observed during save",
+          "purpose": "demo 账号保存未发远端快照写入"
+        }
+      ],
+      "sourceFiles": [
+        "app/health/page.tsx",
+        "lib/store.tsx",
+        "app/api/state/route.ts"
+      ],
+      "apiEndpoints": [
+        "/api/state"
+      ],
+      "codeSignals": [
+        "demo 账号 /api/state PUT 返回 403：示例账号不支持写入远端快照。",
+        "persistAppSnapshotNow 对 demo 用户返回 local_only；health 数据写入 scoped localStorage。"
+      ]
+    },
+    "dataPersistenceResult": "persisted",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "为晨检记录提供真实后端写入和按 childId/classId 查询接口；家长端与教师端共用后端记录源，并保留 demo 只读/可写策略的产品说明。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": true,
+    "notes": "刷新后在教师本地可恢复，但只属于同浏览器、同 demo 教师命名空间；不满足跨账号同步。"
+  },
+  {
+    "findingId": "C11-003",
+    "title": "饮食记录保存成功只落教师本地，家长端不可见",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-diet",
+    "role": "teacher",
+    "demoAccount": "李老师 | 林妈妈验证",
+    "route": "/diet",
+    "viewport": "desktop",
+    "featureStatus": "backend-missing",
+    "userStory": "作为教师，我希望记录餐次后刷新保留，并让家长看到孩子当日饮食。",
+    "reproSteps": [
+      "李老师进入 /diet，为林小雨保存包含 C11-LI-mom4ydej-FOOD 的餐次记录。",
+      "观察点击保存后的网络请求。",
+      "刷新 /diet，确认教师端列表中仍显示该食物文本。",
+      "切换林妈妈家长端，检查首页和家长 AI 页是否出现该餐次。"
+    ],
+    "expected": "饮食记录保存应调用真实后端；刷新后保留；家长端读取同一孩子的饮食记录。",
+    "actual": "教师端保存和刷新后能看到 C11-LI-mom4ydej-FOOD，但记录只在 childcare.demo:v4-demo-recovery-hotfix:u-teacher.meals.v3 中；未观察到 /api/state 或餐次写入接口，林妈妈端不可见。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C11-teacher/li-diet-after-save.png",
+        "artifacts/feature-audit/C11-teacher/li-diet-after-refresh.png",
+        "artifacts/feature-audit/C11-teacher/parent-after-teacher-record.png"
+      ],
+      "consoleErrors": [
+        "Recharts warning: The width(-1) and height(-1) of chart should be greater than 0."
+      ],
+      "networkRequests": [
+        {
+          "method": "PUT",
+          "url": "/api/state",
+          "status": "not observed during save",
+          "purpose": "demo 饮食保存未触发远端持久化"
+        }
+      ],
+      "sourceFiles": [
+        "app/diet/page.tsx",
+        "lib/store.tsx",
+        "app/api/state/route.ts"
+      ],
+      "apiEndpoints": [
+        "/api/state",
+        "/api/ai/vision-meal",
+        "/api/ai/diet-evaluation"
+      ],
+      "codeSignals": [
+        "餐次保存更新 meals store/localStorage。",
+        "demo 账号持久化路径为 local_only，不写远端 snapshot。"
+      ]
+    },
+    "dataPersistenceResult": "persisted",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "实现餐次记录创建/更新 API，并让家长端按 childId/date 读取教师写入的同一餐次数据；AI 识别/评价结果也应与餐次记录绑定保存。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "教师端局部刷新持久化通过，但跨角色同步失败。"
+  },
+  {
+    "findingId": "C11-004",
+    "title": "成长记录仅本地保存，且新增入口不支持真实图片上传",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-growth",
+    "role": "teacher",
+    "demoAccount": "李老师 | 林妈妈验证",
+    "route": "/growth",
+    "viewport": "desktop",
+    "featureStatus": "backend-missing",
+    "userStory": "作为教师，我希望新增文字、标签和图片成长记录，并同步到家长端成长档案或绘本。",
+    "reproSteps": [
+      "李老师进入 /growth，为林小雨新增包含 C11-LI-mom4ydej-GROWTH 的成长记录。",
+      "检查新增表单是否有图片上传或媒体保存能力。",
+      "刷新 /growth，确认教师端文本记录是否保留。",
+      "切换林妈妈家长端，检查成长档案/AI 页是否出现该记录。"
+    ],
+    "expected": "成长记录应支持文字、标签、图片真实保存；刷新保留；家长端成长档案或绘本同步可见。",
+    "actual": "文字/标签记录刷新后在教师端可见，但只保存在 childcare.demo:v4-demo-recovery-hotfix:u-teacher.growth.v3；新增表单未发现真实图片选择/上传；家长端不可见该成长记录。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C11-teacher/li-growth-after-save.png",
+        "artifacts/feature-audit/C11-teacher/li-growth-after-refresh.png",
+        "artifacts/feature-audit/C11-teacher/parent-after-teacher-record.png"
+      ],
+      "consoleErrors": [
+        "Recharts warning: The width(-1) and height(-1) of chart should be greater than 0."
+      ],
+      "networkRequests": [
+        {
+          "method": "PUT",
+          "url": "/api/state",
+          "status": "not observed during save",
+          "purpose": "demo 成长记录保存未触发远端持久化"
+        },
+        {
+          "method": "POST",
+          "url": "media upload endpoint",
+          "status": "not observed",
+          "purpose": "新增成长记录未发现图片上传请求"
+        }
+      ],
+      "sourceFiles": [
+        "app/growth/page.tsx",
+        "lib/store.tsx",
+        "app/api/state/route.ts"
+      ],
+      "apiEndpoints": [
+        "/api/state"
+      ],
+      "codeSignals": [
+        "addGrowthRecord 更新 growth store/localStorage。",
+        "新增记录输入未包含 mediaUrls 或文件上传链路。"
+      ]
+    },
+    "dataPersistenceResult": "persisted",
+    "apiIntegrationResult": "local-state-only",
+    "recommendedImplementation": "补齐成长记录后端写入、媒体上传/对象存储和家长端读取链路；明确成长档案/绘本同步规则。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": true,
+    "notes": "教师端文本记录不是 visual-only，但跨端同步和图片能力缺失。"
+  },
+  {
+    "findingId": "C11-005",
+    "title": "健康材料解析有上传 UI 和接口请求，但返回 fallback/mock 且结果不持久化",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-health-file-bridge",
+    "role": "teacher",
+    "demoAccount": "李老师",
+    "route": "/teacher/health-file-bridge",
+    "viewport": "desktop",
+    "featureStatus": "mock-only",
+    "userStory": "作为教师，我希望上传健康材料后得到真实解析结果，并能刷新后继续查看。",
+    "reproSteps": [
+      "李老师进入 /teacher/health-file-bridge。",
+      "选择测试图片文件 c11-health-upload.png，提交包含 C11-LI-mom4ydej-BRIDGE 的 OCR 文本。",
+      "观察 /api/ai/health-file-bridge 响应和页面结果。",
+      "刷新页面，检查解析结果是否保留。",
+      "检查错误态是否来自真实接口失败而非静态提示。"
+    ],
+    "expected": "上传应调用真实解析服务；返回结果应标明真实 provider；解析结果与儿童/材料记录绑定保存；刷新后可追溯，错误态来自真实失败分支。",
+    "actual": "页面有文件选择并 POST /api/ai/health-file-bridge，接口返回 200；响应包含 fallback/mock/liveReadyButNotVerified 信号，本地结果卡刷新后消失，没有进入 store 或后端记录。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C11-teacher/li-health-file-bridge-result.png",
+        "artifacts/feature-audit/C11-teacher/li-health-file-bridge-after-refresh.png"
+      ],
+      "consoleErrors": [],
+      "networkRequests": [
+        {
+          "method": "POST",
+          "url": "/api/ai/health-file-bridge",
+          "status": 200,
+          "responseSignals": [
+            "fallback: true",
+            "mock: true",
+            "liveReadyButNotVerified: true"
+          ]
+        }
+      ],
+      "sourceFiles": [
+        "app/teacher/health-file-bridge/page.tsx",
+        "app/api/ai/health-file-bridge/route.ts"
+      ],
+      "apiEndpoints": [
+        "/api/ai/health-file-bridge"
+      ],
+      "codeSignals": [
+        "页面 result 只存在组件状态。",
+        "API 在 Brain 不可用时返回本地 fallback 结构化结果，并带 mock/fallback 标记。"
+      ]
+    },
+    "dataPersistenceResult": "lost-after-refresh",
+    "apiIntegrationResult": "mock-only",
+    "recommendedImplementation": "接入可验证的 OCR/健康材料解析服务；保存解析任务、文件元数据、结果和错误状态；页面刷新时按任务或儿童重新读取结果。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": false,
+    "notes": "这是设计图 UI 以上的半接入，但当前成功结果不能视为真实解析完成。"
+  },
+  {
+    "findingId": "C11-006",
+    "title": "高风险会诊生成走 next-json-fallback，结果不能稳定恢复或同步",
+    "severity": "F1",
+    "status": "open",
+    "featureArea": "teacher-high-risk-consultation",
+    "role": "teacher",
+    "demoAccount": "李老师 | 周老师 | 林妈妈验证",
+    "route": "/teacher/high-risk-consultation",
+    "viewport": "desktop",
+    "featureStatus": "partial",
+    "userStory": "作为教师，我希望为本班儿童创建高风险会诊，刷新后能查看，并把提醒/干预卡同步给相关角色。",
+    "reproSteps": [
+      "李老师进入 /teacher/high-risk-consultation，为林小雨生成包含 C11-LI-mom4ydej-CONSULT 的会诊。",
+      "观察流式请求、provider trace、结果卡、提醒和干预卡写回。",
+      "刷新会诊页，检查结果卡是否恢复。",
+      "切换周老师，为晨曦班儿童生成 C11-ZHOU-mom4ydej-CONSULT，确认李老师 token 不可见。",
+      "切换林妈妈家长端，检查是否看到李老师生成的会诊或提醒。"
+    ],
+    "expected": "会诊应使用真实后端/AI 服务；结果、干预卡、提醒写入共享后端；刷新后可查看历史；跨教师按班级隔离；家长端按产品规则看到应同步的信息。",
+    "actual": "页面能生成结果并调用 /api/ai/high-risk-consultation/stream，响应为 text/event-stream，但内容显示 transport 为 next-json-fallback。李/周结果分别写入各自 localStorage consultations/mobile-drafts 命名空间；刷新后当前结果卡不恢复，林妈妈端不可见李老师本次会诊信息。",
+    "evidence": {
+      "screenshots": [
+        "artifacts/feature-audit/C11-teacher/li-high-risk-consultation-result.png",
+        "artifacts/feature-audit/C11-teacher/li-high-risk-consultation-after-refresh.png",
+        "artifacts/feature-audit/C11-teacher/zhou-high-risk-consultation-result.png",
+        "artifacts/feature-audit/C11-teacher/parent-after-teacher-record.png"
+      ],
+      "consoleErrors": [],
+      "networkRequests": [
+        {
+          "method": "POST",
+          "url": "/api/ai/high-risk-consultation/stream",
+          "status": 200,
+          "contentType": "text/event-stream",
+          "responseSignals": [
+            "transport: next-json-fallback",
+            "providerTrace source/provider present but fallback transport used"
+          ]
+        }
+      ],
+      "sourceFiles": [
+        "app/teacher/high-risk-consultation/page.tsx",
+        "app/api/ai/high-risk-consultation/stream/route.ts",
+        "lib/store.tsx"
+      ],
+      "apiEndpoints": [
+        "/api/ai/high-risk-consultation/stream"
+      ],
+      "codeSignals": [
+        "生成结果后 upsertConsultation、upsertInterventionCard、upsertReminder 写入 store/localStorage。",
+        "刷新页面后未从 consultations 恢复当前 result 视图。",
+        "demo 账号持久化仍为 scoped localStorage，不进入共享后端。"
+      ]
+    },
+    "dataPersistenceResult": "persisted",
+    "apiIntegrationResult": "mock-only",
+    "recommendedImplementation": "为会诊创建真实任务/结果/干预卡/提醒后端模型；明确家长端可见范围；页面加载时读取历史会诊并恢复结果详情，fallback 模式需显式标记为演示。",
+    "backendNeeded": true,
+    "frontendNeeded": true,
+    "productDecisionNeeded": true,
+    "notes": "教师间班级隔离在 UI 上通过；但这来自 demo localStorage 命名空间，不能证明真实权限链路完整。"
+  }
+]
