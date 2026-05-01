@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { flushSync } from "react-dom";
 import ReactMarkdown from "react-markdown";
-import { BrainCircuit, CheckCircle2, Clock3, MoonStar, Send, ShieldCheck, Sparkles } from "lucide-react";
+import { BrainCircuit, CheckCircle2, Clock3, MessageSquareText, MoonStar, Send, ShieldCheck, Sparkles } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import InterventionCardPanel from "@/components/agent/InterventionCardPanel";
 import CareModeToggle from "@/components/parent/CareModeToggle";
@@ -73,6 +73,13 @@ import { sanitizeParentFacingText } from "@/lib/agent/parent-copy";
 import { cn } from "@/lib/utils";
 import { formatParentFeedbackStatusLabel } from "@/lib/feedback/consumption";
 import {
+  buildHomeSchoolThreads,
+  buildStructuredFeedbackMessageContent,
+  formatHomeSchoolPersistStatus,
+  formatHomeSchoolTime,
+  getHomeSchoolConversationId,
+} from "@/lib/communication/home-school";
+import {
   buildInterventionTasksFromCard,
   materializeTasksFromLegacy,
   pickActiveTask,
@@ -117,10 +124,15 @@ export default function ParentAgentPage() {
     consultations,
     reminders,
     mobileDrafts,
+    messages,
+    conversations,
     markMobileDraftSyncStatus,
     persistAppSnapshotNow,
+    sendHomeSchoolMessage,
+    markHomeSchoolMessageRead,
+    markParentReminderRead,
+    updateParentReminderStatus,
     upsertReminder,
-    updateReminderStatus,
     getChildInterventionCard,
     getLatestConsultationForChild,
   } = useApp();
@@ -144,6 +156,9 @@ export default function ParentAgentPage() {
   const [trendError, setTrendError] = useState<string | null>(null);
   const [latestTrendQuery, setLatestTrendQuery] = useState<string | null>(null);
   const [latestTrendResult, setLatestTrendResult] = useState<ParentTrendQueryResponse | null>(null);
+  const [homeSchoolMessageDraft, setHomeSchoolMessageDraft] = useState("");
+  const [homeSchoolMessageStatus, setHomeSchoolMessageStatus] = useState<string | null>(null);
+  const [homeSchoolMessageSending, setHomeSchoolMessageSending] = useState(false);
   const [showMoreContent, setShowMoreContent] = useState(false);
   const [, setReflexionLoading] = useState(false);
   const [parentMessageStatus, setParentMessageStatus] = useState<string | null>(null);
@@ -169,6 +184,17 @@ export default function ParentAgentPage() {
     () => parentFeed.find((item) => item.child.id === resolvedChildId) ?? parentFeed[0],
     [parentFeed, resolvedChildId]
   );
+  const childQueryWasUnauthorized = Boolean(childFromQuery && !authorizedChildIds.has(childFromQuery));
+  const selectedHomeSchoolThread = useMemo(() => {
+    if (!selectedFeed) return null;
+    return (
+      buildHomeSchoolThreads({
+        messages,
+        conversations,
+        children: [selectedFeed.child],
+      }).find((thread) => thread.childId === selectedFeed.child.id) ?? null
+    );
+  }, [conversations, messages, selectedFeed]);
   const displayedTrendQuestion = latestTrendQuery;
   const displayedTrendResult = latestTrendResult;
   const displayedTrendError = trendError;
@@ -429,8 +455,17 @@ export default function ParentAgentPage() {
     setReflexionLoading(false);
     setParentMessageStatus(null);
     setFeedbackStatus(null);
+    setHomeSchoolMessageDraft("");
+    setHomeSchoolMessageStatus(null);
     setFeedbackNotePrefill(null);
   }, [resolvedChildId]);
+
+  useEffect(() => {
+    if (!selectedHomeSchoolThread) return;
+    selectedHomeSchoolThread.messages
+      .filter((message) => message.senderRole === "teacher" && !message.readBy.includes(currentUser.id))
+      .forEach((message) => markHomeSchoolMessageRead(message.messageId));
+  }, [currentUser.id, markHomeSchoolMessageRead, selectedHomeSchoolThread]);
 
   useEffect(() => {
     if (!careMode) return;
@@ -449,6 +484,34 @@ export default function ParentAgentPage() {
       consultation: currentResult.consultation,
     }).forEach((item) => upsertReminder(item));
   }, [currentResult, selectedFeed, upsertReminder]);
+
+  async function sendParentFreeHomeSchoolMessage() {
+    const content = homeSchoolMessageDraft.trim();
+    if (!selectedFeed) return;
+
+    if (!content) {
+      setHomeSchoolMessageStatus("请输入要同步给老师的内容。");
+      return;
+    }
+
+    setHomeSchoolMessageSending(true);
+    setHomeSchoolMessageStatus("正在发送给老师...");
+    const result = sendHomeSchoolMessage({
+      childId: selectedFeed.child.id,
+      classId: selectedFeed.child.className,
+      conversationId: getHomeSchoolConversationId(selectedFeed.child.id),
+      content,
+    });
+    setHomeSchoolMessageSending(false);
+
+    if (result.status === "failed") {
+      setHomeSchoolMessageStatus(`发送失败：${result.error ?? result.message}`);
+      return;
+    }
+
+    setHomeSchoolMessageDraft("");
+    setHomeSchoolMessageStatus(`${formatHomeSchoolPersistStatus(result.status)}，老师刷新后可见。`);
+  }
 
   const readRouteError = useCallback(
     async (response: Response, fallbackMessage: string) => {
@@ -893,9 +956,6 @@ export default function ParentAgentPage() {
         .filter((draft) => draft.syncStatus === "local_pending")
         .forEach((draft) => markMobileDraftSyncStatus(draft.draftId, "synced"));
 
-      if (familyTaskReminder) {
-        updateReminderStatus(familyTaskReminder.reminderId, "acknowledged");
-      }
     });
 
     const persistResult = await persistAppSnapshotNow();
@@ -907,10 +967,39 @@ export default function ParentAgentPage() {
       return false;
     }
 
+    const messageResult = sendHomeSchoolMessage({
+      childId: input.childId,
+      classId: selectedFeed.child.className,
+      conversationId: getHomeSchoolConversationId(input.childId),
+      content: buildStructuredFeedbackMessageContent({
+        childName: selectedFeed.child.name,
+        executionStatus: input.executionStatus,
+        childReaction: input.childReaction,
+        improvementStatus: input.improvementStatus,
+        notes: input.notes,
+        barriers: input.barriers,
+      }),
+    });
+
+    if (messageResult.status === "failed") {
+      setFeedbackStatus(
+        `今晚反馈已保存，但家园沟通写入失败：${messageResult.error ?? messageResult.message}`
+      );
+      return false;
+    }
+
+    if (familyTaskReminder) {
+      const reminderResult = markParentReminderRead(familyTaskReminder.reminderId);
+      if (reminderResult.status === "failed") {
+        setFeedbackStatus(
+          `今晚反馈和家园沟通已保存，但提醒已读状态保存失败：${reminderResult.error ?? reminderResult.message}`
+        );
+        return false;
+      }
+    }
+
     setFeedbackStatus(
-      persistResult.status === "saved"
-        ? "今晚反馈已提交，家长建议会按这条新反馈继续更新。"
-        : "今晚反馈已记录在当前设备，家长建议会按这条新反馈继续更新。"
+      `${formatHomeSchoolPersistStatus(messageResult.status)}：今晚反馈已提交，并已写入家园沟通。`
     );
     return true;
   }
@@ -921,8 +1010,17 @@ export default function ParentAgentPage() {
       return;
     }
 
-    updateReminderStatus(familyTaskReminder.reminderId, "snoozed");
-    setFeedbackStatus("已设置稍后提醒，任务卡状态会同步保存在本地。");
+    const result = updateParentReminderStatus(familyTaskReminder.reminderId, "snoozed");
+    if (result.status === "failed") {
+      setFeedbackStatus(`稍后提醒保存失败：${result.error ?? result.message}`);
+      return;
+    }
+
+    setFeedbackStatus(
+      result.status === "local_only"
+        ? "已设置稍后提醒，并写入 D01 本地演示持久化。"
+        : "已设置稍后提醒。"
+    );
   }
 
   if (!selectedFeed || !baseContext || !snapshot) {
@@ -936,6 +1034,96 @@ export default function ParentAgentPage() {
       </div>
     );
   }
+
+  const renderHomeSchoolCommunication = () => {
+    const threadMessages = selectedHomeSchoolThread?.messages ?? [];
+
+    return (
+      <div
+        data-testid="parent-communication-panel"
+        className="mt-5 rounded-3xl border border-slate-100 bg-white p-4 sm:p-5"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
+              <MessageSquareText className="h-4 w-4" />
+              家园沟通记录
+            </div>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              {selectedFeed.child.name} · {selectedFeed.child.className}
+            </p>
+          </div>
+          <Badge variant={selectedHomeSchoolThread?.status === "pending" ? "warning" : "secondary"}>
+            {selectedHomeSchoolThread?.status === "pending"
+              ? "等待老师回复"
+              : selectedHomeSchoolThread?.status === "handled"
+                ? "已处理"
+                : "已同步"}
+          </Badge>
+        </div>
+
+        {childQueryWasUnauthorized ? (
+          <p className="mt-3 rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            当前链接中的 child 参数不属于本家长账号，已切换到授权孩子。
+          </p>
+        ) : null}
+
+        <div data-testid="parent-message-list" className="mt-4 space-y-3">
+          {threadMessages.length > 0 ? (
+            threadMessages.map((message) => {
+              const isParent = message.senderRole === "parent";
+              return (
+                <div
+                  key={message.messageId}
+                  className={cn(
+                    "rounded-2xl border px-4 py-3",
+                    isParent
+                      ? "border-indigo-100 bg-indigo-50/70"
+                      : "border-emerald-100 bg-emerald-50/70"
+                  )}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-medium text-slate-500">
+                    <span>{isParent ? "家长" : message.senderName}</span>
+                    <span>{formatHomeSchoolTime(message.createdAt)}</span>
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
+                    {message.content}
+                  </p>
+                </div>
+              );
+            })
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-500">
+              当前孩子还没有家园沟通记录，发送后会保存在演示持久层并同步给对应老师。
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 space-y-3">
+          <Textarea
+            data-testid="parent-message-input"
+            value={homeSchoolMessageDraft}
+            onChange={(event) => setHomeSchoolMessageDraft(event.target.value)}
+            placeholder="输入要同步给老师的情况，例如：今晚情绪稳定，但入睡还是偏慢。"
+            className="min-h-24 bg-white"
+          />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="min-h-5 text-sm text-slate-500">{homeSchoolMessageStatus}</p>
+            <Button
+              data-testid="parent-send-message"
+              type="button"
+              className="rounded-full"
+              disabled={homeSchoolMessageSending}
+              onClick={() => void sendParentFreeHomeSchoolMessage()}
+            >
+              <Send className="mr-2 h-4 w-4" />
+              {homeSchoolMessageSending ? "发送中" : "发送给老师"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const agentChildMeta = `${selectedFeed.child.className} · ${getAgeText(
     selectedFeed.child.birthDate
@@ -1301,6 +1489,7 @@ export default function ParentAgentPage() {
                     onSubmit={submitStructuredFeedback}
                     onSnoozeReminder={snoozeFamilyReminder}
                   />
+                  {renderHomeSchoolCommunication()}
                 </SectionCard>
               </div>
 
@@ -2049,6 +2238,7 @@ export default function ParentAgentPage() {
                   onSubmit={submitStructuredFeedback}
                   onSnoozeReminder={snoozeFamilyReminder}
                 />
+                {renderHomeSchoolCommunication()}
               </SectionCard>
             </div>
 

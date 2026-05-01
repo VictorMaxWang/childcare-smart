@@ -90,10 +90,10 @@ export default function VisualParityStatesPage() {
               <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
                 <AlertTriangle className="h-6 w-6" />
               </span>
-              确认删除儿童档案
+              儿童档案归档展示
             </DialogTitle>
             <DialogDescription>
-              删除后，该儿童的出勤、饮食、成长与反馈记录将从当前视图中移除，请谨慎操作。
+              此处仅展示弹窗视觉状态；真实删除/归档语义暂未开放。
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
@@ -110,7 +110,9 @@ export default function VisualParityStatesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline">取消</Button>
-            <Button variant="destructive">确认删除</Button>
+            <Button variant="destructive" disabled aria-disabled="true" title="删除/归档暂未开放">
+              删除/归档暂未开放
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

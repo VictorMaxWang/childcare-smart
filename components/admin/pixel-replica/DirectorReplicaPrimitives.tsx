@@ -166,14 +166,17 @@ export function ReplicaUnavailableButton({
       disabled
       title={reason}
       aria-disabled="true"
+      data-testid="d07-replica-unavailable"
       className={cn(
-        "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold opacity-65",
+        "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold opacity-75",
         buttonToneClass[variant],
         className
       )}
     >
       {children}
-      <span className="text-[11px] font-medium opacity-80">{reason}</span>
+      <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200/80">
+        {reason}
+      </span>
     </button>
   );
 }

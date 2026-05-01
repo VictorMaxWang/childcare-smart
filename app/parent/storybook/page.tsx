@@ -1,8 +1,9 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import StoryBookViewer from "@/components/parent/StoryBookViewer";
+import { restoreParentStorybookResponse, useParentD01Data } from "@/components/parent/useParentD01Data";
 import {
   buildParentStoryBookRequestFromFeed,
   DEFAULT_PARENT_STORYBOOK_GENERATION_MODE,
@@ -33,7 +34,6 @@ import {
   type ParentStoryBookClientCacheState,
   writeParentStoryBookCache,
 } from "@/lib/parent/storybook-cache";
-import { useApp } from "@/lib/store";
 
 type StoryBookPageStatus = "loading" | "storybook" | "card" | "empty" | "error";
 
@@ -70,12 +70,15 @@ function buildInitialControls(input: {
 }
 
 export default function ParentStoryBookPage() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const childFromQuery = searchParams.get("child") ?? undefined;
   const presetFromQuery = searchParams.get("preset");
   const explicitDemoSeedId = resolveParentStoryBookDemoSeedId(
     searchParams.get("demoSeed")
   );
+  const parentD01 = useParentD01Data(childFromQuery);
   const {
     getParentFeed,
     healthCheckRecords,
@@ -85,7 +88,9 @@ export default function ParentStoryBookPage() {
     taskCheckInRecords,
     getChildInterventionCard,
     getLatestConsultationForChild,
-  } = useApp();
+    storybooks,
+    saveParentStorybook,
+  } = parentD01;
 
   const [status, setStatus] = useState<StoryBookPageStatus>("loading");
   const [story, setStory] = useState<ParentStoryBookResponse | null>(null);
@@ -103,12 +108,25 @@ export default function ParentStoryBookPage() {
 
   const feeds = getParentFeed();
   const selectedFeed = useMemo(() => {
+    if (parentD01.invalidChildId) {
+      return undefined;
+    }
     if (childFromQuery) {
-      return feeds.find((item) => item.child.id === childFromQuery) ?? feeds[0];
+      return feeds.find((item) => item.child.id === childFromQuery);
+    }
+    if (parentD01.selectedChildId) {
+      return feeds.find((item) => item.child.id === parentD01.selectedChildId) ?? feeds[0];
     }
     return feeds[0];
-  }, [childFromQuery, feeds]);
+  }, [childFromQuery, feeds, parentD01.invalidChildId, parentD01.selectedChildId]);
   const hasChildContext = Boolean(selectedFeed);
+  const savedStorybooks = useMemo(() => {
+    if (!selectedFeed) return [];
+    return [
+      ...(parentD01.parentHomeData?.storybooks ?? storybooks.filter((item) => item.childId === selectedFeed.child.id)),
+    ].sort((left, right) => right.generatedAt.localeCompare(left.generatedAt));
+  }, [parentD01.parentHomeData?.storybooks, selectedFeed, storybooks]);
+  const latestSavedStorybook = savedStorybooks[0] ?? null;
 
   const resolvedDemoSeedId = explicitDemoSeedId;
   const seededPreset = useMemo(
@@ -154,6 +172,16 @@ export default function ParentStoryBookPage() {
   }, [hasChildContext, resolvedPreset]);
 
   useEffect(() => {
+    if (parentD01.invalidChildId || childFromQuery || !selectedFeed?.child.id) {
+      return;
+    }
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("child", selectedFeed.child.id);
+    router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+  }, [childFromQuery, parentD01.invalidChildId, pathname, router, searchParams, selectedFeed?.child.id]);
+
+  useEffect(() => {
+    if (parentD01.invalidChildId) return;
     if (typeof window === "undefined") return;
 
     const url = new URL(window.location.href);
@@ -173,7 +201,7 @@ export default function ParentStoryBookPage() {
       url.searchParams.delete("demoSeed");
     }
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [draftControls.preset, resolvedDemoSeedId, selectedFeed?.child.id]);
+  }, [draftControls.preset, parentD01.invalidChildId, resolvedDemoSeedId, selectedFeed?.child.id]);
 
   useEffect(() => {
     storyRef.current = story;
@@ -208,17 +236,25 @@ export default function ParentStoryBookPage() {
     draftControls.generationMode === "manual-theme" ||
     draftControls.generationMode === "hybrid";
   const manualTheme = draftControls.manualTheme.trim();
-  const themeHint = !hasChildContext && draftControls.generationMode !== "manual-theme"
-    ? "当前没有可用孩子数据，仅支持主题模式。"
-    : requiresTheme && !manualTheme
-      ? "请输入主题，或先点一个快捷主题。"
-      : null;
+  const themeHint = parentD01.invalidChildId
+    ? "当前家长账号没有该 childId 的授权，系统不会自动回退到其他孩子。"
+    : resolvedDemoSeedId
+      ? "当前为本地演示生成，生成结果会保存到 D01 本地演示持久化。"
+      : !hasChildContext && draftControls.generationMode !== "manual-theme"
+        ? "当前没有可用孩子数据，仅支持主题模式。"
+        : requiresTheme && !manualTheme
+          ? "请输入主题，或先点一个快捷主题。"
+          : null;
   const canGenerate =
-    (draftControls.generationMode === "child-personalized" && hasChildContext) ||
-    (draftControls.generationMode === "manual-theme" && Boolean(manualTheme)) ||
-    (draftControls.generationMode === "hybrid" && hasChildContext && Boolean(manualTheme));
+    !parentD01.invalidChildId &&
+    ((draftControls.generationMode === "child-personalized" && hasChildContext) ||
+      (draftControls.generationMode === "manual-theme" && Boolean(manualTheme)) ||
+      (draftControls.generationMode === "hybrid" && hasChildContext && Boolean(manualTheme)));
 
   const request = useMemo<ParentStoryBookRequest | null>(() => {
+    if (parentD01.invalidChildId) {
+      return null;
+    }
     const appliedTheme = appliedControls.manualTheme.trim();
     const appliedRequiresTheme =
       appliedControls.generationMode === "manual-theme" ||
@@ -267,6 +303,7 @@ export default function ParentStoryBookPage() {
     growthRecords,
     healthCheckRecords,
     mealRecords,
+    parentD01.invalidChildId,
     resolvedDemoSeedId,
     selectedFeed,
     taskCheckInRecords,
@@ -279,7 +316,7 @@ export default function ParentStoryBookPage() {
 
   useEffect(() => {
     if (!request || !cacheKey) {
-      if (!storyRef.current) {
+      if (parentD01.invalidChildId || !storyRef.current) {
         setStatus("empty");
         setStory(null);
         setErrorMessage(null);
@@ -297,6 +334,25 @@ export default function ParentStoryBookPage() {
     networkOnlyRef.current = false;
 
     if (!bypassCache) {
+      if (latestSavedStorybook && selectedFeed) {
+        const restoredStory = restoreParentStorybookResponse(latestSavedStorybook, selectedFeed.child.name);
+        startTransition(() => {
+          setStory(restoredStory);
+          setStatus(restoredStory.mode);
+          setErrorMessage(null);
+          setRefreshMessage("已从 D01 本地演示持久化恢复，刷新后仍会保留。");
+          setIsRefreshing(false);
+          setCacheState({
+            kind: "saved",
+            savedAt: new Date(latestSavedStorybook.generatedAt).getTime(),
+          });
+        });
+        return () => {
+          cancelled = true;
+          controller.abort();
+        };
+      }
+
       const cached = readParentStoryBookCache(resolvedCacheKey);
       if (cached && !shouldBypassParentStoryBookCacheOnFirstLoad(cached.story)) {
         startTransition(() => {
@@ -356,17 +412,35 @@ export default function ParentStoryBookPage() {
           appliedControls.preset,
           data
         );
+        const storybookSaveResult =
+          selectedFeed && data.childId === selectedFeed.child.id
+            ? saveParentStorybook({
+                childId: selectedFeed.child.id,
+                response: data,
+                sourceRecordIds: growthRecords
+                  .filter((record) => record.childId === selectedFeed.child.id)
+                  .map((record) => record.id),
+              })
+            : null;
         startTransition(() => {
           setStory(data);
           setStatus(data.mode);
           setErrorMessage(null);
-          setRefreshMessage(null);
+          setRefreshMessage(
+            storybookSaveResult?.status === "failed"
+              ? `生成完成，但保存到 D01 失败：${storybookSaveResult.error ?? storybookSaveResult.message}`
+              : storybookSaveResult?.status === "local_only"
+                ? "本地演示已保存到 D01，刷新后仍存在。"
+                : null
+          );
           setIsRefreshing(false);
           setCacheState(
-            persisted
+            persisted || (storybookSaveResult && storybookSaveResult.status !== "failed")
               ? {
                   kind: "saved",
-                  savedAt: persisted.savedAt,
+                  savedAt: storybookSaveResult
+                    ? new Date(storybookSaveResult.persistedAt).getTime()
+                    : persisted!.savedAt,
                 }
               : { kind: "none" }
           );
@@ -398,7 +472,17 @@ export default function ParentStoryBookPage() {
       cancelled = true;
       controller.abort();
     };
-  }, [appliedControls.preset, cacheKey, request, reloadToken]);
+  }, [
+    appliedControls.preset,
+    cacheKey,
+    growthRecords,
+    latestSavedStorybook,
+    parentD01.invalidChildId,
+    request,
+    reloadToken,
+    saveParentStorybook,
+    selectedFeed,
+  ]);
 
   function syncThemeDraft(nextTheme: string) {
     const trimmed = nextTheme.trim();
@@ -434,6 +518,7 @@ export default function ParentStoryBookPage() {
       pageCountOptions={[...PAGE_COUNT_OPTIONS]}
       generationHint={themeHint}
       canGenerate={canGenerate}
+      parentHref={selectedFeed?.child.id ? `/parent?child=${selectedFeed.child.id}` : "/parent"}
       onSelectPreset={(preset) =>
         setDraftControls((current) => ({ ...current, preset }))
       }

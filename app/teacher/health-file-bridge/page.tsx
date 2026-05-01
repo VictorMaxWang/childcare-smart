@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import { AlertTriangle, ArrowLeft, ClipboardList, FileText, Home, MessageCircle, Settings, ShieldAlert, Sparkles, Stethoscope, Upload } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
@@ -37,6 +38,7 @@ import { useApp } from "@/lib/store";
 const NONE_CHILD_VALUE = "__none__";
 const UNSPECIFIED_FILE_KIND_VALUE = "__unspecified__";
 const REQUEST_SOURCE = "teacher-health-file-bridge-page";
+const LOCAL_DEMO_PARSE_LABEL = "本地演示解析";
 
 const FILE_KIND_OPTIONS = [
   { value: UNSPECIFIED_FILE_KIND_VALUE, label: "未指定" },
@@ -118,6 +120,66 @@ function RiskCard({ risk }: { risk: HealthFileBridgeRiskItem }) {
   );
 }
 
+function buildSavedParseResult(result: HealthFileBridgeResponse, files: HealthFileBridgeFile[]) {
+  const actionMapping = result.actionMapping;
+  return {
+    summary: result.summary,
+    riskItems: result.riskItems,
+    recommendations: [
+      ...(actionMapping?.schoolTodayActions ?? []),
+      ...(actionMapping?.familyTonightActions ?? []),
+      ...(actionMapping?.followUpPlan ?? []),
+    ].map((item) => ({
+      title: item.title,
+      detail: item.detail,
+    })),
+    attentionItems: [
+      ...result.extractedFacts.map((item) => ({
+        title: item.label,
+        detail: item.detail,
+      })),
+      ...result.contraindications.map((item) => ({
+        title: item.title,
+        detail: item.detail,
+      })),
+    ],
+    followUpHints: result.followUpHints,
+    sourceLabel: LOCAL_DEMO_PARSE_LABEL,
+    provenance: {
+      fallback: result.fallback,
+      mock: result.mock,
+      provider: result.provider,
+      model: result.model,
+      generatedAt: result.generatedAt,
+      files: files.map((file) => ({
+        name: file.name,
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes,
+      })),
+    },
+    rawResponse: result,
+  };
+}
+
+function readSavedRawResponse(parseResult: Record<string, unknown> | undefined) {
+  const rawResponse = parseResult?.rawResponse;
+  return rawResponse && typeof rawResponse === "object" ? (rawResponse as HealthFileBridgeResponse) : null;
+}
+
+function getHighestRiskLevel(result: HealthFileBridgeResponse | null): "low" | "medium" | "high" {
+  if (!result || result.riskItems.length === 0) return "low";
+  if (result.riskItems.some((item) => item.severity === "high")) return "high";
+  if (result.riskItems.some((item) => item.severity === "medium")) return "medium";
+  return "low";
+}
+
+function getParseStatusLabel(status: string) {
+  if (status === "completed" || status === "parsed") return "已保存";
+  if (status === "processing") return "解析中";
+  if (status === "failed") return "解析失败";
+  return "待解析";
+}
+
 function DetailCard({
   title,
   detail,
@@ -131,7 +193,17 @@ function DetailCard({
 }
 
 export default function TeacherHealthFileBridgePage() {
-  const { currentUser, visibleChildren } = useApp();
+  const router = useRouter();
+  const {
+    currentUser,
+    visibleChildren,
+    healthMaterials,
+    createHealthMaterialTask,
+    updateHealthMaterialTaskStatus,
+    saveHealthMaterialParseResult,
+    failHealthMaterialParseResult,
+    createConsultationRecord,
+  } = useApp();
   const [childId, setChildId] = useState<string>(NONE_CHILD_VALUE);
   const [sourceRole, setSourceRole] = useState<HealthFileBridgeSourceRole>("teacher");
   const [fileKind, setFileKind] = useState<string>(UNSPECIFIED_FILE_KIND_VALUE);
@@ -139,8 +211,22 @@ export default function TeacherHealthFileBridgePage() {
   const [optionalNotes, setOptionalNotes] = useState("");
   const [files, setFiles] = useState<HealthFileBridgeFile[]>([]);
   const [result, setResult] = useState<HealthFileBridgeResponse | null>(null);
+  const [pendingParseResult, setPendingParseResult] = useState<Record<string, unknown> | null>(null);
+  const [activeMaterialId, setActiveMaterialId] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [consultationMessage, setConsultationMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const childMaterials = useMemo(
+    () =>
+      healthMaterials
+        .filter((material) => material.childId === childId)
+        .sort((left, right) =>
+          (right.updatedAt ?? right.createdAt).localeCompare(left.updatedAt ?? left.createdAt)
+        ),
+    [childId, healthMaterials]
+  );
 
   useEffect(() => {
     if (childId !== NONE_CHILD_VALUE && visibleChildren.some((child) => child.id === childId)) {
@@ -153,6 +239,19 @@ export default function TeacherHealthFileBridgePage() {
     () => visibleChildren.find((child) => child.id === childId) ?? null,
     [childId, visibleChildren]
   );
+
+  useEffect(() => {
+    if (result || activeMaterialId) return;
+    const latestSaved = childMaterials.find(
+      (material) => material.parseStatus === "completed" && material.parseResult
+    );
+    const savedResponse = readSavedRawResponse(latestSaved?.parseResult);
+    if (!latestSaved || !savedResponse) return;
+    setResult(savedResponse);
+    setPendingParseResult(null);
+    setActiveMaterialId(latestSaved.materialId);
+    setSaveMessage(`已恢复 ${latestSaved.filename} 的保存结果。`);
+  }, [activeMaterialId, childMaterials, result]);
 
   if (visibleChildren.length === 0) {
     return (
@@ -172,6 +271,10 @@ export default function TeacherHealthFileBridgePage() {
     );
     setFiles(nextFiles);
     setResult(null);
+    setPendingParseResult(null);
+    setActiveMaterialId(null);
+    setSaveMessage(null);
+    setConsultationMessage(null);
     setError(null);
   }
 
@@ -179,18 +282,55 @@ export default function TeacherHealthFileBridgePage() {
     event.preventDefault();
     setError(null);
     setResult(null);
+    setPendingParseResult(null);
+    setSaveMessage(null);
+    setConsultationMessage(null);
 
-    if (files.length === 0) {
-      setError("请至少选择一份图片或 PDF 材料。");
+    const manualText = [previewText.trim(), optionalNotes.trim()].filter(Boolean).join("\n");
+    if (childId === NONE_CHILD_VALUE || !selectedChild) {
+      setError("请先选择一名幼儿，解析结果需要绑定到具体孩子后才能保存。");
+      return;
+    }
+    if (files.length === 0 && !manualText) {
+      setError("请至少选择一份图片/PDF 材料，或输入材料说明。");
       return;
     }
 
     setIsSubmitting(true);
+    const requestFiles =
+      files.length > 0
+        ? files
+        : [
+            {
+              fileId: `manual-${Date.now()}`,
+              name: "manual-health-material-note.txt",
+              mimeType: "text/plain",
+              sizeBytes: manualText.length,
+              previewText: manualText,
+            } satisfies HealthFileBridgeFile,
+          ];
+
+    const createdMaterial = createHealthMaterialTask({
+      childId,
+      filename: requestFiles[0]?.name ?? "manual-health-material-note.txt",
+      fileType: requestFiles[0]?.mimeType ?? "text/plain",
+      description: manualText || requestFiles.map((file) => file.name).join("、"),
+    });
+
+    if (createdMaterial.status === "failed" || !createdMaterial.data) {
+      setIsSubmitting(false);
+      setError(createdMaterial.error ?? createdMaterial.message ?? "创建解析任务失败。");
+      return;
+    }
+
+    const materialId = createdMaterial.data.materialId;
+    setActiveMaterialId(materialId);
+    updateHealthMaterialTaskStatus({ materialId, status: "processing" });
 
     const requestPayload: HealthFileBridgeRequest = {
-      childId: childId === NONE_CHILD_VALUE ? undefined : childId,
+      childId,
       sourceRole,
-      files: files.map((file) => ({
+      files: requestFiles.map((file) => ({
         ...file,
         previewText: previewText.trim() || file.previewText,
       })),
@@ -219,14 +359,69 @@ export default function TeacherHealthFileBridgePage() {
         throw new Error(message);
       }
 
-      setResult(body as HealthFileBridgeResponse);
+      const nextResult = body as HealthFileBridgeResponse;
+      setResult(nextResult);
+      setPendingParseResult(buildSavedParseResult(nextResult, requestFiles));
+      setSaveMessage("解析已完成，请核对后保存到健康材料记录。");
     } catch (submissionError) {
+      failHealthMaterialParseResult({
+        materialId,
+        error: submissionError instanceof Error ? submissionError.message : "health_file_parse_failed",
+      });
       setError(
         submissionError instanceof Error ? submissionError.message : "健康文件解析失败，请稍后重试。"
       );
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleSaveParseResult() {
+    if (!activeMaterialId || !pendingParseResult) {
+      setError("当前没有待保存的解析结果。");
+      return;
+    }
+    const saved = saveHealthMaterialParseResult({
+      materialId: activeMaterialId,
+      parseResult: pendingParseResult,
+    });
+    if (saved.status === "failed") {
+      setError(saved.error ?? saved.message ?? "保存解析结果失败。");
+      return;
+    }
+    setPendingParseResult(null);
+    setSaveMessage("解析结果已保存，刷新后仍可查看。");
+  }
+
+  function handleCreateConsultationFromResult() {
+    if (!selectedChild || !result) {
+      setError("请先完成并保存解析结果，再创建会诊。");
+      return;
+    }
+    if (pendingParseResult) {
+      setError("请先保存解析结果，再创建高风险会诊。");
+      return;
+    }
+    const riskLevel = getHighestRiskLevel(result);
+    const consultation = createConsultationRecord({
+      childId: selectedChild.id,
+      riskLevel,
+      sourceMaterialId: activeMaterialId ?? undefined,
+      summary: `${LOCAL_DEMO_PARSE_LABEL}触发：${result.summary}`,
+      notes: [
+        `来源材料：${childMaterials.find((material) => material.materialId === activeMaterialId)?.filename ?? "当前解析结果"}`,
+        ...result.riskItems.map((item) => `${getRiskSeverityLabel(item.severity)}：${item.title}`),
+      ].join("\n"),
+      workflowStatus: "pending",
+    });
+    if (consultation.status === "failed" || !consultation.data) {
+      setError(consultation.error ?? consultation.message ?? "创建会诊失败。");
+      return;
+    }
+    setConsultationMessage("已创建高风险会诊，可在教师端和园长端查看。");
+    router.push(
+      `/teacher/high-risk-consultation?childId=${selectedChild.id}&consultationId=${consultation.data.consultationId}`
+    );
   }
 
   return (
@@ -483,7 +678,13 @@ export default function TeacherHealthFileBridgePage() {
 
                   <div className="space-y-2">
                     <p className="text-sm font-semibold text-slate-900">上传图片 / PDF</p>
-                    <Input type="file" accept="image/*,.pdf" multiple onChange={handleFileChange} />
+                    <Input
+                      data-testid="d05-health-file-input"
+                      type="file"
+                      accept="image/*,.pdf"
+                      multiple
+                      onChange={handleFileChange}
+                    />
                     <p className="text-xs leading-5 text-slate-500">
                       当前会先结合文件信息与补充文字整理重点内容，最终仍建议老师结合原始材料复核。
                     </p>
@@ -493,6 +694,7 @@ export default function TeacherHealthFileBridgePage() {
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-slate-900">OCR 预览 / 已提取文字</p>
                   <Textarea
+                    data-testid="d05-health-preview-text"
                     value={previewText}
                     onChange={(event) => setPreviewText(event.target.value)}
                     placeholder="例如：体温 38.1℃，建议明早复查，今晚继续雾化。"
@@ -532,7 +734,14 @@ export default function TeacherHealthFileBridgePage() {
                 {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 
                 <div className="flex flex-wrap gap-3">
-                  <Button id="health-file-submit" type="submit" variant="premium" className="min-h-11 rounded-xl" disabled={isSubmitting}>
+                  <Button
+                    id="health-file-submit"
+                    data-testid="d05-start-parse"
+                    type="submit"
+                    variant="premium"
+                    className="min-h-11 rounded-xl"
+                    disabled={isSubmitting}
+                  >
                     {isSubmitting ? "解析中…" : "开始结构化解析"}
                   </Button>
                   <Button
@@ -544,6 +753,10 @@ export default function TeacherHealthFileBridgePage() {
                       setOptionalNotes("");
                       setFiles([]);
                       setResult(null);
+                      setPendingParseResult(null);
+                      setActiveMaterialId(null);
+                      setSaveMessage(null);
+                      setConsultationMessage(null);
                       setError(null);
                     }}
                     disabled={isSubmitting}
@@ -674,10 +887,11 @@ export default function TeacherHealthFileBridgePage() {
               description="这里先汇总本次结果的完整度与老师需要继续复核的部分。"
             >
               {result ? (
-                <div className="space-y-4">
+                  <div data-testid="d05-parse-result" className="space-y-4">
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="info">{`识别置信度 ${Math.round(result.confidence * 100)}%`}</Badge>
                     <Badge variant="secondary">{`材料类型 ${getFileKindLabel(result.fileType)}`}</Badge>
+                    <Badge variant="warning">{LOCAL_DEMO_PARSE_LABEL}</Badge>
                     {result.fallback || result.mock ? (
                       <Badge variant="warning">当前使用本地兜底结果</Badge>
                     ) : null}
@@ -691,10 +905,84 @@ export default function TeacherHealthFileBridgePage() {
                     <p className="mt-2 text-sm leading-6 text-slate-600">{result.summary}</p>
                     <p className="mt-3 text-xs leading-5 text-slate-500">{result.disclaimer}</p>
                   </div>
+                  {saveMessage ? (
+                    <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 p-3 text-sm text-emerald-700">
+                      {saveMessage}
+                    </div>
+                  ) : null}
+                  {consultationMessage ? (
+                    <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 text-sm text-indigo-700">
+                      {consultationMessage}
+                    </div>
+                  ) : null}
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      data-testid="d05-save-parse"
+                      type="button"
+                      variant="premium"
+                      className="rounded-xl"
+                      onClick={handleSaveParseResult}
+                      disabled={!pendingParseResult || !activeMaterialId}
+                    >
+                      保存解析结果
+                    </Button>
+                    <Button
+                      data-testid="d05-create-consultation"
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={handleCreateConsultationFromResult}
+                      disabled={!activeMaterialId || Boolean(pendingParseResult)}
+                    >
+                      从结果创建高风险会诊
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm text-slate-500">发起解析后，这里会汇总结果摘要与复核提醒。</p>
               )}
+            </SectionCard>
+
+            <SectionCard
+              title="历史解析任务"
+              description="这些任务来自 D01 共享演示数据，刷新后仍会保留。"
+            >
+              <div data-testid="d05-health-history" className="space-y-3">
+                {childMaterials.length > 0 ? (
+                  childMaterials.slice(0, 5).map((material) => {
+                    const savedResponse = readSavedRawResponse(material.parseResult);
+                    return (
+                      <button
+                        key={material.materialId}
+                        type="button"
+                        className="w-full rounded-lg border border-slate-100 bg-white p-4 text-left transition hover:border-indigo-200 hover:bg-indigo-50/40"
+                        onClick={() => {
+                          const rawResponse = readSavedRawResponse(material.parseResult);
+                          if (rawResponse) {
+                            setResult(rawResponse);
+                            setPendingParseResult(null);
+                            setActiveMaterialId(material.materialId);
+                            setSaveMessage(`已打开 ${material.filename} 的保存结果。`);
+                            setConsultationMessage(null);
+                          }
+                        }}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-slate-900">{material.filename}</p>
+                          <Badge variant={material.parseStatus === "failed" ? "destructive" : material.parseStatus === "completed" ? "success" : "secondary"}>
+                            {getParseStatusLabel(material.parseStatus)}
+                          </Badge>
+                        </div>
+                        <p className="mt-2 text-xs leading-5 text-slate-500">
+                          {savedResponse?.summary ?? material.description ?? material.parseError ?? "暂无解析摘要。"}
+                        </p>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-slate-500">当前幼儿还没有健康材料解析任务。</p>
+                )}
+              </div>
             </SectionCard>
 
             <SectionCard

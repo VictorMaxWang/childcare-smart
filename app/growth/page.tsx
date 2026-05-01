@@ -1,15 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   BookHeart,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
   Clock3,
+  Eye,
   HeartPulse,
   MessageSquareText,
   PlusCircle,
+  ShieldAlert,
   Utensils,
   Workflow,
 } from "lucide-react";
@@ -47,11 +50,17 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";  
 import { TeacherActionTile, TeacherContextStrip, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
+import { useParentD01Data } from "@/components/parent/useParentD01Data";
 import { buildRecentLocalDateRange, normalizeLocalDate } from "@/lib/date";
 import { OBSERVATION_INDICATOR_MAP, type ObservationIndicatorOption } from "@/lib/mock/observation";
 import { toast } from "sonner";
 
 export default function GrowthPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const childFromQuery = searchParams.get("child");
+  const parentD01 = useParentD01Data(childFromQuery);
   const { currentUser, visibleChildren, growthRecords, addGrowthRecord } = useApp();
   const [selectedChildId, setSelectedChildId] = useState<string>(visibleChildren[0]?.id ?? "");
   const [category, setCategory] = useState<BehaviorCategory>("情绪表现");
@@ -64,8 +73,27 @@ export default function GrowthPage() {
   const [followUpAction, setFollowUpAction] = useState("");
   const [reviewDate, setReviewDate] = useState("");
   const [showFormOnMobile, setShowFormOnMobile] = useState(false);
+  const [parentDetailRecordId, setParentDetailRecordId] = useState<string | null>(null);
 
   const isTeacher = currentUser.role === "教师";
+  const isParent = currentUser.role === "家长";
+
+  useEffect(() => {
+    if (!isParent || !parentD01.selectedChildId || parentD01.invalidChildId || childFromQuery === parentD01.selectedChildId) {
+      return;
+    }
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("child", parentD01.selectedChildId);
+    router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+  }, [
+    childFromQuery,
+    isParent,
+    parentD01.invalidChildId,
+    parentD01.selectedChildId,
+    pathname,
+    router,
+    searchParams,
+  ]);
   const visibleIds = visibleChildren.map((child) => child.id);
   const filteredRecords = useMemo(() => {
     return growthRecords.filter((record) => {
@@ -167,7 +195,7 @@ export default function GrowthPage() {
     }
 
     const childName = visibleChildren.find((child) => child.id === selectedChildId)?.name ?? "该幼儿";
-    addGrowthRecord({
+    const saveResult = addGrowthRecord({
       childId: selectedChildId,
       category,
       tags: tags.split(/[，,]/).map((item) => item.trim()).filter(Boolean),
@@ -177,8 +205,17 @@ export default function GrowthPage() {
       reviewDate: reviewDate || undefined,
       selectedIndicators: selectedIndicators.length > 0 ? selectedIndicators : undefined,
     });
+    if (saveResult.status === "failed") {
+      toast.error("成长记录保存失败", {
+        description: saveResult.message,
+      });
+      return;
+    }
+
     toast.success("成长记录已保存", {
-      description: `${childName} 的${category}观察已加入台账。`,
+      description: `${childName} 的${category}观察已加入台账。${
+        saveResult.status === "local_only" ? "已写入共享演示数据，刷新后保留。" : "已写入当前数据层，刷新后保留。"
+      }`,
     });
     setDescription("");
     setTags("");
@@ -186,6 +223,199 @@ export default function GrowthPage() {
     setFollowUpAction("");
     setReviewDate("");
     setSelectedIndicators([]);
+  }
+
+  if (isParent) {
+    const parentChild = parentD01.selectedChild;
+    const parentGrowthRecords = (parentD01.parentHomeData?.dailyRecords ?? [])
+      .filter((record) => record.type === "growth")
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    const parentDetailRecord =
+      parentGrowthRecords.find((record) => record.recordId === parentDetailRecordId) ?? parentGrowthRecords[0] ?? null;
+    const parentDetailPayload = parentDetailRecord?.payload ?? null;
+
+    if (parentD01.invalidChildId) {
+      return (
+        <div className="app-page flex min-h-[70vh] items-center justify-center page-enter">
+          <EmptyState
+            icon={<ShieldAlert className="h-6 w-6" />}
+            title="无法查看该孩子的成长档案"
+            description="当前家长账号没有该 childId 的授权，系统不会自动回退到其他孩子。"
+          />
+        </div>
+      );
+    }
+
+    if (!parentChild || !parentD01.parentHomeData) {
+      return (
+        <div className="app-page flex min-h-[70vh] items-center justify-center page-enter">
+          <EmptyState
+            icon={<BookHeart className="h-6 w-6" />}
+            title="暂无可查看的成长档案"
+            description="当前账号还没有关联孩子，或 D01 store 中没有可见的成长记录。"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="app-page max-w-[76rem] page-enter">
+        <section className="mb-5 overflow-hidden rounded-2xl border border-rose-100 bg-[linear-gradient(135deg,#fff7ed_0%,#ffffff_48%,#eef2ff_100%)] p-4 shadow-[0_20px_58px_rgb(244_63_94_/_0.10)] sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="info" className="rounded-full px-3 py-1">
+                  {parentChild.name}
+                </Badge>
+                <Badge variant="secondary" className="rounded-full px-3 py-1">
+                  {parentChild.className}
+                </Badge>
+                <Badge variant={parentGrowthRecords.length > 0 ? "success" : "outline"} className="rounded-full px-3 py-1">
+                  D01 成长记录 {parentGrowthRecords.length} 条
+                </Badge>
+              </div>
+              <h1 className="mt-4 flex items-center gap-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                <BookHeart className="h-7 w-7 text-rose-500" />
+                成长档案
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                这里展示老师在成长记录中写入的真实档案数据，刷新后仍来自 D01 store，不插入静态示例。
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-2xl"
+              onClick={() => router.push(`/parent/storybook?child=${parentChild.id}`)}
+            >
+              生成成长绘本
+            </Button>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <MetricCard label="成长记录" value={`${parentGrowthRecords.length} 条`} icon={<BookHeart className="h-5 w-5" />} tone="primary" />
+            <MetricCard
+              label="需关注"
+              value={`${parentGrowthRecords.filter((record) => Boolean(record.payload.needsAttention)).length} 条`}
+              icon={<CalendarClock className="h-5 w-5" />}
+              tone="warning"
+            />
+            <MetricCard
+              label="最近更新"
+              value={parentGrowthRecords[0]?.createdAt ? formatShortDate(parentGrowthRecords[0].createdAt) : "暂无"}
+              icon={<Clock3 className="h-5 w-5" />}
+              tone="success"
+            />
+          </div>
+        </section>
+
+        {parentGrowthRecords.length === 0 ? (
+          <Card className="rounded-lg">
+            <CardContent className="py-12">
+              <EmptyState
+                icon={<Workflow className="h-6 w-6" />}
+                title="暂无成长记录"
+                description="D01 store 中当前 childId 还没有成长档案记录。"
+              />
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <Card className="rounded-lg">
+              <CardHeader>
+                <CardTitle className="text-lg">成长记录列表</CardTitle>
+                <CardDescription>按写入时间倒序展示，只显示当前 childId 的记录。</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {parentGrowthRecords.map((record) => {
+                  const payload = record.payload;
+                  const tags = Array.isArray(payload.tags) ? payload.tags.filter((tag): tag is string => typeof tag === "string") : [];
+                  const category = typeof payload.category === "string" ? payload.category : "成长记录";
+                  const description = typeof payload.description === "string" ? payload.description : "暂无详细描述";
+                  return (
+                    <article key={record.recordId} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="info">{category}</Badge>
+                            {payload.needsAttention ? <Badge variant="warning">需关注</Badge> : <Badge variant="success">已记录</Badge>}
+                            <Badge variant="secondary">{record.createdAt}</Badge>
+                          </div>
+                          <p className="mt-3 text-sm leading-6 text-slate-700">{description}</p>
+                          {tags.length > 0 ? (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {tags.map((tag) => (
+                                <span key={`${record.recordId}-${tag}`} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setParentDetailRecordId(record.recordId)}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          查看详情
+                        </Button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-lg">
+              <CardHeader>
+                <CardTitle className="text-lg">记录详情</CardTitle>
+                <CardDescription>{parentDetailRecord ? `记录 ID：${parentDetailRecord.recordId}` : "选择一条记录查看详情"}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                {parentDetailRecord && parentDetailPayload ? (
+                  <>
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">记录时间</p>
+                      <p className="mt-1 font-semibold text-slate-900">{parentDetailRecord.createdAt}</p>
+                      <p className="mt-2 text-xs text-slate-500">记录人</p>
+                      <p className="mt-1 text-slate-700">{parentDetailRecord.createdBy}</p>
+                    </div>
+                    <div className="rounded-2xl bg-rose-50/70 p-4">
+                      <p className="text-xs text-rose-500">描述</p>
+                      <p className="mt-2 leading-6 text-slate-700">
+                        {typeof parentDetailPayload.description === "string" ? parentDetailPayload.description : "暂无详细描述"}
+                      </p>
+                    </div>
+                    {Array.isArray(parentDetailPayload.selectedIndicators) && parentDetailPayload.selectedIndicators.length > 0 ? (
+                      <div>
+                        <p className="text-xs font-medium text-slate-500">结构化指标</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {parentDetailPayload.selectedIndicators
+                            .filter((indicator): indicator is string => typeof indicator === "string")
+                            .map((indicator) => (
+                              <Badge key={`${parentDetailRecord.recordId}-${indicator}`} variant="outline">
+                                {getIndicatorLabel(indicator)}
+                              </Badge>
+                            ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="grid gap-3 rounded-2xl border border-slate-100 p-4">
+                      <p>跟进行动：{typeof parentDetailPayload.followUpAction === "string" ? parentDetailPayload.followUpAction : "暂无"}</p>
+                      <p>复查日期：{typeof parentDetailPayload.reviewDate === "string" ? parentDetailPayload.reviewDate : "暂无"}</p>
+                      <p>复查状态：{typeof parentDetailPayload.reviewStatus === "string" ? parentDetailPayload.reviewStatus : "暂无"}</p>
+                    </div>
+                  </>
+                ) : (
+                  <EmptyState
+                    icon={<Eye className="h-6 w-6" />}
+                    title="请选择成长记录"
+                    description="左侧选择一条记录后查看详情。"
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (

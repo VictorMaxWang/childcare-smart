@@ -72,6 +72,10 @@ import {
   createTeacherVoiceDraftPayload,
   readTeacherVoiceDraftPayload,
 } from "@/lib/mobile/voice-input";
+import {
+  buildHomeSchoolThreads,
+  formatHomeSchoolTime,
+} from "@/lib/communication/home-school";
 import { useApp } from "@/lib/store";
 
 const ACTION_LABELS: Record<TeacherAgentWorkflowType, string> = {
@@ -98,6 +102,8 @@ type CommunicationTab = "pending" | "history" | "mine";
 
 type CommunicationItem = {
   id: string;
+  conversationId: string;
+  messageId?: string;
   childId: string;
   senderName: string;
   childLabel: string;
@@ -106,6 +112,7 @@ type CommunicationItem = {
   timeLabel: string;
   attention: boolean;
   avatar: string;
+  threadMessages: ReturnType<typeof buildHomeSchoolThreads>[number]["messages"];
 };
 
 function isWorkflow(value: string | null): value is TeacherAgentWorkflowType {
@@ -121,11 +128,15 @@ export default function TeacherAgentPage() {
     healthCheckRecords,
     growthRecords,
     guardianFeedbacks,
+    messages,
+    conversations,
     mobileDrafts,
     reminders,
     saveMobileDraft,
     markMobileDraftSyncStatus,
     persistAppSnapshotNow,
+    replyHomeSchoolMessage,
+    updateHomeSchoolConversationStatus,
     upsertReminder,
   } = useApp();
   const [scope, setScope] = useState<TeacherAgentMode>("child");
@@ -146,8 +157,6 @@ export default function TeacherAgentPage() {
   const [communicationOnlyAttention, setCommunicationOnlyAttention] = useState(false);
   const [expandedCommunicationId, setExpandedCommunicationId] = useState<string | null>(null);
   const [communicationDrafts, setCommunicationDrafts] = useState<Record<string, string>>({});
-  const [processedCommunicationIds, setProcessedCommunicationIds] = useState<string[]>([]);
-  const [sentCommunicationItems, setSentCommunicationItems] = useState<CommunicationItem[]>([]);
   const routeIntent = searchParams.get("intent");
   const preloadAction = searchParams.get("action");
   const queryDraftId = searchParams.get("draftId");
@@ -831,69 +840,58 @@ export default function TeacherAgentPage() {
   }
 
   const isCommunicationMode = preloadAction === "communication";
-  const processedCommunicationSet = new Set(processedCommunicationIds);
-  const communicationFeedbackChildIds = new Set(classContext.weeklyFeedbacks.map((feedback) => feedback.childId));
-  const allPendingCommunicationItems: CommunicationItem[] = classContext.visibleChildren
-    .filter((child) => !communicationFeedbackChildIds.has(child.id))
-    .map((child) => {
-      const focus = classContext.focusChildren.find((item) => item.childId === child.id);
-      return {
-        id: `pending-${child.id}`,
-        childId: child.id,
-        senderName: `${child.guardians?.[0]?.name ?? child.name + "家长"}`,
-        childLabel: `${child.name} · ${child.className}`,
-        content:
-          focus && focus.reasons.length > 0
-            ? `本周关注：${focus.reasons.join("、")}。建议主动同步园内观察，并请家长补充今晚表现。`
-            : "本周尚未收到家长反馈，可提醒家长补充今晚在家表现。",
-        status: "待回复" as const,
-        timeLabel: "待主动沟通",
-        attention: Boolean(focus && focus.score >= 3),
-        avatar: child.guardians?.[0]?.relation?.includes("爸爸") ? "👨🏻" : "👩🏻",
-      };
-    });
-  const pendingCommunicationItems = allPendingCommunicationItems.filter((item) => !processedCommunicationSet.has(item.id));
-  const feedbackCommunicationItems: CommunicationItem[] = classContext.weeklyFeedbacks.map((feedback) => {
-    const child = classContext.visibleChildren.find((item) => item.id === feedback.childId);
+  const homeSchoolThreads = buildHomeSchoolThreads({
+    messages,
+    conversations,
+    children: visibleChildren,
+  });
+  const allCommunicationItems: CommunicationItem[] = homeSchoolThreads.map((thread) => {
+    const latestMessage = thread.latestMessage;
+    const latestParentMessage = thread.latestParentMessage ?? latestMessage;
+    const latestTeacherMessage = thread.latestTeacherMessage;
+    const teacherHasReplied = thread.messages.some(
+      (message) => message.senderRole === "teacher" && message.senderId === currentUser.id
+    );
+    const status: CommunicationItem["status"] =
+      thread.status === "pending"
+        ? "待回复"
+        : teacherHasReplied || latestTeacherMessage?.senderId === currentUser.id
+          ? "我发起"
+          : "已处理";
+
     return {
-      id: `feedback-${feedback.id}`,
-      childId: feedback.childId,
-      senderName: feedback.createdBy || `${child?.name ?? "幼儿"}家长`,
-      childLabel: `${child?.name ?? "未知幼儿"} · ${child?.className ?? classContext.className}`,
-      content: feedback.content || feedback.notes || "家长已提交反馈，等待老师核对。",
-      status: "已处理",
-      timeLabel: feedback.date,
-      attention: feedback.status !== "已知晓" && feedback.status !== "在家已配合",
-      avatar: feedback.createdBy?.includes("爸爸") ? "👨🏻" : "👩🏻",
+      id: thread.conversationId,
+      conversationId: thread.conversationId,
+      messageId: latestParentMessage?.messageId,
+      childId: thread.childId,
+      senderName: latestParentMessage?.senderName ?? `${thread.childName}家长`,
+      childLabel: `${thread.childName} · ${thread.classId || classContext.className}`,
+      content: latestMessage?.content ?? "该会话暂无消息内容。",
+      status,
+      timeLabel: formatHomeSchoolTime(thread.updatedAt) || "刚刚",
+      attention: thread.status === "pending",
+      avatar: latestParentMessage?.senderName?.includes("爸爸") ? "👨🏻" : "👩🏻",
+      threadMessages: thread.messages,
     };
   });
-  const processedCommunicationItems: CommunicationItem[] = processedCommunicationIds.map((id) => {
-    const source = allPendingCommunicationItems.find((item) => item.id === id);
-    return (
-      source ?? {
-        id,
-        childId: activeChildId,
-        senderName: "已处理沟通",
-        childLabel: classContext.className,
-        content: "该沟通项已由老师在本地标记处理。",
-        status: "已处理" as const,
-        timeLabel: "刚刚",
-        attention: false,
-        avatar: "✓",
-      }
-    );
-  });
+  const pendingCommunicationItems = allCommunicationItems.filter((item) => item.status === "待回复");
+  const handledCommunicationItems = allCommunicationItems.filter((item) => item.status !== "待回复");
+  const mineCommunicationItems = allCommunicationItems.filter((item) =>
+    item.threadMessages.some((message) => message.senderRole === "teacher" && message.senderId === currentUser.id)
+  );
   const communicationItemsByTab =
     communicationTab === "pending"
       ? pendingCommunicationItems
       : communicationTab === "history"
-        ? [...feedbackCommunicationItems, ...processedCommunicationItems]
-        : sentCommunicationItems;
+        ? handledCommunicationItems
+        : mineCommunicationItems;
   const communicationItems = communicationOnlyAttention
     ? communicationItemsByTab.filter((item) => item.attention)
     : communicationItemsByTab;
   const waitingCommunicationCount = pendingCommunicationItems.length;
-  const handledCommunicationCount = feedbackCommunicationItems.length + processedCommunicationItems.length;
+  const handledCommunicationCount = handledCommunicationItems.length;
+  const mineCommunicationCount = mineCommunicationItems.length;
+  const totalCommunicationCount = allCommunicationItems.length;
   const prepareCommunicationReply = (item: CommunicationItem) => {
     setExpandedCommunicationId(item.id);
     setCommunicationDrafts((prev) => ({
@@ -905,7 +903,12 @@ export default function TeacherAgentPage() {
     }));
   };
   const markCommunicationHandled = (item: CommunicationItem) => {
-    setProcessedCommunicationIds((prev) => (prev.includes(item.id) ? prev : [item.id, ...prev]));
+    const result = updateHomeSchoolConversationStatus(item.conversationId, "closed");
+    if (result.status === "failed") {
+      setError(`沟通处理状态保存失败：${result.error ?? result.message}`);
+      return;
+    }
+    setError(null);
     setCommunicationTab("history");
   };
   const sendCommunicationReply = (item: CommunicationItem) => {
@@ -915,25 +918,31 @@ export default function TeacherAgentPage() {
       return;
     }
 
-    const sentItem: CommunicationItem = {
-      ...item,
-      id: `sent-${item.childId}-${Date.now()}`,
-      senderName: currentUser.name,
+    const result = replyHomeSchoolMessage({
+      messageId: item.messageId,
+      conversationId: item.conversationId,
       content: draft,
-      status: "我发起",
-      timeLabel: "刚刚",
-      attention: false,
-      avatar: "✓",
-    };
+    });
+    if (result.status === "failed") {
+      setError(`家园回复发送失败：${result.error ?? result.message}`);
+      return;
+    }
 
-    setSentCommunicationItems((prev) => [sentItem, ...prev]);
-    setProcessedCommunicationIds((prev) => (prev.includes(item.id) ? prev : [item.id, ...prev]));
+    setError(null);
     setCommunicationDrafts((prev) => ({ ...prev, [item.id]: "" }));
     setExpandedCommunicationId(null);
     setCommunicationTab("mine");
   };
   const runCommunicationSuggestion = (item: CommunicationItem) => {
     setSelectedChildId(item.childId);
+    setExpandedCommunicationId(item.id);
+    setCommunicationDrafts((prev) => ({
+      ...prev,
+      [item.id]:
+        currentResult?.parentMessageDraft ??
+        prev[item.id] ??
+        `您好，已收到您关于${item.childLabel}的反馈。我会结合在园观察继续跟进，并把今天重点同步给您。`,
+    }));
     void runWorkflow("communication");
   };
   const pendingTaskCount =
@@ -1026,10 +1035,12 @@ export default function TeacherAgentPage() {
                       </Link>
                       <div>
                         <h1 className="text-3xl font-bold leading-tight text-[#101a35]">家园沟通</h1>
-                        <button type="button" className="mt-4 inline-flex items-center gap-2 text-lg font-bold text-[#172345]">
-                          {classContext.className}
-                          <ChevronDown className="h-5 w-5 text-[#6e7894]" />
-                        </button>
+                        <div className="mt-4 inline-flex items-center gap-2 text-lg font-bold text-[#172345]" data-testid="d07-static-class-label">
+                          <span>{classContext.className}</span>
+                          <span className="rounded-full bg-[#EEF4FF] px-2.5 py-1 text-xs font-semibold text-[#5B58DE]">
+                            当前班级
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1044,7 +1055,7 @@ export default function TeacherAgentPage() {
                     { label: "待回复", value: waitingCommunicationCount, icon: <MessageSquareText className="h-7 w-7" />, tone: "bg-violet-50 text-violet-600", badge: waitingCommunicationCount > 0 ? `${waitingCommunicationCount}` : "" },
                     { label: "待处理", value: classContext.pendingReviews.length + classContext.todayAbnormalChildren.length, icon: <Clock3 className="h-7 w-7" />, tone: "bg-orange-50 text-orange-500" },
                     { label: "已处理", value: handledCommunicationCount, icon: <CheckCircle2 className="h-7 w-7" />, tone: "bg-emerald-50 text-emerald-500" },
-                    { label: "沟通总数", value: handledCommunicationCount + waitingCommunicationCount + sentCommunicationItems.length, icon: <UsersRound className="h-7 w-7" />, tone: "bg-blue-50 text-blue-500" },
+                    { label: "沟通总数", value: totalCommunicationCount, icon: <UsersRound className="h-7 w-7" />, tone: "bg-blue-50 text-blue-500" },
                   ].map((item, index) => (
                     <div key={item.label} className={`relative flex flex-col items-center justify-center gap-1 text-center sm:flex-row sm:gap-3 sm:text-left ${index > 0 ? "border-l border-[#e8edf6]" : ""}`}>
                       <span className={`relative flex h-14 w-14 items-center justify-center rounded-full ${item.tone}`}>
@@ -1058,13 +1069,18 @@ export default function TeacherAgentPage() {
                     </div>
                   ))}
                 </div>
+                {error ? (
+                  <p className="mt-4 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {error}
+                  </p>
+                ) : null}
 
                 <div className="mt-6 flex items-center justify-between border-b border-[#e7edf6]">
                   <div className="flex flex-wrap gap-6 sm:gap-10">
                     {[
                       { key: "pending" as const, label: `待回复 (${waitingCommunicationCount})` },
                       { key: "history" as const, label: `沟通记录 (${handledCommunicationCount})` },
-                      { key: "mine" as const, label: `我发起的 (${sentCommunicationItems.length})` },
+                      { key: "mine" as const, label: `我发起的 (${mineCommunicationCount})` },
                     ].map((tab) => (
                       <button
                         key={tab.key}
@@ -1090,7 +1106,12 @@ export default function TeacherAgentPage() {
                 <div className="mt-4 space-y-4">
                   {communicationItems.length > 0 ? (
                     communicationItems.map((item) => (
-                    <article key={item.id} className="rounded-[1.35rem] border border-[#e0e7f5] bg-white px-4 py-4 shadow-[0_12px_32px_rgb(70_88_140_/_0.045)] sm:px-6">
+                    <article
+                      key={item.id}
+                      data-testid="communication-thread-card"
+                      data-child-id={item.childId}
+                      className="rounded-[1.35rem] border border-[#e0e7f5] bg-white px-4 py-4 shadow-[0_12px_32px_rgb(70_88_140_/_0.045)] sm:px-6"
+                    >
                       <div className="grid grid-cols-[auto_1fr_auto] gap-4">
                         <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-[#f2f5fb] text-4xl">
                           {item.avatar}
@@ -1108,7 +1129,18 @@ export default function TeacherAgentPage() {
                       <p className="mt-4 rounded-[0.9rem] bg-[#f3f6fb] px-4 py-3 text-base font-medium leading-7 text-[#53617f]">{item.content}</p>
                       {expandedCommunicationId === item.id ? (
                         <div className="mt-4 rounded-[0.9rem] border border-violet-100 bg-violet-50/40 p-3">
+                          <div className="mb-3 space-y-2">
+                            {item.threadMessages.map((message) => (
+                              <div key={message.messageId} className="rounded-xl bg-white/80 px-3 py-2 text-sm leading-6 text-[#53617f]">
+                                <span className="font-semibold text-[#293653]">
+                                  {message.senderRole === "teacher" ? message.senderName : "家长"}：
+                                </span>
+                                {message.content}
+                              </div>
+                            ))}
+                          </div>
                           <textarea
+                            data-testid="teacher-reply-input"
                             value={communicationDrafts[item.id] ?? ""}
                             onChange={(event) =>
                               setCommunicationDrafts((prev) => ({
@@ -1120,9 +1152,9 @@ export default function TeacherAgentPage() {
                             placeholder="输入给家长的回复内容"
                           />
                           <div className="mt-3 flex justify-end">
-                            <Button type="button" variant="premium" className="rounded-full" onClick={() => sendCommunicationReply(item)}>
+                            <Button data-testid="teacher-send-reply" type="button" variant="premium" className="rounded-full" onClick={() => sendCommunicationReply(item)}>
                               <Send className="mr-2 h-4 w-4" />
-                              发送本地回复
+                              发送回复
                             </Button>
                           </div>
                         </div>
@@ -1158,7 +1190,7 @@ export default function TeacherAgentPage() {
                     <EmptyState
                       icon={<MessageSquareText className="h-6 w-6" />}
                       title={communicationOnlyAttention ? "当前没有重点沟通项" : "当前没有待展示的沟通记录"}
-                      description="这里只展示当前班级真实反馈、待沟通儿童和本地发送记录。"
+                      description="这里只展示当前班级真实家园沟通消息。"
                     />
                   )}
                 </div>
@@ -1210,7 +1242,7 @@ export default function TeacherAgentPage() {
                         { label: "待回复", value: waitingCommunicationCount, tone: "text-rose-600" },
                         { label: "待处理", value: classContext.pendingReviews.length, tone: "text-amber-600" },
                         { label: "已处理", value: handledCommunicationCount, tone: "text-emerald-600" },
-                        { label: "沟通总数", value: handledCommunicationCount + waitingCommunicationCount, tone: "text-sky-600" },
+                        { label: "沟通总数", value: totalCommunicationCount, tone: "text-sky-600" },
                       ].map((item) => (
                         <div key={item.label} className="rounded-2xl bg-slate-50 px-3 py-3">
                           <p className={`text-2xl font-semibold ${item.tone}`}>{item.value}</p>
@@ -1390,7 +1422,7 @@ export default function TeacherAgentPage() {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Button type="button" variant="outline" className="rounded-2xl" onClick={() => void runWorkflow("weekly-summary")} disabled={isLoading}>导出本页简报</Button>
+                        <Button type="button" variant="outline" className="rounded-2xl" onClick={() => void runWorkflow("weekly-summary")} disabled={isLoading}>生成本页简报</Button>
                         <Button type="button" variant="premium" className="rounded-2xl" onClick={() => void runWorkflow("follow-up")} disabled={isLoading}>
                           <Sparkles className="mr-2 h-4 w-4" />
                           生成今日建议
@@ -1698,15 +1730,32 @@ export default function TeacherAgentPage() {
             <SectionCard title="移动端协同入口" description="教师可先用语音速记或 OCR 形成本地草稿，工作流完成后再同步。">
               <div className="space-y-4">
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" className="rounded-full" onClick={createVoiceDraft} disabled={!activeChildContext}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full"
+                    onClick={createVoiceDraft}
+                    disabled={!activeChildContext}
+                    title="演示样例草稿，不代表真实语音识别已完成"
+                  >
                     <Mic className="mr-2 h-4 w-4" />
-                    语音速记
+                    演示语音草稿
                   </Button>
-                  <Button type="button" variant="outline" className="rounded-full" onClick={createOcrDraft} disabled={!activeChildContext}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full"
+                    onClick={createOcrDraft}
+                    disabled={!activeChildContext}
+                    title="演示样例草稿，不代表真实 OCR 识别已完成"
+                  >
                     <ScanSearch className="mr-2 h-4 w-4" />
-                    OCR 草稿
+                    演示 OCR 草稿
                   </Button>
                 </div>
+                <p className="text-xs leading-5 text-slate-500">
+                  语音和 OCR 入口仅生成演示样例草稿，不展示为真实识别成功。
+                </p>
                 <div className="grid gap-3 lg:grid-cols-2">
                   {sortedTeacherDrafts.length > 0 ? (
                     sortedTeacherDrafts.slice(0, 4).map((draft) => (

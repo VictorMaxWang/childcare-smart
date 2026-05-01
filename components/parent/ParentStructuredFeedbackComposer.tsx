@@ -882,7 +882,7 @@ export default function ParentStructuredFeedbackComposer({
       <div className="flex flex-col gap-3 rounded-lg border border-emerald-100 bg-emerald-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className={careMode ? "text-base font-semibold leading-8 text-slate-900" : "text-sm font-semibold text-slate-900"}>
-            {feedbackPrompt ?? "提交后，今晚反馈会进入下一轮家长建议与跟进。"}
+          {feedbackPrompt ?? "提交后，今晚反馈会写入家园沟通记录，并进入下一轮家长建议与跟进。"}
           </p>
           {!careMode ? (
             <p className="mt-1 text-sm text-slate-600">

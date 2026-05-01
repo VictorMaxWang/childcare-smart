@@ -13,7 +13,8 @@ export type PrimaryNavIconKey =
   | "consultation"
   | "file"
   | "feedback"
-  | "storybook";
+  | "storybook"
+  | "reminders";
 
 export interface PrimaryNavItem {
   href: string;
@@ -32,8 +33,6 @@ export interface PrimaryNavGroup {
 export interface PrimaryNavOptions {
   childId?: string;
 }
-
-const DEFAULT_PARENT_CHILD_ID = "c-1";
 
 const OVERVIEW_ITEM: PrimaryNavItem = { href: "/", label: "数据总览", icon: "overview" };
 const CHILDREN_ITEM: PrimaryNavItem = { href: "/children", label: "幼儿档案", icon: "children" };
@@ -64,7 +63,8 @@ const TEACHER_HEALTH_FILE_ITEM: PrimaryNavItem = {
   icon: "file",
 };
 
-function parentPath(path: string, childId = DEFAULT_PARENT_CHILD_ID) {
+function parentPath(path: string, childId?: string) {
+  if (!childId) return path;
   const separator = path.includes("?") ? "&" : "?";
   return `${path}${separator}child=${encodeURIComponent(childId)}`;
 }
@@ -88,8 +88,16 @@ function buildParentAgentItem(childId?: string): PrimaryNavItem {
 function buildParentFeedbackItem(childId?: string): PrimaryNavItem {
   return {
     href: `${parentPath("/parent/agent", childId)}#feedback`,
-    label: "家园反馈",
+    label: "家园沟通",
     icon: "feedback",
+  };
+}
+
+function buildParentGrowthItem(childId?: string): PrimaryNavItem {
+  return {
+    href: parentPath("/growth", childId),
+    label: "成长档案",
+    icon: "growth",
   };
 }
 
@@ -98,6 +106,30 @@ function buildParentStorybookItem(childId?: string): PrimaryNavItem {
     href: parentPath("/parent/storybook", childId),
     label: "成长绘本",
     icon: "storybook",
+  };
+}
+
+function buildParentHealthItem(childId?: string): PrimaryNavItem {
+  return {
+    href: parentPath("/health", childId),
+    label: "健康管理",
+    icon: "health",
+  };
+}
+
+function buildParentDietItem(childId?: string): PrimaryNavItem {
+  return {
+    href: parentPath("/diet", childId),
+    label: "营养餐谱",
+    icon: "diet",
+  };
+}
+
+function buildParentReminderItem(childId?: string): PrimaryNavItem {
+  return {
+    href: parentPath("/parent/reminders", childId),
+    label: "日常提醒",
+    icon: "reminders",
   };
 }
 
@@ -154,9 +186,13 @@ export function buildPrimaryNavItems(role: AccountRole, options: PrimaryNavOptio
 
   return [
     buildParentHomeItem(options.childId),
-    buildParentAgentItem(options.childId),
     buildParentFeedbackItem(options.childId),
+    buildParentGrowthItem(options.childId),
     buildParentStorybookItem(options.childId),
+    buildParentHealthItem(options.childId),
+    buildParentDietItem(options.childId),
+    buildParentReminderItem(options.childId),
+    buildParentAgentItem(options.childId),
   ];
 }
 

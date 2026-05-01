@@ -1,0 +1,87 @@
+{
+  "taskId": "D07",
+  "title": "shared-actions-visual-only-cleanup",
+  "status": "completed",
+  "assignedGaps": ["D07-G01", "D07-G02", "D07-G03", "D07-G04"],
+  "completedFindingAreas": [
+    "fake-success cleanup",
+    "visual-only action cleanup",
+    "D01 demo persistence integration",
+    "disabled / temporarily unavailable action labeling"
+  ],
+  "implemented": {
+    "childrenAddUsesD01": true,
+    "attendanceToggleUsesD01": true,
+    "childDeleteDisabled": true,
+    "forgotPasswordDisabled": true,
+    "teacherClassFakeDropdownRemoved": true,
+    "teacherMockDraftsLabeledAsDemo": true,
+    "healthExportRenamedToResetFilter": true,
+    "consultationFollowUpReminderUsesD01": true,
+    "replicaUnavailableButtonsVisibleDisabled": true,
+    "d06ReportExportShareKeptClosed": true
+  },
+  "changedFiles": {
+    "added": [
+      "tests/bug-bash/d07-ui-contract-regression.spec.ts"
+    ],
+    "modified": [
+      "app/admin/page.tsx",
+      "app/children/page.tsx",
+      "app/diet/page.tsx",
+      "app/growth/page.tsx",
+      "app/health/page.tsx",
+      "app/login/login-pixel.module.css",
+      "app/login/page.tsx",
+      "app/teacher/agent/page.tsx",
+      "app/teacher/high-risk-consultation/page.tsx",
+      "app/visual-parity/states/page.tsx",
+      "components/admin/pixel-replica/DirectorReplicaPrimitives.tsx",
+      "docs/feature-implementation/PRODUCT_DECISIONS_NEEDED.md",
+      "docs/feature-implementation/results/D07-result.md",
+      "docs/feature-implementation/results/D07-result.json",
+      "lib/demo-data/store.ts",
+      "lib/store.tsx"
+    ]
+  },
+  "checks": {
+    "lint": {
+      "status": "passed",
+      "command": "npm run lint"
+    },
+    "build": {
+      "status": "passed",
+      "command": "npm run build"
+    },
+    "browserOrPlaywright": {
+      "status": "passed",
+      "command": "BUGBASH_BASE_URL=http://127.0.0.1:3000 npx playwright test tests/bug-bash/d07-ui-contract-regression.spec.ts --config=playwright.bugbash.config.ts --project=chromium --reporter=line",
+      "screenshotsDir": "artifacts/feature-implementation/D07/",
+      "screenshots": [
+        "01-login-forgot-disabled.png",
+        "02-children-added.png",
+        "03-children-attendance-delete-disabled.png",
+        "04-health-d01-and-no-export.png",
+        "05-diet-d01-save.png",
+        "06-growth-d01-save.png",
+        "07-teacher-static-class-label.png",
+        "08-teacher-demo-draft-labels.png",
+        "09-consultation-follow-up-reminder.png",
+        "10-admin-weekly-visual-only-disabled.png",
+        "11-admin-agent-disabled-actions.png",
+        "12-admin-agent-weekly-disabled-actions.png"
+      ],
+      "notes": "The first run without BUGBASH_BASE_URL failed because the Playwright config skipped webServer due to an existing .next/dev/lock while 3330 was not serving. Final validation used the existing 127.0.0.1:3000 dev server and passed."
+    },
+    "bugbashSmoke": {
+      "status": "passed",
+      "command": "BUGBASH_BASE_URL=http://127.0.0.1:3000 npm run bugbash:smoke"
+    }
+  },
+  "productDecisionsUpdated": true,
+  "notes": [
+    "D06 remained pending, so report export/share chains stay disabled and labeled as temporarily unavailable.",
+    "No production backend was introduced; writes use the D01 shared demo persistence layer.",
+    "No change was made to docs/feature-audit/INCOMPLETE_FEATURES.json."
+  ]
+}

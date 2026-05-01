@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import type { AdminHomeViewModel, InstitutionPriorityLevel } from "@/lib/agent/admin-types";
 import type { WeeklyReportResponse } from "@/lib/ai/types";
+import type { AdminCommunicationSummary } from "@/lib/communication/home-school";
+import { formatHomeSchoolTime } from "@/lib/communication/home-school";
 import {
   directorReplicaAssets,
   trendTabs,
@@ -46,6 +48,8 @@ export default function DirectorDashboardReplica({
   weeklyReportLoading,
   weeklyReportError,
   weeklyReportPeriodLabel,
+  communicationSummary,
+  onMarkCommunicationHandled,
   onRefresh,
 }: {
   home: AdminHomeViewModel;
@@ -56,6 +60,8 @@ export default function DirectorDashboardReplica({
   weeklyReportLoading: boolean;
   weeklyReportError: string | null;
   weeklyReportPeriodLabel: string;
+  communicationSummary: AdminCommunicationSummary;
+  onMarkCommunicationHandled: (conversationId: string) => void;
   onRefresh: () => void;
 }) {
   const scope = home.adminContext.institutionScope;
@@ -346,6 +352,77 @@ export default function DirectorDashboardReplica({
               <ReplicaButtonLink href="/admin/agent?action=weekly-report" variant="soft" className="mt-5 w-full">
                 查看反馈详情
               </ReplicaButtonLink>
+            </div>
+          </ReplicaPanel>
+
+          <ReplicaPanel
+            title="家园沟通汇总"
+            description="来自 messages / conversations 持久层。"
+            actions={<ReplicaPill tone={communicationSummary.pendingThreads > 0 ? "orange" : "green"}>{communicationSummary.pendingThreads} 待回复</ReplicaPill>}
+          >
+            <div data-testid="admin-communication-summary" className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ["总会话", communicationSummary.totalThreads],
+                  ["待教师回复", communicationSummary.pendingThreads],
+                  ["已回复", communicationSummary.repliedThreads],
+                  ["已处理", communicationSummary.handledThreads],
+                ].map(([label, value]) => (
+                  <div key={label as string} className="rounded-[15px] border border-[#E8ECF7] bg-[#FBFCFF] px-3 py-3">
+                    <p className="text-xl font-bold text-[#172554]">{value}</p>
+                    <p className="mt-1 text-xs text-[#7A86A6]">{label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {communicationSummary.classBreakdown.length > 0 ? (
+                <div className="space-y-2">
+                  {communicationSummary.classBreakdown.map((item) => (
+                    <div key={item.classId} className="flex items-center justify-between rounded-[14px] bg-[#F6F8FC] px-3 py-2 text-xs text-[#596681]">
+                      <span>{item.classId}</span>
+                      <span>
+                        {item.totalThreads} 条 · 待回复 {item.pendingThreads} · 已处理 {item.handledThreads}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-[15px] border border-dashed border-[#D8DEEF] bg-[#FBFCFF] p-4 text-sm text-[#7A86A6]">
+                  当前没有真实家园沟通消息。
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {communicationSummary.recentThreads.map((thread) => (
+                  <div key={thread.conversationId} className="rounded-[15px] border border-[#E8ECF7] bg-white p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-bold text-[#172554]">
+                          {thread.childName} · {thread.classId}
+                        </p>
+                        <p className="mt-1 text-xs text-[#7A86A6]">
+                          {formatHomeSchoolTime(thread.updatedAt)} · {thread.status === "pending" ? "待教师回复" : thread.status === "handled" ? "已处理" : "已回复"}
+                        </p>
+                      </div>
+                      {thread.status !== "handled" ? (
+                        <ReplicaButton
+                          data-testid="admin-mark-communication-handled"
+                          variant="soft"
+                          className="h-8 px-3 text-xs"
+                          onClick={() => onMarkCommunicationHandled(thread.conversationId)}
+                        >
+                          标记处理
+                        </ReplicaButton>
+                      ) : (
+                        <ReplicaPill tone="green">已处理</ReplicaPill>
+                      )}
+                    </div>
+                    <p className="mt-3 line-clamp-3 text-xs leading-5 text-[#596681]">
+                      {thread.latestMessage?.content ?? "暂无消息正文"}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           </ReplicaPanel>
         </aside>

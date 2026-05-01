@@ -60,6 +60,7 @@ const ICON_MAP: Record<PrimaryNavIconKey, LucideIcon> = {
   file: FileText,
   feedback: MessageCircle,
   storybook: BookHeart,
+  reminders: Bell,
 };
 
 type ShellRole = "director" | "teacher" | "parent";
@@ -148,7 +149,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
     if (!isAuthenticated) {
       const currentPath =
-        typeof window !== "undefined" ? `${window.location.pathname}${window.location.search}` : pathname;
+        typeof window !== "undefined"
+          ? `${window.location.pathname}${window.location.search}${window.location.hash}`
+          : pathname;
       const nextPath = sanitizeNextPath(currentPath);
       router.replace(nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : "/login");
       return;
@@ -209,7 +212,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  const childId = currentUser.childIds?.[0] ?? "c-1";
+  const childId = currentUser.childIds?.[0];
   const navOptions = { childId };
   const navItems = buildPrimaryNavItems(currentUser.role, navOptions);
   const navGroups = buildPrimaryNavGroups(currentUser.role, navOptions);
@@ -551,16 +554,17 @@ type MobileBottomTabItem = {
   highlight?: boolean;
 };
 
-function buildMobileBottomNavItems(role: RoleBadgeRole, childId = "c-1"): MobileBottomTabItem[] {
-  const childQuery = `child=${encodeURIComponent(childId)}`;
+function buildMobileBottomNavItems(role: RoleBadgeRole, childId?: string): MobileBottomTabItem[] {
+  const childQuery = childId ? `child=${encodeURIComponent(childId)}` : "";
+  const withChild = (path: string) => (childQuery ? `${path}?${childQuery}` : path);
 
   if (role === "parent") {
     return [
-      { href: `/parent?${childQuery}`, label: "首页", icon: Home, match: (pathname) => stripLocationPath(pathname) === "/parent" },
-      { href: `/parent/agent?${childQuery}`, label: "建议", icon: Sparkles, match: (pathname) => pathname.startsWith("/parent/agent"), highlight: true },
-      { href: `/parent/agent?${childQuery}#feedback`, label: "反馈", icon: MessageCircle, match: () => false },
-      { href: `/parent/storybook?${childQuery}`, label: "绘本", icon: BookHeart, match: (pathname) => pathname.startsWith("/parent/storybook") },
-      { href: `/parent?${childQuery}&care=1`, label: "关怀", icon: Baby, match: () => false },
+      { href: withChild("/parent"), label: "首页", icon: Home, match: (pathname) => stripLocationPath(pathname) === "/parent" },
+      { href: withChild("/parent/agent"), label: "沟通", icon: MessageCircle, match: (pathname) => pathname.startsWith("/parent/agent"), highlight: true },
+      { href: withChild("/growth"), label: "档案", icon: BookHeart, match: (pathname) => stripLocationPath(pathname) === "/growth" },
+      { href: withChild("/parent/storybook"), label: "绘本", icon: BookHeart, match: (pathname) => pathname.startsWith("/parent/storybook") },
+      { href: withChild("/parent/reminders"), label: "提醒", icon: Bell, match: (pathname) => pathname.startsWith("/parent/reminders") },
     ];
   }
 

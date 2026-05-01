@@ -152,6 +152,11 @@ export function buildParentTrendAppSnapshot(
     mobileDrafts: input.mobileDrafts,
     reminders: input.reminders,
     tasks: [],
+    messages: [],
+    conversations: [],
+    healthMaterials: [],
+    nutritionMenus: [],
+    storybooks: [],
     updatedAt: input.updatedAt ?? new Date().toISOString(),
   };
 }

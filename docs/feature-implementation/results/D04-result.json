@@ -1,0 +1,95 @@
+{
+  "taskId": "D04",
+  "title": "parent-features",
+  "status": "completed",
+  "completedFindingIds": [
+    "C10-001",
+    "C10-003",
+    "C10-004",
+    "C10-005",
+    "C10-006",
+    "C10-007",
+    "C15-001",
+    "C15-002",
+    "C15-003",
+    "C21-003",
+    "C21-005",
+    "C21-006",
+    "C21-008"
+  ],
+  "uncompletedFindingIds": [
+    "C13-003",
+    "C13-004",
+    "C13-005",
+    "C13-006"
+  ],
+  "changedFiles": {
+    "added": [
+      "app/parent/reminders/page.tsx",
+      "components/parent/useParentD01Data.ts",
+      "tests/bug-bash/d04-parent-acceptance.spec.ts"
+    ],
+    "modified": [
+      "app/api/ai/parent-storybook/route.ts",
+      "app/diet/page.tsx",
+      "app/growth/page.tsx",
+      "app/health/page.tsx",
+      "app/parent/agent/page.tsx",
+      "app/parent/page.tsx",
+      "app/parent/storybook/page.tsx",
+      "components/MobileNav.tsx",
+      "components/Navbar.tsx",
+      "components/parent/PixelParentHomeReplica.tsx",
+      "lib/navigation/primary-nav.ts",
+      "lib/store.tsx",
+      "docs/feature-implementation/results/D04-result.md",
+      "docs/feature-implementation/results/D04-result.json"
+    ]
+  },
+  "featureResults": {
+    "parentHome": "Today status, seven-day records, teacher feedback, reminders, menus, and storybook entry now use child-scoped D01 store data. Unauthorized children show a real empty/unauthorized state.",
+    "communication": "Parent communication reads and writes D01 messages/conversations. Teacher reply loop remains a D02/C13 dependency.",
+    "growthRecords": "Parent growth archive is a read-only child-scoped D01/D03 record list with detail viewing and real empty states.",
+    "storybook": "Storybooks are loaded and saved by childId in the D01 storybooks bucket; generated results remain after refresh. demoSeed is limited to authorized demo accounts.",
+    "health": "Parent health management now shows readonly morning checks, abnormal records, health materials, and consultation summaries.",
+    "diet": "Parent nutrition view filters menus and diet records by child/class/date and hides teacher-only write controls.",
+    "reminders": "Added parent reminders page with child-scoped read status persisted across refresh.",
+    "childScope": "Removed global parent c-1 silent fallback. Invalid child ids show unauthorized state instead."
+  },
+  "checks": {
+    "lint": {
+      "status": "passed",
+      "command": "npm run lint"
+    },
+    "build": {
+      "status": "passed",
+      "command": "npm run build"
+    },
+    "bugbashSmoke": {
+      "status": "passed",
+      "command": "BUGBASH_BASE_URL=http://127.0.0.1:3000 npm run bugbash:smoke"
+    },
+    "playwrightD04": {
+      "status": "passed",
+      "command": "BUGBASH_BASE_URL=http://127.0.0.1:3000 npx playwright test tests/bug-bash/d04-parent-acceptance.spec.ts --config=playwright.bugbash.config.ts --project=chromium"
+    }
+  },
+  "screenshots": [
+    "artifacts/feature-implementation/D04/01-parent-home.png",
+    "artifacts/feature-implementation/D04/02-parent-agent.png",
+    "artifacts/feature-implementation/D04/03-growth-file.png",
+    "artifacts/feature-implementation/D04/04-health-readonly.png",
+    "artifacts/feature-implementation/D04/05-diet-menu.png",
+    "artifacts/feature-implementation/D04/06-reminders.png",
+    "artifacts/feature-implementation/D04/07-reminder-read-refresh.png",
+    "artifacts/feature-implementation/D04/08-storybook-generated.png",
+    "artifacts/feature-implementation/D04/09-storybook-refresh.png",
+    "artifacts/feature-implementation/D04/10-invalid-child-no-fallback.png",
+    "artifacts/feature-implementation/D04/11-mobile-390x844.png"
+  ],
+  "openFollowUps": [
+    "D02/C13 continues to own teacher replies, director aggregation, and AI suggestion send-loop behavior.",
+    "When production APIs are available, replace D01 demo persistence while preserving child-scoped permission checks and refresh persistence semantics.",
+    "The Playwright webServer on port 3330 was blocked by an existing .next/dev/lock, so validation used the existing dev server at http://127.0.0.1:3000."
+  ]
+}

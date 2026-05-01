@@ -1,0 +1,92 @@
+{
+  "taskId": "D03",
+  "title": "teacher-records",
+  "status": "completed",
+  "assignedGaps": [
+    "D03-G01",
+    "D03-G02",
+    "D03-G03",
+    "D03-G04"
+  ],
+  "completedFindingIds": [
+    "C11-002",
+    "C11-003",
+    "C11-004",
+    "C15-004",
+    "C15-005",
+    "C15-006",
+    "C15-013",
+    "C20-004",
+    "C20-005",
+    "C20-006",
+    "C22-006",
+    "C22-007",
+    "C22-008",
+    "C22-009"
+  ],
+  "uncompletedFindingIds": [
+    "C20-009"
+  ],
+  "changedFiles": {
+    "added": [
+      "tests/bug-bash/d03-teacher-records.spec.ts",
+      "docs/feature-implementation/results/D03-result.md",
+      "docs/feature-implementation/results/D03-result.json"
+    ],
+    "modified": [
+      "lib/store.tsx",
+      "app/health/page.tsx",
+      "app/diet/page.tsx",
+      "app/growth/page.tsx",
+      "app/parent/page.tsx",
+      "lib/demo-data/actions.ts",
+      "app/teacher/agent/page.tsx",
+      "app/teacher/health-file-bridge/page.tsx",
+      "components/MobileNav.tsx",
+      "components/Navbar.tsx",
+      "components/parent/useParentD01Data.ts"
+    ]
+  },
+  "checks": {
+    "lint": {
+      "command": "npm run lint",
+      "status": "passed"
+    },
+    "build": {
+      "command": "npm run build",
+      "status": "passed"
+    },
+    "playwrightD03": {
+      "command": "BUGBASH_BASE_URL=http://127.0.0.1:3000 npx playwright test tests/bug-bash/d03-teacher-records.spec.ts --config=playwright.bugbash.config.ts --project=chromium --reporter=line",
+      "status": "passed",
+      "summary": "1 passed"
+    },
+    "bugbashSmoke": {
+      "command": "BUGBASH_BASE_URL=http://127.0.0.1:3000 npm run bugbash:smoke",
+      "status": "failed",
+      "summary": "3000 dev run reported teacher console net::ERR_CONNECTION_RESET issues on first run; final rerun failed in Playwright trace artifact writing with ENOENT before updating b26-smoke-results.json. A production-server retry on 3331 failed with static resource/MIME issues and was stopped."
+    }
+  },
+  "artifacts": {
+    "screenshotsDir": "artifacts/feature-implementation/D03/",
+    "screenshots": [
+      "01-li-health-after-save.png",
+      "02-li-health-after-refresh.png",
+      "03-parent-health-visible.png",
+      "04-li-diet-after-save.png",
+      "04b-li-diet-after-refresh.png",
+      "05-parent-diet-visible.png",
+      "06-li-growth-after-save.png",
+      "06b-li-growth-after-refresh.png",
+      "07-parent-growth-visible.png",
+      "08-zhou-isolation.png",
+      "09-admin-summary.png"
+    ]
+  },
+  "notes": [
+    "Teacher health, diet, and growth writes now use D01 demo-data mutation helpers and shared institution namespace.",
+    "Save failure paths do not claim success and keep the current form state available.",
+    "Parent and director views derive from the same D01-backed app snapshot; parent diet summary was adjusted to expose the saved meal foods.",
+    "C20-009 remains open because real ASR/OCR provider replacement is outside the D03 record form write path."
+  ]
+}

@@ -34,7 +34,9 @@ import PixelParentHomeReplica, {
   type ParentPixelGrowthImage,
   type ParentPixelReminderItem,
   type ParentPixelStatusItem,
+  type ParentPixelTrendPoint,
 } from "@/components/parent/PixelParentHomeReplica";
+import { useParentD01Data } from "@/components/parent/useParentD01Data";
 import WeeklyReportPreviewCard from "@/components/weekly-report/WeeklyReportPreviewCard";
 import {
   InlineLinkButton,
@@ -59,13 +61,19 @@ import type { AiSuggestionResponse, WeeklyReportResponse } from "@/lib/ai/types"
 import { useCareMode } from "@/lib/care-mode";
 import { buildParentSpeechScript } from "@/lib/voice/browser-tts";
 import { buildParentHomeViewModel } from "@/lib/view-models/role-home";
-import { formatDisplayDate, getAgeText, useApp } from "@/lib/store";
+import { formatDisplayDate, getAgeText } from "@/lib/store";
 
 const TODAY_TEXT = new Date().toLocaleDateString("zh-CN", {
   month: "long",
   day: "numeric",
   weekday: "long",
 });
+const PARENT_MEAL_PRIORITY: Record<string, number> = {
+  早餐: 1,
+  晚餐: 2,
+  加餐: 3,
+  午餐: 4,
+};
 
 function formatTimelineTime(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
@@ -80,21 +88,29 @@ export default function ParentHomePage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const childFromQuery = searchParams.get("child");
   const {
     currentUser,
     getParentFeed,
+    attendanceRecords,
     healthCheckRecords,
     mealRecords,
     growthRecords,
     guardianFeedbacks,
+    healthMaterials,
     taskCheckInRecords,
+    messages,
+    reminders,
+    nutritionMenus,
+    storybooks,
     getChildInterventionCard,
     getLatestConsultationForChild,
-  } = useApp();
+    parentHomeData,
+    invalidChildId,
+  } = useParentD01Data(childFromQuery);
   const { careMode, setCareMode } = useCareMode();
   const [showMoreContent, setShowMoreContent] = useState(false);
   const parentFeed = getParentFeed();
-  const childFromQuery = searchParams.get("child");
   const authorizedChildIds = useMemo(
     () => new Set(parentFeed.map((item) => item.child.id)),
     [parentFeed]
@@ -102,8 +118,10 @@ export default function ParentHomePage() {
   const resolvedChildId =
     childFromQuery && authorizedChildIds.has(childFromQuery)
       ? childFromQuery
-      : parentFeed[0]?.child.id ?? "";
-  const feed = parentFeed.find((item) => item.child.id === resolvedChildId) ?? parentFeed[0];
+      : invalidChildId
+        ? ""
+        : parentFeed[0]?.child.id ?? "";
+  const feed = parentFeed.find((item) => item.child.id === resolvedChildId);
   const viewModel = buildParentHomeViewModel(feed);
   const [previewResult, setPreviewResult] = useState<ParentAgentResult | null>(null);
   const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
@@ -112,9 +130,33 @@ export default function ParentHomePage() {
   const [weeklyReportError, setWeeklyReportError] = useState<string | null>(null);
   const latestInterventionCard = feed ? getChildInterventionCard(feed.child.id) : undefined;
   const latestConsultation = feed ? getLatestConsultationForChild(feed.child.id) : undefined;
+  const latestHealthMaterial = useMemo(() => {
+    if (!feed) return undefined;
+    return healthMaterials
+      .filter((material) => material.childId === feed.child.id)
+      .filter((material) => material.parseStatus === "completed")
+      .sort((left, right) =>
+        (right.updatedAt ?? right.createdAt).localeCompare(left.updatedAt ?? left.createdAt)
+      )[0];
+  }, [feed, healthMaterials]);
+  const latestHealthMaterialParse =
+    latestHealthMaterial?.parseResult && typeof latestHealthMaterial.parseResult === "object"
+      ? latestHealthMaterial.parseResult
+      : undefined;
+  const latestHealthMaterialSummary =
+    typeof latestHealthMaterialParse?.summary === "string"
+      ? sanitizeParentFacingText(latestHealthMaterialParse.summary)
+      : "";
+  const latestHealthMaterialFollowUp =
+    Array.isArray(latestHealthMaterialParse?.followUpHints) && latestHealthMaterialParse.followUpHints.length > 0
+      ? sanitizeParentFacingText(
+          (latestHealthMaterialParse.followUpHints[0] as { detail?: string; title?: string }).detail ??
+            (latestHealthMaterialParse.followUpHints[0] as { title?: string }).title
+        )
+      : "";
 
   useEffect(() => {
-    if (!feed) {
+    if (!feed || invalidChildId) {
       return;
     }
 
@@ -127,7 +169,7 @@ export default function ParentHomePage() {
     }
 
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
-  }, [feed, pathname, router, searchParams]);
+  }, [feed, invalidChildId, pathname, router, searchParams]);
 
   const previewContext = useMemo(() => {
     if (!feed) return null;
@@ -282,8 +324,12 @@ export default function ParentHomePage() {
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
         <EmptyState
           icon={<BrainCircuit className="h-6 w-6" />}
-          title="当前家长账号还没有可展示的孩子数据。"
-          description="请先使用示例家长账号，或完成普通家长账号的孩子建档。"
+          title={invalidChildId ? "无权查看该孩子的数据。" : "当前家长账号还没有可展示的孩子数据。"}
+          description={
+            invalidChildId
+              ? "当前家长账号没有该 childId 的授权，系统不会自动回退到其他孩子。"
+              : "请先使用示例家长账号，或完成普通家长账号的孩子建档。"
+          }
         />
       </div>
     );
@@ -329,9 +375,32 @@ export default function ParentHomePage() {
     viewModel.child.birthDate
   )} · 出生于 ${formatDisplayDate(viewModel.child.birthDate)}`;
   const latestHealthCheck = previewContext.weeklyHealthChecks[0];
-  const latestMeal = previewContext.todayMeals[0] ?? previewContext.weeklyMeals[0];
+  const latestMeal =
+    [...previewContext.todayMeals].sort(
+      (left, right) => (PARENT_MEAL_PRIORITY[right.meal] ?? 0) - (PARENT_MEAL_PRIORITY[left.meal] ?? 0)
+    )[0] ?? previewContext.weeklyMeals[0];
+  const latestMealFoodSummary =
+    latestMeal?.foods
+      .map((food) => `${food.name}${food.amount ? `(${food.amount})` : ""}`)
+      .join("、") ?? "";
   const latestGrowthRecord = previewContext.weeklyGrowthRecords[0];
   const latestFeedback = previewContext.latestFeedback;
+  const childScopedMessages =
+    parentHomeData?.messages ?? messages.filter((message) => message.childId === feed.child.id);
+  const childScopedReminders =
+    parentHomeData?.reminders ??
+    reminders.filter((reminder) => reminder.childId === feed.child.id || reminder.targetId === feed.child.id);
+  const childScopedMenus =
+    parentHomeData?.nutritionMenus ??
+    nutritionMenus.filter((menu) => menu.classId === feed.child.className);
+  const childScopedStorybooks =
+    parentHomeData?.storybooks ?? storybooks.filter((storybook) => storybook.childId === feed.child.id);
+  const savedStorybookCount = childScopedStorybooks.length;
+  const unreadMessageCount = childScopedMessages.filter(
+    (message) => !message.readBy.includes(currentUser.id) && message.senderId !== currentUser.id
+  ).length;
+  const pendingReminderCount = childScopedReminders.filter((reminder) => reminder.status === "pending").length;
+  const todayMenu = childScopedMenus.find((menu) => menu.date === new Date().toISOString().slice(0, 10)) ?? childScopedMenus[0];
   const hasHealthWarning = previewContext.weeklyHealthChecks.some((item) => item.isAbnormal);
   const hasPendingFeedback = viewModel.pendingFeedback.status === "pending";
   const parentStatusLabel = hasPendingFeedback
@@ -360,6 +429,18 @@ export default function ParentHomePage() {
           : "正常"
         : "暂无",
       statusVariant: latestHealthCheck?.isAbnormal ? "warning" : latestHealthCheck ? "success" : "secondary",
+    },
+    {
+      id: "health-material",
+      title: "健康材料摘要",
+      meta: latestHealthMaterial ? "本地演示解析 · 已保存" : "暂无健康材料解析",
+      description: latestHealthMaterial
+        ? `${latestHealthMaterialSummary || "老师已保存健康材料摘要。"}${latestHealthMaterialFollowUp ? ` · 复查建议：${latestHealthMaterialFollowUp}` : ""}`
+        : "老师保存健康材料解析后，这里会展示家长可见摘要。",
+      tone: latestHealthMaterial ? "amber" : "emerald",
+      icon: <HeartPulse className="h-4 w-4" />,
+      status: latestHealthMaterial ? "已同步" : "暂无",
+      statusVariant: latestHealthMaterial ? "warning" : "secondary",
     },
     {
       id: "meal",
@@ -511,7 +592,7 @@ export default function ParentHomePage() {
     <SectionCard
       title="今日成长小故事"
       description="把今天的亮点写成 3 屏睡前绘本，家长在手机上滑一下就能看完。"
-      actions={<Badge variant="success">微绘本入口</Badge>}
+      actions={<Badge variant={savedStorybookCount > 0 ? "success" : "secondary"}>{savedStorybookCount > 0 ? `已保存 ${savedStorybookCount} 本` : "微绘本入口"}</Badge>}
     >
       <div className="rounded-[28px] border border-amber-100 bg-linear-to-br from-amber-50 via-white to-sky-50 p-5 shadow-sm">
         <div className="flex items-start gap-4">
@@ -761,58 +842,119 @@ export default function ParentHomePage() {
     );
   }
 
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const latestAttendance =
+    attendanceRecords.find((record) => record.childId === feed.child.id && record.date === todayKey) ??
+    attendanceRecords
+      .filter((record) => record.childId === feed.child.id)
+      .sort((left, right) => right.date.localeCompare(left.date))[0];
+  const recentDates = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - index));
+    return date.toISOString().slice(0, 10);
+  });
+  const pixelTrendPoints: ParentPixelTrendPoint[] = recentDates.map((date) => {
+    const health = healthCheckRecords.find((record) => record.childId === feed.child.id && record.date === date);
+    const growthCount = growthRecords.filter(
+      (record) => record.childId === feed.child.id && record.createdAt.slice(0, 10) === date
+    ).length;
+    const mealCount = mealRecords.filter((record) => record.childId === feed.child.id && record.date === date).length;
+
+    return {
+      day: new Date(`${date}T00:00:00`).toLocaleDateString("zh-CN", {
+        month: "numeric",
+        day: "numeric",
+      }),
+      temp: health?.temperature ?? null,
+      mood: health ? Math.min(4.4, 3 + growthCount * 0.2 + mealCount * 0.1) : null,
+    };
+  });
+  const latestTeacherMessage = [...childScopedMessages]
+    .filter((message) => message.senderId !== currentUser.id)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+  const latestPendingReminder = [...childScopedReminders]
+    .sort((left, right) => right.scheduledAt.localeCompare(left.scheduledAt))[0];
   const pixelStatusItems: ParentPixelStatusItem[] = [
     {
       id: "arrival",
       label: "入园",
-      value: "08:26",
-      helper: "正常入园",
-      tone: "blue",
+      value: latestAttendance?.checkInAt
+        ? new Date(latestAttendance.checkInAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+        : latestAttendance?.isPresent
+          ? "已入园"
+          : "暂无",
+      helper: latestAttendance?.isPresent ? "来自出勤记录" : "无出勤记录",
+      tone: latestAttendance?.isPresent ? "blue" : "sky",
     },
     {
       id: "temp",
       label: "体温",
-      value: latestHealthCheck ? `${latestHealthCheck.temperature.toFixed(1)}°C` : "36.5°C",
-      helper: latestHealthCheck?.isAbnormal ? "需关注" : "正常",
+      value: latestHealthCheck ? `${latestHealthCheck.temperature.toFixed(1)}°C` : "暂无",
+      helper: latestHealthCheck ? (latestHealthCheck.isAbnormal ? "需关注" : "晨检记录") : "无晨检记录",
       tone: latestHealthCheck?.isAbnormal ? "orange" : "green",
     },
     {
       id: "meal",
       label: "饮食",
-      value: latestMeal ? `${latestMeal.nutritionScore}分` : "早餐+午餐",
-      helper: latestMeal?.allergyReaction ? "有过敏提示" : "进食良好",
+      value: latestMeal ? `${latestMeal.nutritionScore}分` : todayMenu ? "有餐谱" : "暂无",
+      helper: latestMeal?.allergyReaction
+        ? `过敏提示${latestMealFoodSummary ? ` · ${latestMealFoodSummary}` : ""}`
+        : latestMeal
+          ? latestMealFoodSummary || "饮食记录"
+          : todayMenu
+            ? "演示餐谱"
+            : "无饮食记录",
       tone: latestMeal?.allergyReaction ? "orange" : "orange",
     },
     {
       id: "nap",
-      label: "午睡",
-      value: "12:40-14:30",
-      helper: "睡眠安稳",
+      label: "沟通",
+      value: unreadMessageCount > 0 ? `${unreadMessageCount}条未读` : `${childScopedMessages.length}条`,
+      helper: latestTeacherMessage ? "老师反馈" : "无新反馈",
       tone: "violet",
     },
     {
       id: "activity",
-      label: "活动",
-      value: "户外+益智",
-      helper: "积极参与",
+      label: "提醒",
+      value: pendingReminderCount > 0 ? `${pendingReminderCount}条待读` : `${childScopedReminders.length}条`,
+      helper: latestPendingReminder ? "来自提醒数据" : "无提醒",
       tone: "sky",
     },
   ];
   const pixelReminders: ParentPixelReminderItem[] = [
-    {
-      id: "teacher",
-      time: "10:15",
-      author: "林老师",
-      content: `${feed.child.name}今天天气餐吃得很棒，光盘了！`,
-      unread: true,
-    },
-    {
-      id: "care",
-      time: "09:20",
-      author: "保健老师",
-      content: "今日户外活动时间较长，注意补充水分哦～",
-    },
-  ];
+    ...(latestHealthMaterial
+      ? [
+          {
+            id: "health-material",
+            time: new Date(latestHealthMaterial.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+            author: "健康材料",
+            content: `健康材料摘要：${latestHealthMaterialSummary || "本地演示解析结果已保存。"}${latestHealthMaterialFollowUp ? ` 复查建议：${latestHealthMaterialFollowUp}` : ""}`,
+            unread: false,
+          },
+        ]
+      : []),
+    ...childScopedMessages
+      .filter((message) => message.senderId !== currentUser.id)
+      .slice(-2)
+      .reverse()
+      .map((message) => ({
+        id: message.messageId,
+        time: new Date(message.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+        author: message.senderName,
+        content: message.content,
+        unread: !message.readBy.includes(currentUser.id),
+      })),
+    ...childScopedReminders
+      .filter((reminder) => reminder.status === "pending")
+      .slice(0, 2)
+      .map((reminder) => ({
+        id: reminder.reminderId,
+        time: new Date(reminder.scheduledAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+        author: "日常提醒",
+        content: `${reminder.title}：${reminder.description}`,
+        unread: true,
+      })),
+  ].slice(0, 3);
   const pixelGrowthImages: ParentPixelGrowthImage[] = viewModel.mediaGallery
     .slice(0, 4)
     .map((item) => ({
@@ -853,6 +995,7 @@ export default function ParentHomePage() {
           whyRecommended={displayWhyRecommended}
           teacherFocus={displayReviewIn48h}
           growthImages={pixelGrowthImages}
+          trendPoints={pixelTrendPoints}
           hasPendingFeedback={hasPendingFeedback}
         />
       </RolePageShell>

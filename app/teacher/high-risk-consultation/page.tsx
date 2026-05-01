@@ -188,12 +188,15 @@ export default function TeacherHighRiskConsultationPage() {
     healthCheckRecords,
     growthRecords,
     guardianFeedbacks,
+    consultations,
     mobileDrafts,
     saveMobileDraft,
     markMobileDraftSyncStatus,
-    upsertConsultation,
+    saveConsultationRecord,
+    addConsultationRecordNote,
+    updateConsultationRecordStatus,
     upsertInterventionCard,
-    upsertReminder,
+    saveReminderRecord,
   } = useApp();
   const { start, isStreaming, stop } = useAgentStream();
   const searchParams = useSearchParams();
@@ -201,6 +204,7 @@ export default function TeacherHighRiskConsultationPage() {
   const traceCaseParam = searchParams.get("traceCase");
   const routeIntent = searchParams.get("intent");
   const queryChildId = searchParams.get("childId");
+  const queryConsultationId = searchParams.get("consultationId");
   const queryPreferredChildId =
     queryChildId && visibleChildren.some((child) => child.id === queryChildId)
       ? queryChildId
@@ -254,6 +258,17 @@ export default function TeacherHighRiskConsultationPage() {
   const childContext = useMemo(() => buildTeacherAgentChildContext(classContext, activeChildId), [classContext, activeChildId]);
   const autoContext = useMemo(() => (childContext ? buildHighRiskConsultationAutoContext({ classContext, childContext }) : null), [childContext, classContext]);
   const selectedChild = childContext?.child;
+  const storedConsultationsForChild = useMemo(
+    () =>
+      consultations
+        .filter((item) => item.childId === activeChildId)
+        .sort((left, right) => {
+          const leftUpdatedAt = (left as { updatedAt?: string }).updatedAt ?? left.generatedAt;
+          const rightUpdatedAt = (right as { updatedAt?: string }).updatedAt ?? right.generatedAt;
+          return rightUpdatedAt.localeCompare(leftUpdatedAt);
+        }),
+    [activeChildId, consultations]
+  );
   const draftId = selectedChild ? `high-risk-consultation-${selectedChild.id}` : "";
   const existingDraft = useMemo(() => mobileDrafts.find((draft) => draft.draftId === draftId), [draftId, mobileDrafts]);
   const existingDraftPayload = useMemo(
@@ -263,6 +278,22 @@ export default function TeacherHighRiskConsultationPage() {
         | undefined,
     [existingDraft]
   );
+  useEffect(() => {
+    if (isStreaming) return;
+    const preferredStored = queryConsultationId
+      ? storedConsultationsForChild.find((item) => item.consultationId === queryConsultationId)
+      : undefined;
+    const latestStored = preferredStored ?? storedConsultationsForChild[0];
+    if (!latestStored || !isRenderableConsultationApiResult(latestStored)) return;
+    if (result?.consultationId === latestStored.consultationId) return;
+    setResult(latestStored);
+    setProviderTrace(
+      latestStored.providerTrace && typeof latestStored.providerTrace === "object"
+        ? (latestStored.providerTrace as ConsultationProviderTrace)
+        : null
+    );
+    setStreamMessage("已从 D01 演示数据恢复最近一次会诊，刷新后仍可查看。");
+  }, [isStreaming, queryConsultationId, result?.consultationId, storedConsultationsForChild]);
   const debugFixtureViewModel = useMemo(() => {
     if (
       traceMode !== "debug" ||
@@ -466,28 +497,54 @@ export default function TeacherHighRiskConsultationPage() {
             return;
           }
 
-          setResult(rawResult);
+          const saveResult = saveConsultationRecord({
+            childId: selectedChild.id,
+            consultation: rawResult,
+            workflowStatus: "pending",
+          });
+          if (saveResult.status === "failed") {
+            const message = saveResult.error ?? saveResult.message ?? "会诊结果保存失败。";
+            setStreamError(message);
+            setStreamMessage(message);
+            return;
+          }
+
+          setResult((saveResult.data as ConsultationApiResult | undefined) ?? rawResult);
           setShowSetupSections(false);
-          upsertConsultation(rawResult);
           upsertInterventionCard(rawResult.interventionCard);
-          buildReminderItems({
-            childId: selectedChild.id,
-            targetRole: "teacher",
-            targetId: selectedChild.id,
-            childName: selectedChild.name,
-            interventionCard: rawResult.interventionCard,
-            consultation: rawResult,
-          }).forEach((item) => upsertReminder(item));
-          buildReminderItems({
-            childId: selectedChild.id,
-            targetRole: "parent",
-            targetId: selectedChild.id,
-            childName: selectedChild.name,
-            interventionCard: rawResult.interventionCard,
-            consultation: rawResult,
-          }).forEach((item) => upsertReminder(item));
+          const reminderResults = [
+            ...buildReminderItems({
+              childId: selectedChild.id,
+              targetRole: "teacher",
+              targetId: selectedChild.id,
+              childName: selectedChild.name,
+              interventionCard: rawResult.interventionCard,
+              consultation: rawResult,
+            }),
+            ...buildReminderItems({
+              childId: selectedChild.id,
+              targetRole: "parent",
+              targetId: selectedChild.id,
+              childName: selectedChild.name,
+              interventionCard: rawResult.interventionCard,
+              consultation: rawResult,
+            }),
+          ].map((item) => saveReminderRecord(item));
+          const failedReminder = reminderResults.find((item) => item.status === "failed");
+          if (failedReminder) {
+            const message = failedReminder.error ?? failedReminder.message ?? "后续提醒保存失败。";
+            setStreamError(message);
+            setStreamMessage(`会诊结果已保存，但后续提醒未保存：${message}`);
+            return;
+          }
           markMobileDraftSyncStatus(draftId, "synced");
-          setStreamMessage("会诊完成，已同步教师端、家长端和园长端。");
+          const reminderPersistenceText =
+            reminderResults.length === 0
+              ? "本次没有生成新的后续提醒。"
+              : reminderResults.some((item) => item.status === "local_only")
+                ? "后续提醒已写入共享演示数据，刷新后保留。"
+                : "后续提醒已写入当前数据层，刷新后保留。";
+          setStreamMessage(`会诊完成，已保存到 D01 演示数据，教师端、家长端和园长端可从同一记录读取。${reminderPersistenceText}`);
         }
       });
 
@@ -531,15 +588,38 @@ export default function TeacherHighRiskConsultationPage() {
 
   function addFollowUpReminder() {
     if (!selectedChild || !result) return;
-    buildReminderItems({
+    const reminderResults = buildReminderItems({
       childId: selectedChild.id,
       targetRole: "teacher",
       targetId: selectedChild.id,
       childName: selectedChild.name,
       interventionCard: result.interventionCard,
       consultation: result,
-    }).forEach((item) => upsertReminder(item));
-    setStreamMessage("已加入后续提醒。");
+    }).map((item) =>
+      saveReminderRecord({
+        ...item,
+        reminderId: `${item.reminderId}-manual-follow-up`,
+        title: `${item.title}（后续提醒）`,
+        status: "pending",
+      })
+    );
+    if (reminderResults.length === 0) {
+      setStreamMessage("当前会诊没有可生成的后续提醒。");
+      return;
+    }
+
+    const failedReminder = reminderResults.find((item) => item.status === "failed");
+    if (failedReminder) {
+      const message = failedReminder.error ?? failedReminder.message ?? "后续提醒保存失败。";
+      setStreamError(message);
+      setStreamMessage(`后续提醒未保存：${message}`);
+      return;
+    }
+
+    const persistenceText = reminderResults.some((item) => item.status === "local_only")
+      ? "已加入后续提醒，并写入共享演示数据，刷新后保留。"
+      : "已加入后续提醒，并写入当前数据层，刷新后保留。";
+    setStreamMessage(persistenceText);
   }
 
   if (visibleChildren.length === 0 || !selectedChild || !childContext || !autoContext) {
@@ -559,15 +639,60 @@ export default function TeacherHighRiskConsultationPage() {
       role: guardian.relation,
     })),
   ];
+  const persistedDiscussionNotes =
+    ((result as { notes?: Array<{ note?: string; createdBy?: string; createdAt?: string }> } | null)?.notes ?? [])
+      .map((item) => `${item.createdBy === currentUser.id ? currentUser.name : "会诊记录"}：${item.note ?? ""}`)
+      .filter((item) => item.trim().length > 0);
   const discussionMessages = [
     `${currentUser.name}：发起会诊，近期出现持续关注信号。`,
+    ...persistedDiscussionNotes,
     ...discussionNotes,
   ];
   const sendDiscussionNote = () => {
     const note = discussionInput.trim();
     if (!note) return;
+    if (result) {
+      const saved = addConsultationRecordNote({
+        consultationId: result.consultationId,
+        note,
+      });
+      if (saved.status === "failed") {
+        setStreamError(saved.error ?? saved.message ?? "会诊备注保存失败。");
+        return;
+      }
+      if (saved.data && isRenderableConsultationApiResult(saved.data)) {
+        setResult(saved.data);
+      }
+      setStreamMessage(
+        saved.status === "local_only"
+          ? "会诊备注已写入共享演示数据，刷新后仍可查看。"
+          : "会诊备注已保存到当前数据层，刷新后仍可查看。"
+      );
+      setDiscussionInput("");
+      return;
+    }
     setDiscussionNotes((prev) => [`${currentUser.name}：${note}`, ...prev]);
     setDiscussionInput("");
+  };
+
+  const updateWorkflowStatus = (status: "pending" | "in-progress" | "resolved") => {
+    if (!result) return;
+    const saved = updateConsultationRecordStatus({
+      consultationId: result.consultationId,
+      status,
+    });
+    if (saved.status === "failed") {
+      setStreamError(saved.error ?? saved.message ?? "会诊状态更新失败。");
+      return;
+    }
+    if (saved.data && isRenderableConsultationApiResult(saved.data)) {
+      setResult(saved.data);
+    }
+    setStreamMessage(
+      `会诊状态已更新为 ${status === "pending" ? "待处理" : status === "in-progress" ? "处理中" : "已解决"}。${
+        saved.status === "local_only" ? "已写入共享演示数据，刷新后保留。" : "已写入当前数据层，刷新后保留。"
+      }`
+    );
   };
 
   return (
@@ -798,12 +923,13 @@ export default function TeacherHighRiskConsultationPage() {
                   </div>
                   <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
                     <p className="text-sm font-semibold text-slate-950">会议讨论与记录</p>
-                    <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+                    <div data-testid="d05-consultation-discussion" className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
                       {discussionMessages.map((message, index) => (
                         <div key={`${index}-${message}`} className="rounded-2xl bg-slate-50 p-3">{message}</div>
                       ))}
                       <div className="flex items-center gap-2 rounded-2xl border border-indigo-100 bg-white px-3 py-2">
                         <input
+                          data-testid="d05-consultation-note-input"
                           value={discussionInput}
                           onChange={(event) => setDiscussionInput(event.target.value)}
                           onKeyDown={(event) => {
@@ -815,7 +941,17 @@ export default function TeacherHighRiskConsultationPage() {
                           className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
                           placeholder="输入讨论内容，按 Enter 发送"
                         />
-                        <Button type="button" size="sm" variant="premium" className="ml-auto rounded-xl" onClick={sendDiscussionNote} disabled={!discussionInput.trim()}>发送</Button>
+                        <Button
+                          data-testid="d05-consultation-note-send"
+                          type="button"
+                          size="sm"
+                          variant="premium"
+                          className="ml-auto rounded-xl"
+                          onClick={sendDiscussionNote}
+                          disabled={!discussionInput.trim()}
+                        >
+                          发送
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -971,9 +1107,38 @@ export default function TeacherHighRiskConsultationPage() {
                       <div className="flex flex-wrap gap-2">
                         <Badge variant="warning">会诊结论</Badge>
                         <Badge variant="secondary">{buildConsultationResultBadge(result)}</Badge>
+                        <Badge variant="info">
+                          {((result as { workflowStatus?: string }).workflowStatus ?? "pending") === "resolved"
+                            ? "已解决"
+                            : ((result as { workflowStatus?: string }).workflowStatus ?? "pending") === "in-progress"
+                              ? "处理中"
+                              : "待处理"}
+                        </Badge>
                       </div>
                       <p className="mt-3 text-lg font-semibold text-slate-900">{result.summary}</p>
                       <p className="mt-3 text-sm leading-7 text-slate-600">{result.coordinatorSummary.finalConclusion}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-100 bg-white p-4">
+                      <p className="text-sm font-semibold text-slate-900">处理状态</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {[
+                          ["pending", "待处理"],
+                          ["in-progress", "处理中"],
+                          ["resolved", "已解决"],
+                        ].map(([status, label]) => (
+                          <Button
+                            key={status}
+                            data-testid={`d05-consultation-status-${status}`}
+                            type="button"
+                            size="sm"
+                            variant={((result as { workflowStatus?: string }).workflowStatus ?? "pending") === status ? "premium" : "outline"}
+                            className="rounded-xl"
+                            onClick={() => updateWorkflowStatus(status as "pending" | "in-progress" | "resolved")}
+                          >
+                            {label}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
                     <div className="grid gap-4 lg:grid-cols-2">
                       <div className="rounded-lg border border-slate-100 bg-white p-5">
@@ -1021,7 +1186,13 @@ export default function TeacherHighRiskConsultationPage() {
                       会诊完成后，结果会同步回教师端结果卡，并将今晚任务写入家长端；如需升级，也会同步生成园长决策卡。
                     </div>
                     <div className="flex flex-wrap gap-3">
-                      <Button type="button" variant="outline" className="rounded-xl" onClick={addFollowUpReminder}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={addFollowUpReminder}
+                        data-testid="d07-follow-up-reminder"
+                      >
                         <Clock3 className="mr-2 h-4 w-4" />
                         加入后续提醒
                       </Button>
