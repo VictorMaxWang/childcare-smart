@@ -1,0 +1,11 @@
+{
+  "taskId": "E10",
+  "title": "Cleanup ui-only mock-only and fake-success",
+  "status": "pending",
+  "dependencies": ["E02", "E03", "E04", "E05", "E06", "E07", "E08", "E09"],
+  "writeScope": ["product labels", "disabled controls", "mock/fallback boundaries"],
+  "mustWriteMarkdown": "docs/product-completion/results/E10-result.md",
+  "requiredChecks": ["npm run lint", "npm run build", "visual-only safety regression"],
+  "notes": "Every enabled button must perform real work or clearly fail."
+}
+

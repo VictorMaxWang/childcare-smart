@@ -1,0 +1,11 @@
+{
+  "taskId": "E03",
+  "title": "Aggregation trends and weekly reports",
+  "status": "pending",
+  "dependencies": ["E01"],
+  "writeScope": ["analytics APIs", "weekly report APIs", "weekly report UI"],
+  "mustWriteMarkdown": "docs/product-completion/results/E03-result.md",
+  "requiredChecks": ["npm run lint", "npm run build", "weekly report regression"],
+  "notes": "Reports must be archived records before export or share."
+}
+

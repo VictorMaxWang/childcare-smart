@@ -13,6 +13,20 @@ import { getAuthSessionSecret } from "@/lib/auth/session-config";
 const SESSION_COOKIE = "ccs_session";
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+const API_ROUTE_HANDLED_AUTH_PREFIXES = [
+  "/api/demo",
+  "/api/children",
+  "/api/teachers",
+  "/api/messages",
+  "/api/feedback",
+  "/api/records",
+  "/api/health-materials",
+  "/api/consultations",
+  "/api/analytics",
+  "/api/weekly-reports",
+  "/api/attachments",
+  "/api/reminders",
+];
 
 function normalizeBase64Url(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -116,6 +130,7 @@ export async function proxy(request: NextRequest) {
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api/auth") ||
+    API_ROUTE_HANDLED_AUTH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) ||
     pathname === "/favicon.ico" ||
     pathname === "/login" ||
     pathname === "/auth/login"

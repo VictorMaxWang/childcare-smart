@@ -1,0 +1,11 @@
+{
+  "taskId": "E11",
+  "title": "Automated and browser regression",
+  "status": "pending",
+  "dependencies": ["E02", "E03", "E04", "E05", "E06", "E07", "E08", "E09", "E10"],
+  "writeScope": ["tests", "playwright configs if needed", "test docs"],
+  "mustWriteMarkdown": "docs/product-completion/results/E11-result.md",
+  "requiredChecks": ["npm run lint", "npm run build", "npm run feature:smoke", "npm run bugbash:smoke"],
+  "notes": "Use Browser Use when runtime supports it; otherwise use Playwright and document fallback."
+}
+
