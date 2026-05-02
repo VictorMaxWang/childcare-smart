@@ -1,0 +1,11 @@
+{
+  "taskId": "E02",
+  "title": "CRUD archive teacher and child management",
+  "status": "pending",
+  "dependencies": ["E01"],
+  "writeScope": ["children APIs", "teachers APIs", "child and teacher management UI"],
+  "mustWriteMarkdown": "docs/product-completion/results/E02-result.md",
+  "requiredChecks": ["npm run lint", "npm run build", "CRUD archive regression"],
+  "notes": "Deletion means archive by default; include restore and permission tests."
+}
+

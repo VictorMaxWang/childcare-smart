@@ -17,6 +17,7 @@ import {
   mergeScopedSnapshotForSessionUser,
   scopeSnapshotForSessionUser,
 } from "@/lib/persistence/state-scope";
+import { normalizeExtendedSnapshot } from "@/lib/server/app-data-model";
 
 export const runtime = "nodejs";
 
@@ -107,8 +108,13 @@ export async function PUT(request: Request) {
       [user.institutionId]
     );
 
+    const currentRawSnapshot =
+      decodeDatabaseJson<Record<string, unknown>>(rows[0]?.snapshot) ??
+      (rows[0]?.snapshot && typeof rows[0]?.snapshot === "object"
+        ? (rows[0]?.snapshot as Record<string, unknown>)
+        : null);
     const currentSnapshot =
-      normalizeAppStateSnapshot(decodeDatabaseJson<AppStateSnapshot>(rows[0]?.snapshot)) ??
+      normalizeAppStateSnapshot(currentRawSnapshot) ??
       normalizeAppStateSnapshot(rows[0]?.snapshot) ??
       normalizedSnapshot;
     const snapshotToSave = mergeScopedSnapshotForSessionUser({
@@ -116,7 +122,18 @@ export async function PUT(request: Request) {
       incomingSnapshot: normalizedSnapshot,
       user,
     });
-    const encodedSnapshot = encodeDatabaseJson(snapshotToSave);
+    const currentExtendedSnapshot = currentRawSnapshot ? normalizeExtendedSnapshot(currentRawSnapshot, user) : null;
+    const encodedSnapshot = encodeDatabaseJson(
+      currentExtendedSnapshot
+        ? {
+            ...snapshotToSave,
+            teachers: currentExtendedSnapshot.teachers,
+            weeklyReports: currentExtendedSnapshot.weeklyReports,
+            attachments: currentExtendedSnapshot.attachments,
+            auditLogs: currentExtendedSnapshot.auditLogs,
+          }
+        : snapshotToSave
+    );
 
     await dbQuery(
       `

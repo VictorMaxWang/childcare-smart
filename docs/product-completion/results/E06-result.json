@@ -1,0 +1,11 @@
+{
+  "taskId": "E06",
+  "title": "Common voice orb core",
+  "status": "pending",
+  "dependencies": ["E01"],
+  "writeScope": ["voice assistant components", "command planner", "permission gate", "executor"],
+  "mustWriteMarkdown": "docs/product-completion/results/E06-result.md",
+  "requiredChecks": ["npm run lint", "npm run build", "voice command core regression"],
+  "notes": "Voice orb must execute real commands and provide text fallback."
+}
+

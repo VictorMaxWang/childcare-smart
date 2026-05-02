@@ -1,0 +1,11 @@
+{
+  "taskId": "E07",
+  "title": "Director voice skills",
+  "status": "pending",
+  "dependencies": ["E06"],
+  "writeScope": ["admin voice skills", "director weekly report and dispatch flows"],
+  "mustWriteMarkdown": "docs/product-completion/results/E07-result.md",
+  "requiredChecks": ["npm run lint", "npm run build", "director voice regression"],
+  "notes": "Dispatch, share, archive, and send actions require confirmation."
+}
+

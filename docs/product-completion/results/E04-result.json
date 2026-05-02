@@ -1,0 +1,11 @@
+{
+  "taskId": "E04",
+  "title": "Feedback details attachments and media messages",
+  "status": "pending",
+  "dependencies": ["E01"],
+  "writeScope": ["feedback APIs", "attachment metadata APIs", "message media UI"],
+  "mustWriteMarkdown": "docs/product-completion/results/E04-result.md",
+  "requiredChecks": ["npm run lint", "npm run build", "feedback and attachment regression"],
+  "notes": "If binary storage is unavailable, save metadata only and label status clearly."
+}
+

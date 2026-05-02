@@ -1,0 +1,11 @@
+{
+  "taskId": "E09",
+  "title": "Parent voice skills",
+  "status": "pending",
+  "dependencies": ["E06"],
+  "writeScope": ["parent voice skills", "parent message feedback and storybook commands"],
+  "mustWriteMarkdown": "docs/product-completion/results/E09-result.md",
+  "requiredChecks": ["npm run lint", "npm run build", "parent voice regression"],
+  "notes": "Parent commands are limited to authorized childIds."
+}
+

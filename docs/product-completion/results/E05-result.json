@@ -1,0 +1,11 @@
+{
+  "taskId": "E05",
+  "title": "OCR ASR providers and health material parsing",
+  "status": "pending",
+  "dependencies": ["E01"],
+  "writeScope": ["lib/ai/providers", "OCR/ASR routes", "health material parsing"],
+  "mustWriteMarkdown": "docs/product-completion/results/E05-result.md",
+  "requiredChecks": ["npm run lint", "npm run build", "provider fallback regression"],
+  "notes": "Provider fallback must be visible and cannot be presented as real provider success."
+}
+

@@ -1,0 +1,11 @@
+{
+  "taskId": "E08",
+  "title": "Teacher voice skills",
+  "status": "pending",
+  "dependencies": ["E06"],
+  "writeScope": ["teacher voice skills", "teacher record and consultation commands"],
+  "mustWriteMarkdown": "docs/product-completion/results/E08-result.md",
+  "requiredChecks": ["npm run lint", "npm run build", "teacher voice regression"],
+  "notes": "Teacher writes are limited to authorized class children."
+}
+

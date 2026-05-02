@@ -1,0 +1,124 @@
+{
+  "taskId": "E01",
+  "title": "API scope and unified data service",
+  "status": "completed",
+  "completedAt": "2026-05-02",
+  "changedFiles": [
+    "app/api/analytics/admin/summary/route.ts",
+    "app/api/analytics/director-dashboard/route.ts",
+    "app/api/analytics/parent-home/route.ts",
+    "app/api/analytics/teacher-workbench/route.ts",
+    "app/api/analytics/trends/route.ts",
+    "app/api/attachments/route.ts",
+    "app/api/attachments/[attachmentId]/route.ts",
+    "app/api/children/route.ts",
+    "app/api/children/[childId]/route.ts",
+    "app/api/children/[childId]/archive/route.ts",
+    "app/api/consultations/route.ts",
+    "app/api/consultations/[consultationId]/notes/route.ts",
+    "app/api/consultations/[consultationId]/status/route.ts",
+    "app/api/demo/session/route.ts",
+    "app/api/demo/session/switch/route.ts",
+    "app/api/feedback/route.ts",
+    "app/api/feedback/[feedbackId]/route.ts",
+    "app/api/health-materials/route.ts",
+    "app/api/health-materials/[materialId]/route.ts",
+    "app/api/health-materials/[materialId]/parse/route.ts",
+    "app/api/messages/route.ts",
+    "app/api/messages/[messageId]/read/route.ts",
+    "app/api/messages/[messageId]/reply/route.ts",
+    "app/api/records/route.ts",
+    "app/api/records/[recordId]/route.ts",
+    "app/api/records/[recordId]/archive/route.ts",
+    "app/api/reminders/route.ts",
+    "app/api/reminders/[reminderId]/route.ts",
+    "app/api/state/route.ts",
+    "app/api/teachers/route.ts",
+    "app/api/teachers/[teacherId]/route.ts",
+    "app/api/teachers/[teacherId]/archive/route.ts",
+    "app/api/weekly-reports/route.ts",
+    "app/api/weekly-reports/[reportId]/route.ts",
+    "app/api/weekly-reports/[reportId]/archive/route.ts",
+    "app/api/weekly-reports/[reportId]/export/route.ts",
+    "lib/api/client.ts",
+    "lib/api/demo-session.ts",
+    "lib/api/errors.ts",
+    "lib/api/scope.ts",
+    "lib/api/types.ts",
+    "lib/server/api-errors.ts",
+    "lib/server/api-errors.test.ts",
+    "lib/server/api-handlers.ts",
+    "lib/server/app-data-model.ts",
+    "lib/server/app-data-repository.ts",
+    "lib/server/app-data-service.ts",
+    "lib/server/app-data-service.test.ts",
+    "lib/server/scope.ts",
+    "lib/server/scope.test.ts",
+    "lib/server/session.ts",
+    "proxy.ts",
+    "tests/feature-completion/e01-api-scope.spec.ts",
+    "docs/product-completion/BACKEND_API_SPEC.md",
+    "docs/product-completion/SERVER_SCOPE_SPEC.md",
+    "docs/product-completion/IMPLEMENTATION_LOG.md",
+    "docs/product-completion/results/E01-result.md",
+    "docs/product-completion/results/E01-result.json"
+  ],
+  "checks": {
+    "lint": {
+      "command": "npm run lint",
+      "status": "passed"
+    },
+    "build": {
+      "command": "npm run build",
+      "status": "passed"
+    },
+    "tsc": {
+      "command": "npx tsc --noEmit --pretty false --incremental false",
+      "status": "passed"
+    },
+    "nodeTests": {
+      "command": "node --import ./scripts/register-test-path-loader.mjs --test ./lib/server/api-errors.test.ts ./lib/server/scope.test.ts ./lib/server/app-data-service.test.ts",
+      "status": "passed",
+      "passed": 12
+    },
+    "playwrightE01": {
+      "command": "FEATURE_BASE_URL=http://127.0.0.1:3330 FEATURE_SKIP_WEBSERVER=1 npx playwright test tests/feature-completion/e01-api-scope.spec.ts --config=playwright.feature.config.ts --reporter=line",
+      "status": "passed",
+      "passed": 4
+    },
+    "featureSmoke": {
+      "command": "FEATURE_BASE_URL=http://127.0.0.1:3330 FEATURE_SKIP_WEBSERVER=1 npm run feature:smoke",
+      "status": "passed_on_rerun",
+      "passed": 13,
+      "note": "First run hit transient ECONNRESET on /api/auth/demo-login; immediate rerun passed 13/13."
+    }
+  },
+  "implementedScope": [
+    "demo session",
+    "children",
+    "teachers",
+    "messages",
+    "feedback",
+    "records",
+    "health materials",
+    "consultations",
+    "analytics",
+    "weekly reports",
+    "attachments",
+    "reminders"
+  ],
+  "remainingRisks": [
+    "E02-E09 still need page-by-page migration from scattered localStorage/store calls to the new API client.",
+    "Demo API persistence is process-local and resets on server restart or serverless cold start.",
+    "Normal-account snapshot persistence is read-modify-write last-write-wins without optimistic versioning.",
+    "Legacy AI routes under /api/ai/* were not normalized in E01 and need E05/E06 risk review.",
+    "Weekly report share, voice assistant commands, and quality metrics aliases remain future work."
+  ],
+  "nextTasks": [
+    "E02 can migrate child/teacher/record pages to the service client.",
+    "E03 can build analytics and weekly report product flows on the API foundation.",
+    "E04 can migrate communication, feedback, and attachment UX.",
+    "E05/E06 can address AI-route auth, fake-success, and voice command execution risks.",
+    "E07/E08/E09 should reuse E01 scope helpers rather than creating parallel authorization checks."
+  ]
+}
