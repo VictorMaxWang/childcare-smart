@@ -1,0 +1,136 @@
+{
+  "taskId": "R04",
+  "title": "vivo live provider smoke",
+  "status": "needs-real-provider",
+  "generatedAt": "2026-05-03",
+  "envComplete": false,
+  "envPresence": [
+    {
+      "name": "VIVO_APP_KEY",
+      "present": false,
+      "processEnvPresent": false,
+      "userOrMachineEnvPresent": false,
+      "dotEnvLocalPresent": false
+    },
+    {
+      "name": "VIVO_APP_ID",
+      "present": false,
+      "processEnvPresent": false,
+      "userOrMachineEnvPresent": false,
+      "dotEnvLocalPresent": false
+    },
+    {
+      "name": "VIVO_BASE_URL",
+      "present": false,
+      "processEnvPresent": false,
+      "userOrMachineEnvPresent": false,
+      "dotEnvLocalPresent": false
+    },
+    {
+      "name": "VIVO_LLM_MODEL",
+      "present": false,
+      "processEnvPresent": false,
+      "userOrMachineEnvPresent": false,
+      "dotEnvLocalPresent": false
+    },
+    {
+      "name": "VIVO_OCR_PATH",
+      "present": false,
+      "processEnvPresent": false,
+      "userOrMachineEnvPresent": false,
+      "dotEnvLocalPresent": false
+    },
+    {
+      "name": "VIVO_ASR_PACKAGE",
+      "present": false,
+      "processEnvPresent": false,
+      "userOrMachineEnvPresent": false,
+      "dotEnvLocalPresent": false
+    },
+    {
+      "name": "VIVO_ASR_CLIENT_VERSION",
+      "present": false,
+      "processEnvPresent": false,
+      "userOrMachineEnvPresent": false,
+      "dotEnvLocalPresent": false
+    },
+    {
+      "name": "VIVO_ASR_USER_ID",
+      "present": false,
+      "processEnvPresent": false,
+      "userOrMachineEnvPresent": false,
+      "dotEnvLocalPresent": false
+    },
+    {
+      "name": "VIVO_ASR_ENGINE_ID",
+      "present": false,
+      "processEnvPresent": false,
+      "userOrMachineEnvPresent": false,
+      "dotEnvLocalPresent": false
+    }
+  ],
+  "missingEnv": [
+    "VIVO_APP_KEY",
+    "VIVO_APP_ID",
+    "VIVO_BASE_URL",
+    "VIVO_LLM_MODEL",
+    "VIVO_OCR_PATH",
+    "VIVO_ASR_PACKAGE",
+    "VIVO_ASR_CLIENT_VERSION",
+    "VIVO_ASR_USER_ID",
+    "VIVO_ASR_ENGINE_ID"
+  ],
+  "providerStatus": {
+    "chat": "missing-env",
+    "ocr": "missing-env",
+    "asr": "missing-env"
+  },
+  "smoke": {
+    "chat": {
+      "status": "not-run",
+      "reason": "missing-env",
+      "sentLiveRequest": false,
+      "result": "VIVO_APP_KEY unavailable; no live prompt was sent."
+    },
+    "ocr": {
+      "status": "not-run",
+      "reason": "missing-env",
+      "sentLiveRequest": false,
+      "result": "VIVO_APP_KEY and VIVO_APP_ID unavailable; no image was submitted."
+    },
+    "asr": {
+      "status": "not-run",
+      "reason": "missing-env",
+      "sentLiveRequest": false,
+      "result": "VIVO_APP_KEY, VIVO_ASR_PACKAGE, VIVO_ASR_CLIENT_VERSION, and VIVO_ASR_USER_ID unavailable; no audio was submitted."
+    }
+  },
+  "checks": {
+    "productAi": "skipped; blocked by missing-env",
+    "lint": "not-run; no code changes required",
+    "build": "not-run; no code changes required"
+  },
+  "filesRead": [
+    "docs/product-completion/VIVO_AIGC_PROVIDER_NOTES.md",
+    "docs/product-completion/OCR_ASR_PROVIDER_SPEC.md",
+    "docs/product-completion/VIVO_PROVIDER_FINAL_STATUS.md",
+    "docs/product-completion/results/E05-result.json",
+    "lib/providers/vivo/*",
+    ".env.example",
+    "package.json"
+  ],
+  "secretSafety": {
+    "printedSecretValues": false,
+    "wroteSecretValues": false,
+    "modifiedEnvExample": false,
+    "screenshotsTaken": false,
+    "secretExposureRisk": "none observed from generated logs/reports"
+  },
+  "changedFiles": [
+    "docs/product-completion/results/R04-result.md",
+    "docs/product-completion/results/R04-result.json",
+    "docs/product-completion/VIVO_PROVIDER_LIVE_SMOKE_REPORT.md"
+  ],
+  "r99Ready": false,
+  "nextStep": "Configure real vivo runtime env outside tracked files, then rerun R04 live smoke before R99 final acceptance."
+}
