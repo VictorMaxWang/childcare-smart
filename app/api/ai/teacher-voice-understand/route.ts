@@ -1,18 +1,17 @@
 import { NextResponse } from "next/server";
 import { resolveAsrProvider } from "@/lib/ai/providers";
 import { buildTeacherVoiceUnderstandFallback } from "@/lib/ai/teacher-voice-understand";
-import {
-  createBrainTransportHeaders,
-  forwardBrainRequest,
-  type BrainForwardResult,
-} from "@/lib/server/brain-client";
+import { createBrainTransportHeaders } from "@/lib/server/brain-client";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { apiError } from "@/lib/server/api-errors";
 
-function buildLocalFallbackHeaders(brainForward: BrainForwardResult) {
+const TEACHER_VOICE_UNDERSTAND_TARGET = "/api/v1/agents/teacher/voice-understand";
+
+function buildLocalFallbackHeaders() {
   return createBrainTransportHeaders({
     transport: "next-json-fallback",
-    targetPath: brainForward.targetPath,
-    upstreamHost: brainForward.upstreamHost,
-    fallbackReason: brainForward.fallbackReason ?? "brain-proxy-unavailable",
+    targetPath: TEACHER_VOICE_UNDERSTAND_TARGET,
+    fallbackReason: "next-provider-gated-local-route",
   });
 }
 
@@ -29,10 +28,10 @@ function toOptionalNumber(value: FormDataEntryValue | unknown) {
 }
 
 export async function POST(request: Request) {
-  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/teacher/voice-understand");
-  if (brainForward.response) return brainForward.response;
+  const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
+  if (authError) return authError;
 
-  const headers = buildLocalFallbackHeaders(brainForward);
+  const headers = buildLocalFallbackHeaders();
   const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
   const asrProvider = resolveAsrProvider();
 
@@ -62,12 +61,21 @@ export async function POST(request: Request) {
 
     const asrResult = await asrProvider.transcribe({
       attachmentName,
+      audioBytes: audio instanceof File ? Buffer.from(await audio.arrayBuffer()) : undefined,
       fallbackText,
       transcript,
       mimeType,
       durationMs,
       scene,
     });
+
+    if (asrResult.source === "provider_unavailable" && !asrResult.output.transcript.trim()) {
+      return apiError(
+        "provider_unavailable",
+        "当前未接入真实 ASR provider，音频文件不会被伪造成识别成功；请提供文本转写或配置 provider。",
+        { status: 503, headers }
+      );
+    }
 
     return NextResponse.json(
       buildTeacherVoiceUnderstandFallback({

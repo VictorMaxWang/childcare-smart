@@ -1,11 +1,105 @@
 {
   "taskId": "E08",
-  "title": "Teacher voice skills",
-  "status": "pending",
-  "dependencies": ["E06"],
-  "writeScope": ["teacher voice skills", "teacher record and consultation commands"],
-  "mustWriteMarkdown": "docs/product-completion/results/E08-result.md",
-  "requiredChecks": ["npm run lint", "npm run build", "teacher voice regression"],
-  "notes": "Teacher writes are limited to authorized class children."
+  "status": "partial",
+  "completedItems": [
+    "Implemented teacher voice intents for morning check, diet, class diet bulk, growth, parent reply, communication navigation, health material navigation, health material task creation, high-risk consultation creation, today task query, dispatch status update, child profile navigation, class/child status query, and pending parent-message query.",
+    "All teacher write intents require E06 confirmation before execution.",
+    "Teacher voice execution uses E06 command bus and E01 AppDataService only.",
+    "Demo seed now includes Lin Xiaoming/c-4, parent visibility for u-parent, and two Chenxi class children.",
+    "Voice writes refresh API-backed app state through /api/state and router.refresh().",
+    "Cross-class teacher access is blocked by command permission and E01 scope checks.",
+    "E08 targeted Playwright passed and screenshots were saved."
+  ],
+  "remainingItems": [
+    "Full feature:smoke still has old D08/localStorage communication failures and later dev-server ECONNREFUSED.",
+    "Full product:voice parser passed, but Playwright failed in E07 director suite with dev-server ECONNRESET/brain proxy fallback before completing all product voice suites.",
+    "A dedicated ambiguous same-name child picker UI is not yet productized beyond current missing-param/permission handling."
+  ],
+  "supportedIntents": [
+    "create_morning_check",
+    "create_diet_record",
+    "create_growth_record",
+    "reply_message",
+    "navigate",
+    "create_health_material_task",
+    "create_consultation",
+    "query_today_tasks",
+    "update_dispatch_status",
+    "open_child_profile",
+    "query_child_status",
+    "query_parent_messages"
+  ],
+  "changedFiles": [
+    "app/api/state/route.ts",
+    "app/parent/reminders/page.tsx",
+    "components/voice-assistant/VoiceOrb.tsx",
+    "docs/product-completion/COMMAND_INTENT_MAP.md",
+    "docs/product-completion/VOICE_ASSISTANT_SPEC.md",
+    "docs/product-completion/IMPLEMENTATION_LOG.md",
+    "docs/product-completion/results/E08-result.md",
+    "docs/product-completion/results/E08-result.json",
+    "lib/auth/accounts.ts",
+    "lib/demo-data/seed.ts",
+    "lib/store.tsx",
+    "lib/voice-assistant/command-bus.ts",
+    "lib/voice-assistant/executors.ts",
+    "lib/voice-assistant/intents.ts",
+    "lib/voice-assistant/parser.ts",
+    "lib/voice-assistant/parser.test.ts",
+    "lib/voice-assistant/permissions.ts",
+    "lib/voice-assistant/types.ts",
+    "package.json",
+    "tests/product-completion/e08-teacher-voice-assistant.spec.ts"
+  ],
+  "apiMethodsUsed": [
+    "lib/api/client.ts apiGet/apiPost/apiPatch",
+    "AppDataService.listChildren",
+    "AppDataService.listMessages",
+    "AppDataService.replyMessage",
+    "AppDataService.listRecords",
+    "AppDataService.createRecord",
+    "AppDataService.updateRecord",
+    "AppDataService.listHealthMaterials",
+    "AppDataService.createHealthMaterial",
+    "AppDataService.listConsultations",
+    "AppDataService.createConsultation",
+    "AppDataService.updateConsultationStatus",
+    "AppDataService.listReminders",
+    "AppDataService.getTeacherWorkbench",
+    "AppDataService.getParentHome",
+    "/api/voice-assistant/commands",
+    "/api/state",
+    "/api/records",
+    "/api/messages",
+    "/api/health-materials",
+    "/api/consultations"
+  ],
+  "scopeHelpersUsed": [
+    "lib/server/scope.ts canAccessChild",
+    "lib/server/scope.ts requireChildAccess",
+    "lib/server/scope.ts canAccessClass",
+    "lib/server/scope.ts requireClassAccess",
+    "lib/server/scope.ts requireConversationReplyAccess",
+    "lib/server/scope.ts requireDirector"
+  ],
+  "browserUseEvidence": [
+    "artifacts/product-completion/E08/teacher-voice-morning-check-preview.png",
+    "artifacts/product-completion/E08/teacher-voice-morning-check-executed.png",
+    "artifacts/product-completion/E08/teacher-voice-open-communication.png",
+    "artifacts/product-completion/E08/teacher-voice-open-health-file-bridge.png",
+    "artifacts/product-completion/E08/teacher-mobile-voice-orb.png",
+    "npx playwright test tests/product-completion/e08-teacher-voice-assistant.spec.ts --config=playwright.feature.config.ts --reporter=line: 4/4 passed"
+  ],
+  "checks": {
+    "lint": "passed: npm run lint",
+    "build": "passed: npm run build",
+    "featureSmoke": "failed: npm run feature:smoke failed first on old D08 communication/localStorage assertions, then dev server dropped and later tests returned ECONNREFUSED",
+    "productVoice": "partial/failed: npm run product:voice parser 13/13 passed; Playwright failed in E07 director suite with ECONNRESET/brain proxy fallback before all suites completed. E08 targeted Playwright passed separately."
+  },
+  "risks": [
+    "Full product voice suite depends on E07/E09 suites and local brain proxy fallback stability, which failed outside the E08 targeted flow.",
+    "Full feature smoke still contains older D08 localStorage-oriented assertions that conflict with API-backed demo state.",
+    "Ambiguous child selection UI should be hardened if duplicate nicknames/guardian labels are introduced in production data."
+  ],
+  "notes": "E08 teacher voice functionality is implemented and targeted E08 API/UI/mobile Playwright passed. Overall status is partial only because required broad smoke/product suites did not fully pass for non-E08 reasons."
 }
-

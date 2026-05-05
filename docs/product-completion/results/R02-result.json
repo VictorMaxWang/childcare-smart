@@ -1,0 +1,162 @@
+{
+  "taskId": "R02",
+  "status": "done",
+  "featureSmokeBefore": "failed: 19 total, 13 passed, 6 failed, about 371.8s",
+  "featureSmokeAfter": "passed: 19/19, final run about 4.6m",
+  "migratedTests": [
+    {
+      "domain": "communication-flow",
+      "testFile": "tests/feature-completion/communication-flow.spec.ts",
+      "summary": "Migrated from localStorage-only communication flow to E01/E04 API-backed parent message, teacher reply, scope denial, parent visibility, and director feedback status coverage."
+    },
+    {
+      "domain": "director-summary",
+      "testFile": "tests/feature-completion/director-summary.spec.ts",
+      "summary": "Migrated from fixed mock metrics to E03/E07 admin aggregation, trends, weekly report generation/export/share/archive, and feedback status coverage."
+    },
+    {
+      "domain": "health-consultation",
+      "testFile": "tests/feature-completion/health-consultation.spec.ts",
+      "summary": "Migrated from old demo parse assertions to E05/E08 provider contract checks, missing-env provider_unavailable, text fallback, saved parse result, and consultation persistence."
+    },
+    {
+      "domain": "parent-features storybook seed",
+      "testFile": "tests/feature-completion/parent-features.spec.ts",
+      "summary": "Migrated demoSeed/storybook assertions to E09/E10 child scope, local export/share, and real API isolation."
+    },
+    {
+      "domain": "teacher-records-persistence",
+      "testFile": "tests/feature-completion/teacher-records-persistence.spec.ts",
+      "summary": "Migrated from mock draft/localStorage persistence to E01/E02/E08 records API persistence, parent API visibility, and cross-class teacher denial."
+    },
+    {
+      "domain": "visual-only-safety",
+      "testFile": "tests/feature-completion/visual-only-safety.spec.ts",
+      "summary": "Migrated old disabled replica expectations to current E10 disabled MVP controls, local-only draft isolation, and login redirect protection."
+    }
+  ],
+  "fixedRegressions": [
+    {
+      "domain": "parent-features storybook seed",
+      "classification": "real-regression",
+      "summary": "Parent storybook demoSeed requests with nested snapshot.child.className no longer trip class-scope 403; explicit child mismatch and role guards remain enforced.",
+      "fixedBy": [
+        "lib/server/ai-route-guard.ts",
+        "app/api/ai/parent-storybook/route.ts"
+      ]
+    }
+  ],
+  "remainingFailures": [],
+  "classification": [
+    {
+      "testFile": "tests/feature-completion/communication-flow.spec.ts",
+      "testName": "D08 parent teacher communication round trip persists across roles",
+      "failure": "Legacy test asserted old localStorage-only flow and fixed UI state.",
+      "classification": "outdated-test",
+      "action": "Updated test to verify API-backed parent message, teacher reply, teacher2 403, parent visibility, and director feedback status.",
+      "relatedTask": "E01/E04/E07/E08/E09",
+      "fixedBy": [
+        "tests/feature-completion/communication-flow.spec.ts"
+      ]
+    },
+    {
+      "testFile": "tests/feature-completion/director-summary.spec.ts",
+      "testName": "D08 director dashboard summarizes current API records instead of fixed mock",
+      "failure": "Legacy test expected fixed mock metrics and old conversation buckets.",
+      "classification": "outdated-test",
+      "action": "Updated test to verify E03/E07 aggregation, trends, weekly report create/export/share/archive, and feedback status.",
+      "relatedTask": "E03/E07",
+      "fixedBy": [
+        "tests/feature-completion/director-summary.spec.ts"
+      ]
+    },
+    {
+      "testFile": "tests/feature-completion/health-consultation.spec.ts",
+      "testName": "D08 health material parse and consultation persist across teacher director parent",
+      "failure": "Legacy test expected old local demo parsing copy and did not model missing provider env explicitly.",
+      "classification": "outdated-test/env-missing",
+      "action": "Updated test to verify text fallback, image/audio missing-env provider_unavailable, saved parse result, high-risk consultation creation/status update, and scoped visibility.",
+      "relatedTask": "E05/E08",
+      "fixedBy": [
+        "tests/feature-completion/health-consultation.spec.ts"
+      ]
+    },
+    {
+      "testFile": "tests/feature-completion/parent-features.spec.ts",
+      "testName": "D08 parent storybook demoSeed stays isolated from real provider and remote state",
+      "failure": "Real parent storybook AI route treated nested snapshot.child.className as forged class scope and returned 403; legacy assertions also expected old seed behavior.",
+      "classification": "real-regression/outdated-test",
+      "action": "Allowed parent-storybook to ignore JSON className hints while keeping explicit child scope checks; updated demoSeed isolation/export/share coverage.",
+      "relatedTask": "E09/E10",
+      "fixedBy": [
+        "lib/server/ai-route-guard.ts",
+        "app/api/ai/parent-storybook/route.ts",
+        "tests/feature-completion/parent-features.spec.ts"
+      ]
+    },
+    {
+      "testFile": "tests/feature-completion/teacher-records-persistence.spec.ts",
+      "testName": "D08 teacher records persist after refresh and are visible to parent",
+      "failure": "Legacy test relied on mock draft/localStorage persistence instead of records API/service persistence.",
+      "classification": "outdated-test",
+      "action": "Updated test to write records through API, verify refresh-safe teacher UI, parent API visibility, and teacher2 cross-class denial.",
+      "relatedTask": "E01/E02/E08",
+      "fixedBy": [
+        "tests/feature-completion/teacher-records-persistence.spec.ts"
+      ]
+    },
+    {
+      "testFile": "tests/feature-completion/visual-only-safety.spec.ts",
+      "testName": "D08 visual-only actions are disabled or explicitly labeled and demo drafts do not hit remote state",
+      "failure": "Legacy test expected old disabled admin replica state rather than current E10 MVP controls.",
+      "classification": "outdated-test",
+      "action": "Updated test to verify current login-disabled controls, E10 disabled MVP buttons, local demo draft isolation, and login redirect role protection.",
+      "relatedTask": "E10",
+      "fixedBy": [
+        "tests/feature-completion/visual-only-safety.spec.ts"
+      ]
+    },
+    {
+      "testFile": "playwright.feature.config.ts",
+      "testName": "feature smoke dev server reuse",
+      "failure": "Legacy feature config did not support PRODUCT_BASE_URL/BUGBASH_BASE_URL reuse and could confuse stale .next/dev/lock with a live server.",
+      "classification": "flaky-dev-server",
+      "action": "Updated baseURL/port priority, skip flags, and R02 artifact output; removed stale lock-based reuse.",
+      "relatedTask": "R02",
+      "fixedBy": [
+        "playwright.feature.config.ts"
+      ]
+    }
+  ],
+  "changedFiles": [
+    "playwright.feature.config.ts",
+    "lib/server/ai-route-guard.ts",
+    "app/api/ai/parent-storybook/route.ts",
+    "tests/feature-completion/helpers.ts",
+    "tests/feature-completion/communication-flow.spec.ts",
+    "tests/feature-completion/director-summary.spec.ts",
+    "tests/feature-completion/health-consultation.spec.ts",
+    "tests/feature-completion/parent-features.spec.ts",
+    "tests/feature-completion/teacher-records-persistence.spec.ts",
+    "tests/feature-completion/visual-only-safety.spec.ts",
+    "docs/product-completion/LEGACY_SMOKE_MIGRATION_REPORT.md",
+    "docs/product-completion/results/R02-result.md",
+    "docs/product-completion/results/R02-result.json",
+    "artifacts/product-completion/R02/"
+  ],
+  "checks": {
+    "lint": "passed",
+    "build": "passed",
+    "featureSmoke": "passed: 19/19",
+    "productSmoke": "passed: 2/2",
+    "productApi": "passed: 8/8",
+    "productAi": "passed: 5/5 plus provider smoke",
+    "productVoice": "passed: parser 13/13 and Playwright 20/20",
+    "productJourney": "passed: 1/1"
+  },
+  "risks": [
+    "Optional local brain/vivo services are still not configured; tests cover explicit fallback/provider_unavailable behavior rather than fake success.",
+    "The worktree contained many pre-existing E02-E11 changes; R02 avoided reverting unrelated files."
+  ],
+  "notes": "R02 completed. Feature smoke output is under artifacts/product-completion/R02/. Final port check showed 127.0.0.1:3330 was not listening after tests."
+}

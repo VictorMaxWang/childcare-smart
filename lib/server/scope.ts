@@ -1,5 +1,5 @@
 import type { SessionUser } from "@/lib/auth/accounts";
-import type { ApiExtendedSnapshot, ApiTeacher } from "@/lib/api/types";
+import type { ApiExtendedSnapshot, ApiTeacher, ApiWeeklyReport } from "@/lib/api/types";
 import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
 import { ApiRouteError } from "@/lib/server/api-errors";
 
@@ -27,7 +27,7 @@ export function canAccessChild(
 
   if (session.role === ROLE_PARENT) {
     const explicitChildIds = readParentChildIds(session);
-    return explicitChildIds.size > 0 ? explicitChildIds.has(child.id) : child.parentUserId === session.id;
+    return explicitChildIds.has(child.id) || child.parentUserId === session.id;
   }
 
   return false;
@@ -154,4 +154,28 @@ export function requireConversationReplyAccess(
   if (!canReplyConversation(session, snapshot, conversation)) {
     throw new ApiRouteError("forbidden_scope", "当前账号无权回复该会话。");
   }
+}
+export function canAccessReport(
+  session: SessionUser,
+  snapshot: Pick<ApiExtendedSnapshot, "children">,
+  report: ApiWeeklyReport | null | undefined
+) {
+  if (!report || report.institutionId !== session.institutionId) return false;
+  if (report.scopeType === "institution") return canManageDirectorResource(session);
+  if (report.scopeType === "class") return canAccessClass(session, snapshot, report.scopeId);
+  return canAccessChild(session, findChild(snapshot, report.scopeId));
+}
+
+export function requireReportAccess(
+  session: SessionUser,
+  snapshot: Pick<ApiExtendedSnapshot, "children">,
+  report: ApiWeeklyReport | null | undefined
+) {
+  if (!report) {
+    throw new ApiRouteError("not_found", "Weekly report was not found.");
+  }
+  if (!canAccessReport(session, snapshot, report)) {
+    throw new ApiRouteError("forbidden_scope", "Current account cannot access this weekly report.");
+  }
+  return report;
 }

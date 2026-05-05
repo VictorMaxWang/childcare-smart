@@ -18,7 +18,8 @@ import {
   type BrainForwardResult,
   type BrainTransport,
 } from "@/lib/server/brain-client";
-import { getCurrentSessionUser } from "@/lib/auth/account-server";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { requireDemoSession } from "@/lib/server/session";
 
 export const runtime = "nodejs";
 const DEFAULT_PARENT_STORYBOOK_BRAIN_TIMEOUT_MS = 45_000;
@@ -195,6 +196,14 @@ function resolveRequestChildId(payload: ParentStoryBookRequest) {
   return "";
 }
 
+function resolveSnapshotChildId(payload: ParentStoryBookRequest) {
+  const snapshotChild = payload.snapshot.child;
+  if (isRecord(snapshotChild) && typeof snapshotChild.id === "string" && snapshotChild.id.trim()) {
+    return snapshotChild.id.trim();
+  }
+  return "";
+}
+
 function buildLocalStoryBookFallback(input: {
   payload: ParentStoryBookRequest;
   brainForward?: BrainForwardResult;
@@ -248,6 +257,12 @@ function buildLocalStoryBookFallbackHeaders(input: {
 }
 
 export async function POST(request: Request) {
+  const authError = await authorizeAiRoute(request, {
+    requiredRole: "parent",
+    collectJsonClassNames: false,
+  });
+  if (authError) return authError;
+
   let payload: ParentStoryBookRequest;
 
   try {
@@ -268,13 +283,8 @@ export async function POST(request: Request) {
   }
 
   const requestedChildId = resolveRequestChildId(payload);
-  const sessionUser = await getCurrentSessionUser();
-  if (!sessionUser) {
-    return NextResponse.json(
-      { error: "Authentication required" },
-      { status: 401, headers: buildCacheHeaders("bypass") }
-    );
-  }
+  const snapshotChildId = resolveSnapshotChildId(payload);
+  const sessionUser = (await requireDemoSession(request)).user;
   if (sessionUser.role !== ROLE_PARENT) {
     return NextResponse.json(
       { error: "Parent role required" },
@@ -284,6 +294,12 @@ export async function POST(request: Request) {
   if (!requestedChildId || !(sessionUser.childIds ?? []).includes(requestedChildId)) {
     return NextResponse.json(
       { error: "Child is not authorized for current parent" },
+      { status: 403, headers: buildCacheHeaders("bypass") }
+    );
+  }
+  if (snapshotChildId && snapshotChildId !== requestedChildId) {
+    return NextResponse.json(
+      { error: "Storybook snapshot child does not match requested child" },
       { status: 403, headers: buildCacheHeaders("bypass") }
     );
   }

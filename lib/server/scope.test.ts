@@ -60,3 +60,20 @@ test("parent child ownership does not grant class-level scope", () => {
 
   assert.equal(canAccessClass(parent, snapshot, ownChild.className), false);
 });
+
+test("parent can access server-owned child even when explicit childIds exist", () => {
+  const parent = demoUser("u-parent");
+  const snapshot = buildSnapshot(parent);
+  snapshot.children = [
+    {
+      ...snapshot.children[0],
+      id: "c-parent-owned",
+      name: "Parent Owned",
+      parentUserId: parent.id,
+    },
+    ...snapshot.children,
+  ];
+
+  const child = requireChildAccess(parent, snapshot, "c-parent-owned");
+  assert.equal(child.id, "c-parent-owned");
+});

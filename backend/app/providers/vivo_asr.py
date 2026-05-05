@@ -110,7 +110,7 @@ class MockAsrProvider:
         if transcript:
             return ProviderResult(
                 provider=self.provider_name,
-                mode="mock",
+                mode="fallback",
                 source="provided_transcript",
                 request_id=request_id,
                 output=AsrTranscription(
@@ -122,17 +122,32 @@ class MockAsrProvider:
                 ),
             )
 
-        mock_transcript = _build_mock_transcript(input)
+        fallback_transcript = _normalize_text(input.fallback_text)
+        if fallback_transcript:
+            return ProviderResult(
+                provider=self.provider_name,
+                mode="fallback",
+                source="provided_fallback_text",
+                request_id=request_id,
+                output=AsrTranscription(
+                    transcript=fallback_transcript,
+                    confidence=None,
+                    meta=_build_meta(input, reason="provided-fallback-text"),
+                    raw={"path": "provided_fallback_text"},
+                    fallback=True,
+                ),
+            )
+
         return ProviderResult(
             provider=self.provider_name,
-            mode="mock",
-            source="mock",
+            mode="fallback",
+            source="provider_unavailable",
             request_id=request_id,
             output=AsrTranscription(
-                transcript=mock_transcript,
-                confidence=0.62,
-                meta=_build_meta(input, reason="mock-transcript"),
-                raw={"path": "mock-fallback"},
+                transcript="",
+                confidence=0.0,
+                meta=_build_meta(input, reason="provider-unavailable"),
+                raw={"path": "provider_unavailable"},
                 fallback=True,
             ),
         )
@@ -485,7 +500,7 @@ class VivoAsrProvider:
         if transcript:
             return ProviderResult(
                 provider=self.provider_name,
-                mode="mock",
+                mode="fallback",
                 source="provided_transcript",
                 model=ASR_MODEL_NAME,
                 request_id=request_id,
@@ -592,8 +607,8 @@ class VivoAsrProvider:
         }
         return ProviderResult(
             provider=self.provider_name,
-            mode="mock",
-            source="mock",
+            mode="fallback",
+            source=mock_result.source,
             model=ASR_MODEL_NAME,
             request_id=request_id,
             output=AsrTranscription(

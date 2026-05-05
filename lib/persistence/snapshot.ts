@@ -69,6 +69,14 @@ export interface DemoStorybook {
   sourceRecordIds: string[];
   pages: Array<Record<string, unknown>>;
   generatedAt: string;
+  updatedAt?: string;
+  share?: {
+    shareId: string;
+    sharedBy: string;
+    sharedAt: string;
+    summary: string;
+    localText: string;
+  };
 }
 
 export interface AppStateSnapshot {

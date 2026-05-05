@@ -17,7 +17,8 @@ import {
   mergeScopedSnapshotForSessionUser,
   scopeSnapshotForSessionUser,
 } from "@/lib/persistence/state-scope";
-import { normalizeExtendedSnapshot } from "@/lib/server/app-data-model";
+import { normalizeExtendedSnapshot, toCoreSnapshot } from "@/lib/server/app-data-model";
+import { DefaultAppDataRepository } from "@/lib/server/app-data-repository";
 
 export const runtime = "nodejs";
 
@@ -36,7 +37,12 @@ export async function GET() {
     }
 
     if (user.accountKind === "demo") {
-      return NextResponse.json({ ok: true, snapshot: null, isDemo: true });
+      const snapshot = await new DefaultAppDataRepository().load(user);
+      return NextResponse.json({
+        ok: true,
+        snapshot: scopeSnapshotForSessionUser(toCoreSnapshot(snapshot), user),
+        isDemo: true,
+      });
     }
 
     const { rows } = await dbQuery<{ snapshot: unknown }>(

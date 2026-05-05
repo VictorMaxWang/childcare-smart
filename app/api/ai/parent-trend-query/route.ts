@@ -4,9 +4,13 @@ import {
   createBrainTransportHeaders,
   forwardBrainRequest,
 } from "@/lib/server/brain-client";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import { requireParentChildAccess } from "@/lib/server/parent-route-guard";
 
 export async function POST(request: Request) {
+  const authError = await authorizeAiRoute(request, { requiredRole: "parent" });
+  if (authError) return authError;
+
   const body = (await request.clone().json().catch(() => null)) as ParentTrendQueryPayload | null;
   const access = await requireParentChildAccess(body?.childId);
   if (access.response) {

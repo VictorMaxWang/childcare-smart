@@ -23,6 +23,85 @@ function isParentStoryBookResponse(value: unknown): value is ParentStoryBookResp
   );
 }
 
+function readString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function normalizeStorybookScene(value: unknown, index: number, childName: string): ParentStoryBookScene {
+  const record = isRecord(value) ? value : {};
+  const title = readString(record.sceneTitle) || readString(record.title) || `Saved story page ${index + 1}`;
+  const text =
+    readString(record.sceneText) ||
+    readString(record.text) ||
+    `${childName} has a saved storybook page.`;
+
+  return {
+    ...(record as Partial<ParentStoryBookScene>),
+    sceneIndex: readNumber(record.sceneIndex) ?? index + 1,
+    sceneTitle: title,
+    sceneText: text,
+    imagePrompt: readString(record.imagePrompt) || `${childName} saved storybook page ${index + 1}`,
+    imageUrl: readString(record.imageUrl) || null,
+    assetRef: readString(record.assetRef) || null,
+    imageSourceKind: (readString(record.imageSourceKind) || "svg-fallback") as ParentStoryBookScene["imageSourceKind"],
+    imageStatus: (readString(record.imageStatus) || "fallback") as ParentStoryBookScene["imageStatus"],
+    audioUrl: readString(record.audioUrl) || null,
+    audioRef: readString(record.audioRef) || null,
+    audioScript: readString(record.audioScript) || text,
+    audioStatus: (readString(record.audioStatus) || "fallback") as ParentStoryBookScene["audioStatus"],
+    voiceStyle: readString(record.voiceStyle) || "gentle parent narration",
+    highlightSource: readString(record.highlightSource) || "saved-storybook",
+  };
+}
+
+function normalizeEmbeddedStorybookResponse(
+  response: ParentStoryBookResponse,
+  storybook: DemoStorybook,
+  childName: string
+): ParentStoryBookResponse {
+  const scenes = response.scenes.length
+    ? response.scenes.map((scene, index) => normalizeStorybookScene(scene, index, childName))
+    : [normalizeStorybookScene(null, 0, childName)];
+  const providerMeta: Record<string, unknown> = isRecord(response.providerMeta) ? response.providerMeta : {};
+  const sceneCount = scenes.length;
+  const highlightCount = Math.max(storybook.sourceRecordIds.length, sceneCount);
+
+  return {
+    ...response,
+    mode: response.mode === "card" ? "card" : "storybook",
+    summary: readString(response.summary) || "Stored local storybook.",
+    moral: readString(response.moral) || "Record real growth and review it gently.",
+    parentNote:
+      readString(response.parentNote) ||
+      "This MVP storybook uses local export and local share text only.",
+    source: (readString(response.source) || "rule") as ParentStoryBookResponse["source"],
+    fallback: response.fallback ?? true,
+    fallbackReason: response.fallbackReason ?? "stored-storybook",
+    generatedAt: readString(response.generatedAt) || storybook.generatedAt,
+    stylePreset: (readString(response.stylePreset) || "sunrise-watercolor") as ParentStoryBookResponse["stylePreset"],
+    providerMeta: {
+      provider: readString(providerMeta.provider) || "d01-demo-store",
+      mode: readString(providerMeta.mode) || "saved-storybook",
+      transport: (readString(providerMeta.transport) || "next-json-fallback") as ParentStoryBookResponse["providerMeta"]["transport"],
+      imageProvider: readString(providerMeta.imageProvider) || "d01-demo-store",
+      audioProvider: readString(providerMeta.audioProvider) || "browser-preview",
+      imageDelivery: (readString(providerMeta.imageDelivery) || "svg-fallback") as ParentStoryBookResponse["providerMeta"]["imageDelivery"],
+      audioDelivery: (readString(providerMeta.audioDelivery) || "preview-only") as ParentStoryBookResponse["providerMeta"]["audioDelivery"],
+      stylePreset: (readString(providerMeta.stylePreset) || readString(response.stylePreset) || "sunrise-watercolor") as ParentStoryBookResponse["providerMeta"]["stylePreset"],
+      requestSource: readString(providerMeta.requestSource) || "stored-storybook",
+      fallbackReason: readString(providerMeta.fallbackReason) || "stored-storybook",
+      realProvider: providerMeta.realProvider === true,
+      highlightCount: readNumber(providerMeta.highlightCount) ?? highlightCount,
+      sceneCount: readNumber(providerMeta.sceneCount) ?? sceneCount,
+    },
+    scenes,
+  };
+}
+
 export function restoreParentStorybookResponse(
   storybook: DemoStorybook,
   childName = "孩子"
@@ -32,7 +111,7 @@ export function restoreParentStorybookResponse(
     .find(isParentStoryBookResponse);
 
   if (embeddedResponse) {
-    return embeddedResponse;
+    return normalizeEmbeddedStorybookResponse(embeddedResponse, storybook, childName);
   }
 
   const scenes: ParentStoryBookScene[] = storybook.pages.map((page, index) => {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server.js";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import {
   buildAdminAgentContext,
   buildAdminDailyPriorityResult,
@@ -149,6 +150,9 @@ function buildNormalizedProxyResponse(upstream: Response, data: AdminAgentResult
 }
 
 export async function POST(request: Request) {
+  const authError = await authorizeAiRoute(request, { requiredRole: "admin" });
+  if (authError) return authError;
+
   let payload: AdminAgentRequestPayload | null = null;
 
   try {

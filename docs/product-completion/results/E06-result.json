@@ -1,11 +1,140 @@
 {
   "taskId": "E06",
-  "title": "Common voice orb core",
-  "status": "pending",
-  "dependencies": ["E01"],
-  "writeScope": ["voice assistant components", "command planner", "permission gate", "executor"],
-  "mustWriteMarkdown": "docs/product-completion/results/E06-result.md",
-  "requiredChecks": ["npm run lint", "npm run build", "voice command core regression"],
-  "notes": "Voice orb must execute real commands and provide text fallback."
+  "status": "done",
+  "completedItems": [
+    "Mounted shared VoiceOrb in the authenticated AppShell for director, teacher, and parent roles.",
+    "Implemented local rule-based intent parser for the requested E06 intent schema.",
+    "Implemented command bus with preview, confirmation, execution, role permission checks, and error handling.",
+    "Implemented text fallback, browser SpeechRecognition entry, ASR provider fallback entry, provider status display, unknown fallback, and command history.",
+    "Added /api/voice-assistant/commands using E01 requireSession, AppDataService, and scope-backed server execution.",
+    "Added /api/ai/provider-status and /api/ai/voice-asr using E05 authorizeAiRoute and provider resolvers.",
+    "Hardened /api/ai/weekly-report payload role authorization before backend forwarding/execution.",
+    "Added Node parser tests and E06 Playwright acceptance tests with screenshots."
+  ],
+  "remainingItems": [
+    "Real vivo chat/asr enhancement needs E05 env configuration.",
+    "assign_task remains preview/permission-only until a stable E01 task assignment API exists.",
+    "Full npm run feature:smoke timed out after 20 minutes; E06 targeted Playwright passed."
+  ],
+  "fixedFindings": [
+    "Added /api/voice-assistant to proxy API bypass list so unauthenticated calls return JSON 401 instead of login HTML.",
+    "Blocked weekly-report AI payload role override attempts by re-authorizing the payload role.",
+    "Removed fake ASR success: /api/ai/voice-asr returns provider_unavailable when there is no real provider and no transcript."
+  ],
+  "changedFiles": [
+    "app/api/ai/provider-status/route.ts",
+    "app/api/ai/voice-asr/route.ts",
+    "app/api/ai/weekly-report/route.ts",
+    "app/api/voice-assistant/commands/route.ts",
+    "components/Navbar.tsx",
+    "components/voice-assistant/VoiceOrb.tsx",
+    "lib/api/voice-assistant.ts",
+    "lib/voice-assistant/command-bus.ts",
+    "lib/voice-assistant/executors.ts",
+    "lib/voice-assistant/history.ts",
+    "lib/voice-assistant/intents.ts",
+    "lib/voice-assistant/parser.test.ts",
+    "lib/voice-assistant/parser.ts",
+    "lib/voice-assistant/permissions.ts",
+    "lib/voice-assistant/types.ts",
+    "proxy.ts",
+    "tests/product-completion/e06-voice-assistant.spec.ts",
+    "docs/product-completion/VOICE_ASSISTANT_SPEC.md",
+    "docs/product-completion/COMMAND_INTENT_MAP.md",
+    "docs/product-completion/IMPLEMENTATION_LOG.md",
+    "docs/product-completion/PRODUCT_DECISIONS.md",
+    "docs/product-completion/results/E06-result.md",
+    "docs/product-completion/results/E06-result.json"
+  ],
+  "apiMethodsUsed": [
+    "lib/api/client.ts apiGet/apiPost",
+    "AppDataService.listChildren via repository context",
+    "AppDataService.sendMessage",
+    "AppDataService.replyMessage",
+    "AppDataService.createRecord",
+    "AppDataService.createFeedback",
+    "AppDataService.updateReminder",
+    "AppDataService.createWeeklyReport",
+    "AppDataService.exportWeeklyReportData",
+    "AppDataService.shareWeeklyReport",
+    "AppDataService.createConsultation",
+    "AppDataService.addConsultationNote",
+    "AppDataService.updateConsultationStatus",
+    "AppDataService.getFeedback",
+    "AppDataService.getAdminSummary",
+    "AppDataService.getTeacherWorkbench",
+    "AppDataService.getParentHome",
+    "AppDataService.listReminders"
+  ],
+  "scopeHelpersUsed": [
+    "requireSession",
+    "authorizeAiRoute",
+    "canAccessChild",
+    "requireChildAccess via AppDataService",
+    "requireClassAccess via AppDataService/authorizeAiRoute",
+    "requireDirector via AppDataService/authorizeAiRoute",
+    "requireReportAccess via AppDataService"
+  ],
+  "aiRoutesSecured": [
+    "/api/ai/provider-status",
+    "/api/ai/voice-asr",
+    "/api/ai/weekly-report"
+  ],
+  "supportedCoreIntents": [
+    "navigate",
+    "send_message",
+    "reply_message",
+    "create_morning_check",
+    "create_diet_record",
+    "create_growth_record",
+    "create_feedback",
+    "mark_reminder_read",
+    "generate_weekly_report",
+    "export_weekly_report",
+    "share_weekly_report",
+    "create_consultation",
+    "add_consultation_note",
+    "update_consultation_status",
+    "assign_task_preview_only",
+    "view_feedback_detail",
+    "open_child_profile",
+    "query_dashboard",
+    "query_child_status",
+    "query_today_tasks",
+    "unknown"
+  ],
+  "providerStatusUsed": {
+    "chat": {
+      "providerName": "vivo",
+      "status": "missing-env",
+      "configured": false
+    },
+    "asr": {
+      "providerName": "vivo",
+      "status": "missing-env",
+      "configured": false
+    },
+    "fallbackText": "当前使用文本/本地规则 fallback"
+  },
+  "browserUseEvidence": [
+    "artifacts/product-completion/E06/director-voice-orb-open.png",
+    "artifacts/product-completion/E06/director-voice-orb-navigation.png",
+    "artifacts/product-completion/E06/teacher-write-confirmation.png",
+    "artifacts/product-completion/E06/teacher-write-executed.png",
+    "artifacts/product-completion/E06/parent-unknown-command.png",
+    "artifacts/product-completion/E06/mobile-parent-voice-orb.png"
+  ],
+  "checks": {
+    "lint": "passed",
+    "build": "passed",
+    "featureSmoke": "timed out after 20 minutes with existing full suite; E06 targeted Playwright passed 5/5",
+    "productAi": "passed; vivo chat/ocr/asr missing-env"
+  },
+  "risks": [
+    "Browser SpeechRecognition availability depends on the end user's browser.",
+    "Real vivo ASR/chat is not active until env is configured.",
+    "Full existing feature smoke suite did not complete within 20 minutes in this run.",
+    "assign_task must not be enabled for execution until an E01 task API is available."
+  ],
+  "notes": "E06 completed the shared framework and base commands. E07/E08/E09 can now extend role-specific skills in parallel."
 }
-

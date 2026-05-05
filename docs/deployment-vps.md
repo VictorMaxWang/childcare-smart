@@ -105,8 +105,8 @@ BRAIN_API_TIMEOUT_MS=45000
 BRAIN_TIMEOUT_MS=45000
 REQUEST_TIMEOUT_SECONDS=45
 ALLOW_ORIGINS=https://<real-release-domain>,https://<real-preview-domain>
-VIVO_APP_ID=replace-on-server-only
-VIVO_APP_KEY=replace-on-server-only
+VIVO_APP_ID=your_vivo_app_id
+VIVO_APP_KEY=your_vivo_app_key
 ```
 
 说明：

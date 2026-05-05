@@ -148,7 +148,10 @@ export function buildVoiceDraftFromUpload(params: {
     content: params.result.upload.draftContent,
     attachmentName: params.result.upload.attachmentName,
     persistenceScope:
-      params.result.upload.source === "mock" || params.result.upload.status === "mocked"
+      params.result.upload.source === "mock" ||
+      params.result.upload.source === "local-text-fallback" ||
+      params.result.upload.status === "mocked" ||
+      params.result.upload.status === "local_fallback"
         ? "local"
         : "remote",
     structuredPayload,

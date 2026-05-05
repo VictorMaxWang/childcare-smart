@@ -25,11 +25,11 @@
 - `docs/bug-bash/FINAL_BUG_BASH_REPORT.md`
 - `package.json`
 
-`docs/product-completion/results/*.json` 校验结果：
+`docs/product-completion/results/*.json` 校验结果（E99 原始验收曾记录 `E07-result.json` 非法；R01 于 2026-05-03 复核）：
 
-- 合法 JSON：`E01-result.json`、`E02-result.json`、`E03-result.json`、`E04-result.json`、`E05-result.json`、`E06-result.json`、`E08-result.json`、`E09-result.json`、`E10-result.json`、`E11-result.json`
-- 非法 JSON：`E07-result.json`
-- 影响：`E07-result.json` 不能作为结构化验收证据，属于发布前应修复的验收资料质量问题。
+- R01 复核：`E01-result.json` 至 `E11-result.json` 全部为合法 JSON。
+- E07 字段：`taskId`、`status`、`completedItems`、`remainingItems`、`supportedIntents`、`changedFiles`、`apiMethodsUsed`、`scopeHelpersUsed`、`browserUseEvidence`、`checks`、`risks`、`notes` 均存在。
+- 影响修正：`E07-result.json` 当前可作为结构化验收证据；E99 原始记录的问题已通过 R01 复核关闭。
 
 ## 命令结果
 
@@ -82,7 +82,7 @@ Browser Use 原生执行状态：
 
 - `needs-backend`：MVP 完成；生产发布仍需真实身份、生产数据库、对象存储、外部分享/PDF 服务和真实 vivo env。
 - `needs-product-spec`：仍需产品决策，包括硬删除与归档边界、批量派单、高级 BI、儿童选择消歧、教师账号生命周期、外部分享/PDF 形式。
-- `partial`：产品主链路 MVP 完成；`feature:smoke`、`bugbash:smoke`、`E07-result.json` 仍构成严格发布残留。
+- `partial`：产品主链路 MVP 完成；`feature:smoke`、`bugbash:smoke` 仍构成严格发布残留。E99 原始记录的 `E07-result.json` 非法问题已由 R01 复核关闭。
 - `ui-only`：主产品验收路径已清理或显式禁用；旧 D08 仍有 ui-only 禁用控件断言失败。
 - `mock-only`：外部 provider 与外部服务 mock/fallback 边界已明确；真实外部服务未接入时不声明真实成功。
 - `fake-success`：产品验收套件未发现 fake-success；无 vivo env 时 OCR/ASR 不伪造真实 provider 成功。
@@ -187,13 +187,12 @@ Browser Use 原生执行状态：
 ## 是否建议发布
 
 - 演示发布：建议。核心三端闭环、产品 CRUD、权限/scope、周报、附件、语音球和 fallback 均已达到 MVP 演示标准。
-- 生产发布：不建议。真实 vivo provider 未配置，生产外部服务未完成，`feature:smoke` 和 `bugbash:smoke` 仍失败，且 `E07-result.json` 验收证据文件非法。
+- 生产发布：不建议。真实 vivo provider 未配置，生产外部服务未完成，`feature:smoke` 和 `bugbash:smoke` 仍失败。E99 原始记录的 `E07-result.json` 验收证据文件非法问题已由 R01 复核关闭。
 
 ## 发布前必须修复项
 
 - 修复 `npm run feature:smoke` 的 6 项 D08 失败，或明确废弃/更新旧测试口径。
 - 修复 `npm run bugbash:smoke` 的 B26 parent/mobile 403 console error 问题。
-- 修复 `docs/product-completion/results/E07-result.json` 非法 JSON。
 - 配置真实 vivo env 并完成 Chat/OCR/ASR live smoke，不得以 fallback 代替真实 provider 通过。
 - 接入生产身份、生产数据库、对象存储、外部分享/PDF 服务。
 - 如必须使用 Browser Use 原生验收，升级本机 Node 到 `>= v22.22.0` 或配置 `NODE_REPL_NODE_PATH`。

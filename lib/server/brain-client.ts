@@ -426,9 +426,9 @@ function createSseResponse(body: ReadableStream<Uint8Array>, extraHeaders?: Head
 export function createMockBrainStreamResponse() {
   const encoder = new TextEncoder();
   const events = [
-    'event: meta\ndata: {"source":"next-fallback","mode":"mock"}\n\n',
-    'event: reasoning\ndata: {"message":"FastAPI SSE endpoint is not available yet, using fallback stream."}\n\n',
-    'event: final\ndata: {"message":"Fallback stream completed."}\n\n',
+    'event: meta\ndata: {"source":"next-fallback","mode":"provider_unavailable","fallback":true}\n\n',
+    'event: reasoning\ndata: {"message":"FastAPI SSE endpoint is unavailable; no provider result was generated."}\n\n',
+    'event: error\ndata: {"code":"provider_unavailable","message":"AI stream provider is unavailable; this is not a generated success response."}\n\n',
   ];
 
   return createSseResponse(

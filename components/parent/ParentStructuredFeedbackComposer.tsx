@@ -16,9 +16,10 @@ import { formatParentFeedbackStatusLabel } from "@/lib/feedback/consumption";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import AttachmentMediaPicker, { type AttachmentDraft } from "@/components/communication/AttachmentMediaPicker";
 import ParentVoiceNoteInput from "@/components/parent/ParentVoiceNoteInput";
 import { cn } from "@/lib/utils";
-import { Camera, CheckCircle2, ClipboardList, Heart, Moon, ShieldCheck, Utensils } from "lucide-react";
+import { CheckCircle2, ClipboardList, Heart, Moon, ShieldCheck, Utensils } from "lucide-react";
 
 type ExecutionCountOption = 1 | 2 | 3;
 
@@ -97,6 +98,7 @@ export interface ParentStructuredFeedbackComposerSubmitInput {
   relatedConsultationId?: string;
   interventionCardId?: string;
   attachments: ParentFeedbackAttachments;
+  attachmentDrafts?: AttachmentDraft[];
 }
 
 interface ParentStructuredFeedbackComposerProps {
@@ -127,6 +129,31 @@ interface ParentStructuredFeedbackComposerProps {
 
 function getOptionButtonClassName(careMode: boolean) {
   return careMode ? "min-h-12 rounded-2xl px-4 text-base" : "rounded-full";
+}
+
+function buildFeedbackAttachments(drafts: AttachmentDraft[]): ParentFeedbackAttachments {
+  const voice = drafts
+    .filter((item) => item.kind === "audio")
+    .map((item) => ({
+      url: item.localPreviewUrl,
+      name: item.fileName,
+      mimeType: item.mimeType,
+      sizeBytes: item.byteSize,
+      meta: { attachmentDraftId: item.id, kind: item.kind, durationMs: item.durationMs },
+    }));
+  const image = drafts
+    .filter((item) => item.kind === "image")
+    .map((item) => ({
+      url: item.localPreviewUrl,
+      name: item.fileName,
+      mimeType: item.mimeType,
+      sizeBytes: item.byteSize,
+      meta: { attachmentDraftId: item.id, kind: item.kind },
+    }));
+  return {
+    ...(voice.length > 0 ? { voice } : {}),
+    ...(image.length > 0 ? { image } : {}),
+  };
 }
 
 export default function ParentStructuredFeedbackComposer({
@@ -164,6 +191,7 @@ export default function ParentStructuredFeedbackComposer({
   );
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [attachmentDrafts, setAttachmentDrafts] = useState<AttachmentDraft[]>([]);
 
   const composerMessage = validationMessage ?? statusMessage;
   const reviewLabel =
@@ -247,7 +275,8 @@ export default function ParentStructuredFeedbackComposer({
       relatedConsultationId:
         interventionCard.consultationId ?? consultation?.consultationId,
       interventionCardId: interventionCard.id,
-      attachments: {},
+      attachments: buildFeedbackAttachments(attachmentDrafts),
+      attachmentDrafts,
     });
 
     setSubmitting(false);
@@ -262,6 +291,7 @@ export default function ParentStructuredFeedbackComposer({
     setExecutorRole("parent");
     setBarriers([]);
     setNotes("");
+    setAttachmentDrafts([]);
     setShowDetails(false);
   }
 
@@ -334,6 +364,7 @@ export default function ParentStructuredFeedbackComposer({
               <button
                 key={option.value}
                 type="button"
+                data-testid={`feedback-execution-${option.value}`}
                 onClick={() => {
                   setExecutionStatus(option.value);
                   setExecutionCount((current) =>
@@ -388,6 +419,7 @@ export default function ParentStructuredFeedbackComposer({
                     <button
                       key={`${option.label}-${index}`}
                       type="button"
+                      data-testid={`feedback-reaction-${option.value}-${index}`}
                       onClick={() => setChildReaction(option.value)}
                       className="text-center"
                     >
@@ -427,6 +459,7 @@ export default function ParentStructuredFeedbackComposer({
                     <button
                       key={`${option.label}-${index}`}
                       type="button"
+                      data-testid={`feedback-improvement-${option.value}-${index}`}
                       onClick={() => setImprovementStatus(option.value)}
                       className="text-center"
                     >
@@ -465,6 +498,7 @@ export default function ParentStructuredFeedbackComposer({
                     <button
                       key={`${option.label}-${index}`}
                       type="button"
+                      data-testid={`feedback-appetite-${option.value}-${index}`}
                       onClick={() => {
                         setExecutionStatus(option.value);
                         setExecutionCount(option.value === "not_started" ? undefined : 1);
@@ -523,21 +557,20 @@ export default function ParentStructuredFeedbackComposer({
             />
             <p className="mt-2 text-right text-sm text-slate-400">{notes.length}/200</p>
           </div>
-          <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h4 className="text-lg font-bold text-slate-950">上传照片/视频 <span className="text-base font-normal text-slate-400">（选填）</span></h4>
-              <p className="mt-1 text-sm leading-6 text-slate-500">有助于老师更好地了解孩子的情况</p>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                有助于老师更好地了解孩子的情况；当前 MVP 保存附件元数据和本地预览，不伪装为云端上传成功。
+              </p>
             </div>
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                className="flex h-16 w-36 items-center justify-center gap-2 rounded-[18px] border border-violet-200 bg-violet-50 text-base font-bold text-violet-600"
-                disabled
-              >
-                <Camera className="h-5 w-5" />
-                添加
-              </button>
-              <span className="text-base text-slate-400">0/3</span>
+            <div className="w-full sm:max-w-md">
+              <AttachmentMediaPicker
+                value={attachmentDrafts}
+                onChange={setAttachmentDrafts}
+                accept="image/*,audio/*,.pdf,.doc,.docx,.txt"
+                disabled={!interventionCard || submitting}
+              />
             </div>
           </div>
         </section>
@@ -545,6 +578,7 @@ export default function ParentStructuredFeedbackComposer({
         <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+6.75rem)] z-10 lg:bottom-4">
           <Button
             type="button"
+            data-testid="parent-submit-structured-feedback"
             className="h-16 w-full rounded-[28px] bg-[linear-gradient(135deg,#5b46ff,#7c3aed)] text-xl font-black text-white shadow-[0_18px_44px_rgb(91_70_255_/_0.28)]"
             onClick={() => void handleSubmit()}
             disabled={!interventionCard || submitting}
@@ -813,7 +847,7 @@ export default function ParentStructuredFeedbackComposer({
               <p className={careMode ? "text-base font-semibold text-slate-900" : "text-sm font-semibold text-slate-900"}>
                 谁来执行
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="hidden">
                 {EXECUTOR_ROLE_OPTIONS.map((option) => (
                   <Button
                     key={option.value}
@@ -864,15 +898,15 @@ export default function ParentStructuredFeedbackComposer({
                 附件补充
               </p>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                语音和图片补充将在后续任务接入。本轮先保留结构化字段与占位入口，不上传文件。
+                支持图片、文件和语音补充；当前 MVP 保存附件元数据和本地预览，保存后老师可在反馈详情中查看和播放，不伪装为云端对象存储。
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button type="button" variant="outline" className={optionButtonClassName} disabled>
-                  语音补充 稍后开放
-                </Button>
-                <Button type="button" variant="outline" className={optionButtonClassName} disabled>
-                  图片补充 稍后开放
-                </Button>
+              <div className="mt-3">
+                <AttachmentMediaPicker
+                  value={attachmentDrafts}
+                  onChange={setAttachmentDrafts}
+                  accept="image/*,audio/*,.pdf,.doc,.docx,.txt"
+                  disabled={!interventionCard || submitting}
+                />
               </div>
             </div>
           </div>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { ParentMessageReflexionRequest, ParentMessageReflexionResponse } from "@/lib/ai/types";
 import { sanitizeParentMessageReflexionResponse } from "@/lib/agent/parent-message-reflexion";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import { requireParentChildAccess } from "@/lib/server/parent-route-guard";
 
 function readString(value: unknown) {
@@ -63,6 +64,9 @@ function buildParentMessageFallbackResponse(
 }
 
 export async function POST(request: Request) {
+  const authError = await authorizeAiRoute(request, { requiredRole: "parent" });
+  if (authError) return authError;
+
   const body = (await request.clone().json().catch(() => null)) as ParentMessageReflexionRequest | null;
   const access = await requireParentChildAccess(body?.targetChildId ?? body?.childId);
   if (access.response) {

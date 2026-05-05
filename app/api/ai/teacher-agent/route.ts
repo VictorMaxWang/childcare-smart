@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server.js";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import {
   executeFollowUp,
   executeSuggestion,
@@ -50,6 +51,9 @@ function isValidPayload(payload: unknown): payload is TeacherAgentRequestPayload
 }
 
 export async function POST(request: Request) {
+  const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
+  if (authError) return authError;
+
   const brainForward = await forwardBrainRequest(request, "/api/v1/agents/teacher/run");
   if (brainForward.response) return brainForward.response;
 

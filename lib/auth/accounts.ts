@@ -78,7 +78,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     role: "家长",
     avatar: "👩",
     institutionId: DEMO_INSTITUTION_ID,
-    childIds: ["c-1"],
+    childIds: ["c-1", "c-4"],
     accountKind: "demo",
     description: "家长端 · 查看孩子近 7 天饮食、晨检与反馈",
   },

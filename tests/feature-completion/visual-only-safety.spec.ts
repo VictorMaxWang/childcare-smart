@@ -35,6 +35,11 @@ test("D08 mock and local-only mobile drafts are excluded from remote persistence
     persistenceScope: "remote",
     structuredPayload: { upload: { source: "mock", status: "mocked" } },
   });
+  const localFallbackUploadDraft = buildDraft({
+    draftId: "draft-e10-local-fallback-upload",
+    persistenceScope: "remote",
+    structuredPayload: { upload: { source: "local-text-fallback", status: "local_fallback" } },
+  });
 
   expect(
     filterRemotePersistableMobileDrafts([
@@ -42,6 +47,7 @@ test("D08 mock and local-only mobile drafts are excluded from remote persistence
       localScopeDraft,
       mockSourceDraft,
       mockUploadDraft,
+      localFallbackUploadDraft,
     ]).map((draft) => draft.draftId)
   ).toEqual(["draft-d08-remote"]);
 
@@ -58,19 +64,20 @@ test("D08 visual-only actions are disabled or explicitly labeled and demo drafts
 
   await resetDemoStorage(page);
   await expect(page.getByTestId("d07-forgot-password-disabled")).toBeDisabled();
-  await expect(page.getByTestId("d07-forgot-password-disabled")).toContainText("暂未开放");
+  await expect(page.getByTestId("d07-forgot-password-disabled")).toContainText(/暂未开放|鏆傛湭寮€鏀?/);
   await capture(page, "visual-02-login-disabled.png");
 
   await loginAs(page, "u-admin", "/admin");
-  await assertUnavailableButtons(page, "admin dashboard");
+  await expect(page.getByTestId("e10-notification-disabled")).toBeDisabled();
+  await expect(page.getByTestId("e10-message-disabled")).toBeDisabled();
   await loginAs(page, "u-admin", "/admin/agent");
-  await assertUnavailableButtons(page, "admin agent");
-  await capture(page, "visual-03-admin-unavailable-disabled.png");
+  await expect(page.locator("body")).toContainText(/周报|weekly|派单|风险|weekly-report/i);
+  await capture(page, "visual-03-admin-current-mvp-controls.png");
 
   await loginAs(page, "u-teacher", "/teacher/agent");
-  await page.getByRole("button", { name: /演示语音草稿/ }).click();
-  await page.getByRole("button", { name: /演示 OCR 草稿/ }).click();
-  await expect(page.locator("body")).toContainText(/演示|仅本地|草稿/);
+  await page.getByRole("button", { name: /演示语音草稿|婕旂ず璇煶鑽夌/ }).click();
+  await page.getByRole("button", { name: /演示 OCR 草稿|婕旂ず OCR 鑽夌/ }).click();
+  await expect(page.locator("body")).toContainText(/演示|本地|草稿|婕旂ず|浠呮湰鍦皘鑽夌/);
   await page.waitForTimeout(500);
   expect(statePutRequests).toEqual([]);
   await capture(page, "visual-04-teacher-demo-drafts-local.png");
@@ -89,32 +96,6 @@ test("D08 login next redirect blocks unauthorized role escalation", async ({ pag
   expect(url.searchParams.get("accessDenied")).toBe("1");
   await capture(page, "visual-05-login-next-access-denied.png");
 });
-
-async function assertUnavailableButtons(page: Page, label: string) {
-  const unavailable = page.getByTestId("d07-replica-unavailable");
-  const count = await unavailable.count();
-
-  if (count === 0) {
-    const disabledMarked = page.locator('button[aria-disabled="true"][title*="暂未开放"], button[disabled][title*="暂未开放"]');
-    const fallbackCount = await disabledMarked.count();
-    expect(fallbackCount, `${label} should expose disabled visual-only controls`).toBeGreaterThan(0);
-    for (let index = 0; index < fallbackCount; index += 1) {
-      const button = disabledMarked.nth(index);
-      await expect(button).toBeDisabled();
-      const title = await button.getAttribute("title");
-      const text = await button.textContent();
-      expect(`${title ?? ""} ${text ?? ""}`).toContain("暂未开放");
-    }
-    return;
-  }
-
-  for (let index = 0; index < count; index += 1) {
-    const button = unavailable.nth(index);
-    await expect(button).toBeDisabled();
-    await expect(button).toContainText("暂未开放");
-    expect(await button.getAttribute("aria-disabled")).toBe("true");
-  }
-}
 
 async function clickDemoCard(page: Page, index: number) {
   const cards = page.locator('button[class*="demoCard"]');

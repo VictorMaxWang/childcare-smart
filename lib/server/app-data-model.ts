@@ -1,5 +1,12 @@
 import { DEMO_ACCOUNTS, type SessionUser } from "@/lib/auth/accounts";
-import type { ApiAttachment, ApiAuditLog, ApiExtendedSnapshot, ApiTeacher, ApiWeeklyReport } from "@/lib/api/types";
+import type {
+  ApiAttachment,
+  ApiAuditLog,
+  ApiExtendedSnapshot,
+  ApiTeacher,
+  ApiWeeklyReport,
+  AttachmentKind,
+} from "@/lib/api/types";
 import { createDemoSeedSnapshot } from "@/lib/demo-data/seed";
 import { emptyInstitutionSnapshot } from "@/lib/persistence/bootstrap";
 import { normalizeAppStateSnapshot, type AppStateSnapshot } from "@/lib/persistence/snapshot";
@@ -14,6 +21,11 @@ function readString(value: unknown) {
 
 function readArray(value: unknown) {
   return Array.isArray(value) ? value : [];
+}
+
+function readWeeklyReportStatus(value: unknown) {
+  if (value === "archived" || value === "shared") return value;
+  return "draft";
 }
 
 export function createApiId(prefix: string) {
@@ -67,6 +79,10 @@ function normalizeTeachers(value: unknown, session: SessionUser) {
         institutionId,
         className: readString(item.className) || undefined,
         archivedAt: readString(item.archivedAt) || undefined,
+        archivedBy: readString(item.archivedBy) || undefined,
+        archiveReason: readString(item.archiveReason) || undefined,
+        restoredAt: readString(item.restoredAt) || undefined,
+        restoredBy: readString(item.restoredBy) || undefined,
         createdAt: readString(item.createdAt) || new Date().toISOString(),
         updatedAt: readString(item.updatedAt) || new Date().toISOString(),
       };
@@ -91,16 +107,36 @@ function normalizeWeeklyReports(value: unknown) {
         institutionId: readString(item.institutionId),
         periodStart: readString(item.periodStart),
         periodEnd: readString(item.periodEnd),
-        status: item.status === "archived" ? "archived" : "generated",
+        status: readWeeklyReportStatus(item.status),
         payload: isRecord(item.payload) ? item.payload : {},
         sourceRecordIds: readArray(item.sourceRecordIds).filter((value): value is string => typeof value === "string"),
         createdBy: readString(item.createdBy),
+        generatedBy: readString(item.generatedBy) || readString(item.createdBy),
         createdAt: readString(item.createdAt) || new Date().toISOString(),
         updatedAt: readString(item.updatedAt) || new Date().toISOString(),
         archivedAt: readString(item.archivedAt) || undefined,
+        archivedBy: readString(item.archivedBy) || undefined,
+        share: isRecord(item.share)
+          ? {
+              shareId: readString(item.share.shareId),
+              sharedBy: readString(item.share.sharedBy),
+              sharedAt: readString(item.share.sharedAt),
+              summary: readString(item.share.summary),
+              localText: readString(item.share.localText),
+            }
+          : undefined,
       };
     })
     .filter((item): item is ApiWeeklyReport => Boolean(item));
+}
+
+function deriveAttachmentKind(mimeType: string, fileName = ""): AttachmentKind {
+  const lowerMime = mimeType.toLowerCase();
+  const lowerName = fileName.toLowerCase();
+  if (lowerMime.startsWith("image/")) return "image";
+  if (lowerMime.startsWith("audio/")) return "audio";
+  if (lowerMime === "application/pdf" || lowerName.endsWith(".pdf")) return "pdf";
+  return "other";
 }
 
 function normalizeAttachments(value: unknown) {
@@ -119,15 +155,23 @@ function normalizeAttachments(value: unknown) {
           item.relatedType === "feedback" ||
           item.relatedType === "health-material" ||
           item.relatedType === "consultation" ||
-          item.relatedType === "weekly-report"
+          item.relatedType === "weekly-report" ||
+          item.relatedType === "storybook"
             ? item.relatedType
             : undefined,
         relatedId: readString(item.relatedId) || undefined,
+        kind:
+          item.kind === "image" || item.kind === "audio" || item.kind === "pdf" || item.kind === "other"
+            ? item.kind
+            : deriveAttachmentKind(readString(item.mimeType), fileName),
         fileName,
         mimeType: readString(item.mimeType) || "application/octet-stream",
         byteSize: typeof item.byteSize === "number" ? item.byteSize : undefined,
         storageMode: item.storageMode === "uploaded" ? "uploaded" : "metadata_only",
         uploadStatus: item.uploadStatus === "uploaded" || item.uploadStatus === "failed" ? item.uploadStatus : "metadata_saved",
+        localPreviewUrl: readString(item.localPreviewUrl) || undefined,
+        downloadUrl: readString(item.downloadUrl) || undefined,
+        durationMs: typeof item.durationMs === "number" ? item.durationMs : undefined,
         createdBy: readString(item.createdBy),
         createdAt: readString(item.createdAt) || new Date().toISOString(),
         updatedAt: readString(item.updatedAt) || new Date().toISOString(),
@@ -152,6 +196,7 @@ function normalizeAuditLogs(value: unknown) {
         targetId: readString(item.targetId),
         action: readString(item.action),
         result: item.result === "failed" ? "failed" : "success",
+        metadata: isRecord(item.metadata) ? item.metadata : undefined,
         createdAt: readString(item.createdAt) || new Date().toISOString(),
       };
     })
@@ -179,7 +224,8 @@ export function appendAuditLog(
   targetType: string,
   targetId: string,
   action: string,
-  result: "success" | "failed" = "success"
+  result: "success" | "failed" = "success",
+  metadata?: Record<string, unknown>
 ) {
   snapshot.auditLogs = [
     {
@@ -191,6 +237,7 @@ export function appendAuditLog(
       targetId,
       action,
       result,
+      metadata,
       createdAt: new Date().toISOString(),
     },
     ...snapshot.auditLogs,

@@ -1,0 +1,94 @@
+{
+  "taskId": "R04-config",
+  "status": "partial",
+  "generatedAt": "2026-05-05T08:44:03.968Z",
+  "localEnv": {
+    "envLocalExists": true,
+    "chat": "missing-env",
+    "ocr": "missing-env",
+    "asr": "missing-env",
+    "missingVariables": [
+      "VIVO_APP_KEY",
+      "VIVO_APP_ID",
+      "VIVO_BASE_URL",
+      "VIVO_LLM_MODEL",
+      "VIVO_OCR_PATH",
+      "VIVO_ASR_PACKAGE",
+      "VIVO_ASR_CLIENT_VERSION",
+      "VIVO_ASR_USER_ID",
+      "VIVO_ASR_ENGINE_ID"
+    ]
+  },
+  "vercel": {
+    "cliAvailable": false,
+    "loggedIn": false,
+    "projectLinked": false,
+    "configured": "manual-required",
+    "environments": []
+  },
+  "tencentDocker": {
+    "checked": true,
+    "dockerAvailable": false,
+    "containers": [
+      {
+        "name": "childcare-smart-backend-staging",
+        "status": "missing",
+        "missingVariables": [
+          "VIVO_APP_KEY",
+          "VIVO_APP_ID",
+          "VIVO_BASE_URL",
+          "VIVO_LLM_MODEL",
+          "VIVO_OCR_PATH",
+          "VIVO_ASR_PACKAGE",
+          "VIVO_ASR_CLIENT_VERSION",
+          "VIVO_ASR_USER_ID",
+          "VIVO_ASR_ENGINE_ID"
+        ]
+      },
+      {
+        "name": "smartchildcare-backend-staging",
+        "status": "missing",
+        "missingVariables": [
+          "VIVO_APP_KEY",
+          "VIVO_APP_ID",
+          "VIVO_BASE_URL",
+          "VIVO_LLM_MODEL",
+          "VIVO_OCR_PATH",
+          "VIVO_ASR_PACKAGE",
+          "VIVO_ASR_CLIENT_VERSION",
+          "VIVO_ASR_USER_ID",
+          "VIVO_ASR_ENGINE_ID"
+        ]
+      }
+    ],
+    "notes": "smartchildcare-caddy-staging is a proxy container and is not a vivo provider runtime."
+  },
+  "productAi": "pass with missing-env; live provider requests were not sent; Playwright provider/auth regressions passed 6/6",
+  "checks": {
+    "vivoCheckEnv": "expected-fail missing-env",
+    "vivoCheckEnvPartial": "expected-fail missing-env",
+    "vivoConfigureVercel": "expected-fail manual-required",
+    "tencentDocker": "expected-fail docker-missing",
+    "productAi": "pass missing-env",
+    "lint": "pass",
+    "build": "pass"
+  },
+  "secretsExposed": false,
+  "changedFiles": [
+    "scripts/configure-vivo-env-local.ps1",
+    "scripts/configure-vivo-env-vercel.ps1",
+    "scripts/check-vivo-env-tencent-docker.sh",
+    "scripts/check-vivo-env-local.mjs",
+    "scripts/product-ai-smoke.mjs",
+    "lib/providers/vivo/vivo-provider-status.ts",
+    "package.json",
+    "docs/product-completion/VIVO_ENV_SYNC_GUIDE.md",
+    "docs/product-completion/results/R04-config-result.md",
+    "docs/product-completion/results/R04-config-result.json",
+    "docs/product-completion/VIVO_PROVIDER_LIVE_SMOKE_REPORT.md",
+    "artifacts/product-completion/R04/product-ai-live-smoke.json",
+    "artifacts/product-completion/R04/product-ai-live-smoke.md",
+    "artifacts/product-completion/R04/vercel-env-manual-checklist.md"
+  ],
+  "notes": "Automation is hardened. The AppKEY shared in chat is treated as leaked and was not used. Production remains blocked until a reset AppKEY and all required vivo env are configured locally and in Vercel, Vercel is redeployed, and product:ai live provider smoke passes without missing-env."
+}

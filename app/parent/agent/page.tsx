@@ -25,6 +25,11 @@ import ParentTransparencyPanel from "@/components/parent/ParentTransparencyPanel
 import ParentStructuredFeedbackComposer, {
   type ParentStructuredFeedbackComposerSubmitInput,
 } from "@/components/parent/ParentStructuredFeedbackComposer";
+import AttachmentMediaPicker, {
+  AttachmentPreviewList,
+  type AttachmentDraft,
+} from "@/components/communication/AttachmentMediaPicker";
+import FeedbackDetailDialog from "@/components/communication/FeedbackDetailDialog";
 import ParentTrendResponseCard from "@/components/parent/ParentTrendResponseCard";
 import {
   AgentWorkspaceCard,
@@ -72,6 +77,17 @@ import { buildParentSpeechScript } from "@/lib/voice/browser-tts";
 import { sanitizeParentFacingText } from "@/lib/agent/parent-copy";
 import { cn } from "@/lib/utils";
 import { formatParentFeedbackStatusLabel } from "@/lib/feedback/consumption";
+import {
+  createAttachment as createApiAttachment,
+  createFeedback as createApiFeedback,
+  listAttachments as listApiAttachments,
+  listFeedback as listApiFeedback,
+  listMessages as listApiMessages,
+  sendMessage as sendApiMessage,
+  type ApiFeedback,
+  type ApiMessage,
+} from "@/lib/api/communication";
+import type { ApiAttachment } from "@/lib/api/types";
 import {
   buildHomeSchoolThreads,
   buildStructuredFeedbackMessageContent,
@@ -159,6 +175,12 @@ export default function ParentAgentPage() {
   const [homeSchoolMessageDraft, setHomeSchoolMessageDraft] = useState("");
   const [homeSchoolMessageStatus, setHomeSchoolMessageStatus] = useState<string | null>(null);
   const [homeSchoolMessageSending, setHomeSchoolMessageSending] = useState(false);
+  const [homeSchoolAttachmentDrafts, setHomeSchoolAttachmentDrafts] = useState<AttachmentDraft[]>([]);
+  const [apiMessages, setApiMessages] = useState<ApiMessage[]>([]);
+  const [apiFeedbacks, setApiFeedbacks] = useState<ApiFeedback[]>([]);
+  const [apiAttachments, setApiAttachments] = useState<ApiAttachment[]>([]);
+  const [feedbackDetailId, setFeedbackDetailId] = useState<string | null>(null);
+  const [feedbackDetailOpen, setFeedbackDetailOpen] = useState(false);
   const [showMoreContent, setShowMoreContent] = useState(false);
   const [, setReflexionLoading] = useState(false);
   const [parentMessageStatus, setParentMessageStatus] = useState<string | null>(null);
@@ -185,16 +207,32 @@ export default function ParentAgentPage() {
     [parentFeed, resolvedChildId]
   );
   const childQueryWasUnauthorized = Boolean(childFromQuery && !authorizedChildIds.has(childFromQuery));
+  const refreshE04CommunicationData = useCallback(async () => {
+    if (!resolvedChildId) return;
+    try {
+      const [nextMessages, nextFeedbacks, nextAttachments] = await Promise.all([
+        listApiMessages(resolvedChildId),
+        listApiFeedback(resolvedChildId),
+        listApiAttachments({ childId: resolvedChildId }),
+      ]);
+      setApiMessages(nextMessages);
+      setApiFeedbacks(nextFeedbacks);
+      setApiAttachments(nextAttachments);
+    } catch (error) {
+      setHomeSchoolMessageStatus(error instanceof Error ? error.message : "E01 通信数据读取失败。");
+    }
+  }, [resolvedChildId]);
+  const communicationMessages = apiMessages.length > 0 ? apiMessages : messages;
   const selectedHomeSchoolThread = useMemo(() => {
     if (!selectedFeed) return null;
     return (
       buildHomeSchoolThreads({
-        messages,
+        messages: communicationMessages,
         conversations,
         children: [selectedFeed.child],
       }).find((thread) => thread.childId === selectedFeed.child.id) ?? null
     );
-  }, [conversations, messages, selectedFeed]);
+  }, [communicationMessages, conversations, selectedFeed]);
   const displayedTrendQuestion = latestTrendQuery;
   const displayedTrendResult = latestTrendResult;
   const displayedTrendError = trendError;
@@ -457,8 +495,15 @@ export default function ParentAgentPage() {
     setFeedbackStatus(null);
     setHomeSchoolMessageDraft("");
     setHomeSchoolMessageStatus(null);
+    setHomeSchoolAttachmentDrafts([]);
+    setFeedbackDetailId(null);
+    setFeedbackDetailOpen(false);
     setFeedbackNotePrefill(null);
   }, [resolvedChildId]);
+
+  useEffect(() => {
+    void refreshE04CommunicationData();
+  }, [refreshE04CommunicationData]);
 
   useEffect(() => {
     if (!selectedHomeSchoolThread) return;
@@ -486,6 +531,50 @@ export default function ParentAgentPage() {
   }, [currentResult, selectedFeed, upsertReminder]);
 
   async function sendParentFreeHomeSchoolMessage() {
+    const content = homeSchoolMessageDraft.trim();
+    if (!selectedFeed) return;
+
+    if (!content && homeSchoolAttachmentDrafts.length === 0) {
+      setHomeSchoolMessageStatus("请输入要同步给老师的内容或附件。");
+      return;
+    }
+
+    setHomeSchoolMessageSending(true);
+    setHomeSchoolMessageStatus("正在通过 E01 API 发送给老师...");
+    try {
+      const message = await sendApiMessage({
+        childId: selectedFeed.child.id,
+        conversationId: getHomeSchoolConversationId(selectedFeed.child.id),
+        content: content || "附件消息",
+      });
+      await Promise.all(
+        homeSchoolAttachmentDrafts.map((draft) =>
+          createApiAttachment({
+            childId: selectedFeed.child.id,
+            relatedType: "message",
+            relatedId: message.messageId,
+            kind: draft.kind,
+            fileName: draft.fileName,
+            mimeType: draft.mimeType,
+            byteSize: draft.byteSize,
+            localPreviewUrl: draft.localPreviewUrl,
+            durationMs: draft.durationMs,
+          })
+        )
+      );
+      setHomeSchoolMessageDraft("");
+      setHomeSchoolAttachmentDrafts([]);
+      await refreshE04CommunicationData();
+      setHomeSchoolMessageStatus("E01 API 已保存，刷新后仍可见。");
+    } catch (error) {
+      setHomeSchoolMessageStatus(error instanceof Error ? `发送失败：${error.message}` : "发送失败。");
+    } finally {
+      setHomeSchoolMessageSending(false);
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async function sendParentFreeHomeSchoolMessageLegacy() {
     const content = homeSchoolMessageDraft.trim();
     if (!selectedFeed) return;
 
@@ -927,6 +1016,48 @@ export default function ParentAgentPage() {
 
     setFeedbackStatus("正在提交今晚反馈...");
 
+    let savedFeedbackId = "";
+    try {
+      const detail = await createApiFeedback({
+        ...input,
+        sourceChannel: "parent-agent",
+        content: buildStructuredFeedbackMessageContent({
+          childName: selectedFeed.child.name,
+          executionStatus: input.executionStatus,
+          childReaction: input.childReaction,
+          improvementStatus: input.improvementStatus,
+          notes: input.notes,
+          barriers: input.barriers,
+        }),
+      });
+      savedFeedbackId = detail.feedback.feedbackId;
+      await sendApiMessage({
+        childId: input.childId,
+        conversationId: getHomeSchoolConversationId(input.childId),
+        content: detail.feedback.content,
+      });
+      await Promise.all(
+        (input.attachmentDrafts ?? []).map((draft) =>
+          createApiAttachment({
+            childId: input.childId,
+            relatedType: "feedback",
+            relatedId: savedFeedbackId,
+            kind: draft.kind,
+            fileName: draft.fileName,
+            mimeType: draft.mimeType,
+            byteSize: draft.byteSize,
+            localPreviewUrl: draft.localPreviewUrl,
+            durationMs: draft.durationMs,
+          })
+        )
+      );
+      await refreshE04CommunicationData();
+      setFeedbackDetailId(savedFeedbackId);
+    } catch (error) {
+      setFeedbackStatus(error instanceof Error ? `E01 API 保存失败：${error.message}` : "E01 API 保存失败。");
+      return false;
+    }
+
     flushSync(() => {
       addGuardianFeedback({
         childId: input.childId,
@@ -1039,6 +1170,7 @@ export default function ParentAgentPage() {
     const threadMessages = selectedHomeSchoolThread?.messages ?? [];
 
     return (
+      <>
       <div
         data-testid="parent-communication-panel"
         className="mt-5 rounded-3xl border border-slate-100 bg-white p-4 sm:p-5"
@@ -1089,6 +1221,14 @@ export default function ParentAgentPage() {
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
                     {message.content}
                   </p>
+                  <div className="mt-3">
+                    <AttachmentPreviewList
+                      items={apiAttachments.filter(
+                        (attachment) => attachment.relatedType === "message" && attachment.relatedId === message.messageId
+                      )}
+                      compact
+                    />
+                  </div>
                 </div>
               );
             })
@@ -1099,6 +1239,33 @@ export default function ParentAgentPage() {
           )}
         </div>
 
+        {apiFeedbacks.length > 0 ? (
+          <div data-testid="parent-feedback-detail-list" className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-slate-900">反馈详情</p>
+              <span className="text-xs text-slate-500">{apiFeedbacks.length} 条</span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {apiFeedbacks.slice(0, 3).map((feedback) => (
+                <Button
+                  key={feedback.feedbackId}
+                  data-testid="parent-open-feedback-detail"
+                  data-feedback-id={feedback.feedbackId}
+                  type="button"
+                  variant="outline"
+                  className="rounded-full"
+                  onClick={() => {
+                    setFeedbackDetailId(feedback.feedbackId);
+                    setFeedbackDetailOpen(true);
+                  }}
+                >
+                  查看反馈详情
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-4 space-y-3">
           <Textarea
             data-testid="parent-message-input"
@@ -1106,6 +1273,12 @@ export default function ParentAgentPage() {
             onChange={(event) => setHomeSchoolMessageDraft(event.target.value)}
             placeholder="输入要同步给老师的情况，例如：今晚情绪稳定，但入睡还是偏慢。"
             className="min-h-24 bg-white"
+          />
+          <AttachmentMediaPicker
+            value={homeSchoolAttachmentDrafts}
+            onChange={setHomeSchoolAttachmentDrafts}
+            accept="image/*,audio/*,.pdf,.doc,.docx,.txt"
+            disabled={homeSchoolMessageSending}
           />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="min-h-5 text-sm text-slate-500">{homeSchoolMessageStatus}</p>
@@ -1122,6 +1295,12 @@ export default function ParentAgentPage() {
           </div>
         </div>
       </div>
+      <FeedbackDetailDialog
+        feedbackId={feedbackDetailId}
+        open={feedbackDetailOpen}
+        onOpenChange={setFeedbackDetailOpen}
+      />
+      </>
     );
   };
 

@@ -24,8 +24,12 @@ const API_ROUTE_HANDLED_AUTH_PREFIXES = [
   "/api/consultations",
   "/api/analytics",
   "/api/weekly-reports",
+  "/api/storybooks",
   "/api/attachments",
   "/api/reminders",
+  "/api/assignments",
+  "/api/ai",
+  "/api/voice-assistant",
 ];
 
 function normalizeBase64Url(value: string) {

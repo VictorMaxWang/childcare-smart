@@ -1,6 +1,11 @@
 import { normalizeTeacherVoiceMimeType } from "@/lib/mobile/teacher-voice-audio";
 
-export type VoiceCaptureStatus = "uploaded" | "mocked" | "processing" | "failed";
+export type VoiceCaptureStatus =
+  | "uploaded"
+  | "local_fallback"
+  | "mocked"
+  | "processing"
+  | "failed";
 
 export interface VoiceUploadRequest {
   file: File;
@@ -19,7 +24,7 @@ export interface VoiceUploadResponse {
   transcript?: string;
   draftContent: string;
   provider?: string;
-  source: "upload-api" | "mock";
+  source: "upload-api" | "local-text-fallback" | "mock";
   nextAction?: "none" | "teacher-agent" | "high-risk-consultation";
   raw?: Record<string, unknown>;
 }
@@ -37,13 +42,8 @@ function inferNextAction(transcript: string) {
   return "none";
 }
 
-function buildFallbackTranscript(attachmentName: string, fallbackText?: string) {
-  const normalizedFallbackText = fallbackText?.trim();
-  if (normalizedFallbackText) {
-    return normalizedFallbackText;
-  }
-
-  return `${attachmentName} 转写结果：孩子今天晨检后情绪偏低，建议老师记录为重点观察并同步家长。`;
+function buildFallbackTranscript(fallbackText?: string) {
+  return fallbackText?.trim() ?? "";
 }
 
 export function buildMockVoiceUploadResponse(params: {
@@ -52,7 +52,7 @@ export function buildMockVoiceUploadResponse(params: {
   provider?: string;
   raw?: Record<string, unknown>;
 }): VoiceUploadResponse {
-  const transcript = buildFallbackTranscript(params.attachmentName, params.fallbackText);
+  const transcript = buildFallbackTranscript(params.fallbackText);
 
   return {
     status: "mocked",
@@ -63,8 +63,34 @@ export function buildMockVoiceUploadResponse(params: {
     attachmentName: params.attachmentName,
     transcript,
     draftContent: transcript,
-    provider: params.provider ?? "mock-asr",
+    provider: params.provider ?? "text-input-asr-fallback",
     source: "mock",
+    nextAction: inferNextAction(transcript),
+    raw: params.raw,
+  };
+}
+
+export function buildVoiceUploadResponse(params: {
+  attachmentName: string;
+  transcript?: string;
+  provider?: string;
+  source?: VoiceUploadResponse["source"];
+  status?: VoiceCaptureStatus;
+  raw?: Record<string, unknown>;
+}): VoiceUploadResponse {
+  const transcript = buildFallbackTranscript(params.transcript);
+
+  return {
+    status: params.status ?? "uploaded",
+    assetId:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? `voice-${crypto.randomUUID()}`
+        : `voice-${Date.now()}`,
+    attachmentName: params.attachmentName,
+    transcript,
+    draftContent: transcript,
+    provider: params.provider ?? "upload-api",
+    source: params.source ?? "upload-api",
     nextAction: inferNextAction(transcript),
     raw: params.raw,
   };
@@ -77,12 +103,15 @@ function isVoiceUploadResponse(value: unknown): value is VoiceUploadResponse {
 
   return (
     (candidate.status === "uploaded" ||
+      candidate.status === "local_fallback" ||
       candidate.status === "mocked" ||
       candidate.status === "processing" ||
       candidate.status === "failed") &&
     typeof candidate.attachmentName === "string" &&
     typeof candidate.draftContent === "string" &&
-    (candidate.source === "upload-api" || candidate.source === "mock")
+    (candidate.source === "upload-api" ||
+      candidate.source === "local-text-fallback" ||
+      candidate.source === "mock")
   );
 }
 
@@ -126,12 +155,36 @@ export async function uploadTeacherVoiceCapture(
     }
 
     return responseJson;
-  } catch {
-    return buildMockVoiceUploadResponse({
+  } catch (error) {
+    if (request.fallbackText?.trim()) {
+      return buildVoiceUploadResponse({
+        attachmentName,
+        transcript: request.fallbackText,
+        provider: "text-input-asr-fallback",
+        source: "local-text-fallback",
+        status: "local_fallback",
+        raw: {
+          attachmentName,
+          childId: request.childId,
+          durationMs: request.durationMs,
+          mimeType: normalizedMimeType,
+          originalMimeType: request.mimeType,
+          scene: request.scene,
+          size: request.file.size,
+        },
+      });
+    }
+
+    return {
+      status: "failed",
       attachmentName,
-      fallbackText: request.fallbackText,
-      provider: "mock-asr-client-fallback",
+      draftContent: "",
+      provider: "provider-unavailable",
+      source: "local-text-fallback",
+      nextAction: "none",
       raw: {
+        error: error instanceof Error ? error.message : "teacher voice upload failed",
+        reason: "当前未接入真实 ASR provider，音频文件不会被伪造转写成功。",
         attachmentName,
         childId: request.childId,
         durationMs: request.durationMs,
@@ -140,6 +193,6 @@ export async function uploadTeacherVoiceCapture(
         scene: request.scene,
         size: request.file.size,
       },
-    });
+    };
   }
 }

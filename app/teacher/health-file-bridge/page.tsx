@@ -23,6 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { apiPost } from "@/lib/api/client";
+import { ApiClientError } from "@/lib/api/errors";
 import type {
   HealthFileBridgeContraindication,
   HealthFileBridgeFact,
@@ -33,12 +35,12 @@ import type {
   HealthFileBridgeRiskItem,
   HealthFileBridgeSourceRole,
 } from "@/lib/ai/types";
+import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
 import { useApp } from "@/lib/store";
 
 const NONE_CHILD_VALUE = "__none__";
 const UNSPECIFIED_FILE_KIND_VALUE = "__unspecified__";
 const REQUEST_SOURCE = "teacher-health-file-bridge-page";
-const LOCAL_DEMO_PARSE_LABEL = "本地演示解析";
 
 const FILE_KIND_OPTIONS = [
   { value: UNSPECIFIED_FILE_KIND_VALUE, label: "未指定" },
@@ -74,7 +76,16 @@ function formatResultBadge(label: string, active: boolean) {
   return <Badge variant={active ? "warning" : "secondary"}>{`${label}：${active ? "是" : "否"}`}</Badge>;
 }
 
-function toUploadMeta(file: File, index: number, previewText: string): HealthFileBridgeFile {
+async function fileToBase64(file: File) {
+  if (!file.type.toLowerCase().startsWith("image/")) return undefined;
+  const buffer = await file.arrayBuffer();
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function toUploadMeta(file: File, index: number, previewText: string, imageBase64?: string): HealthFileBridgeFile {
   const generatedId =
     typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
@@ -87,10 +98,28 @@ function toUploadMeta(file: File, index: number, previewText: string): HealthFil
     sizeBytes: file.size || undefined,
     pageCount: undefined,
     previewText: previewText || undefined,
+    imageBase64,
     meta: {
       lastModified: file.lastModified,
+      imageBase64,
     },
   };
+}
+
+function getProviderLabel(result: HealthFileBridgeResponse) {
+  if (result.provider === "vivo" && !result.fallback && !result.mock) return "vivo OCR provider";
+  if (result.source === "local-text-fallback") return "本地文本 fallback";
+  if (result.fallback) return "本地规则解析";
+  return result.provider ?? "provider";
+}
+
+function getOcrStatusLabel(result: HealthFileBridgeResponse) {
+  const ocrStatus = (result.providerStatus?.ocr as { status?: string; reason?: string } | undefined)?.status;
+  if (!ocrStatus) return "provider 状态未知";
+  if (ocrStatus === "ready") return "vivo OCR ready";
+  if (ocrStatus === "missing-env") return "vivo OCR missing-env";
+  if (ocrStatus === "unsupported") return "当前未接入真实 OCR provider";
+  return `vivo OCR ${ocrStatus}`;
 }
 
 function riskVariant(level: HealthFileBridgeRiskItem["severity"]) {
@@ -144,12 +173,15 @@ function buildSavedParseResult(result: HealthFileBridgeResponse, files: HealthFi
       })),
     ],
     followUpHints: result.followUpHints,
-    sourceLabel: LOCAL_DEMO_PARSE_LABEL,
+    sourceLabel: getProviderLabel(result),
     provenance: {
       fallback: result.fallback,
       mock: result.mock,
       provider: result.provider,
       model: result.model,
+      providerStatus: result.providerStatus,
+      extractedText: result.extractedText,
+      warnings: result.warnings,
       generatedAt: result.generatedAt,
       files: files.map((file) => ({
         name: file.name,
@@ -213,6 +245,7 @@ export default function TeacherHealthFileBridgePage() {
   const [result, setResult] = useState<HealthFileBridgeResponse | null>(null);
   const [pendingParseResult, setPendingParseResult] = useState<Record<string, unknown> | null>(null);
   const [activeMaterialId, setActiveMaterialId] = useState<string | null>(null);
+  const [activeApiMaterialId, setActiveApiMaterialId] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [consultationMessage, setConsultationMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -250,6 +283,7 @@ export default function TeacherHealthFileBridgePage() {
     setResult(savedResponse);
     setPendingParseResult(null);
     setActiveMaterialId(latestSaved.materialId);
+    setActiveApiMaterialId(null);
     setSaveMessage(`已恢复 ${latestSaved.filename} 的保存结果。`);
   }, [activeMaterialId, childMaterials, result]);
 
@@ -265,14 +299,19 @@ export default function TeacherHealthFileBridgePage() {
     );
   }
 
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const nextFiles = Array.from(event.target.files ?? []).map((file, index) =>
-      toUploadMeta(file, index, previewText.trim())
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    const nextFiles = await Promise.all(
+      selectedFiles.map(async (file, index) =>
+        toUploadMeta(file, index, previewText.trim(), await fileToBase64(file))
+      )
     );
     setFiles(nextFiles);
     setResult(null);
     setPendingParseResult(null);
     setActiveMaterialId(null);
+    setActiveApiMaterialId(null);
+    setActiveApiMaterialId(null);
     setSaveMessage(null);
     setConsultationMessage(null);
     setError(null);
@@ -325,6 +364,24 @@ export default function TeacherHealthFileBridgePage() {
 
     const materialId = createdMaterial.data.materialId;
     setActiveMaterialId(materialId);
+    let apiMaterialId: string | null = null;
+    try {
+      const apiMaterial = await apiPost<AppStateSnapshot["healthMaterials"][number]>("/api/health-materials", {
+        childId,
+        filename: requestFiles[0]?.name ?? "manual-health-material-note.txt",
+        fileType: requestFiles[0]?.mimeType ?? "text/plain",
+        description: manualText || requestFiles.map((file) => file.name).join("、"),
+      });
+      apiMaterialId = apiMaterial.materialId;
+      setActiveApiMaterialId(apiMaterialId);
+    } catch (apiCreateError) {
+      setActiveApiMaterialId(null);
+      setSaveMessage(
+        apiCreateError instanceof ApiClientError
+          ? `E01 health materials API 暂未保存任务：${apiCreateError.message}`
+          : "E01 health materials API 暂未保存任务。"
+      );
+    }
     updateHealthMaterialTaskStatus({ materialId, status: "processing" });
 
     const requestPayload: HealthFileBridgeRequest = {
@@ -376,10 +433,28 @@ export default function TeacherHealthFileBridgePage() {
     }
   }
 
-  function handleSaveParseResult() {
+  async function handleSaveParseResult() {
     if (!activeMaterialId || !pendingParseResult) {
       setError("当前没有待保存的解析结果。");
       return;
+    }
+    if (activeApiMaterialId) {
+      try {
+        await apiPost<AppStateSnapshot["healthMaterials"][number]>(
+          `/api/health-materials/${encodeURIComponent(activeApiMaterialId)}/parse`,
+          {
+            parseStatus: "completed",
+            parseResult: pendingParseResult,
+          }
+        );
+      } catch (apiSaveError) {
+        setError(
+          apiSaveError instanceof ApiClientError
+            ? `E01 health materials API 保存失败：${apiSaveError.message}`
+            : "E01 health materials API 保存失败。"
+        );
+        return;
+      }
     }
     const saved = saveHealthMaterialParseResult({
       materialId: activeMaterialId,
@@ -393,7 +468,7 @@ export default function TeacherHealthFileBridgePage() {
     setSaveMessage("解析结果已保存，刷新后仍可查看。");
   }
 
-  function handleCreateConsultationFromResult() {
+  async function handleCreateConsultationFromResult() {
     if (!selectedChild || !result) {
       setError("请先完成并保存解析结果，再创建会诊。");
       return;
@@ -403,15 +478,33 @@ export default function TeacherHealthFileBridgePage() {
       return;
     }
     const riskLevel = getHighestRiskLevel(result);
-    const consultation = createConsultationRecord({
+    const consultationPayload = {
       childId: selectedChild.id,
       riskLevel,
-      sourceMaterialId: activeMaterialId ?? undefined,
-      summary: `${LOCAL_DEMO_PARSE_LABEL}触发：${result.summary}`,
+      sourceMaterialId: activeApiMaterialId ?? activeMaterialId ?? undefined,
+      summary: `${getProviderLabel(result)}触发：${result.summary}`,
       notes: [
         `来源材料：${childMaterials.find((material) => material.materialId === activeMaterialId)?.filename ?? "当前解析结果"}`,
         ...result.riskItems.map((item) => `${getRiskSeverityLabel(item.severity)}：${item.title}`),
       ].join("\n"),
+      workflowStatus: "pending",
+    };
+    try {
+      await apiPost<AppStateSnapshot["consultations"][number]>("/api/consultations", consultationPayload);
+    } catch (apiConsultationError) {
+      setError(
+        apiConsultationError instanceof ApiClientError
+          ? `E01 consultations API 创建失败：${apiConsultationError.message}`
+          : "E01 consultations API 创建失败。"
+      );
+      return;
+    }
+    const consultation = createConsultationRecord({
+      childId: selectedChild.id,
+      riskLevel,
+      sourceMaterialId: activeMaterialId ?? undefined,
+      summary: consultationPayload.summary,
+      notes: consultationPayload.notes,
       workflowStatus: "pending",
     });
     if (consultation.status === "failed" || !consultation.data) {
@@ -525,7 +618,7 @@ export default function TeacherHealthFileBridgePage() {
                             <p className="mt-1 text-xs text-slate-500">{file.mimeType || "未知类型"} · {formatBytes(file.sizeBytes)}</p>
                           </div>
                           <Badge variant={result ? (result.fallback || result.mock ? "warning" : "success") : "outline"}>
-                            {result ? (result.fallback || result.mock ? "本地兜底结果" : "解析完成") : "等待解析"}
+                            {result ? (result.fallback || result.mock ? "本地规则解析" : "真实 provider 解析") : "等待解析"}
                           </Badge>
                         </div>
                       ))}
@@ -755,6 +848,7 @@ export default function TeacherHealthFileBridgePage() {
                       setResult(null);
                       setPendingParseResult(null);
                       setActiveMaterialId(null);
+                      setActiveApiMaterialId(null);
                       setSaveMessage(null);
                       setConsultationMessage(null);
                       setError(null);
@@ -891,9 +985,14 @@ export default function TeacherHealthFileBridgePage() {
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="info">{`识别置信度 ${Math.round(result.confidence * 100)}%`}</Badge>
                     <Badge variant="secondary">{`材料类型 ${getFileKindLabel(result.fileType)}`}</Badge>
-                    <Badge variant="warning">{LOCAL_DEMO_PARSE_LABEL}</Badge>
+                    <Badge variant={result.provider === "vivo" && !result.fallback ? "success" : "warning"}>
+                      {getProviderLabel(result)}
+                    </Badge>
+                    <Badge variant={result.provider === "vivo" && !result.fallback ? "success" : "warning"}>
+                      {getOcrStatusLabel(result)}
+                    </Badge>
                     {result.fallback || result.mock ? (
-                      <Badge variant="warning">当前使用本地兜底结果</Badge>
+                      <Badge variant="warning">当前使用本地规则建议</Badge>
                     ) : null}
                     {result.liveReadyButNotVerified ? formatResultBadge("建议继续复核原件", true) : null}
                   </div>
@@ -903,6 +1002,17 @@ export default function TeacherHealthFileBridgePage() {
                       <p className="text-sm font-semibold text-slate-900">结果摘要</p>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-slate-600">{result.summary}</p>
+                    {result.extractedText ? (
+                      <div className="mt-3 rounded-md border border-indigo-100 bg-white p-3">
+                        <p className="text-xs font-semibold text-slate-700">extracted text</p>
+                        <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">
+                          {result.extractedText}
+                        </p>
+                      </div>
+                    ) : null}
+                    {result.warnings?.length ? (
+                      <p className="mt-3 text-xs leading-5 text-amber-700">{result.warnings.join("；")}</p>
+                    ) : null}
                     <p className="mt-3 text-xs leading-5 text-slate-500">{result.disclaimer}</p>
                   </div>
                   {saveMessage ? (
@@ -962,6 +1072,7 @@ export default function TeacherHealthFileBridgePage() {
                             setResult(rawResponse);
                             setPendingParseResult(null);
                             setActiveMaterialId(material.materialId);
+                            setActiveApiMaterialId(null);
                             setSaveMessage(`已打开 ${material.filename} 的保存结果。`);
                             setConsultationMessage(null);
                           }

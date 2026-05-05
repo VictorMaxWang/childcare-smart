@@ -116,9 +116,18 @@ test("D07 removes fake success and preserves shared demo writes", async ({ page 
   await expect.poll(() => hasAttendanceForChild(page, childId as string)).toBe(true);
   await page.reload();
   await expect.poll(() => hasAttendanceForChild(page, childId as string)).toBe(true);
-  await expect(page.getByTestId(`d07-archive-disabled-${childId}`)).toBeDisabled();
-  await expect(page.getByTestId(`d07-archive-disabled-${childId}`)).toContainText("归档暂未开放");
-  await screenshot(page, "03-children-attendance-delete-disabled.png");
+  page.once("dialog", async (dialog) => {
+    await dialog.accept();
+  });
+  await page.getByTestId(`e02-archive-child-${childId}`).click();
+  await expect(page.getByTestId(`e02-child-row-${childId}`)).toHaveCount(0);
+  await page.getByTestId("e02-toggle-archived-children").click();
+  await expect(page.getByTestId(`e02-restore-child-${childId}`)).toBeEnabled();
+  await screenshot(page, "03-children-attendance-archive-real.png");
+  page.once("dialog", async (dialog) => {
+    await dialog.accept();
+  });
+  await page.getByTestId(`e02-restore-child-${childId}`).click();
 
   await loginAs(page, "u-teacher", "/health");
   await expect(page.locator("body")).not.toContainText("导出记录");
@@ -170,10 +179,8 @@ test("D07 removes fake success and preserves shared demo writes", async ({ page 
   await screenshot(page, "09-consultation-follow-up-reminder.png");
 
   await loginAs(page, "u-admin", "/admin");
-  const exportWeekly = page.getByRole("button", { name: /导出周报.*暂未开放/ }).first();
-  await expect(exportWeekly).toBeDisabled();
-  await expect(page.getByRole("button", { name: /分享周报.*暂未开放/ }).first()).toBeDisabled();
-  await screenshot(page, "10-admin-weekly-visual-only-disabled.png");
+  await expect(page.getByTestId("admin-api-summary")).toBeVisible();
+  await screenshot(page, "10-admin-summary-no-weekly-fake-disabled.png");
 
   await loginAs(page, "u-admin", "/admin/agent");
   await expect(page.getByRole("button", { name: /使用说明.*暂未开放/ }).first()).toBeDisabled();
@@ -182,7 +189,10 @@ test("D07 removes fake success and preserves shared demo writes", async ({ page 
   await screenshot(page, "11-admin-agent-disabled-actions.png");
 
   await loginAs(page, "u-admin", "/admin/agent?action=weekly-report");
-  await expect(page.getByRole("button", { name: /导出周报.*暂未开放/ }).first()).toBeDisabled();
-  await expect(page.getByRole("button", { name: /分享周报.*暂未开放/ }).first()).toBeDisabled();
-  await screenshot(page, "12-admin-agent-weekly-disabled-actions.png");
+  await expect(page.getByTestId("weekly-save-report")).toBeEnabled();
+  await page.getByTestId("weekly-save-report").click();
+  await expect(page.getByTestId("weekly-report-detail")).toBeVisible();
+  await expect(page.getByTestId("weekly-export-markdown")).toBeEnabled();
+  await expect(page.getByTestId("weekly-share-report")).toBeEnabled();
+  await screenshot(page, "12-admin-agent-weekly-export-share-enabled.png");
 });

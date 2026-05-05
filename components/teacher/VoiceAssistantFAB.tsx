@@ -166,6 +166,12 @@ export default function VoiceAssistantFAB({
   const understanding = result?.understanding ?? null;
   const previewItems = understanding?.draft_items.slice(0, 2) ?? [];
   const warnings = understanding?.warnings ?? [];
+  const uploadIsLocalFallback = Boolean(
+    result &&
+      (result.upload.source !== "upload-api" ||
+        result.upload.status === "local_fallback" ||
+        result.upload.status === "mocked")
+  );
 
   return (
     <>
@@ -280,8 +286,12 @@ export default function VoiceAssistantFAB({
 
               <div className="space-y-5 px-6 pt-5">
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant={result.upload.source === "mock" ? "warning" : "success"}>
-                    {result.upload.source === "mock" ? "演示上传" : "正式上传"}
+                  <Badge variant={uploadIsLocalFallback ? "warning" : "success"}>
+                    {result.upload.source === "mock"
+                      ? "演示上传"
+                      : result.upload.source === "local-text-fallback"
+                        ? "本地文本 fallback"
+                        : "正式上传"}
                   </Badge>
                   <Badge
                     variant={
@@ -328,14 +338,14 @@ export default function VoiceAssistantFAB({
                   </div>
                 </div>
 
-                {result.upload.source === "mock" || understanding?.trace.fallback ? (
+                {uploadIsLocalFallback || understanding?.trace.fallback ? (
                   <div className="rounded-[24px] border border-amber-200 bg-amber-50/80 p-4">
                     <p className="text-sm font-semibold text-amber-900">结果说明</p>
                     <p className="mt-2 text-sm leading-6 text-amber-800">
-                      {result.upload.source === "mock" && understanding?.trace.fallback
+                      {uploadIsLocalFallback && understanding?.trace.fallback
                         ? "当前上传与理解均采用演示兜底结果，更适合录屏演示与草稿整理，请以正式数据为准。"
-                        : result.upload.source === "mock"
-                          ? "当前上传采用本地演示结果，适合录屏演示与草稿整理。"
+                        : uploadIsLocalFallback
+                          ? "当前上传采用本地文本 fallback，没有将 ASR missing-env 伪造成真实识别成功。"
                           : "当前理解结果采用本地兜底整理，适合录屏演示与草稿整理。"}
                     </p>
                   </div>

@@ -40,6 +40,7 @@ const HEALTH_ITEM: PrimaryNavItem = { href: "/health", label: "晨检与健康",
 const GROWTH_ITEM: PrimaryNavItem = { href: "/growth", label: "成长行为", icon: "growth" };
 const DIET_ITEM: PrimaryNavItem = { href: "/diet", label: "饮食记录", icon: "diet" };
 const ADMIN_HOME_ITEM: PrimaryNavItem = { href: "/admin", label: "园所首页", icon: "role-home" };
+const ADMIN_TEACHERS_ITEM: PrimaryNavItem = { href: "/admin/teachers", label: "教师管理", icon: "children" };
 const ADMIN_AGENT_ITEM: PrimaryNavItem = { href: "/admin/agent", label: "AI 助手", icon: "ai" };
 const ADMIN_WEEKLY_ITEM: PrimaryNavItem = {
   href: "/admin/agent?action=weekly-report",
@@ -135,6 +136,7 @@ function buildParentReminderItem(childId?: string): PrimaryNavItem {
 
 const ADMIN_NAV_ITEMS: PrimaryNavItem[] = [
   ADMIN_HOME_ITEM,
+  ADMIN_TEACHERS_ITEM,
   ADMIN_AGENT_ITEM,
   ADMIN_WEEKLY_ITEM,
   CHILDREN_ITEM,

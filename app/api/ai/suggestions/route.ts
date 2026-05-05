@@ -5,9 +5,16 @@ import type { AiSuggestionPayload, AiSuggestionResponse } from "@/lib/ai/types";
 import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
 import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import { requireParentChildAccess } from "@/lib/server/parent-route-guard";
 
 export async function POST(request: Request) {
+  const authError = await authorizeAiRoute(request, {
+    requiredRole: "parent",
+    collectJsonClassNames: false,
+  });
+  if (authError) return authError;
+
   let payload: AiSuggestionPayload | null = null;
   const brainRequest = request.clone();
 

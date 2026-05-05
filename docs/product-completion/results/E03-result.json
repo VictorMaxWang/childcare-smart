@@ -1,11 +1,94 @@
 {
   "taskId": "E03",
-  "title": "Aggregation trends and weekly reports",
-  "status": "pending",
-  "dependencies": ["E01"],
-  "writeScope": ["analytics APIs", "weekly report APIs", "weekly report UI"],
-  "mustWriteMarkdown": "docs/product-completion/results/E03-result.md",
-  "requiredChecks": ["npm run lint", "npm run build", "weekly report regression"],
-  "notes": "Reports must be archived records before export or share."
+  "status": "partial",
+  "completedItems": [
+    "Director summary uses E01 AppDataService real aggregation for children, teachers, today's records, health abnormal records, meal records, growth records, unresolved feedback, high-risk consultations, reminders, class stats, recent 7-day trend, and current-week trend.",
+    "Trend API supports timeRange, classId, childId, metric, and windowDays with scoped zero-series empty state.",
+    "Added admin quality metrics API from the same aggregation source.",
+    "Weekly report creation stores server-generated payload/sourceRecordIds through /api/weekly-reports.",
+    "Weekly report list/detail/PATCH/archive/export/share routes are implemented.",
+    "Director weekly report workspace supports save, history, detail, export, share, archive, and archived-history view.",
+    "Report scope access is centralized through lib/server/scope.ts helpers.",
+    "E03 Node service tests and Playwright/API acceptance test were added."
+  ],
+  "remainingItems": [
+    "External PDF export service is still outside MVP.",
+    "External/public share service is still outside MVP.",
+    "Full feature:smoke still has old non-E03 failures and one old D08 visual-only disabled-control assertion that conflicts with opened E03 export/share controls.",
+    "lint/build remain blocked by pre-existing app/teacher/agent/page.tsx issues outside E03 scope."
+  ],
+  "fixedFindings": [
+    "C12-002 weekly report export/share actions opened for saved weekly reports.",
+    "C12-005 director health/diet/growth summary now has service-side aggregation.",
+    "C15-011 weekly report has persistent save/list/detail chain.",
+    "C20-010 trend query has stable Next API fallback.",
+    "C20-014 weekly report save/archive/share APIs implemented.",
+    "C22-015 weekly report export/share/detail gaps reduced to MVP.",
+    "C23-007 real empty/zero trend state is represented with sparse dataQuality."
+  ],
+  "changedFiles": [
+    "app/admin/agent/page.tsx",
+    "app/admin/page.tsx",
+    "app/api/analytics/admin/quality-metrics/route.ts",
+    "app/api/analytics/admin/summary/route.ts",
+    "app/api/children/[childId]/trend/route.ts",
+    "app/api/weekly-reports/[reportId]/route.ts",
+    "app/api/weekly-reports/[reportId]/share/route.ts",
+    "components/admin/pixel-replica/DirectorDashboardReplica.tsx",
+    "components/admin/pixel-replica/DirectorWeeklyReportReplica.tsx",
+    "docs/product-completion/AGGREGATION_TREND_SPEC.md",
+    "docs/product-completion/IMPLEMENTATION_LOG.md",
+    "docs/product-completion/PRODUCT_DECISIONS.md",
+    "docs/product-completion/WEEKLY_REPORT_SPEC.md",
+    "docs/product-completion/results/E03-result.json",
+    "docs/product-completion/results/E03-result.md",
+    "lib/api/analytics.ts",
+    "lib/api/types.ts",
+    "lib/api/weekly-reports.ts",
+    "lib/server/analytics-aggregates.ts",
+    "lib/server/api-handlers.ts",
+    "lib/server/app-data-model.ts",
+    "lib/server/app-data-service.test.ts",
+    "lib/server/app-data-service.ts",
+    "lib/server/scope.ts",
+    "tests/feature-completion/e03-director-weekly-report.spec.ts"
+  ],
+  "apiMethodsUsed": [
+    "GET /api/analytics/admin/summary",
+    "GET /api/analytics/admin/quality-metrics",
+    "GET /api/analytics/trends",
+    "GET /api/children/[childId]/trend",
+    "GET /api/weekly-reports",
+    "POST /api/weekly-reports",
+    "GET /api/weekly-reports/[reportId]",
+    "PATCH /api/weekly-reports/[reportId]",
+    "POST /api/weekly-reports/[reportId]/archive",
+    "GET /api/weekly-reports/[reportId]/export",
+    "POST /api/weekly-reports/[reportId]/share"
+  ],
+  "scopeHelpersUsed": [
+    "requireDirector",
+    "requireChildAccess",
+    "requireClassAccess",
+    "canAccessChild",
+    "canViewFeedback",
+    "canAccessReport",
+    "requireReportAccess"
+  ],
+  "browserUseEvidence": [
+    "artifacts/product-completion/E03/admin-summary-real-aggregation.png",
+    "artifacts/product-completion/E03/weekly-report-history-detail.png",
+    "npx playwright test tests/feature-completion/e03-director-weekly-report.spec.ts --config=playwright.feature.config.ts --reporter=line"
+  ],
+  "checks": {
+    "lint": "failed: app/teacher/agent/page.tsx conditional React hooks errors; unrelated warnings in app/parent/agent/page.tsx and components/communication/AttachmentMediaPicker.tsx",
+    "build": "failed: app/teacher/agent/page.tsx Cannot redeclare block-scoped variable refreshE04CommunicationData",
+    "featureSmoke": "failed overall with 4 old D08 failures; E03 targeted Playwright passed 1/1"
+  },
+  "risks": [
+    "Current dev server on localhost:3000 was reused because .next/dev/lock prevented Playwright config from starting a fresh server.",
+    "Old D08 visual-only smoke expects disabled controls on admin dashboard, while E03 intentionally opens weekly export/share controls.",
+    "Existing teacher agent page errors block repository-wide lint/build until the E04/E08 conflict is resolved."
+  ],
+  "notes": "E03 feature implementation and targeted verification are complete; repository-wide status is partial because mandatory global checks are blocked by pre-existing non-E03 failures."
 }
-
