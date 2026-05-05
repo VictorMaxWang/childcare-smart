@@ -1,67 +1,83 @@
 # R04 Result
 
+Generated: 2026-05-05
+
 ## Status
 
-needs-real-provider
+done
 
 ## Summary
 
-R04 did not run a live vivo provider smoke because the current runtime environment is still missing the required vivo AIGC variables. This is intentional: no Chat, OCR, or ASR success was fabricated, and no provider code was modified to bypass configuration checks.
+R04 live vivo provider smoke is complete. Local server-side vivo runtime env is ready for Chat, OCR, and ASR, and `npm run product:ai` sent real provider requests for all three capabilities. Chat, OCR, and ASR all returned `live-pass`.
 
-The task remains blocked on real provider configuration. R99 final acceptance should not start until R04 is rerun with complete vivo runtime env and the live provider smoke records real outcomes.
+No fake success was recorded. `missing-env` was not treated as `live-pass`, and provider errors were not treated as passing results.
 
-## Env Presence
+## Local Env
 
-Only presence was checked. No secret values were printed or written.
+Only presence and readiness were checked. No secret values were printed or written.
 
-| Variable | Present |
+| Capability | Status |
 | --- | --- |
-| `VIVO_APP_KEY` | no |
-| `VIVO_APP_ID` | no |
-| `VIVO_BASE_URL` | no |
-| `VIVO_LLM_MODEL` | no |
-| `VIVO_OCR_PATH` | no |
-| `VIVO_ASR_PACKAGE` | no |
-| `VIVO_ASR_CLIENT_VERSION` | no |
-| `VIVO_ASR_USER_ID` | no |
-| `VIVO_ASR_ENGINE_ID` | no |
+| Chat | `ready` |
+| OCR | `ready` |
+| ASR | `ready` |
 
-Checked sources:
+`npm run vivo:check-env` output showed:
 
-- Current Codex process environment: no usable values found.
-- User or machine environment: no usable values found.
-- Project `.env.local`: no usable values found.
+- Project root: SET
+- `.env.local`: SET
+- 9 server-side `VIVO_*` variables: SET
+- `NEXT_PUBLIC_VIVO_*`: MISSING
+- Chat/OCR/ASR: ready
 
-Tracked `.env.example` defaults/placeholders were not counted as live runtime env.
+## Local Smoke
 
-## Provider Smoke
-
-| Capability | Result | Detail |
+| Capability | Result | Classification |
 | --- | --- | --- |
-| Chat | not-run / missing-env | `VIVO_APP_KEY` is unavailable, so no live prompt was sent. |
-| OCR | not-run / missing-env | `VIVO_APP_KEY` and `VIVO_APP_ID` are unavailable, so no image was submitted. |
-| ASR | not-run / missing-env | `VIVO_APP_KEY`, `VIVO_ASR_PACKAGE`, `VIVO_ASR_CLIENT_VERSION`, and `VIVO_ASR_USER_ID` are unavailable, so no audio was submitted. |
+| Chat | `live-pass` | none |
+| OCR | `live-pass` | none |
+| ASR | `live-pass` | none |
 
-Provider status recorded for R04:
+`npm run product:ai` result:
 
-- Chat: `missing-env`
-- OCR: `missing-env`
-- ASR: `missing-env`
+- Node live smoke: `live-provider-verified`
+- Chat/OCR/ASR: `live-pass`
+- Playwright AI provider/auth regression: 6/6 passed
+- `secretsExposed`: false
 
-## Checks
+## Vercel
 
-- `npm run product:ai`: skipped; blocked by missing env.
-- `npm run lint`: not run; no code changes required.
-- `npm run build`: not run; no code changes required.
+Unauthenticated request to `https://www.smartchildcare.cn/api/ai/provider-status` returns `307 Temporary Redirect` to `/login`, then `/login` returns `200 OK`.
+
+This is recorded as `login-protected`, not as a provider failure. Authenticated online provider-state verification was not completed in this run, so Vercel env effectiveness and redeploy state remain `unknown`.
+
+## Tencent Cloud
+
+Per the supplied Tencent Docker verification, container `childcare-smart-backend-staging` has all 9 server-side `VIVO_*` variables SET. No values were read or recorded.
+
+`https://api.smartchildcare.cn/health` is reachable and reports staging health `ok`; that endpoint is configuration/health evidence for the Tencent backend, not proof that Vercel Next `/api/ai/*` has live provider env.
+
+## R99 Checks
+
+| Command | Result |
+| --- | --- |
+| `npm run vivo:check-env` | passed |
+| `npm run lint` | passed |
+| `npm run build` | passed |
+| `npm run product:smoke` | passed, 2/2 |
+| `npm run product:api` | passed, 8/8 |
+| `npm run product:ai` | passed; Chat/OCR/ASR live-pass; Playwright 6/6 |
+| `npm run product:voice` | passed; parser 13/13 and Playwright 20/20 |
+| `npm run product:journey` | passed, 1/1 |
+| `npm run feature:smoke` | passed, 19/19 |
+| `npm run bugbash:smoke` | passed, 1/1 |
+| `npx tsc --noEmit` | passed |
+
+Prior `bugbash:smoke` network error `ERR_NETWORK_CHANGED` was rerun and did not reproduce.
 
 ## Secret Safety
 
-- No real key, token, or authorization header was printed.
-- No key or token was written into reports.
-- `.env.example` was not modified.
-- No screenshots were taken.
-- Secret exposure risk from generated R04 logs/reports: none observed.
+- No real vivo key, token, signature, secret, authorization header, or credential value was written to this report.
+- No `NEXT_PUBLIC_VIVO_*` variable was added.
+- No tracked source, docs, snapshots, or test fixtures were populated with real secrets.
 
-## Next Step
-
-Configure the real vivo runtime environment outside tracked files, then rerun R04. R99 final acceptance is not ready until live Chat/OCR/ASR provider outcomes are recorded or a documented provider limitation is accepted.

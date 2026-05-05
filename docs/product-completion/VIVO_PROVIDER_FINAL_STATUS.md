@@ -1,53 +1,53 @@
-# E90 Vivo Provider Final Status
+# Vivo Provider Final Status
 
-Generated: 2026-05-03
+Generated: 2026-05-05
 
-## Documentation Status
+## Overall Status
 
-- Status: completed.
-- vivo AIGC official docs were read and summarized in `VIVO_AIGC_PROVIDER_NOTES.md`.
-- Confirmed capabilities: Chat/text generation, general OCR, and ASR.
-- Confirmed local implementation owns provider interfaces under the E05 provider layer and does not create frontend vivo clients.
+- Local vivo provider status: live verified for Chat, OCR, and ASR.
+- R04 status: done.
+- Secret exposure: none observed in generated reports or command output.
+- Vercel online provider state: login-protected when unauthenticated; authenticated verification still required before production.
+- Tencent Docker backend env: recorded as all 9 server-side `VIVO_*` SET for `childcare-smart-backend-staging`.
 
 ## Provider Status
 
-| Capability | Final status | Local provider status | Required env | Notes |
+| Capability | Final status | Local provider status | Smoke result | Notes |
 | --- | --- | --- | --- | --- |
-| Chat | needs-real-provider | `missing-env` | `VIVO_APP_KEY` | Interface exists; local rules/fallback are used when env is missing. |
-| OCR | needs-real-provider | `missing-env` | `VIVO_APP_KEY`, `VIVO_APP_ID` | jpg/png/bmp are the confirmed image formats. PDF is not confirmed. |
-| ASR | needs-real-provider | `missing-env` | `VIVO_APP_KEY`, `VIVO_ASR_PACKAGE`, `VIVO_ASR_CLIENT_VERSION`, `VIVO_ASR_USER_ID` | HTTP long-audio flow is implemented. Browser `webm` is not confirmed. |
+| Chat | live-verified-local | `ready` | `live-pass` | Real provider request completed successfully. |
+| OCR | live-verified-local | `ready` | `live-pass` | Health-material parser tests now distinguish live `vivo-ocr-provider` from fallback provenance. |
+| ASR | live-verified-local | `ready` | `live-pass` | Browser unsupported formats still fail closed unless supported or converted. |
 
 ## API Auth Status
 
-- `/api/ai/*` auth status: completed.
-- E05 secured 21 AI routes with the E01 server guard and scope helpers.
-- E06 added protected `/api/ai/provider-status`, `/api/ai/voice-asr`, and hardened `/api/ai/weekly-report` role payload authorization.
-- E11 `ai-routes-auth.spec.ts` passed unauthenticated 401, wrong-role 403, parent child scope, teacher class scope, and director institution scope cases.
+- `/api/ai/provider-status` remains authenticated.
+- Unauthenticated Vercel access returns `307 /login`; this is classified as `login-protected`.
+- Product AI/voice tests continue to cover unauthenticated, wrong-role, parent child scope, teacher class scope, and director institution scope behavior.
 
-## Missing Env And Fallback
+## Fallback And No-Fake-Success Status
 
-- `npm run product:ai` passed on 2026-05-03 with provider status `missing-env` for Chat, OCR, and ASR.
-- Missing env must stay visible in UI/API responses and must not be converted into success.
-- Text fallback is allowed for explicit typed text/transcript. It must be labelled as local fallback.
-- Binary-only image/audio recognition without a configured provider returns `provider_unavailable` or `missing-env`, not recognized text.
+- `missing-env` is no longer the local state, but fallback paths remain covered.
+- `product:voice` accepts `vivo provider ready`, `fallback`, and `missing-env` UI states while preserving permission and confirmation checks.
+- Health-material parsing accepts OCR provider `ready` only when live provenance is explicit; fallback still requires fallback provenance.
+- ASR audio-only unsupported/provider failure paths remain fail-closed and are not treated as recognized transcript success.
 
-## fake-success Status
+## Local R04/R99 Evidence
 
-- Final status: completed for the E90 MVP contract.
-- OCR image/PDF without recognized text does not become fake health parse success.
-- ASR audio-only input fails closed when ASR is missing-env.
-- Teacher voice routes may succeed only with typed transcript or explicit fallback text.
-- Health material local fallback can save only with provenance labelled as local fallback, not real OCR.
+| Command | Result |
+| --- | --- |
+| `npm run vivo:check-env` | passed |
+| `npm run product:ai` | passed; Chat/OCR/ASR `live-pass`; Playwright 6/6 |
+| `npm run product:voice` | passed; parser 13/13 and Playwright 20/20 |
+| `npm run feature:smoke` | passed, 19/19 |
+| `npm run bugbash:smoke` | passed, 1/1 |
+| `npm run lint` | passed |
+| `npm run build` | passed |
+| `npx tsc --noEmit` | passed |
 
-## Secret Exposure Check
+## Remaining Production Actions
 
-- Final status: completed with no real secret exposure found in E90 checks.
-- Process env did not contain configured `VIVO_*` values during E90.
-- `.env.example` contains empty or placeholder/default provider fields, not real keys.
-- Tracked-file scan found only code references, docs placeholders, and test/dummy assignments. No real vivo key, token, or bearer secret was recorded in E90 reports.
+- Complete one authenticated online Vercel provider-state check after redeploy.
+- Verify the deployed Vercel app reports live provider readiness without exposing secrets.
+- Keep Tencent backend health/configuration evidence separate from Vercel Next `/api/ai/*` evidence.
+- Decide separately whether browser `webm` audio should be converted/supported for live ASR, or remain outside production scope.
 
-## Remaining Actions
-
-- Configure real vivo runtime env outside the repository.
-- Run live provider smoke for Chat, OCR, and ASR after env is available.
-- Decide whether to add PDF OCR or browser audio conversion for unsupported formats.

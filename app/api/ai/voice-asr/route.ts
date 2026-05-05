@@ -1,4 +1,5 @@
 import { resolveAsrProvider } from "@/lib/ai/providers/asr-provider";
+import { VivoProviderError } from "@/lib/providers/vivo/vivo-errors";
 import { apiError, apiOk, withApiErrors } from "@/lib/server/api-errors";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import type { VoiceAsrResponse } from "@/lib/voice-assistant/types";
@@ -27,15 +28,26 @@ export function POST(request: Request) {
         : null;
     const audioBytes = audioFile ? Buffer.from(await audioFile.arrayBuffer()) : undefined;
     const provider = resolveAsrProvider();
-    const result = await provider.transcribe({
-      attachmentName: audioFile?.name || readString(formData.get("attachmentName")) || "voice-assistant.webm",
-      audioBytes,
-      durationMs: readNumber(formData.get("durationMs")),
-      fallbackText: readString(formData.get("fallbackText")),
-      mimeType: readString(formData.get("mimeType")) || audioFile?.type,
-      scene: readString(formData.get("scene")) || "voice-orb",
-      transcript: readString(formData.get("transcript")),
-    });
+    const result = await provider
+      .transcribe({
+        attachmentName: audioFile?.name || readString(formData.get("attachmentName")) || "voice-assistant.webm",
+        audioBytes,
+        durationMs: readNumber(formData.get("durationMs")),
+        fallbackText: readString(formData.get("fallbackText")),
+        mimeType: readString(formData.get("mimeType")) || audioFile?.type,
+        scene: readString(formData.get("scene")) || "voice-orb",
+        transcript: readString(formData.get("transcript")),
+      })
+      .catch((error: unknown) => {
+        if (error instanceof VivoProviderError) {
+          return null;
+        }
+        throw error;
+      });
+
+    if (!result) {
+      return apiError("provider_unavailable", "当前 ASR provider 不支持该音频输入。", { status: 503 });
+    }
 
     if (result.source === "provider_unavailable" && !result.output.transcript) {
       return apiError("provider_unavailable", "当前 ASR provider 不可用，请使用文字指令 fallback。", { status: 503 });

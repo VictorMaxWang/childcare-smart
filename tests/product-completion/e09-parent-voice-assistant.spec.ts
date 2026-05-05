@@ -6,6 +6,7 @@ import { loginAs } from "../feature-completion/helpers";
 
 const ARTIFACT_DIR = path.join(process.cwd(), "artifacts", "product-completion", "E09");
 const CHILD_ID = "c-1";
+const LIVE_OR_FALLBACK_PROVIDER_STATUS = /vivo provider ready|fallback|missing-env/i;
 
 async function captureE09(page: Page, fileName: string) {
   await fs.mkdir(ARTIFACT_DIR, { recursive: true });
@@ -239,7 +240,7 @@ test.describe("E09 parent voice assistant skills", () => {
     );
 
     await openVoiceOrb(page);
-    await expect(page.getByTestId("voice-orb-provider-status")).toContainText(/fallback|本地规则|文本|missing-env/);
+    await expect(page.getByTestId("voice-orb-provider-status")).toContainText(LIVE_OR_FALLBACK_PROVIDER_STATUS);
     await submitVoiceText(page, `给老师留言，今天晚上孩子有点咳嗽 ${token}`, true);
     await expect(page.getByTestId("voice-orb-result")).toContainText("留言已发送", { timeout: 20_000 });
     await captureE09(page, "01-parent-message-executed.png");

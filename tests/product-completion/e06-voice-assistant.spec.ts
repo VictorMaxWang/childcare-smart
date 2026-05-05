@@ -5,6 +5,8 @@ import path from "node:path";
 import { loginAs } from "../feature-completion/helpers";
 
 const ARTIFACT_DIR = path.join(process.cwd(), "artifacts", "product-completion", "E06");
+const LIVE_OR_FALLBACK_PROVIDER_STATUS = /vivo provider ready|fallback|missing-env/i;
+const ASR_STATUS_VALUES = ["ready", "missing-env", "provider-unavailable", "unsupported"];
 
 async function screenshot(page: Page, fileName: string) {
   await fs.mkdir(ARTIFACT_DIR, { recursive: true });
@@ -68,7 +70,10 @@ test.describe("E06 voice assistant core framework", () => {
       expect(provider.status()).toBe(200);
       const providerBody = await provider.json();
       expect(providerBody.ok).toBe(true);
-      expect(providerBody.data.asr.status).toBe("missing-env");
+      expect(ASR_STATUS_VALUES).toContain(providerBody.data.asr.status);
+      if (providerBody.data.asr.status === "ready") {
+        expect(providerBody.data.asr.isRealProvider).toBe(true);
+      }
 
       const weekly403 = await parent.post("/api/ai/weekly-report", {
         data: weeklyPayload("admin"),
@@ -159,7 +164,7 @@ test.describe("E06 voice assistant core framework", () => {
     await expect(page.getByTestId("voice-orb-button")).toBeVisible();
     await page.getByTestId("voice-orb-button").click();
     await expect(page.getByTestId("voice-orb-panel")).toBeVisible();
-    await expect(page.getByTestId("voice-orb-provider-status")).toContainText(/fallback|文本|本地规则|missing-env/);
+    await expect(page.getByTestId("voice-orb-provider-status")).toContainText(LIVE_OR_FALLBACK_PROVIDER_STATUS);
     await screenshot(page, "director-voice-orb-open.png");
 
     await page.getByTestId("voice-orb-input").fill("打开教师管理");

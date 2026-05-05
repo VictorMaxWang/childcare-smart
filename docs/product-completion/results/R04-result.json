@@ -1,136 +1,40 @@
 {
   "taskId": "R04",
-  "title": "vivo live provider smoke",
-  "status": "needs-real-provider",
-  "generatedAt": "2026-05-03",
-  "envComplete": false,
-  "envPresence": [
-    {
-      "name": "VIVO_APP_KEY",
-      "present": false,
-      "processEnvPresent": false,
-      "userOrMachineEnvPresent": false,
-      "dotEnvLocalPresent": false
-    },
-    {
-      "name": "VIVO_APP_ID",
-      "present": false,
-      "processEnvPresent": false,
-      "userOrMachineEnvPresent": false,
-      "dotEnvLocalPresent": false
-    },
-    {
-      "name": "VIVO_BASE_URL",
-      "present": false,
-      "processEnvPresent": false,
-      "userOrMachineEnvPresent": false,
-      "dotEnvLocalPresent": false
-    },
-    {
-      "name": "VIVO_LLM_MODEL",
-      "present": false,
-      "processEnvPresent": false,
-      "userOrMachineEnvPresent": false,
-      "dotEnvLocalPresent": false
-    },
-    {
-      "name": "VIVO_OCR_PATH",
-      "present": false,
-      "processEnvPresent": false,
-      "userOrMachineEnvPresent": false,
-      "dotEnvLocalPresent": false
-    },
-    {
-      "name": "VIVO_ASR_PACKAGE",
-      "present": false,
-      "processEnvPresent": false,
-      "userOrMachineEnvPresent": false,
-      "dotEnvLocalPresent": false
-    },
-    {
-      "name": "VIVO_ASR_CLIENT_VERSION",
-      "present": false,
-      "processEnvPresent": false,
-      "userOrMachineEnvPresent": false,
-      "dotEnvLocalPresent": false
-    },
-    {
-      "name": "VIVO_ASR_USER_ID",
-      "present": false,
-      "processEnvPresent": false,
-      "userOrMachineEnvPresent": false,
-      "dotEnvLocalPresent": false
-    },
-    {
-      "name": "VIVO_ASR_ENGINE_ID",
-      "present": false,
-      "processEnvPresent": false,
-      "userOrMachineEnvPresent": false,
-      "dotEnvLocalPresent": false
-    }
-  ],
-  "missingEnv": [
-    "VIVO_APP_KEY",
-    "VIVO_APP_ID",
-    "VIVO_BASE_URL",
-    "VIVO_LLM_MODEL",
-    "VIVO_OCR_PATH",
-    "VIVO_ASR_PACKAGE",
-    "VIVO_ASR_CLIENT_VERSION",
-    "VIVO_ASR_USER_ID",
-    "VIVO_ASR_ENGINE_ID"
-  ],
-  "providerStatus": {
-    "chat": "missing-env",
-    "ocr": "missing-env",
-    "asr": "missing-env"
+  "status": "done",
+  "generatedAt": "2026-05-05",
+  "localEnv": {
+    "chat": "ready",
+    "ocr": "ready",
+    "asr": "ready"
   },
-  "smoke": {
-    "chat": {
-      "status": "not-run",
-      "reason": "missing-env",
-      "sentLiveRequest": false,
-      "result": "VIVO_APP_KEY unavailable; no live prompt was sent."
-    },
-    "ocr": {
-      "status": "not-run",
-      "reason": "missing-env",
-      "sentLiveRequest": false,
-      "result": "VIVO_APP_KEY and VIVO_APP_ID unavailable; no image was submitted."
-    },
-    "asr": {
-      "status": "not-run",
-      "reason": "missing-env",
-      "sentLiveRequest": false,
-      "result": "VIVO_APP_KEY, VIVO_ASR_PACKAGE, VIVO_ASR_CLIENT_VERSION, and VIVO_ASR_USER_ID unavailable; no audio was submitted."
-    }
+  "localSmoke": {
+    "chat": "live-pass",
+    "ocr": "live-pass",
+    "asr": "live-pass"
   },
+  "vercel": {
+    "envConfigured": "unknown",
+    "redeployed": "unknown",
+    "providerStatus": "login-protected"
+  },
+  "tencentDocker": {
+    "container": "childcare-smart-backend-staging",
+    "allVivoEnvSet": true
+  },
+  "secretsExposed": false,
   "checks": {
-    "productAi": "skipped; blocked by missing-env",
-    "lint": "not-run; no code changes required",
-    "build": "not-run; no code changes required"
+    "vivoCheckEnv": "passed; 9 server-side VIVO_* SET; NEXT_PUBLIC_VIVO_* MISSING; Chat/OCR/ASR ready",
+    "productAi": "passed; Chat/OCR/ASR live-pass; Playwright 6/6; no provider-error; no missing-env fake pass",
+    "lint": "passed",
+    "build": "passed",
+    "productSmoke": "passed, 2/2",
+    "productApi": "passed, 8/8",
+    "productVoice": "passed; parser 13/13 and Playwright 20/20; live provider ready accepted without weakening fallback assertions",
+    "productJourney": "passed, 1/1",
+    "featureSmoke": "passed, 19/19; OCR ready/live and fallback paths are distinguished",
+    "bugbashSmoke": "passed, 1/1; prior P2 console-error ERR_NETWORK_CHANGED was not reproduced on rerun",
+    "tsc": "passed"
   },
-  "filesRead": [
-    "docs/product-completion/VIVO_AIGC_PROVIDER_NOTES.md",
-    "docs/product-completion/OCR_ASR_PROVIDER_SPEC.md",
-    "docs/product-completion/VIVO_PROVIDER_FINAL_STATUS.md",
-    "docs/product-completion/results/E05-result.json",
-    "lib/providers/vivo/*",
-    ".env.example",
-    "package.json"
-  ],
-  "secretSafety": {
-    "printedSecretValues": false,
-    "wroteSecretValues": false,
-    "modifiedEnvExample": false,
-    "screenshotsTaken": false,
-    "secretExposureRisk": "none observed from generated logs/reports"
-  },
-  "changedFiles": [
-    "docs/product-completion/results/R04-result.md",
-    "docs/product-completion/results/R04-result.json",
-    "docs/product-completion/VIVO_PROVIDER_LIVE_SMOKE_REPORT.md"
-  ],
-  "r99Ready": false,
-  "nextStep": "Configure real vivo runtime env outside tracked files, then rerun R04 live smoke before R99 final acceptance."
+  "notes": "Local vivo live provider verified for Chat, OCR, and ASR. Vercel /api/ai/provider-status is login-protected when unauthenticated, so authenticated online provider-state verification is still required before production release. Tencent Docker env is recorded from the supplied container check as all VIVO_* SET without reading or writing values."
 }
+
