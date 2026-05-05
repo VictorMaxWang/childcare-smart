@@ -963,7 +963,11 @@ export interface WeeklyReportResponse {
 }
 
 export type HealthFileBridgeSourceRole = "parent" | "teacher";
-export type HealthFileBridgeSource = "backend-text-fallback" | "next-local-extractor";
+export type HealthFileBridgeSource =
+  | "backend-text-fallback"
+  | "next-local-extractor"
+  | "local-text-fallback"
+  | "vivo-ocr-provider";
 export type HealthFileBridgeRiskLevel = "low" | "medium" | "high";
 export type HealthFileBridgeFileType =
   | "report-screenshot"
@@ -981,6 +985,8 @@ export interface HealthFileBridgeFile {
   pageCount?: number;
   fileUrl?: string;
   previewText?: string;
+  imageBase64?: string;
+  dataUrl?: string;
   meta?: Record<string, unknown>;
 }
 
@@ -1095,6 +1101,10 @@ export interface HealthFileBridgeProvenance {
   liveReadyButNotVerified: boolean;
   provider?: string;
   model?: string;
+  extractedText?: string;
+  providerStatus?: Record<string, unknown>;
+  warnings?: string[];
+  rawProviderResponse?: Record<string, unknown>;
   generatedAt: string;
 }
 
@@ -1133,6 +1143,10 @@ export interface HealthFileBridgeResponse {
   generatedAt: string;
   provider?: string;
   model?: string;
+  extractedText?: string;
+  providerStatus?: Record<string, unknown>;
+  warnings?: string[];
+  rawProviderResponse?: Record<string, unknown>;
   bridgeWriteback?: HealthFileBridgeWriteback;
 }
 

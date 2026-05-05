@@ -1,11 +1,105 @@
 {
   "taskId": "E02",
-  "title": "CRUD archive teacher and child management",
-  "status": "pending",
-  "dependencies": ["E01"],
-  "writeScope": ["children APIs", "teachers APIs", "child and teacher management UI"],
-  "mustWriteMarkdown": "docs/product-completion/results/E02-result.md",
-  "requiredChecks": ["npm run lint", "npm run build", "CRUD archive regression"],
-  "notes": "Deletion means archive by default; include restore and permission tests."
+  "status": "done",
+  "completedItems": [
+    "Children page now lists, filters, creates, edits, archives and restores through the E01 API client.",
+    "Children archive/restore uses soft archive metadata and default active-only listing.",
+    "Teacher management MVP added at /admin/teachers with list, detail, create, edit, class assignment, archive and restore.",
+    "Teacher management APIs are director-only and return the E01 uniform 403 forbidden_scope envelope for teachers and parents.",
+    "Child access remains enforced through lib/server/scope.ts for parent-owned children, teacher class children and director institution children.",
+    "Child and teacher PATCH paths now sanitize immutable/archive fields instead of trusting request bodies.",
+    "Playwright/API coverage added for CRUD, refresh persistence, archive/restore visibility and forbidden childId/teacherId access.",
+    "E02 documentation, implementation log and product decisions were updated without editing IMPLEMENTATION_STATUS.md."
+  ],
+  "remainingItems": [
+    "C21-007 remains a production data-model risk: classId, teacherId, parentId and childId relationships still use the E01 demo/process-local repository rather than a durable database schema.",
+    "Teacher account invitation, phone/account status and login enable-disable controls remain outside the E02 MVP.",
+    "Health, diet and growth record UI CRUD migration remains for E03/E04/E05/E06 scope; E02 only uses records API for attendance persistence on /children."
+  ],
+  "fixedFindings": [
+    "C12-003",
+    "C12-004",
+    "C15-012",
+    "C20-007",
+    "C22-005"
+  ],
+  "changedFiles": [
+    "app/children/page.tsx",
+    "app/admin/teachers/page.tsx",
+    "components/Navbar.tsx",
+    "lib/navigation/primary-nav.ts",
+    "lib/api/types.ts",
+    "lib/api/children.ts",
+    "lib/api/teachers.ts",
+    "lib/api/records.ts",
+    "lib/server/scope.ts",
+    "lib/server/api-handlers.ts",
+    "lib/server/app-data-model.ts",
+    "lib/server/app-data-service.ts",
+    "lib/server/app-data-service.test.ts",
+    "lib/server/scope.test.ts",
+    "tests/feature-completion/e02-crud-archive.spec.ts",
+    "docs/product-completion/CRUD_ARCHIVE_SPEC.md",
+    "docs/product-completion/PRODUCT_DECISIONS.md",
+    "docs/product-completion/IMPLEMENTATION_LOG.md",
+    "docs/product-completion/results/E02-result.md",
+    "docs/product-completion/results/E02-result.json"
+  ],
+  "apiMethodsUsed": [
+    "apiGet",
+    "apiPost",
+    "apiPatch",
+    "listChildren",
+    "getChild",
+    "createChild",
+    "updateChild",
+    "archiveChild",
+    "listTeachers",
+    "getTeacher",
+    "createTeacher",
+    "updateTeacher",
+    "archiveTeacher",
+    "listRecords",
+    "createRecord",
+    "updateRecord",
+    "archiveRecord",
+    "AppDataService.listChildren",
+    "AppDataService.getChild",
+    "AppDataService.createChild",
+    "AppDataService.updateChild",
+    "AppDataService.archiveChild",
+    "AppDataService.listTeachers",
+    "AppDataService.getTeacher",
+    "AppDataService.createTeacher",
+    "AppDataService.updateTeacher",
+    "AppDataService.archiveTeacher"
+  ],
+  "scopeHelpersUsed": [
+    "canAccessChild",
+    "requireChildAccess",
+    "requireDirector",
+    "requireRecordModifyAccess",
+    "requireClassAccess",
+    "requireTeacherAccess"
+  ],
+  "browserUseEvidence": [
+    "artifacts/product-completion/E02/api-crud-archive-restore-permission.json",
+    "artifacts/product-completion/E02/01-admin-child-created-edited.png",
+    "artifacts/product-completion/E02/02-admin-child-archived.png",
+    "artifacts/product-completion/E02/03-admin-child-restored.png",
+    "artifacts/product-completion/E02/04-admin-teacher-created-edited.png",
+    "artifacts/product-completion/E02/05-admin-teacher-archived.png",
+    "artifacts/product-completion/E02/06-admin-teacher-restored.png",
+    "artifacts/product-completion/E02/07-teacher-management-forbidden.png"
+  ],
+  "checks": {
+    "lint": "passed: npm run lint (0 errors; 2 unrelated warnings in app/parent/agent/page.tsx and components/communication/AttachmentMediaPicker.tsx)",
+    "build": "passed: npm run build",
+    "featureSmoke": "passed: FEATURE_BASE_URL=http://127.0.0.1:3330 FEATURE_SKIP_WEBSERVER=1 npm run feature:smoke (17/17); E02专项 Playwright 4/4 passed"
+  },
+  "risks": [
+    "Standalone npm run typecheck still reports unrelated current AI/OCR/ASR provider type errors in dirty files outside E02 scope; npm run build and required checks passed.",
+    "E02 remains on the E01 demo/process-local repository, so production database durability is still tracked under C21-007."
+  ],
+  "notes": "A temporary next start server was launched from the successful production build at http://127.0.0.1:3330 because .next/dev/lock existed and the Playwright feature config would otherwise skip starting a server. The server was stopped after tests."
 }
-

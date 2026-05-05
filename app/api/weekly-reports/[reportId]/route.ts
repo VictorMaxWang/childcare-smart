@@ -8,3 +8,8 @@ export async function GET(request: Request, context: Context) {
   const { reportId } = await context.params;
   return handleWeeklyReport(request, reportId);
 }
+
+export async function PATCH(request: Request, context: Context) {
+  const { reportId } = await context.params;
+  return handleWeeklyReport(request, reportId);
+}

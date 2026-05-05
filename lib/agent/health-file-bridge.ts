@@ -770,6 +770,12 @@ export function buildHealthFileBridgeResponse(
     fallback: boolean;
     mock: boolean;
     liveReadyButNotVerified: boolean;
+    provider?: string;
+    model?: string;
+    extractedText?: string;
+    providerStatus?: Record<string, unknown>;
+    warnings?: string[];
+    rawProviderResponse?: Record<string, unknown>;
   }
 ): HealthFileBridgeResponse {
   const signals = collectSignals(request);
@@ -806,7 +812,11 @@ export function buildHealthFileBridgeResponse(
     mock: options.mock,
     liveReadyButNotVerified: options.liveReadyButNotVerified,
     generatedAt: new Date().toISOString(),
-    provider: "next-local-health-file-extractor",
-    model: "t8-health-file-bridge-local",
+    provider: options.provider ?? "next-local-health-file-extractor",
+    model: options.model ?? "t8-health-file-bridge-local",
+    extractedText: options.extractedText,
+    providerStatus: options.providerStatus,
+    warnings: options.warnings,
+    rawProviderResponse: options.rawProviderResponse,
   };
 }

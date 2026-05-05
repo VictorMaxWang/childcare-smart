@@ -25,6 +25,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import MobileNav from "@/components/MobileNav";
+import { VoiceOrb } from "@/components/voice-assistant/VoiceOrb";
 import { RoleBadge, type RoleBadgeRole } from "@/components/ui/role-badge";
 import { LoadingState } from "@/components/ui/state-block";
 import type { AccountRole } from "@/lib/auth/accounts";
@@ -121,6 +122,7 @@ const ROUTE_TITLE_MAP = [
   { prefix: "/teacher/agent", title: "教师 AI 助手" },
   { prefix: "/teacher", title: "教师工作台" },
   { prefix: "/admin/agent", title: "园长 AI 助手" },
+  { prefix: "/admin/teachers", title: "教师管理" },
   { prefix: "/admin", title: "园所首页" },
   { prefix: "/parent/storybook", title: "成长绘本" },
   { prefix: "/parent/agent", title: "家长 AI 助手" },
@@ -263,6 +265,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <main className="pixel-app-main min-h-[calc(100vh-86px)] overflow-x-hidden pb-[calc(env(safe-area-inset-bottom)+5.9rem)] sm:min-h-[calc(100vh-72px)] lg:min-h-[calc(100vh-80px)] lg:pb-0">
           {children}
         </main>
+        <VoiceOrb />
         <MobileBottomTabBar items={bottomNavItems} pathname={currentLocation} />
       </div>
     </div>
@@ -295,11 +298,7 @@ function ShellTopbar({
   roleMeta: (typeof ROLE_META)[AccountRole];
 }) {
   const topNavItems = roleMeta.shellMode === "top-tabs" ? navItems.slice(0, 7) : navItems.slice(0, 5);
-  const showUnavailableNotice = (feature: string) => {
-    toast.info(`${feature}暂未开放`, {
-      description: "当前为演示环境，后续将接入真实业务消息与检索能力。",
-    });
-  };
+  const unavailableReason = "MVP 暂未接入真实业务消息与全局检索服务，E10 已记录为产品缺口。";
 
   return (
     <header className="pixel-topbar sticky top-0 z-50 border-b border-slate-200/80 bg-white/94 shadow-[0_1px_0_rgb(15_23_42_/_0.03),0_10px_34px_rgb(79_70_229_/_0.06)] backdrop-blur-xl">
@@ -337,10 +336,12 @@ function ShellTopbar({
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            onClick={() => showUnavailableNotice("通知中心")}
-            className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-[0_10px_24px_rgb(15_23_42_/_0.08)] ring-1 ring-slate-200/80 sm:hidden"
+            disabled
+            aria-disabled="true"
+            data-testid="e10-mobile-notification-disabled"
+            className="relative flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-2xl bg-white text-slate-400 opacity-70 shadow-[0_10px_24px_rgb(15_23_42_/_0.08)] ring-1 ring-slate-200/80 sm:hidden"
             aria-label="通知"
-            title="通知中心暂未开放"
+            title={`通知中心暂未开放：${unavailableReason}`}
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
             <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
@@ -349,20 +350,22 @@ function ShellTopbar({
           </button>
           <button
             type="button"
-            onClick={() => showUnavailableNotice("消息中心")}
-            className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-[0_10px_24px_rgb(15_23_42_/_0.08)] ring-1 ring-slate-200/80 sm:hidden"
+            disabled
+            aria-disabled="true"
+            data-testid="e10-mobile-message-disabled"
+            className="flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-2xl bg-white text-slate-400 opacity-70 shadow-[0_10px_24px_rgb(15_23_42_/_0.08)] ring-1 ring-slate-200/80 sm:hidden"
             aria-label="消息"
-            title="消息中心暂未开放"
+            title={`消息中心暂未开放：${unavailableReason}`}
           >
             <MessageCircle className="h-5 w-5" aria-hidden="true" />
           </button>
-          <ShellIconButton label="搜索" onClick={() => showUnavailableNotice("全局搜索")}>
+          <ShellIconButton label="搜索" reason={unavailableReason} testId="e10-global-search-disabled">
             <Search className="h-4 w-4" aria-hidden="true" />
           </ShellIconButton>
-          <ShellIconButton label="通知" badge="6" onClick={() => showUnavailableNotice("通知中心")}>
+          <ShellIconButton label="通知" badge="6" reason={unavailableReason} testId="e10-notification-disabled">
             <Bell className="h-4 w-4" aria-hidden="true" />
           </ShellIconButton>
-          <ShellIconButton label="消息" onClick={() => showUnavailableNotice("消息中心")}>
+          <ShellIconButton label="消息" reason={unavailableReason} testId="e10-message-disabled">
             <MessageCircle className="h-4 w-4" aria-hidden="true" />
           </ShellIconButton>
           <div className="hidden items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-[0_10px_26px_rgb(15_23_42_/_0.07)] sm:flex">
@@ -639,20 +642,24 @@ function ShellIconButton({
   badge,
   children,
   label,
-  onClick,
+  reason,
+  testId,
 }: {
   badge?: string;
   children: ReactNode;
   label: string;
-  onClick: () => void;
+  reason: string;
+  testId?: string;
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      className="relative hidden h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 sm:flex"
+      disabled
+      aria-disabled="true"
+      data-testid={testId}
+      className="relative hidden h-10 w-10 cursor-not-allowed items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-400 opacity-70 shadow-sm sm:flex"
       aria-label={label}
-      title={`${label}暂未开放`}
+      title={`${label}暂未开放：${reason}`}
     >
       {children}
       {badge ? (

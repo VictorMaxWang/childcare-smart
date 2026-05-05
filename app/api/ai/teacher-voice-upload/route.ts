@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { resolveAsrProvider } from "@/lib/ai/providers";
-import { forwardBrainRequest } from "@/lib/server/brain-client";
-import { buildMockVoiceUploadResponse } from "@/lib/mobile/voice-assistant-upload";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { apiError } from "@/lib/server/api-errors";
+import { VivoProviderError } from "@/lib/providers/vivo";
+import { buildVoiceUploadResponse } from "@/lib/mobile/voice-assistant-upload";
 
 function toNumber(value: FormDataEntryValue | null) {
   if (typeof value !== "string") return undefined;
@@ -10,8 +12,8 @@ function toNumber(value: FormDataEntryValue | null) {
 }
 
 export async function POST(request: Request) {
-  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/teacher/voice-upload");
-  if (brainForward.response) return brainForward.response;
+  const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
+  if (authError) return authError;
 
   const formData = await request.formData();
   const audio = formData.get("audio");
@@ -34,14 +36,34 @@ export async function POST(request: Request) {
   try {
     const asrResult = await resolveAsrProvider().transcribe({
       attachmentName,
+      audioBytes: Buffer.from(await audio.arrayBuffer()),
       fallbackText,
+      mimeType:
+        (typeof formData.get("mimeType") === "string"
+          ? String(formData.get("mimeType"))
+          : undefined) || audio.type || "audio/webm",
+      durationMs: toNumber(formData.get("durationMs")),
+      scene:
+        typeof formData.get("scene") === "string"
+          ? String(formData.get("scene"))
+          : "teacher-global-fab",
     });
 
+    if (asrResult.source === "provider_unavailable" && !asrResult.output.transcript.trim()) {
+      return apiError(
+        "provider_unavailable",
+        "当前未接入真实 ASR provider，音频文件不会被伪造转写成功；请使用浏览器语音识别或文本输入 fallback。",
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
-      buildMockVoiceUploadResponse({
+      buildVoiceUploadResponse({
         attachmentName,
-        fallbackText: asrResult.output.transcript,
+        transcript: asrResult.output.transcript,
         provider: asrResult.provider,
+        source: "upload-api",
+        status: "uploaded",
         raw: {
           childId:
             typeof formData.get("childId") === "string"
@@ -67,16 +89,12 @@ export async function POST(request: Request) {
       { status: 200 }
     );
   } catch (error) {
-    return NextResponse.json(
-      {
-        status: "failed",
-        attachmentName,
-        draftContent: fallbackText || "",
-        source: "mock",
-        raw: {
-          error: error instanceof Error ? error.message : "teacher_voice_upload_failed",
-        },
-      },
+    if (error instanceof VivoProviderError) {
+      return apiError("provider_unavailable", error.message, { status: 503 });
+    }
+    return apiError(
+      "server_error",
+      error instanceof Error ? error.message : "teacher_voice_upload_failed",
       { status: 500 }
     );
   }

@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   CalendarCheck2,
   Download,
+  FileJson,
   HeartPulse,
   RefreshCw,
   Share2,
@@ -13,6 +14,7 @@ import {
   Utensils,
 } from "lucide-react";
 import type { AdminAgentActionItem, AdminAgentResult } from "@/lib/agent/admin-types";
+import type { ApiWeeklyReport, WeeklyReportExportFormat } from "@/lib/api/types";
 import {
   directorReplicaAssets,
 } from "./directorReplicaData";
@@ -24,13 +26,30 @@ import {
   ReplicaMetric,
   ReplicaPanel,
   ReplicaPill,
-  ReplicaUnavailableButton,
 } from "./DirectorReplicaPrimitives";
 
 function priorityTone(priority: string) {
   if (priority === "P1" || priority === "高") return "red" as const;
   if (priority === "P2" || priority === "中") return "orange" as const;
   return "blue" as const;
+}
+
+function readNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function reportSummary(report: ApiWeeklyReport | null) {
+  const payloadSummary =
+    report?.payload && typeof report.payload.summary === "object" && report.payload.summary !== null
+      ? (report.payload.summary as Record<string, unknown>)
+      : {};
+  return {
+    recordCount: readNumber(payloadSummary.recordCount),
+    healthAbnormalCount: readNumber(payloadSummary.healthAbnormalCount),
+    highRiskConsultationCount: readNumber(payloadSummary.highRiskConsultationCount),
+    unresolvedFeedbackCount: readNumber(payloadSummary.unresolvedFeedbackCount),
+    childCount: readNumber(payloadSummary.childCount),
+  };
 }
 
 export default function DirectorWeeklyReportReplica({
@@ -43,8 +62,19 @@ export default function DirectorWeeklyReportReplica({
   trendLabels,
   attendanceTrendSeries,
   classDistribution,
+  savedReports,
+  selectedReport,
+  includeArchivedReports,
+  historyLoading,
+  actionStatus,
   onRerun,
   onSwitchDaily,
+  onSaveReport,
+  onSelectReport,
+  onToggleArchived,
+  onExportReport,
+  onShareReport,
+  onArchiveReport,
   onCreateDispatch,
   isCreatingNotification,
 }: {
@@ -57,13 +87,26 @@ export default function DirectorWeeklyReportReplica({
   trendLabels: string[];
   attendanceTrendSeries: number[];
   classDistribution: Array<{ label: string; value: number; detail: string; color: string }>;
+  savedReports: ApiWeeklyReport[];
+  selectedReport: ApiWeeklyReport | null;
+  includeArchivedReports: boolean;
+  historyLoading: boolean;
+  actionStatus: string | null;
   onRerun: () => void;
   onSwitchDaily: () => void;
+  onSaveReport: () => void;
+  onSelectReport: (reportId: string) => void;
+  onToggleArchived: () => void;
+  onExportReport: (format: WeeklyReportExportFormat) => void;
+  onShareReport: () => void;
+  onArchiveReport: (action: "archive" | "restore") => void;
   onCreateDispatch: (actionItem: AdminAgentActionItem) => void;
   isCreatingNotification: (actionItemId: string) => boolean;
 }) {
   const scope = result?.institutionScope;
   const actionItems = result?.actionItems ?? [];
+  const selectedSummary = reportSummary(selectedReport);
+  const canUseSelectedReport = Boolean(selectedReport);
   const feedbackExpectedCount = scope?.feedbackExpectedChildCount ?? 0;
   const feedbackCompletedCount = scope?.feedbackCompletedChildCount ?? 0;
   const summary = result?.summary ?? (loading ? "正在生成本周运营报表..." : "暂无周报结果，请重新生成。");
@@ -106,14 +149,31 @@ export default function DirectorWeeklyReportReplica({
       description="数据统计周期：周一 00:00 - 周日 24:00。复刻运营报表总览、风险趋势、指标卡片与待跟进事项。"
       actions={
         <>
-          <ReplicaUnavailableButton variant="outline">
+          <ReplicaButton
+            variant="outline"
+            disabled={!canUseSelectedReport || actionStatus?.startsWith("export")}
+            onClick={() => onExportReport("markdown")}
+          >
             <Download className="h-4 w-4" />
             导出周报
-          </ReplicaUnavailableButton>
-          <ReplicaUnavailableButton variant="outline">
+          </ReplicaButton>
+          <ReplicaButton
+            variant="outline"
+            disabled={!canUseSelectedReport || actionStatus === "sharing"}
+            onClick={onShareReport}
+          >
             <Share2 className="h-4 w-4" />
             分享周报
-          </ReplicaUnavailableButton>
+          </ReplicaButton>
+          <ReplicaButton
+            variant="soft"
+            disabled={actionStatus === "saving"}
+            onClick={onSaveReport}
+            data-testid="weekly-save-report"
+          >
+            <FileJson className="h-4 w-4" />
+            保存周报
+          </ReplicaButton>
           <ReplicaButton onClick={onRerun} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             重新生成周报
@@ -126,6 +186,101 @@ export default function DirectorWeeklyReportReplica({
           {requestError}
         </div>
       ) : null}
+
+      <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+        <ReplicaPanel
+          title="周报历史"
+          actions={
+            <ReplicaButton variant="ghost" onClick={onToggleArchived} className="h-8 px-3 text-xs">
+              {includeArchivedReports ? "隐藏归档" : "查看归档"}
+            </ReplicaButton>
+          }
+        >
+          <div data-testid="weekly-history-list" className="space-y-3">
+            {historyLoading ? (
+              <p className="rounded-[14px] bg-[#F8FAFF] p-4 text-sm text-[#7A86A6]">正在加载周报历史...</p>
+            ) : savedReports.length > 0 ? (
+              savedReports.slice(0, 6).map((report) => (
+                <button
+                  key={report.reportId}
+                  type="button"
+                  onClick={() => onSelectReport(report.reportId)}
+                  className={`w-full rounded-[14px] border px-4 py-3 text-left text-sm transition ${
+                    selectedReport?.reportId === report.reportId
+                      ? "border-[#635BFF] bg-[#F5F4FF] text-[#172554]"
+                      : "border-[#E8ECF7] bg-white text-[#596681] hover:border-[#C8CEF0]"
+                  }`}
+                >
+                  <span className="block font-semibold">{report.title}</span>
+                  <span className="mt-1 block text-xs">
+                    {report.periodStart} - {report.periodEnd} · {report.status}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="rounded-[14px] border border-dashed border-[#D8DEEF] bg-[#FBFCFF] p-4 text-sm text-[#7A86A6]">
+                暂无已保存周报，生成后点击保存周报。
+              </p>
+            )}
+          </div>
+        </ReplicaPanel>
+
+        <ReplicaPanel title="周报详情">
+          <div data-testid="weekly-report-detail" className="space-y-4">
+            {selectedReport ? (
+              <>
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <ReplicaMetric label="儿童" value={`${selectedSummary.childCount}`} subValue="scope" tone="blue" />
+                  <ReplicaMetric label="记录" value={`${selectedSummary.recordCount}`} subValue="period" tone="green" />
+                  <ReplicaMetric label="异常" value={`${selectedSummary.healthAbnormalCount}`} subValue="health" tone="purple" />
+                  <ReplicaMetric label="高风险" value={`${selectedSummary.highRiskConsultationCount}`} subValue="consult" tone="orange" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(["json", "markdown", "html", "share-text"] as WeeklyReportExportFormat[]).map((format) => (
+                    <ReplicaButton
+                      key={format}
+                      variant="outline"
+                      className="h-8 px-3 text-xs"
+                      disabled={Boolean(actionStatus)}
+                      onClick={() => onExportReport(format)}
+                      data-testid={format === "markdown" ? "weekly-export-markdown" : undefined}
+                    >
+                      {format}
+                    </ReplicaButton>
+                  ))}
+                  <ReplicaButton
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    disabled={Boolean(actionStatus)}
+                    onClick={onShareReport}
+                    data-testid="weekly-share-report"
+                  >
+                    分享
+                  </ReplicaButton>
+                  <ReplicaButton
+                    variant={selectedReport.status === "archived" ? "soft" : "outline"}
+                    className="h-8 px-3 text-xs"
+                    disabled={Boolean(actionStatus)}
+                    onClick={() => onArchiveReport(selectedReport.status === "archived" ? "restore" : "archive")}
+                    data-testid="weekly-archive-report"
+                  >
+                    {selectedReport.status === "archived" ? "恢复" : "归档"}
+                  </ReplicaButton>
+                </div>
+                {selectedReport.share ? (
+                  <p className="rounded-[14px] bg-[#F8FAFF] p-3 text-xs leading-5 text-[#596681]">
+                    {selectedReport.share.summary}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="rounded-[14px] border border-dashed border-[#D8DEEF] bg-[#FBFCFF] p-4 text-sm text-[#7A86A6]">
+                选择历史周报查看详情，或保存当前生成结果。
+              </p>
+            )}
+          </div>
+        </ReplicaPanel>
+      </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
@@ -278,9 +433,9 @@ export default function DirectorWeeklyReportReplica({
               <p className="mt-3 text-xs text-[#7A86A6]">
                 {feedbackExpectedCount > 0 ? `已完成 ${feedbackCompletedCount} / 应完成 ${feedbackExpectedCount}` : "暂无绑定家长反馈对象"}
               </p>
-              <ReplicaUnavailableButton variant="soft" className="mt-5 w-full">
+              <ReplicaButton onClick={onSwitchDaily} variant="soft" className="mt-5 w-full">
                 查看反馈详情
-              </ReplicaUnavailableButton>
+              </ReplicaButton>
             </div>
           </ReplicaPanel>
 

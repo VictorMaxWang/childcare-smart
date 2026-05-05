@@ -14,6 +14,7 @@ import {
   AudioLines,
   BookOpenText,
   CalendarDays,
+  Download,
   ImageIcon,
   LoaderCircle,
   MessageCircle,
@@ -21,6 +22,7 @@ import {
   Play,
   Radio,
   RotateCcw,
+  Share2,
   Sparkles,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +44,7 @@ import type {
   ParentStoryBookStylePreset,
   ParentStoryBookStyleMode,
 } from "@/lib/ai/types";
+import type { StorybookExportFormat } from "@/lib/api/types";
 import {
   describeStoryBookMode,
   formatStoryBookClientCache,
@@ -1060,6 +1063,8 @@ export default function StoryBookViewer({
   refreshMessage,
   cacheState,
   isRefreshing = false,
+  isStorybookActionPending = false,
+  storybookActionStatus,
   selectedChildName,
   hasChildContext,
   generationMode,
@@ -1083,6 +1088,8 @@ export default function StoryBookViewer({
   onCustomStyleNegativePromptChange,
   onGenerate,
   onRetry,
+  onExportStorybook,
+  onShareStorybook,
   parentHref = "/parent",
 }: {
   status: StoryBookViewerStatus;
@@ -1091,6 +1098,8 @@ export default function StoryBookViewer({
   refreshMessage?: string | null;
   cacheState?: { kind: "none" | "hit" | "saved"; savedAt?: number };
   isRefreshing?: boolean;
+  isStorybookActionPending?: boolean;
+  storybookActionStatus?: string | null;
   selectedChildName?: string;
   hasChildContext: boolean;
   generationMode: ParentStoryBookGenerationMode;
@@ -1114,6 +1123,8 @@ export default function StoryBookViewer({
   onCustomStyleNegativePromptChange: (value: string) => void;
   onGenerate: () => void;
   onRetry?: () => void;
+  onExportStorybook?: (format: StorybookExportFormat) => void;
+  onShareStorybook?: () => void;
   parentHref?: string;
 }) {
   const theme = getTheme(story?.stylePreset ?? selectedPresetId);
@@ -1305,6 +1316,32 @@ export default function StoryBookViewer({
                 <Sparkles className="mr-2 h-4 w-4" />
                 添加故事
               </Button>
+              {story ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn("rounded-full", theme.quiet)}
+                    data-testid="e10-storybook-export-markdown"
+                    disabled={isStorybookActionPending || !onExportStorybook}
+                    onClick={() => onExportStorybook?.("markdown")}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    导出
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn("rounded-full", theme.quiet)}
+                    data-testid="e10-storybook-share-local"
+                    disabled={isStorybookActionPending || !onShareStorybook}
+                    onClick={onShareStorybook}
+                  >
+                    <Share2 className="mr-2 h-4 w-4" />
+                    分享
+                  </Button>
+                </>
+              ) : null}
             </div>
           </div>
 
@@ -1665,6 +1702,15 @@ export default function StoryBookViewer({
             {refreshMessage ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-6 text-amber-900">
                 {refreshMessage}
+              </div>
+            ) : null}
+            {storybookActionStatus ? (
+              <div
+                className="rounded-2xl border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm leading-6 text-sky-900"
+                data-testid="e10-storybook-action-status"
+                role="status"
+              >
+                {storybookActionStatus}
               </div>
             ) : null}
             {isRefreshing ? (

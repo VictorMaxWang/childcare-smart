@@ -132,3 +132,16 @@ D02-D05 and D07-D08 produced implementation results. D06 remains pending. D90 me
 ## Notes For D99
 
 D99 can exercise the completed D02-D08 real-user paths, especially communication, teacher records, parent child-scope flows, health material/consultation, and visual-only safety. It should not fail solely because D06 weekly report/director reporting, production backend auth, real OCR/ASR/LLM providers, or product-specified export/share/delete flows are still open.
+
+## E10 Reconciliation
+
+E10 supersedes the older D90 remaining-product list for the MVP surface:
+
+- Weekly export/share and feedback detail are implemented through scoped APIs and should no longer be tested as disabled placeholders.
+- Teacher management and child edit/archive/restore are implemented as director-only API-backed demo persistence.
+- Attachments, voice, and image support are implemented as metadata-only/local-preview MVP and must not be described as cloud object storage.
+- Storybook share/export are implemented as local export/download and local share/copy text. Public links, PDF, and media packages remain explicit remaining gaps.
+- OCR/ASR missing-env paths now fail closed for binary-only input instead of returning mock success.
+- Voice assistant execution remains centralized in the E06 command bus and revalidates confirmation/scope server-side.
+
+Remaining blockers for production release are durable database/identity, real object storage, external share/PDF services, real vivo env smoke, and service auth for direct FastAPI backend exposure.

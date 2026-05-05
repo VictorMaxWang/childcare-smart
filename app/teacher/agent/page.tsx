@@ -30,6 +30,11 @@ import TeacherAgentHistoryList, { type TeacherAgentHistoryListItem } from "@/com
 import TeacherAgentResultCard from "@/components/teacher/TeacherAgentResultCard";
 import { TeacherActionTile, TeacherContextStrip, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import WeeklyReportPreviewCard from "@/components/weekly-report/WeeklyReportPreviewCard";
+import AttachmentMediaPicker, {
+  AttachmentPreviewList,
+  type AttachmentDraft,
+} from "@/components/communication/AttachmentMediaPicker";
+import FeedbackDetailDialog from "@/components/communication/FeedbackDetailDialog";
 import {
   AgentWorkspaceCard,
   InlineLinkButton,
@@ -76,6 +81,17 @@ import {
   buildHomeSchoolThreads,
   formatHomeSchoolTime,
 } from "@/lib/communication/home-school";
+import {
+  createAttachment as createApiAttachment,
+  listAttachments as listApiAttachments,
+  listFeedback as listApiFeedback,
+  listMessages as listApiMessages,
+  replyMessage as replyApiMessage,
+  type ApiFeedback,
+  type ApiMessage,
+} from "@/lib/api/communication";
+import { updateAssignmentStatus as updateApiAssignmentStatus } from "@/lib/api/assignments";
+import type { ApiAttachment } from "@/lib/api/types";
 import { useApp } from "@/lib/store";
 
 const ACTION_LABELS: Record<TeacherAgentWorkflowType, string> = {
@@ -138,6 +154,7 @@ export default function TeacherAgentPage() {
     replyHomeSchoolMessage,
     updateHomeSchoolConversationStatus,
     upsertReminder,
+    reloadAppSnapshotFromApi,
   } = useApp();
   const [scope, setScope] = useState<TeacherAgentMode>("child");
   const [selectedChildId, setSelectedChildId] = useState<string>("");
@@ -157,6 +174,13 @@ export default function TeacherAgentPage() {
   const [communicationOnlyAttention, setCommunicationOnlyAttention] = useState(false);
   const [expandedCommunicationId, setExpandedCommunicationId] = useState<string | null>(null);
   const [communicationDrafts, setCommunicationDrafts] = useState<Record<string, string>>({});
+  const [communicationAttachmentDrafts, setCommunicationAttachmentDrafts] = useState<Record<string, AttachmentDraft[]>>({});
+  const [apiMessages, setApiMessages] = useState<ApiMessage[]>([]);
+  const [apiFeedbacks, setApiFeedbacks] = useState<ApiFeedback[]>([]);
+  const [apiAttachments, setApiAttachments] = useState<ApiAttachment[]>([]);
+  const [feedbackDetailId, setFeedbackDetailId] = useState<string | null>(null);
+  const [feedbackDetailOpen, setFeedbackDetailOpen] = useState(false);
+  const [updatingAssignmentId, setUpdatingAssignmentId] = useState<string | null>(null);
   const routeIntent = searchParams.get("intent");
   const preloadAction = searchParams.get("action");
   const queryDraftId = searchParams.get("draftId");
@@ -316,6 +340,22 @@ export default function TeacherAgentPage() {
           (!activeChildContext || item.childId === activeChildContext.child.id)
       ),
     [activeChildContext, reminders]
+  );
+
+  const updateAdminDispatchStatus = useCallback(
+    async (assignmentId: string, status: "in_progress" | "completed") => {
+      setUpdatingAssignmentId(assignmentId);
+      setError(null);
+      try {
+        await updateApiAssignmentStatus(assignmentId, { status });
+        await reloadAppSnapshotFromApi();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "派单状态更新失败。");
+      } finally {
+        setUpdatingAssignmentId(null);
+      }
+    },
+    [reloadAppSnapshotFromApi]
   );
 
   const createVoiceDraft = useCallback(() => {
@@ -827,6 +867,25 @@ export default function TeacherAgentPage() {
     };
   }, [visibleChildren.length, weeklyReportKey, weeklyReportPayload]);
 
+  const refreshE04CommunicationData = useCallback(async () => {
+    try {
+      const [nextMessages, nextFeedbacks, nextAttachments] = await Promise.all([
+        listApiMessages(),
+        listApiFeedback(),
+        listApiAttachments(),
+      ]);
+      setApiMessages(nextMessages);
+      setApiFeedbacks(nextFeedbacks);
+      setApiAttachments(nextAttachments);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "E01 通信数据读取失败。");
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshE04CommunicationData();
+  }, [refreshE04CommunicationData]);
+
   if (visibleChildren.length === 0) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
@@ -840,8 +899,9 @@ export default function TeacherAgentPage() {
   }
 
   const isCommunicationMode = preloadAction === "communication";
+  const communicationMessages = apiMessages.length > 0 ? apiMessages : messages;
   const homeSchoolThreads = buildHomeSchoolThreads({
-    messages,
+    messages: communicationMessages,
     conversations,
     children: visibleChildren,
   });
@@ -911,7 +971,51 @@ export default function TeacherAgentPage() {
     setError(null);
     setCommunicationTab("history");
   };
-  const sendCommunicationReply = (item: CommunicationItem) => {
+  const sendCommunicationReply = async (item: CommunicationItem) => {
+    const draft = communicationDrafts[item.id]?.trim();
+    const attachmentDrafts = communicationAttachmentDrafts[item.id] ?? [];
+    if (!draft && attachmentDrafts.length === 0) {
+      prepareCommunicationReply(item);
+      return;
+    }
+    const baseMessageId = item.messageId ?? item.threadMessages[0]?.messageId;
+    if (!baseMessageId) {
+      setError("当前会话缺少可回复的消息。");
+      return;
+    }
+    try {
+      const reply = await replyApiMessage(baseMessageId, {
+        conversationId: item.conversationId,
+        content: draft || "语音/附件回复",
+      });
+      await Promise.all(
+        attachmentDrafts.map((attachment) =>
+          createApiAttachment({
+            childId: item.childId,
+            relatedType: "message",
+            relatedId: reply.messageId,
+            kind: attachment.kind,
+            fileName: attachment.fileName,
+            mimeType: attachment.mimeType,
+            byteSize: attachment.byteSize,
+            localPreviewUrl: attachment.localPreviewUrl,
+            durationMs: attachment.durationMs,
+          })
+        )
+      );
+      setError(null);
+      setCommunicationDrafts((prev) => ({ ...prev, [item.id]: "" }));
+      setCommunicationAttachmentDrafts((prev) => ({ ...prev, [item.id]: [] }));
+      setExpandedCommunicationId(null);
+      setCommunicationTab("mine");
+      await refreshE04CommunicationData();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? `E01 回复发送失败：${requestError.message}` : "E01 回复发送失败。");
+    }
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const sendCommunicationReplyLegacy = (item: CommunicationItem) => {
     const draft = communicationDrafts[item.id]?.trim();
     if (!draft) {
       prepareCommunicationReply(item);
@@ -1007,6 +1111,7 @@ export default function TeacherAgentPage() {
   ];
 
   return (
+    <>
     <RolePageShell
       badge={`教师 AI 助手 · ${currentUser.className ?? "当前班级"}`}
       title="把班级数据转成可执行的教师处理建议"
@@ -1136,6 +1241,14 @@ export default function TeacherAgentPage() {
                                   {message.senderRole === "teacher" ? message.senderName : "家长"}：
                                 </span>
                                 {message.content}
+                                <div className="mt-2">
+                                  <AttachmentPreviewList
+                                    items={apiAttachments.filter(
+                                      (attachment) => attachment.relatedType === "message" && attachment.relatedId === message.messageId
+                                    )}
+                                    compact
+                                  />
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -1151,8 +1264,20 @@ export default function TeacherAgentPage() {
                             className="min-h-28 w-full resize-y rounded-[0.8rem] border border-violet-100 bg-white px-3 py-2 text-sm leading-6 text-[#293653] outline-none focus:border-violet-300"
                             placeholder="输入给家长的回复内容"
                           />
+                          <div className="mt-3">
+                            <AttachmentMediaPicker
+                              value={communicationAttachmentDrafts[item.id] ?? []}
+                              onChange={(next) =>
+                                setCommunicationAttachmentDrafts((prev) => ({
+                                  ...prev,
+                                  [item.id]: next,
+                                }))
+                              }
+                              accept="image/*,audio/*,.pdf,.doc,.docx,.txt"
+                            />
+                          </div>
                           <div className="mt-3 flex justify-end">
-                            <Button data-testid="teacher-send-reply" type="button" variant="premium" className="rounded-full" onClick={() => sendCommunicationReply(item)}>
+                            <Button data-testid="teacher-send-reply" type="button" variant="premium" className="rounded-full" onClick={() => void sendCommunicationReply(item)}>
                               <Send className="mr-2 h-4 w-4" />
                               发送回复
                             </Button>
@@ -1173,6 +1298,22 @@ export default function TeacherAgentPage() {
                           <Lightbulb className="mr-2 h-5 w-5" />
                           沟通建议
                         </Button>
+                        {apiFeedbacks.some((feedback) => feedback.childId === item.childId) ? (
+                          <Button
+                            data-testid="teacher-open-feedback-detail"
+                            data-feedback-id={apiFeedbacks.find((feedback) => feedback.childId === item.childId)?.feedbackId}
+                            type="button"
+                            variant="outline"
+                            className="h-12 rounded-full border-emerald-100 bg-emerald-50/60 text-base font-bold text-emerald-600"
+                            onClick={() => {
+                              const feedback = apiFeedbacks.find((candidate) => candidate.childId === item.childId);
+                              setFeedbackDetailId(feedback?.feedbackId ?? null);
+                              setFeedbackDetailOpen(Boolean(feedback));
+                            }}
+                          >
+                            查看反馈详情
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
                           variant="outline"
@@ -1216,7 +1357,7 @@ export default function TeacherAgentPage() {
                   className="mt-6 h-14 w-full rounded-[1rem] text-lg font-bold"
                   onClick={() => {
                     const target = communicationItems[0];
-                    if (target) sendCommunicationReply(target);
+                    if (target) void sendCommunicationReply(target);
                   }}
                   disabled={isLoading || communicationItems.length === 0}
                 >
@@ -2000,7 +2141,11 @@ export default function TeacherAgentPage() {
               <div className="space-y-3">
                 {teacherReminders.length > 0 ? (
                   teacherReminders.slice(0, 5).map((item) => (
-                    <div key={item.reminderId} className="rounded-lg border border-slate-100 bg-white p-4">
+                    <div
+                      key={item.reminderId}
+                      className="rounded-lg border border-slate-100 bg-white p-4"
+                      data-testid={item.sourceType === "admin_dispatch" ? "teacher-assignment-card" : undefined}
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
                           <BellRing className="h-4 w-4 text-indigo-500" />
@@ -2009,6 +2154,30 @@ export default function TeacherAgentPage() {
                         <span className="text-xs text-slate-500">{getReminderStatusLabel(item.status)}</span>
                       </div>
                       <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+                      {item.sourceType === "admin_dispatch" && item.sourceId ? (
+                        <div className="mt-3 flex flex-wrap gap-2" data-testid="teacher-assignment-actions">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={updatingAssignmentId === item.sourceId || item.status === "acknowledged" || item.status === "done"}
+                            onClick={() => void updateAdminDispatchStatus(item.sourceId ?? "", "in_progress")}
+                            data-testid="teacher-assignment-in-progress"
+                          >
+                            标记跟进中
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={updatingAssignmentId === item.sourceId || item.status === "done"}
+                            onClick={() => void updateAdminDispatchStatus(item.sourceId ?? "", "completed")}
+                            data-testid="teacher-assignment-complete"
+                          >
+                            标记完成
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   ))
                 ) : (
@@ -2020,5 +2189,13 @@ export default function TeacherAgentPage() {
         }
       />
     </RolePageShell>
+    <FeedbackDetailDialog
+      feedbackId={feedbackDetailId}
+      open={feedbackDetailOpen}
+      canUpdateStatus
+      onOpenChange={setFeedbackDetailOpen}
+      onUpdated={() => void refreshE04CommunicationData()}
+    />
+    </>
   );
 }

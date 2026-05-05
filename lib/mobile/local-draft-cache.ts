@@ -59,7 +59,12 @@ export function isLocalOnlyMobileDraft(draft: MobileDraft) {
   }
 
   const upload = readNestedObject(payload.upload);
-  if (upload?.source === "mock" || upload?.status === "mocked") {
+  if (
+    upload?.source === "mock" ||
+    upload?.source === "local-text-fallback" ||
+    upload?.status === "mocked" ||
+    upload?.status === "local_fallback"
+  ) {
     return true;
   }
 

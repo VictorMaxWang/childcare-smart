@@ -25,6 +25,75 @@ const INITIAL_STATE: AdminQualityMetricsState = {
   error: null,
 };
 
+function unwrapApiPayload(payload: unknown) {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    !Array.isArray(payload) &&
+    "ok" in payload &&
+    (payload as { ok?: unknown }).ok === true &&
+    "data" in payload
+  ) {
+    return (payload as { data: unknown }).data;
+  }
+
+  return payload;
+}
+
+async function fetchMetricsPayload(
+  input: {
+    institutionId?: string;
+    windowDays: number;
+    includeDemoFallback: boolean;
+    signal: AbortSignal;
+  }
+) {
+  const query = new URLSearchParams({
+    windowDays: String(input.windowDays),
+    includeDemoFallback: input.includeDemoFallback ? "1" : "0",
+  });
+  if (input.institutionId) query.set("institutionId", input.institutionId);
+
+  const analyticsResponse = await fetch(`/api/analytics/admin/quality-metrics?${query.toString()}`, {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store",
+    signal: input.signal,
+  });
+  const analyticsPayload = unwrapApiPayload(await analyticsResponse.json().catch(() => null));
+  if (analyticsResponse.ok) {
+    return analyticsPayload;
+  }
+
+  const aiResponse = await fetch("/api/ai/admin-quality-metrics", {
+    method: "POST",
+    credentials: "include",
+    cache: "no-store",
+    signal: input.signal,
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      institutionId: input.institutionId,
+      windowDays: input.windowDays,
+      includeDemoFallback: input.includeDemoFallback,
+    }),
+  });
+  const aiPayload = unwrapApiPayload(await aiResponse.json().catch(() => null));
+  if (!aiResponse.ok) {
+    const error =
+      aiPayload &&
+      typeof aiPayload === "object" &&
+      "error" in aiPayload &&
+      typeof (aiPayload as { error?: unknown }).error === "string"
+        ? (aiPayload as { error: string }).error
+        : "admin quality metrics are unavailable";
+    throw new Error(error);
+  }
+
+  return aiPayload;
+}
+
 export function useAdminQualityMetrics(
   options: UseAdminQualityMetricsOptions = {}
 ) {
@@ -52,41 +121,14 @@ export function useAdminQualityMetrics(
       });
 
       try {
-        const response = await fetch("/api/ai/admin-quality-metrics", {
-          method: "POST",
-          credentials: "include",
-          cache: "no-store",
+        const payload = await fetchMetricsPayload({
+          institutionId,
+          windowDays,
+          includeDemoFallback,
           signal: controller.signal,
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            institutionId,
-            windowDays,
-            includeDemoFallback,
-          }),
         });
 
-        const payload = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | unknown;
-
         if (cancelled) return;
-
-        if (!response.ok) {
-          setState({
-            data: null,
-            status: "unavailable",
-            error:
-              (typeof payload === "object" &&
-                payload !== null &&
-                "error" in payload &&
-                typeof payload.error === "string" &&
-                payload.error) ||
-              "admin quality metrics are unavailable",
-          });
-          return;
-        }
 
         const normalized = normalizeAdminQualityMetricsResponse(payload);
         if (!normalized) {

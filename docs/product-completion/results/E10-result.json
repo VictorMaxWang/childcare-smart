@@ -1,11 +1,117 @@
 {
   "taskId": "E10",
-  "title": "Cleanup ui-only mock-only and fake-success",
-  "status": "pending",
-  "dependencies": ["E02", "E03", "E04", "E05", "E06", "E07", "E08", "E09"],
-  "writeScope": ["product labels", "disabled controls", "mock/fallback boundaries"],
-  "mustWriteMarkdown": "docs/product-completion/results/E10-result.md",
-  "requiredChecks": ["npm run lint", "npm run build", "visual-only safety regression"],
-  "notes": "Every enabled button must perform real work or clearly fail."
+  "status": "partial",
+  "completedItems": [
+    "Weekly report export/share remains enabled and backed by saved report APIs.",
+    "Feedback details and structured attachment metadata/local-preview flows remain enabled and labelled as metadata-only MVP.",
+    "Teacher management CRUD/archive and child edit/archive/restore are covered by E10 acceptance tests.",
+    "Parent storybook page exposes local Markdown export and clipboard/local share actions.",
+    "Director single-assignment AI dispatch loop remains API-backed and batch/help items are documented as non-MVP disabled decisions.",
+    "Admin quality metrics now prefer real local aggregate API data before AI fallback."
+  ],
+  "remainingItems": [
+    "feature:smoke still fails legacy D08 localStorage/provider expectation cases; E10 targeted acceptance passed.",
+    "Production object storage, public share links, PDF/social export, production DB/auth lifecycle, backend internal auth, and real vivo env smoke remain outside current MVP.",
+    "Batch dispatch, external BI, help documentation, and ambiguous child disambiguation picker remain product gaps."
+  ],
+  "cleanedUiOnly": [
+    "Global notification, message, and search controls no longer show clickable no-op/toast-only behavior; they are explicit disabled controls with reasons.",
+    "Old hidden disabled upload block was removed from feedback composer.",
+    "Storybook local export/share controls were added as real MVP actions instead of absent visual-only buttons.",
+    "D07 stale tests were updated to stop expecting weekly report export/share and child archive to remain disabled."
+  ],
+  "cleanedMockOnly": [
+    "Teacher voice upload/understand no longer returns mock success for audio-only ASR missing-env.",
+    "Python ASR mock provider no longer fabricates transcript text from file names.",
+    "Python OCR mock provider no longer fabricates binary OCR text from file names.",
+    "Director metrics prefer local aggregate API data instead of fixed AI/demo metrics."
+  ],
+  "cleanedFakeSuccess": [
+    "ASR missing-env with no text fallback now returns provider_unavailable instead of 200 success.",
+    "Health file binary OCR fallback fails closed when provider is unavailable and no text material exists.",
+    "Teacher voice UI labels local text fallback separately from real ASR upload.",
+    "Streaming AI fallback no longer emits a mock completed final event; it emits provider_unavailable/error metadata."
+  ],
+  "providerRisksFixed": [
+    "teacher-voice-upload and teacher-voice-understand routes use local provider contracts and fail closed on ASR provider_unavailable.",
+    "Parent storybook media cache now records owner child/storybook scope and rejects cross-child/ownerless media reads.",
+    "High-risk consultation provider trace now distinguishes real provider output from fallback output.",
+    "/api/ai provider-state evidence remains covered by product:ai and E10 provider missing-env acceptance."
+  ],
+  "voiceRisksFixed": [
+    "Command bus recomputes requiredConfirmation server-side before execution.",
+    "Command bus sanitizes navigation targets and rejects external/API/unknown paths.",
+    "Forged parent write commands without confirmation are rejected and do not persist messages.",
+    "Director, teacher, and parent voice regression suites pass through E06 command bus and scope checks."
+  ],
+  "productDecisionsAdded": [
+    "Soft archive/restore is the MVP replacement for hard delete.",
+    "Attachments are metadata-only plus local preview until object storage is introduced.",
+    "Storybook sharing/export is local clipboard/Markdown MVP; public links, PDF, and social share are deferred.",
+    "Teacher deactivation means business archive, not identity lifecycle deletion.",
+    "Ambiguous child voice commands fail closed instead of writing to a guessed child.",
+    "Assignment statuses are pending | in-progress | resolved with legacy alias compatibility.",
+    "Global notification/message/search are disabled with reasons until notification/message-center/search specs exist."
+  ],
+  "changedFiles": [
+    "app/api/ai/health-file-bridge/route.ts",
+    "app/api/ai/high-risk-consultation/route.ts",
+    "app/api/ai/parent-storybook/media/[mediaKey]/route.ts",
+    "app/api/ai/teacher-voice-understand/route.ts",
+    "app/api/ai/teacher-voice-upload/route.ts",
+    "app/parent/storybook/page.tsx",
+    "backend/app/api/v1/endpoints/teacher_voice.py",
+    "backend/app/providers/vivo_asr.py",
+    "backend/app/providers/vivo_ocr.py",
+    "components/Navbar.tsx",
+    "components/parent/ParentStructuredFeedbackComposer.tsx",
+    "components/parent/StoryBookViewer.tsx",
+    "components/parent/useParentD01Data.ts",
+    "components/teacher/VoiceAssistantFAB.tsx",
+    "docs/feature-audit/INCOMPLETE_FEATURES.updated.json",
+    "docs/feature-implementation/IMPLEMENTATION_SUMMARY.md",
+    "docs/product-completion/IMPLEMENTATION_LOG.md",
+    "docs/product-completion/OCR_ASR_PROVIDER_SPEC.md",
+    "docs/product-completion/PRODUCT_DECISIONS.md",
+    "docs/product-completion/REMAINING_GAPS.md",
+    "docs/product-completion/VOICE_ASSISTANT_SPEC.md",
+    "docs/product-completion/results/E10-result.json",
+    "docs/product-completion/results/E10-result.md",
+    "lib/agent/use-admin-quality-metrics.ts",
+    "lib/mobile/local-draft-cache.ts",
+    "lib/mobile/voice-assistant-upload.ts",
+    "lib/mobile/voice-input.ts",
+    "lib/server/brain-client.ts",
+    "lib/server/parent-storybook-cache.ts",
+    "lib/voice-assistant/command-bus.ts",
+    "tests/bug-bash/d07-ui-contract-regression.spec.ts",
+    "tests/feature-completion/visual-only-safety.spec.ts",
+    "tests/product-completion/e05-vivo-provider.spec.ts",
+    "tests/product-completion/e06-voice-assistant.spec.ts",
+    "tests/product-completion/e10-browser-acceptance.spec.ts"
+  ],
+  "browserUseEvidence": [
+    "artifacts/product-completion/E10/01-admin-provider-status-disabled-nav.png",
+    "artifacts/product-completion/E10/02-weekly-report-export-share-enabled.png",
+    "artifacts/product-completion/E10/05-feedback-attachments-metadata-only.png",
+    "artifacts/product-completion/E10/09-teacher-management-crud-archive.png",
+    "artifacts/product-completion/E10/11-child-edit-archive-restore.png",
+    "artifacts/product-completion/E10/14-storybook-export-local.png",
+    "artifacts/product-completion/E10/15-storybook-share-local.png",
+    "artifacts/product-completion/E10/19-asr-missing-env-no-fake-success.png",
+    "artifacts/product-completion/E10/22-parent-voice-orb-permission.png"
+  ],
+  "checks": {
+    "lint": "passed: npm run lint",
+    "build": "passed: npm run build",
+    "featureSmoke": "failed: npm run feature:smoke still has legacy D08 failures in communication-flow, director-summary, health-consultation, parent-features storybook seed, and teacher-records-persistence",
+    "productVoice": "passed: npm run product:voice (13 parser tests and 15 Playwright tests)",
+    "productAi": "passed: npm run product:ai (vivo chat/ocr/asr missing-env contract verified)"
+  },
+  "risks": [
+    "Brain backend is not running in local checks, so some AI routes intentionally log proxy fallback/ECONNREFUSED while tests assert safe fallback behavior.",
+    "feature:smoke failures appear tied to legacy D08 localStorage and old provider expectations rather than the E10 acceptance path.",
+    "Without real vivo environment variables, only provider contract and missing-env behavior can be verified."
+  ],
+  "notes": "E10 cleanup and targeted acceptance are implemented. Overall status is partial only because the required aggregate feature:smoke command is not fully green."
 }
-

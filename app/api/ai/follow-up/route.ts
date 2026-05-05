@@ -6,6 +6,7 @@ import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/inp
 import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
 import { selectStructuredFeedbackConsumption } from "@/lib/feedback/consumption";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import { requireParentChildAccess } from "@/lib/server/parent-route-guard";
 import { buildMemoryContextForPrompt } from "@/lib/server/memory-context";
 import {
@@ -93,6 +94,9 @@ function buildTaskContext(payload: AiFollowUpPayload) {
 }
 
 export async function POST(request: Request) {
+  const authError = await authorizeAiRoute(request, { requiredRole: "parent" });
+  if (authError) return authError;
+
   let payload: AiFollowUpPayload | null = null;
 
   try {

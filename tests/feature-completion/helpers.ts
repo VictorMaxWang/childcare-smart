@@ -1,8 +1,15 @@
-import { expect, type Page, type TestInfo } from "@playwright/test";
+import {
+  expect,
+  request as playwrightRequest,
+  type APIRequestContext,
+  type APIResponse,
+  type Page,
+  type TestInfo,
+} from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-export const ARTIFACT_DIR = path.join(process.cwd(), "artifacts", "feature-implementation", "D08");
+export const ARTIFACT_DIR = path.join(process.cwd(), "artifacts", "product-completion", "R02");
 export const SHARED_NAMESPACE = "demo:v5-d01-shared-demo:institution:inst-1";
 export const BUCKETS = {
   children: `childcare.${SHARED_NAMESPACE}.children.v3`,
@@ -29,6 +36,67 @@ export async function loginAs(page: Page, accountId: string, route: string) {
   expect(response.ok()).toBeTruthy();
   await page.goto(route);
   await expect(page.locator("body")).not.toHaveText("");
+}
+
+export async function demoContext(testInfo: TestInfo, accountId?: string) {
+  const baseURL = testInfo.project.use.baseURL as string | undefined;
+  return playwrightRequest.newContext({
+    baseURL,
+    extraHTTPHeaders: accountId ? { "x-demo-account-id": accountId } : undefined,
+  });
+}
+
+export async function expectOk<T = unknown>(response: APIResponse, status = 200): Promise<T> {
+  expect(response.status()).toBe(status);
+  const body = await response.json();
+  expect(body.ok).toBe(true);
+  expect(body.data).toBeDefined();
+  return body.data as T;
+}
+
+export async function expectFailure(response: APIResponse, status: number, code?: string) {
+  expect(response.status()).toBe(status);
+  const body = await response.json();
+  expect(body.ok).toBe(false);
+  if (code) expect(body.code).toBe(code);
+  expect(typeof body.error).toBe("string");
+  expect(body.error.length).toBeGreaterThan(0);
+  return body as { ok: false; code: string; error: string };
+}
+
+export async function planVoiceCommand(
+  api: APIRequestContext,
+  text: string,
+  context: Record<string, unknown> = {}
+) {
+  const data = await expectOk<{ command: Record<string, unknown> }>(
+    await api.post("/api/voice-assistant/commands", {
+      data: {
+        action: "plan",
+        utterance: { text, inputMode: "text", transcriptSource: "playwright-r02" },
+        context,
+      },
+    })
+  );
+  return data.command;
+}
+
+export async function executeVoiceCommand(
+  api: APIRequestContext,
+  text: string,
+  context: Record<string, unknown> = {}
+) {
+  const command = await planVoiceCommand(api, text, context);
+  return expectOk<Record<string, unknown>>(
+    await api.post("/api/voice-assistant/commands", {
+      data: {
+        action: "execute",
+        command,
+        confirmed: true,
+        context,
+      },
+    })
+  );
 }
 
 export async function resetDemoStorage(page: Page) {
@@ -121,6 +189,10 @@ export async function expectNoRemoteStatePut(page: Page, action: () => Promise<v
 
 export function slugify(value: string) {
   return value.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "feature-test";
+}
+
+export function tinyPngDataUrl() {
+  return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
 }
 
 function toPosix(value: string) {

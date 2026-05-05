@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
@@ -18,6 +19,9 @@ function buildLocalFallbackHeaders(
 }
 
 export async function POST(request: Request) {
+  const authError = await authorizeAiRoute(request, { requiredRole: "admin" });
+  if (authError) return authError;
+
   const targetPath = "/api/v1/agents/metrics/admin-quality";
   const brainForward = await forwardBrainRequest(request, targetPath);
 

@@ -4,6 +4,7 @@ import {
   readBrainTransportHeaders,
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import { normalizeHighRiskConsultationResult } from "@/lib/consultation/normalize-result";
 
 type ProviderTrace = {
@@ -358,6 +359,9 @@ async function buildFallbackEvents(
 }
 
 export async function POST(request: Request) {
+  const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
+  if (authError) return authError;
+
   const brainForward = await forwardBrainRequest(request, "/api/v1/agents/consultations/high-risk/stream");
   if (brainForward.response) return brainForward.response;
 

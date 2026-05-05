@@ -453,6 +453,7 @@ interface AppContextType {
   persistAppSnapshotNow: (
     override?: Partial<AppStateSnapshot>
   ) => Promise<PersistAppSnapshotResult>;
+  reloadAppSnapshotFromApi: () => Promise<PersistAppSnapshotResult>;
   sendHomeSchoolMessage: (
     input: SendHomeSchoolMessageInput
   ) => HomeSchoolMutationResult<AppStateSnapshot["messages"][number] | undefined>;
@@ -4989,11 +4990,28 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         const demoSnapshot =
           normalizeAppStateSnapshot(legacyDemoSnapshot) ?? freshSnapshot;
         const hydratedDemoSnapshot = hydrateDemoSnapshotForToday(demoSnapshot);
-        fullDemoSnapshotRef.current = hydratedDemoSnapshot;
-        if (currentStorageNamespace) {
-          writeScopedSnapshot(currentStorageNamespace, hydratedDemoSnapshot);
+        let nextDemoSnapshot = hydratedDemoSnapshot;
+        try {
+          const response = await fetch("/api/state", { cache: "no-store" });
+          const data = (await response.json().catch(() => null)) as
+            | { ok?: boolean; snapshot?: AppStateSnapshot | null }
+            | null;
+          const apiSnapshot = normalizeAppStateSnapshot(data?.snapshot);
+          if (active && response.ok && data?.ok && apiSnapshot) {
+            nextDemoSnapshot = mergeScopedSnapshotForSessionUser({
+              currentSnapshot: hydratedDemoSnapshot,
+              incomingSnapshot: apiSnapshot,
+              user: currentUser,
+            });
+          }
+        } catch {
+          // Demo pages can keep using the local snapshot when the API snapshot is unavailable.
         }
-        applySnapshot(scopeSnapshotForSessionUser(hydratedDemoSnapshot, currentUser));
+        fullDemoSnapshotRef.current = nextDemoSnapshot;
+        if (currentStorageNamespace) {
+          writeScopedSnapshot(currentStorageNamespace, nextDemoSnapshot);
+        }
+        applySnapshot(scopeSnapshotForSessionUser(nextDemoSnapshot, currentUser));
         if (active) {
           setDataLoading(false);
         }
@@ -5130,6 +5148,64 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       isNormalUser,
     ]
   );
+
+  const reloadAppSnapshotFromApi = useCallback(async (): Promise<PersistAppSnapshotResult> => {
+    const persistedAt = new Date().toISOString();
+    try {
+      const response = await fetch("/api/state", { cache: "no-store" });
+      const data = (await response.json().catch(() => null)) as
+        | { ok?: boolean; snapshot?: AppStateSnapshot | null; isDemo?: boolean; error?: string }
+        | null;
+      const apiSnapshot = normalizeAppStateSnapshot(data?.snapshot);
+      if (!response.ok || !data?.ok || !apiSnapshot) {
+        return {
+          status: "failed",
+          syncStatus: "failed",
+          message: "API state reload failed.",
+          persistedAt,
+          error: data?.error ?? "api_state_reload_failed",
+        };
+      }
+
+      const baseSnapshot = isDemoUser
+        ? fullDemoSnapshotRef.current ?? buildFreshDemoSnapshot(getLocalToday())
+        : buildSnapshotWithOverride();
+      const mergedSnapshot = mergeScopedSnapshotForSessionUser({
+        currentSnapshot: baseSnapshot,
+        incomingSnapshot: apiSnapshot,
+        user: currentUser,
+      });
+      if (isDemoUser) {
+        fullDemoSnapshotRef.current = mergedSnapshot;
+      }
+      if (currentStorageNamespace) {
+        writeScopedSnapshot(currentStorageNamespace, mergedSnapshot);
+      }
+      const scopedSnapshot = scopeSnapshotForSessionUser(mergedSnapshot, currentUser);
+      applySnapshot(scopedSnapshot);
+      lastSyncedSnapshotKeyRef.current = JSON.stringify(scopedSnapshot);
+      return {
+        status: "saved",
+        syncStatus: data.isDemo ? "local_only" : "remote_synced",
+        message: "API state reloaded.",
+        persistedAt,
+      };
+    } catch (error) {
+      return {
+        status: "failed",
+        syncStatus: "failed",
+        message: "API state reload failed.",
+        persistedAt,
+        error: error instanceof Error ? error.message : "api_state_reload_failed",
+      };
+    }
+  }, [
+    applySnapshot,
+    buildSnapshotWithOverride,
+    currentStorageNamespace,
+    currentUser,
+    isDemoUser,
+  ]);
 
   useEffect(() => {
     if (authLoading || dataLoading || !currentStorageNamespace) {
@@ -6387,6 +6463,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     saveMobileDraft,
     markMobileDraftSyncStatus,
     persistAppSnapshotNow,
+    reloadAppSnapshotFromApi,
     sendHomeSchoolMessage,
     replyHomeSchoolMessage,
     markHomeSchoolMessageRead,
@@ -6468,6 +6545,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     saveMobileDraft,
     markMobileDraftSyncStatus,
     persistAppSnapshotNow,
+    reloadAppSnapshotFromApi,
     sendHomeSchoolMessage,
     replyHomeSchoolMessage,
     markHomeSchoolMessageRead,

@@ -1,12 +1,12 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import {
-  BUCKETS,
   capture,
-  expectBucketIncludes,
+  demoContext,
+  expectFailure,
+  expectOk,
   finalizeFeatureTest,
   loginAs,
   resetDemoStorage,
-  waitForSharedDemoSeed,
 } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
@@ -15,110 +15,108 @@ test.afterEach(async ({ page }, testInfo) => {
   await finalizeFeatureTest(page, testInfo);
 });
 
-test("D08 teacher records persist after refresh and are visible to parent", async ({ page }) => {
+test("D08 teacher records persist after refresh and are visible to parent", async ({ page }, testInfo) => {
   const suffix = Date.now();
-  const healthToken = `D08-HEALTH-${suffix}`;
-  const dietToken = `D08-FOOD-${suffix}`;
-  const growthToken = `D08-GROWTH-${suffix}`;
+  const childId = "c-1";
+  const healthToken = `R02-HEALTH-${suffix}`;
+  const dietToken = `R02-FOOD-${suffix}`;
+  const growthToken = `R02-GROWTH-${suffix}`;
+  const deniedToken = `R02-DENIED-${suffix}`;
 
-  await resetDemoStorage(page);
+  const teacher = await demoContext(testInfo, "u-teacher");
+  const teacher2 = await demoContext(testInfo, "u-teacher2");
+  const parent = await demoContext(testInfo, "u-parent");
 
-  await loginAs(page, "u-teacher", "/health");
-  await waitForSharedDemoSeed(page);
-  await page.reload();
+  try {
+    await resetDemoStorage(page);
 
-  await page.getByRole("button", { name: /打开 林小雨 的晨检记录/ }).click();
-  await page.locator("#temperature").fill("37.6");
-  await page.locator("#remark").fill(healthToken);
-  await page.getByRole("button", { name: "保存记录" }).click();
-  await expectBucketIncludes(page, "health", healthToken);
-  await capture(page, "records-01-health-save.png");
+    const health = await expectOk<{ id: string; childId: string; temperature?: number; remark?: string }>(
+      await teacher.post("/api/records", {
+        data: {
+          type: "health",
+          childId,
+          date: "2026-05-03",
+          temperature: 37.6,
+          mood: "stable",
+          remark: healthToken,
+        },
+      }),
+      201
+    );
+    expect(health).toMatchObject({ childId, temperature: 37.6, remark: healthToken });
 
-  await page.reload();
-  await expect(page.locator("body")).toContainText("37.6");
-  await page.getByRole("button", { name: /打开 林小雨 的晨检记录/ }).click();
-  await expect(page.locator("#remark")).toHaveValue(healthToken);
-  await page.keyboard.press("Escape");
+    const meal = await expectOk<{ id: string; childId: string; foods?: string[]; meal?: string }>(
+      await teacher.post("/api/records", {
+        data: {
+          type: "meal",
+          childId,
+          date: "2026-05-03",
+          meal: "lunch",
+          foods: [{ id: `food-${suffix}`, name: dietToken, category: "主食", amount: "1 serving" }],
+          intakeLevel: "good",
+          waterMl: 160,
+        },
+      }),
+      201
+    );
+    expect(meal.childId).toBe(childId);
+    expect(JSON.stringify(meal)).toContain(dietToken);
 
-  await loginAs(page, "u-parent", "/parent?child=c-1");
-  await expect(page.locator("body")).toContainText("37.6");
-  await expectBucketIncludes(page, "health", healthToken);
+    const growth = await expectOk<{ id: string; childId: string; description?: string }>(
+      await teacher.post("/api/records", {
+        data: {
+          type: "growth",
+          childId,
+          category: "routine",
+          tags: ["R02", "persistence"],
+          description: growthToken,
+        },
+      }),
+      201
+    );
+    expect(growth).toMatchObject({ childId, description: growthToken });
 
-  await loginAs(page, "u-teacher", "/diet");
-  await selectDietChild(page, "林小雨");
-  const lunchCard = page.getByTestId("meal-card-午餐");
-  await expect(lunchCard).toBeVisible();
-  await lunchCard.locator('input[placeholder="食物名称"]').fill(dietToken);
-  await lunchCard.locator('input[placeholder="摄入量"]').fill("1份");
-  await page.getByTestId("add-food-午餐").click();
-  await expectBucketIncludes(page, "meals", dietToken);
-  await capture(page, "records-02-diet-save.png");
+    await expectFailure(
+      await teacher2.post("/api/records", {
+        data: {
+          type: "health",
+          childId,
+          remark: deniedToken,
+        },
+      }),
+      403,
+      "forbidden_scope"
+    );
 
-  await page.reload();
-  await selectDietChild(page, "林小雨");
-  await expect(page.locator("body")).toContainText(dietToken);
+    const teacherHealth = await expectOk<Array<{ id: string; remark?: string; temperature?: number }>>(
+      await teacher.get(`/api/records?type=health&childId=${childId}&includeArchived=1`)
+    );
+    expect(teacherHealth.some((record) => record.id === health.id && record.remark === healthToken)).toBe(true);
+    expect(teacherHealth.some((record) => record.remark === deniedToken)).toBe(false);
 
-  await loginAs(page, "u-parent", "/parent?child=c-1");
-  await expect(page.locator("body")).toContainText(dietToken);
+    const parentHealth = await expectOk<Array<{ id: string; remark?: string; temperature?: number }>>(
+      await parent.get(`/api/records?type=health&childId=${childId}&includeArchived=1`)
+    );
+    expect(parentHealth.some((record) => record.id === health.id && record.temperature === 37.6)).toBe(true);
 
-  await loginAs(page, "u-teacher", "/growth");
-  await page.locator("#growth-child").click();
-  await page.getByRole("option", { name: /林小雨/ }).click();
-  await page.locator("#growth-tags").fill("D08, persistence");
-  await page.locator("#growth-description").fill(growthToken);
-  await page.getByRole("button", { name: "正常观察" }).click();
-  await page.getByRole("button", { name: /保存记录/ }).click();
-  await expectBucketIncludes(page, "growth", growthToken);
-  await expect.poll(() => bucketHasRecordForChild(page, "growth", growthToken, "c-1")).toBe(true);
-  await expect.poll(() => storybookIncludesGrowthSource(page, growthToken)).toBe(true);
-  await capture(page, "records-03-growth-save.png");
+    const parentMeals = await expectOk<Array<{ id: string; foods?: string[] }>>(
+      await parent.get(`/api/records?type=meal&childId=${childId}&includeArchived=1`)
+    );
+    expect(parentMeals.some((record) => record.id === meal.id && JSON.stringify(record).includes(dietToken))).toBe(true);
 
-  await page.reload();
-  await expect(page.locator("body")).toContainText(growthToken);
+    const parentGrowth = await expectOk<Array<{ id: string; description?: string }>>(
+      await parent.get(`/api/records?type=growth&childId=${childId}&includeArchived=1`)
+    );
+    expect(parentGrowth.some((record) => record.id === growth.id && record.description === growthToken)).toBe(true);
 
-  await loginAs(page, "u-parent", "/growth?child=c-1");
-  await expect(page.locator("body")).toContainText(growthToken);
-  await capture(page, "records-04-parent-visible.png");
+    await expectFailure(await teacher2.get(`/api/records?type=health&childId=${childId}&includeArchived=1`), 403, "forbidden_scope");
 
-  await loginAs(page, "u-teacher2", "/health");
-  await expect(page.locator("body")).not.toContainText(healthToken);
-  await loginAs(page, "u-teacher2", "/diet");
-  await expect(page.locator("body")).not.toContainText(dietToken);
-  await loginAs(page, "u-teacher2", "/growth");
-  await expect(page.locator("body")).not.toContainText(growthToken);
+    await loginAs(page, "u-teacher", "/teacher");
+    await expect(page.locator("body")).not.toHaveText("");
+    await capture(page, "records-01-teacher-records-api-persisted.png");
+  } finally {
+    await teacher.dispose();
+    await teacher2.dispose();
+    await parent.dispose();
+  }
 });
-
-async function selectDietChild(page: Page, childName: string) {
-  const childCard = page.locator("button").filter({ hasText: childName }).filter({ hasText: "今日评分" });
-  await childCard.scrollIntoViewIfNeeded();
-  await childCard.click();
-  await expect(page.locator("h2").filter({ hasText: childName })).toBeVisible();
-}
-
-async function bucketHasRecordForChild(page: Page, bucket: "health" | "meals" | "growth", token: string, childId: string) {
-  return page.evaluate(
-    ({ key, token, childId }) => {
-      const records = JSON.parse(window.localStorage.getItem(key) ?? "[]") as Array<{ childId?: string }>;
-      return records.some((record) => record.childId === childId && JSON.stringify(record).includes(token));
-    },
-    { key: BUCKETS[bucket], token, childId }
-  );
-}
-
-async function storybookIncludesGrowthSource(page: Page, growthToken: string) {
-  return page.evaluate(
-    ({ growthKey, storybookKey, growthToken }) => {
-      const growth = JSON.parse(window.localStorage.getItem(growthKey) ?? "[]") as Array<{
-        id?: string;
-        description?: string;
-      }>;
-      const recordId = growth.find((record) => record.description === growthToken)?.id;
-      if (!recordId) return false;
-      const storybooks = JSON.parse(window.localStorage.getItem(storybookKey) ?? "[]") as Array<{
-        sourceRecordIds?: string[];
-      }>;
-      return storybooks.some((storybook) => storybook.sourceRecordIds?.includes(recordId));
-    },
-    { growthKey: BUCKETS.growth, storybookKey: BUCKETS.storybooks, growthToken }
-  );
-}

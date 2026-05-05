@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { AdminHomeViewModel, InstitutionPriorityLevel } from "@/lib/agent/admin-types";
 import type { WeeklyReportResponse } from "@/lib/ai/types";
+import type { ApiAdminSummary } from "@/lib/api/types";
 import type { AdminCommunicationSummary } from "@/lib/communication/home-school";
 import { formatHomeSchoolTime } from "@/lib/communication/home-school";
 import {
@@ -30,7 +31,6 @@ import {
   ReplicaMetricLink,
   ReplicaPanel,
   ReplicaPill,
-  ReplicaUnavailableButton,
 } from "./DirectorReplicaPrimitives";
 
 function priorityTone(level: InstitutionPriorityLevel) {
@@ -48,8 +48,12 @@ export default function DirectorDashboardReplica({
   weeklyReportLoading,
   weeklyReportError,
   weeklyReportPeriodLabel,
+  adminSummary,
+  adminSummaryLoading,
+  adminSummaryError,
   communicationSummary,
   onMarkCommunicationHandled,
+  onOpenFeedbackDetail,
   onRefresh,
 }: {
   home: AdminHomeViewModel;
@@ -60,8 +64,12 @@ export default function DirectorDashboardReplica({
   weeklyReportLoading: boolean;
   weeklyReportError: string | null;
   weeklyReportPeriodLabel: string;
+  adminSummary: ApiAdminSummary | null;
+  adminSummaryLoading: boolean;
+  adminSummaryError: string | null;
   communicationSummary: AdminCommunicationSummary;
   onMarkCommunicationHandled: (conversationId: string) => void;
+  onOpenFeedbackDetail: () => void;
   onRefresh: () => void;
 }) {
   const scope = home.adminContext.institutionScope;
@@ -69,6 +77,13 @@ export default function DirectorDashboardReplica({
   const pendingDispatchCount = scope.pendingDispatchCount;
   const weeklySummary = weeklyReport?.summary ?? home.weeklySummary;
   const latestDietCoverage = home.dietTrendSeries.at(-1) ?? 0;
+  const apiMetricSource = adminSummaryLoading
+    ? "API 聚合刷新中"
+    : adminSummaryError
+      ? "API 聚合暂不可用"
+      : adminSummary
+        ? "E01 API/service scope 聚合"
+        : "等待 API 聚合";
   const closureSteps = [
     { label: "识别问题", value: `${home.priorityTopItems.length}`, status: home.priorityTopItems.length > 0 ? "待推进" : "暂无" },
     { label: "生成动作", value: `${home.adminContext.actionItems.length}`, status: home.adminContext.actionItems.length > 0 ? "已生成" : "暂无" },
@@ -82,31 +97,33 @@ export default function DirectorDashboardReplica({
     {
       label: "出勤率",
       value: `${scope.todayAttendanceRate}%`,
-      subValue: `出勤 ${scope.todayPresentCount} / 应出勤 ${scope.visibleChildren}`,
+      subValue: adminSummary
+        ? `儿童 ${adminSummary.childCount} · 今日记录 ${adminSummary.todayRecordCount}`
+        : `出勤 ${scope.todayPresentCount} / 应出勤 ${scope.visibleChildren}`,
       href: "/children",
       icon: <CalendarCheck2 className="h-4 w-4" />,
       tone: "blue" as const,
     },
     {
       label: "晨检异常",
-      value: `${scope.healthAbnormalCount}项`,
-      subValue: `近 7 天异常记录 ${scope.healthAbnormalCount} 项`,
+      value: `${adminSummary?.healthAbnormalCount ?? scope.healthAbnormalCount}项`,
+      subValue: adminSummary ? `源记录 ${adminSummary.sourceRecordIds.length} 条` : `近 7 天异常记录 ${scope.healthAbnormalCount} 项`,
       href: "/health",
       icon: <HeartPulse className="h-4 w-4" />,
       tone: "purple" as const,
     },
     {
       label: "饮食记录覆盖",
-      value: `${latestDietCoverage}%`,
-      subValue: "按近 7 天真实饮食记录计算",
+      value: adminSummary ? `${adminSummary.mealRecordCount}条` : `${latestDietCoverage}%`,
+      subValue: adminSummary ? "来自服务端真实饮食记录" : "按近 7 天真实饮食记录计算",
       href: "/diet",
       icon: <Utensils className="h-4 w-4" />,
       tone: "orange" as const,
     },
     {
       label: "成长关注",
-      value: `${scope.growthAttentionCount}项`,
-      subValue: `待复查 ${scope.pendingReviewCount} 项`,
+      value: `${adminSummary?.growthRecordCount ?? scope.growthAttentionCount}项`,
+      subValue: adminSummary ? `未处理反馈 ${adminSummary.unresolvedFeedbackCount} · 高风险 ${adminSummary.highRiskConsultationCount}` : `待复查 ${scope.pendingReviewCount} 项`,
       href: "/growth",
       icon: <Activity className="h-4 w-4" />,
       tone: "green" as const,
@@ -120,14 +137,14 @@ export default function DirectorDashboardReplica({
       description={`数据统计周期：${weeklyReportPeriodLabel}。以园长数据看板为主体，保留儿童档案与闭环管理入口。`}
       actions={
         <>
-          <ReplicaUnavailableButton variant="outline">
+          <ReplicaButtonLink href="/admin/agent?action=weekly-report" variant="outline">
             <Download className="h-4 w-4" />
             导出周报
-          </ReplicaUnavailableButton>
-          <ReplicaUnavailableButton variant="outline">
+          </ReplicaButtonLink>
+          <ReplicaButtonLink href="/admin/agent?action=weekly-report" variant="outline">
             <Share2 className="h-4 w-4" />
             分享周报
-          </ReplicaUnavailableButton>
+          </ReplicaButtonLink>
           <ReplicaButton onClick={onRefresh} disabled={weeklyReportLoading}>
             <RefreshCw className={`h-4 w-4 ${weeklyReportLoading ? "animate-spin" : ""}`} />
             刷新数据
@@ -145,6 +162,9 @@ export default function DirectorDashboardReplica({
                   {weeklyReportLoading ? "正在生成本周运营摘要..." : weeklySummary}
                 </p>
                 {weeklyReportError ? <p className="mt-2 text-xs text-white/80">{weeklyReportError}</p> : null}
+                <p data-testid="admin-api-summary" className="mt-2 text-xs font-semibold text-white/80">
+                  {apiMetricSource}
+                </p>
               </div>
               <Image
                 src={directorReplicaAssets.dashboardCluster}
@@ -349,9 +369,9 @@ export default function DirectorDashboardReplica({
               <p className="mt-3 text-xs text-[#7A86A6]">
                 {feedbackExpectedCount > 0 ? `已完成 ${feedbackCompletedCount} / 应完成 ${feedbackExpectedCount}` : "暂无绑定家长反馈对象"}
               </p>
-              <ReplicaButtonLink href="/admin/agent?action=weekly-report" variant="soft" className="mt-5 w-full">
+              <ReplicaButton data-testid="admin-open-feedback-detail" onClick={onOpenFeedbackDetail} variant="soft" className="mt-5 w-full">
                 查看反馈详情
-              </ReplicaButtonLink>
+              </ReplicaButton>
             </div>
           </ReplicaPanel>
 

@@ -53,8 +53,6 @@ class VivoOcrProvider:
         text_parts = [*preview_texts]
         if notes:
             text_parts.append(notes)
-        if not text_parts and file_names:
-            text_parts.append(" ".join(file_names))
 
         text = "\n".join(part for part in text_parts if part).strip()
         return {

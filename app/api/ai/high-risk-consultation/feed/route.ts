@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createBrainTransportHeaders, forwardBrainRequest } from "@/lib/server/brain-client";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 
 function buildLocalFallbackHeaders(targetPath: string, fallbackReason: string | null, upstreamHost: string | null) {
   return createBrainTransportHeaders({
@@ -11,6 +12,9 @@ function buildLocalFallbackHeaders(targetPath: string, fallbackReason: string | 
 }
 
 export async function GET(request: Request) {
+  const authError = await authorizeAiRoute(request, { requiredRole: "staff", allowUnscoped: true });
+  if (authError) return authError;
+
   const url = new URL(request.url);
   const targetPath = `/api/v1/agents/consultations/high-risk/feed${url.search}`;
   const brainForward = await forwardBrainRequest(request, targetPath);

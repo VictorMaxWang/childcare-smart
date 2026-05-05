@@ -1,0 +1,140 @@
+{
+  "taskId": "R03",
+  "status": "done",
+  "bugbashSmokeBefore": "failed; latest reproduction had 4 B26 issues, all parent POST /api/ai/suggestions 403 console errors. E99 historical B26 artifact recorded 6 same-root parent/mobile 403 console errors.",
+  "bugbashSmokeAfter": "passed; artifacts/bug-bash/B26/b26-smoke-results.json has ok=true and issues=[].",
+  "diagnosed403": [
+    {
+      "id": "B26-403-1",
+      "route": "/parent",
+      "requestUrl": "/api/ai/suggestions",
+      "method": "POST",
+      "account": "u-parent",
+      "role": "parent",
+      "viewport": "desktop",
+      "expected": "unexpected",
+      "consoleErrorSource": "browser resource console error from 403 suggestions response",
+      "affectsUserPath": true,
+      "shouldFixFrontendRequest": false,
+      "shouldUpdateTestExpected403": false,
+      "shouldFixScopeOrChildParam": true,
+      "conclusion": "Normal parent home path sent an authorized child snapshot; route guard incorrectly treated snapshot.child.className as class scope."
+    },
+    {
+      "id": "B26-403-2",
+      "route": "/parent?child=c-1",
+      "requestUrl": "/api/ai/suggestions",
+      "method": "POST",
+      "account": "u-parent",
+      "role": "parent",
+      "viewport": "desktop",
+      "expected": "unexpected",
+      "consoleErrorSource": "browser resource console error from 403 suggestions response",
+      "affectsUserPath": true,
+      "shouldFixFrontendRequest": false,
+      "shouldUpdateTestExpected403": false,
+      "shouldFixScopeOrChildParam": true,
+      "conclusion": "Authorized child c-1 path was blocked before requireParentChildAccess could validate the intended child-scoped request."
+    },
+    {
+      "id": "B26-403-3",
+      "route": "/parent?child=c-1",
+      "requestUrl": "/api/ai/suggestions",
+      "method": "POST",
+      "account": "u-parent",
+      "role": "parent",
+      "viewport": "mobile 390x844",
+      "expected": "unexpected",
+      "consoleErrorSource": "browser resource console error from 403 suggestions response",
+      "affectsUserPath": true,
+      "shouldFixFrontendRequest": false,
+      "shouldUpdateTestExpected403": false,
+      "shouldFixScopeOrChildParam": true,
+      "conclusion": "Mobile parent smoke hit the same child-scoped suggestions request and failed because className was collected as class scope."
+    },
+    {
+      "id": "B26-403-4",
+      "route": "/parent?child=c-1",
+      "requestUrl": "/api/ai/suggestions",
+      "method": "POST",
+      "account": "u-parent",
+      "role": "parent",
+      "viewport": "mobile 390x844",
+      "expected": "unexpected",
+      "consoleErrorSource": "browser resource console error from duplicate 403 suggestions response",
+      "affectsUserPath": true,
+      "shouldFixFrontendRequest": false,
+      "shouldUpdateTestExpected403": false,
+      "shouldFixScopeOrChildParam": true,
+      "conclusion": "Duplicate mobile occurrence of the same route guard misclassification."
+    },
+    {
+      "id": "B26-403-5",
+      "route": "/parent/storybook?child=c-1",
+      "requestUrl": "/api/ai/suggestions",
+      "method": "POST",
+      "account": "u-parent",
+      "role": "parent",
+      "viewport": "historical parent route attribution",
+      "expected": "unexpected",
+      "consoleErrorSource": "historical E99/B26 browser resource console error, likely delayed in-flight parent-home request after navigation",
+      "affectsUserPath": true,
+      "shouldFixFrontendRequest": false,
+      "shouldUpdateTestExpected403": false,
+      "shouldFixScopeOrChildParam": true,
+      "conclusion": "Same endpoint and root cause as parent home suggestions; not a storybook permission requirement."
+    },
+    {
+      "id": "B26-403-6",
+      "route": "/parent/storybook?child=c-1",
+      "requestUrl": "/api/ai/suggestions",
+      "method": "POST",
+      "account": "u-parent",
+      "role": "parent",
+      "viewport": "historical parent route attribution",
+      "expected": "unexpected",
+      "consoleErrorSource": "historical E99/B26 duplicate 403 console error",
+      "affectsUserPath": true,
+      "shouldFixFrontendRequest": false,
+      "shouldUpdateTestExpected403": false,
+      "shouldFixScopeOrChildParam": true,
+      "conclusion": "Historical duplicate of the same suggestions route guard issue."
+    }
+  ],
+  "fixedFrontendRequests": [],
+  "updatedTestExpectations": [],
+  "scopeChanges": [
+    {
+      "file": "app/api/ai/suggestions/route.ts",
+      "change": "Use authorizeAiRoute(request, { requiredRole: \"parent\", collectJsonClassNames: false }) for the parent suggestions route.",
+      "permissionWidening": false
+    },
+    {
+      "file": "lib/server/scope.ts",
+      "change": "No change. Parent class-scope restrictions remain intact.",
+      "permissionWidening": false
+    }
+  ],
+  "changedFiles": [
+    "app/api/ai/suggestions/route.ts",
+    "tests/product-completion/ai-routes-auth.spec.ts",
+    "docs/product-completion/results/R03-result.md",
+    "docs/product-completion/results/R03-result.json",
+    "artifacts/product-completion/R03/bugbash-parent-mobile-403-report.md"
+  ],
+  "checks": {
+    "lint": "passed: npm run lint",
+    "build": "passed: npm run build",
+    "bugbashSmoke": "passed: npm run bugbash:smoke; 1 passed, B26 issues=[]",
+    "productSmoke": "passed: npm run product:smoke; 2 passed",
+    "productApi": "passed: npm run product:api; 8 passed",
+    "productVoice": "passed: npm run product:voice; parser 13 passed and Playwright 20 passed",
+    "productJourney": "passed: npm run product:journey; 1 passed",
+    "aiRoutesAuth": "passed: npx playwright test tests/product-completion/ai-routes-auth.spec.ts --config=playwright.product.config.ts; 2 passed"
+  },
+  "risks": [
+    "Brain service was unavailable locally, so checks exercised the existing fallback path rather than a live Brain success path.",
+    "The historical /parent/storybook?child=c-1 entries are attributed to delayed in-flight parent-home suggestions requests, based on matching endpoint and root cause."
+  ],
+  "notes": "No bugbash expected-403 ignore was added. No frontend request was hidden or removed. Parent child access remains enforced by requireParentChildAccess(childId), and forged child c-3 still returns 403 forbidden_scope in the added regression test."
+}

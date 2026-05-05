@@ -1,3 +1,9 @@
+import {
+  getVivoProviderStatus,
+  requestVivoChat,
+  type VivoProviderStatus,
+} from "@/lib/providers/vivo";
+
 export interface HighRiskConsultationLlmInput {
   childName: string;
   className: string;
@@ -21,11 +27,15 @@ export interface HighRiskConsultationLlmOutput {
 
 export interface LlmProviderResult<T> {
   provider: string;
-  mode: "mock" | "real";
+  mode: "fallback" | "mock" | "real";
+  model?: string;
+  warnings?: string[];
+  providerStatus?: VivoProviderStatus;
   output: T;
 }
 
 export interface LlmProvider {
+  getStatus(): VivoProviderStatus;
   generateHighRiskConsultationNarrative(
     input: HighRiskConsultationLlmInput
   ): Promise<LlmProviderResult<HighRiskConsultationLlmOutput>>;
@@ -39,84 +49,40 @@ function buildMockNarrative(input: HighRiskConsultationLlmInput): HighRiskConsul
 
   return {
     summary: [
-      `${input.childName} 当前已进入高风险闭环，建议先完成园内复核，再在今晚完成一次家庭配合，并在 48 小时内复查看风险是否下降。`,
-      longTermTrait ? `这次判断还参考了长期特征：${longTermTrait}。` : "",
-      recentSignal ? `近期连续信号是：${recentSignal}。` : "",
+      `${input.childName} 当前已进入${input.riskLevel === "high" ? "高" : "重点"}风险闭环，建议先完成园内复核，再在今晚完成一次家庭配合，并在 48 小时内复查看风险是否下降。`,
+      longTermTrait ? `本次判断参考了长期特征：${longTermTrait}。` : "",
+      recentSignal ? `近期连续信号：${recentSignal}。` : "",
     ]
       .filter(Boolean)
       .join(" "),
     parentMessageDraft: [
       `${input.childName} 今天在园出现需要重点关注的连续信号。今晚请优先完成：${input.tonightAtHomeActions[0] ?? "一项家庭稳定动作"}。`,
       lastConsultation ? `上次会诊提醒过：${lastConsultation}。` : "",
-      openLoop ? `这次也请继续观察：${openLoop}。` : "完成后请反馈孩子反应、是否改善，以及是否仍有异常。",
+      openLoop ? `也请继续观察：${openLoop}。` : "完成后请反馈孩子反应、是否改善，以及是否仍有异常。",
     ]
       .filter(Boolean)
       .join(" "),
     directorReason: [
-      `${input.childName} 同时命中 ${input.triggerReasons.length} 类风险信号，需要老师、家长、园长在同一条闭环里协同处理。`,
-      recentSignal ? `近期连续上下文显示：${recentSignal}。` : "",
-      openLoop ? `且仍有未闭环事项：${openLoop}。` : "",
+      `${input.childName} 同时命中 ${input.triggerReasons.length} 类风险信号，需要老师、家长、园长在同一闭环里协同处理。`,
+      recentSignal ? `近期上下文显示：${recentSignal}。` : "",
+      openLoop ? `仍有未闭环事项：${openLoop}。` : "",
     ]
       .filter(Boolean)
       .join(" "),
   };
 }
 
-async function requestDashscopeNarrative(
-  input: HighRiskConsultationLlmInput
-): Promise<HighRiskConsultationLlmOutput | null> {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
-  if (!apiKey) return null;
-
-  const prompt = [
-    "你是移动端托育 AI 助手的高风险会诊文案引擎。",
-    "请输出严格 JSON，字段只能是 summary、parentMessageDraft、directorReason。",
-    "summary 适合教师端一屏展示，100 字以内。",
-    "parentMessageDraft 适合家长任务卡，强调今晚动作与反馈。",
-    "directorReason 适合园长优先级决策卡，强调为什么今天要优先盯住。",
-    "如果输入里包含 longTermTraits、recentContinuitySignals、lastConsultationTakeaways、openLoops，请吸收真正相关的连续性上下文，但不要暴露原始字段名或技术术语。",
-    JSON.stringify(input),
-  ].join("\n");
+function parseNarrativeJson(content: string): HighRiskConsultationLlmOutput | null {
+  const trimmed = content.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
+  const candidate = fenced ?? trimmed;
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
 
   try {
-    const response = await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: process.env.AI_MODEL || "qwen-turbo",
-        response_format: { type: "json_object" },
-        temperature: 0.2,
-        messages: [
-          {
-            role: "system",
-            content: "你是托育高风险会诊文案助手，只输出 JSON。",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const raw = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const content = raw.choices?.[0]?.message?.content;
-    if (!content) return null;
-
-    const parsed = JSON.parse(content) as Partial<HighRiskConsultationLlmOutput>;
-    if (!parsed.summary || !parsed.parentMessageDraft || !parsed.directorReason) {
-      return null;
-    }
-
+    const parsed = JSON.parse(candidate.slice(start, end + 1)) as Partial<HighRiskConsultationLlmOutput>;
+    if (!parsed.summary || !parsed.parentMessageDraft || !parsed.directorReason) return null;
     return {
       summary: parsed.summary,
       parentMessageDraft: parsed.parentMessageDraft,
@@ -127,28 +93,98 @@ async function requestDashscopeNarrative(
   }
 }
 
-class MockLlmProvider implements LlmProvider {
-  async generateHighRiskConsultationNarrative(input: HighRiskConsultationLlmInput) {
+class LocalRulesLlmProvider implements LlmProvider {
+  getStatus() {
     return {
-      provider: "mock-llm",
-      mode: "mock" as const,
+      ...getVivoProviderStatus("chat"),
+      configured: false,
+      isRealProvider: false,
+      warnings: ["未配置 vivo AIGC，当前使用本地规则建议。"],
+    };
+  }
+
+  async generateHighRiskConsultationNarrative(input: HighRiskConsultationLlmInput) {
+    const status = this.getStatus();
+    return {
+      provider: "local-rules-llm",
+      mode: "fallback" as const,
+      model: "local-health-rules",
+      warnings: status.warnings,
+      providerStatus: status,
       output: buildMockNarrative(input),
     };
   }
 }
 
-class DashscopeLlmProvider implements LlmProvider {
-  async generateHighRiskConsultationNarrative(input: HighRiskConsultationLlmInput) {
-    const output = (await requestDashscopeNarrative(input)) ?? buildMockNarrative(input);
+class VivoLlmProvider implements LlmProvider {
+  getStatus() {
+    return getVivoProviderStatus("chat");
+  }
 
-    return {
-      provider: "dashscope-llm",
-      mode: "real" as const,
-      output,
-    };
+  async generateHighRiskConsultationNarrative(input: HighRiskConsultationLlmInput) {
+    const status = this.getStatus();
+    try {
+      const result = await requestVivoChat({
+        messages: [
+          {
+            role: "system",
+            content:
+              "你是托育高风险会诊文案助手。只输出 JSON，不要输出 Markdown。字段只能是 summary、parentMessageDraft、directorReason。",
+          },
+          {
+            role: "user",
+            content: [
+              "请根据输入生成会诊摘要、给家长的沟通草稿、园长介入理由。",
+              "summary 控制在 100 字以内，parentMessageDraft 强调今晚家庭动作与反馈，directorReason 强调为何需要优先盯住。",
+              JSON.stringify(input),
+            ].join("\n"),
+          },
+        ],
+        taskType: "high-risk-consultation",
+        temperature: 0.2,
+        maxTokens: 800,
+      });
+      const parsed = parseNarrativeJson(result.text);
+      if (parsed) {
+        return {
+          provider: result.providerName,
+          mode: "real" as const,
+          model: result.model,
+          warnings: result.warnings,
+          providerStatus: result.status,
+          output: parsed,
+        };
+      }
+
+      return {
+        provider: result.providerName,
+        mode: "fallback" as const,
+        model: result.model,
+        warnings: [...result.warnings, "vivo chat 返回内容不是预期 JSON，已降级为本地规则建议。"],
+        providerStatus: result.status,
+        output: buildMockNarrative(input),
+      };
+    } catch (error) {
+      return {
+        provider: "vivo-chat",
+        mode: "fallback" as const,
+        model: "vivo-chat",
+        warnings: [
+          error instanceof Error ? error.message : "vivo chat provider 调用失败。",
+          "已降级为本地规则建议。",
+        ],
+        providerStatus: {
+          ...status,
+          status: "provider-unavailable" as const,
+          isRealProvider: false,
+        },
+        output: buildMockNarrative(input),
+      };
+    }
   }
 }
 
 export function resolveLlmProvider(): LlmProvider {
-  return process.env.DASHSCOPE_API_KEY ? new DashscopeLlmProvider() : new MockLlmProvider();
+  const status = getVivoProviderStatus("chat");
+  return status.status === "ready" ? new VivoLlmProvider() : new LocalRulesLlmProvider();
 }

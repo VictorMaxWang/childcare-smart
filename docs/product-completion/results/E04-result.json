@@ -1,11 +1,95 @@
 {
   "taskId": "E04",
-  "title": "Feedback details attachments and media messages",
-  "status": "pending",
-  "dependencies": ["E01"],
-  "writeScope": ["feedback APIs", "attachment metadata APIs", "message media UI"],
-  "mustWriteMarkdown": "docs/product-completion/results/E04-result.md",
-  "requiredChecks": ["npm run lint", "npm run build", "feedback and attachment regression"],
-  "notes": "If binary storage is unavailable, save metadata only and label status clearly."
+  "status": "done",
+  "completedItems": [
+    "Parent, teacher, and director feedback detail flows are active and no longer disabled placeholders.",
+    "Feedback detail aggregates child, parent, teacher, messages, replies, attachments, and audit-derived status history.",
+    "Feedback status supports open, in-progress, resolved, and archived with persisted staff updates.",
+    "Parent message attachments, parent feedback attachments, and teacher reply attachments save through E01 attachments API/service.",
+    "Image attachments show thumbnails and preview/save actions.",
+    "Audio attachments support MediaRecorder when available and audio file fallback when unavailable.",
+    "Saved audio attachments render playable audio controls.",
+    "Attachment detail and content routes run server-side scope checks.",
+    "Attachment service enforces 5MB single-file and 3-per-related-object limits.",
+    "Storybook relatedType metadata and scope foundation is present.",
+    "E04 Playwright loop passed across parent, teacher, director, and cross-class forbidden access."
+  ],
+  "remainingItems": [
+    "Real external object storage is not connected in E04.",
+    "ASR/OCR transcription is deferred to E05.",
+    "Voice assistant features are deferred to E06-E09.",
+    "Full storybook media export/share packaging is outside E04.",
+    "Full feature:smoke still has D08/non-E04 failures."
+  ],
+  "fixedFindings": [
+    "Parent feedback/message attachment placeholders are replaced with working attachment selection and preview.",
+    "Director weekly/dashboard feedback detail entry is no longer disabled and opens a real detail flow.",
+    "Feedback status updates persist and reopen with status history.",
+    "Attachment content URLs are scoped on the server, not only hidden in the UI.",
+    "File input handling now copies FileList before clearing the input so selected files actually preview."
+  ],
+  "changedFiles": [
+    "app/admin/page.tsx",
+    "app/api/attachments/[attachmentId]/content/route.ts",
+    "app/api/feedback/route.ts",
+    "app/parent/agent/page.tsx",
+    "app/teacher/agent/page.tsx",
+    "components/admin/pixel-replica/DirectorDashboardReplica.tsx",
+    "components/admin/pixel-replica/DirectorWeeklyReportReplica.tsx",
+    "components/communication/AttachmentMediaPicker.tsx",
+    "components/communication/FeedbackDetailDialog.tsx",
+    "components/parent/ParentStructuredFeedbackComposer.tsx",
+    "docs/product-completion/ATTACHMENT_VOICE_IMAGE_SPEC.md",
+    "docs/product-completion/IMPLEMENTATION_LOG.md",
+    "docs/product-completion/PRODUCT_DECISIONS.md",
+    "docs/product-completion/results/E04-result.md",
+    "docs/product-completion/results/E04-result.json",
+    "lib/api/communication.ts",
+    "lib/api/types.ts",
+    "lib/server/api-handlers.ts",
+    "lib/server/app-data-model.ts",
+    "lib/server/app-data-service.ts",
+    "tests/feature-completion/e04-feedback-attachments.spec.ts"
+  ],
+  "apiMethodsUsed": [
+    "GET /api/messages",
+    "POST /api/messages",
+    "POST /api/messages/[messageId]/reply",
+    "GET /api/feedback",
+    "POST /api/feedback",
+    "GET /api/feedback/[feedbackId]",
+    "PATCH /api/feedback/[feedbackId]",
+    "GET /api/attachments",
+    "POST /api/attachments",
+    "GET /api/attachments/[attachmentId]",
+    "GET /api/attachments/[attachmentId]/content"
+  ],
+  "scopeHelpersUsed": [
+    "requireChildAccess",
+    "requireFeedbackViewAccess",
+    "requireConversationReplyAccess",
+    "requireDirector",
+    "canAccessChild",
+    "canViewFeedback"
+  ],
+  "browserUseEvidence": [
+    "artifacts/product-completion/E04/parent-feedback-detail.png",
+    "artifacts/product-completion/E04/parent-message-attachment-after-refresh.png",
+    "artifacts/product-completion/E04/teacher-feedback-detail.png",
+    "artifacts/product-completion/E04/teacher-reply-audio.png",
+    "artifacts/product-completion/E04/parent-sees-teacher-audio.png",
+    "artifacts/product-completion/E04/admin-feedback-status-resolved.png"
+  ],
+  "checks": {
+    "lint": "passed: npm run lint",
+    "build": "passed: npm run build",
+    "featureSmoke": "partial: FEATURE_BASE_URL=http://127.0.0.1:3000 FEATURE_SKIP_WEBSERVER=1 npm run feature:smoke ran; E04 passed, full suite failed 5 D08/non-E04 cases and left 1 test unrun"
+  },
+  "risks": [
+    "metadata_only demo mode stores data URLs in the snapshot for local preview/playback; this is not production object storage.",
+    "Feedback detail message aggregation is child-scoped because older messages do not have a feedbackId relation.",
+    "MediaRecorder behavior depends on browser support; audio file upload fallback is provided.",
+    "Full feature smoke remains red due D08/non-E04 tests unrelated to the E04 targeted pass."
+  ],
+  "notes": "E04 reused E01 API client, AppDataService, unified error envelope, and lib/server/scope.ts helpers. IMPLEMENTATION_STATUS.md was not modified."
 }
-

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
+import FeedbackDetailDialog from "@/components/communication/FeedbackDetailDialog";
 import DirectorDashboardReplica from "@/components/admin/pixel-replica/DirectorDashboardReplica";
 import EmptyState from "@/components/EmptyState";
 import { buildAdminHomeViewModel, buildAdminWeeklyReportSnapshot } from "@/lib/agent/admin-agent";
@@ -10,6 +11,9 @@ import { dedupeAdminHomeExposure } from "@/lib/agent/admin-home-dedupe";
 import { useAdminConsultationWorkspace } from "@/lib/agent/use-admin-consultation-workspace";
 import { fetchWeeklyReport } from "@/lib/agent/weekly-report-client";
 import type { WeeklyReportResponse } from "@/lib/ai/types";
+import { getAdminSummary } from "@/lib/api/analytics";
+import { listFeedback as listApiFeedback, type ApiFeedback } from "@/lib/api/communication";
+import type { ApiAdminSummary } from "@/lib/api/types";
 import { buildAdminCommunicationSummary } from "@/lib/communication/home-school";
 import { INSTITUTION_NAME, useApp } from "@/lib/store";
 
@@ -42,6 +46,12 @@ export default function AdminHomePage() {
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
   const [weeklyReportError, setWeeklyReportError] = useState<string | null>(null);
   const [weeklyReportRefreshNonce, setWeeklyReportRefreshNonce] = useState(0);
+  const [adminSummary, setAdminSummary] = useState<ApiAdminSummary | null>(null);
+  const [adminSummaryLoading, setAdminSummaryLoading] = useState(false);
+  const [adminSummaryError, setAdminSummaryError] = useState<string | null>(null);
+  const [apiFeedbacks, setApiFeedbacks] = useState<ApiFeedback[]>([]);
+  const [feedbackDetailId, setFeedbackDetailId] = useState<string | null>(null);
+  const [feedbackDetailOpen, setFeedbackDetailOpen] = useState(false);
 
   const latestConsultations = getLatestConsultations();
   const localConsultationSummaries = useMemo(() => {
@@ -196,6 +206,69 @@ export default function AdminHomePage() {
     };
   }, [visibleChildren.length, weeklyReportKey, weeklyReportPayload, weeklyReportRefreshNonce]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAdminSummary() {
+      setAdminSummaryLoading(true);
+      setAdminSummaryError(null);
+      try {
+        const data = await getAdminSummary();
+        if (!cancelled) setAdminSummary(data);
+      } catch (error) {
+        if (!cancelled) {
+          setAdminSummary(null);
+          setAdminSummaryError(error instanceof Error ? error.message : "Admin summary API unavailable.");
+        }
+      } finally {
+        if (!cancelled) setAdminSummaryLoading(false);
+      }
+    }
+
+    void loadAdminSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [weeklyReportRefreshNonce]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadFeedback() {
+      try {
+        const data = await listApiFeedback();
+        if (!cancelled) setApiFeedbacks(data);
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(error instanceof Error ? error.message : "反馈详情读取失败。");
+        }
+      }
+    }
+    void loadFeedback();
+    return () => {
+      cancelled = true;
+    };
+  }, [weeklyReportRefreshNonce]);
+
+  async function handleOpenFeedbackDetail() {
+    let feedback = apiFeedbacks[0];
+    if (!feedback) {
+      try {
+        const data = await listApiFeedback();
+        setApiFeedbacks(data);
+        feedback = data[0];
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "反馈详情读取失败。");
+        return;
+      }
+    }
+    if (!feedback) {
+      toast.info("当前暂无可查看的反馈详情。");
+      return;
+    }
+    setFeedbackDetailId(feedback.feedbackId);
+    setFeedbackDetailOpen(true);
+  }
+
   function handleRefreshDashboard() {
     weeklyReportCacheRef.current.delete(weeklyReportKey);
     setWeeklyReportRefreshNonce((value) => value + 1);
@@ -240,9 +313,20 @@ export default function AdminHomePage() {
         weeklyReportLoading={weeklyReportLoading}
         weeklyReportError={weeklyReportError}
         weeklyReportPeriodLabel={weeklyReportPayload.snapshot.periodLabel}
+        adminSummary={adminSummary}
+        adminSummaryLoading={adminSummaryLoading}
+        adminSummaryError={adminSummaryError}
         communicationSummary={communicationSummary}
         onMarkCommunicationHandled={handleMarkCommunicationHandled}
+        onOpenFeedbackDetail={handleOpenFeedbackDetail}
         onRefresh={handleRefreshDashboard}
+      />
+      <FeedbackDetailDialog
+        feedbackId={feedbackDetailId}
+        open={feedbackDetailOpen}
+        canUpdateStatus
+        onOpenChange={setFeedbackDetailOpen}
+        onUpdated={() => setWeeklyReportRefreshNonce((value) => value + 1)}
       />
       {localConsultationSummaries.length > 0 ? (
         <section className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">

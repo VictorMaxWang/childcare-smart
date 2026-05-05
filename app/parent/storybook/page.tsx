@@ -5,6 +5,12 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import StoryBookViewer from "@/components/parent/StoryBookViewer";
 import { restoreParentStorybookResponse, useParentD01Data } from "@/components/parent/useParentD01Data";
 import {
+  exportStorybook,
+  shareStorybook,
+  upsertStorybook as upsertApiStorybook,
+} from "@/lib/api/storybooks";
+import type { StorybookExportFormat } from "@/lib/api/types";
+import {
   buildParentStoryBookRequestFromFeed,
   DEFAULT_PARENT_STORYBOOK_GENERATION_MODE,
   DEFAULT_PARENT_STORYBOOK_PAGE_COUNT,
@@ -100,6 +106,8 @@ export default function ParentStoryBookPage() {
   const [cacheState, setCacheState] = useState<ParentStoryBookClientCacheState>({
     kind: "none",
   });
+  const [storybookActionStatus, setStorybookActionStatus] = useState<string | null>(null);
+  const [isStorybookActionPending, setIsStorybookActionPending] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const networkOnlyRef = useRef(false);
   const storyRef = useRef<ParentStoryBookResponse | null>(null);
@@ -336,6 +344,13 @@ export default function ParentStoryBookPage() {
     if (!bypassCache) {
       if (latestSavedStorybook && selectedFeed) {
         const restoredStory = restoreParentStorybookResponse(latestSavedStorybook, selectedFeed.child.name);
+        void upsertApiStorybook({
+          childId: selectedFeed.child.id,
+          storybookId: restoredStory.storyId,
+          response: restoredStory as unknown as Record<string, unknown>,
+          sourceRecordIds: latestSavedStorybook.sourceRecordIds,
+          generatedAt: restoredStory.generatedAt,
+        }).catch(() => undefined);
         startTransition(() => {
           setStory(restoredStory);
           setStatus(restoredStory.mode);
@@ -412,16 +427,35 @@ export default function ParentStoryBookPage() {
           appliedControls.preset,
           data
         );
+        const sourceRecordIds = selectedFeed
+          ? growthRecords
+              .filter((record) => record.childId === selectedFeed.child.id)
+              .map((record) => record.id)
+          : [];
         const storybookSaveResult =
           selectedFeed && data.childId === selectedFeed.child.id
             ? saveParentStorybook({
                 childId: selectedFeed.child.id,
                 response: data,
-                sourceRecordIds: growthRecords
-                  .filter((record) => record.childId === selectedFeed.child.id)
-                  .map((record) => record.id),
+                sourceRecordIds,
               })
             : null;
+        let apiStorybookSaveError = "";
+        let apiStorybookSaved = false;
+        if (selectedFeed && data.childId === selectedFeed.child.id) {
+          try {
+            await upsertApiStorybook({
+              childId: selectedFeed.child.id,
+              storybookId: data.storyId,
+              response: data as unknown as Record<string, unknown>,
+              sourceRecordIds,
+              generatedAt: data.generatedAt,
+            });
+            apiStorybookSaved = true;
+          } catch (saveError) {
+            apiStorybookSaveError = saveError instanceof Error ? saveError.message : "E01 绘本服务保存失败。";
+          }
+        }
         startTransition(() => {
           setStory(data);
           setStatus(data.mode);
@@ -429,9 +463,13 @@ export default function ParentStoryBookPage() {
           setRefreshMessage(
             storybookSaveResult?.status === "failed"
               ? `生成完成，但保存到 D01 失败：${storybookSaveResult.error ?? storybookSaveResult.message}`
-              : storybookSaveResult?.status === "local_only"
-                ? "本地演示已保存到 D01，刷新后仍存在。"
-                : null
+              : apiStorybookSaveError
+                ? `本地演示已保存，但 E01 绘本服务保存失败：${apiStorybookSaveError}`
+                : apiStorybookSaved
+                  ? "绘本已保存到 E01 服务，语音可分享/导出；刷新后仍存在。"
+                  : storybookSaveResult?.status === "local_only"
+                    ? "本地演示已保存到 D01，刷新后仍存在。"
+                    : null
           );
           setIsRefreshing(false);
           setCacheState(
@@ -497,6 +535,63 @@ export default function ParentStoryBookPage() {
     }));
   }
 
+  async function handleExportStorybook(format: StorybookExportFormat) {
+    if (!story?.storyId) {
+      setStorybookActionStatus("请先生成或恢复一本成长绘本后再导出。");
+      return;
+    }
+
+    setIsStorybookActionPending(true);
+    setStorybookActionStatus(null);
+    try {
+      const exported = await exportStorybook(story.storyId, format);
+      const blob = new Blob([exported.content], { type: exported.mimeType });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = exported.filename;
+      anchor.rel = "noopener";
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
+      setStorybookActionStatus(`已生成本地导出文件 ${exported.filename}；当前未接入外部 PDF/公开链接服务。`);
+    } catch (error) {
+      setStorybookActionStatus(error instanceof Error ? error.message : "成长绘本导出失败。");
+    } finally {
+      setIsStorybookActionPending(false);
+    }
+  }
+
+  async function handleShareStorybook() {
+    if (!story?.storyId) {
+      setStorybookActionStatus("请先生成或恢复一本成长绘本后再分享。");
+      return;
+    }
+
+    setIsStorybookActionPending(true);
+    setStorybookActionStatus(null);
+    try {
+      const shared = await shareStorybook(story.storyId, { summary: story.summary });
+      let copied = false;
+      try {
+        await navigator.clipboard?.writeText(shared.copyText);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+      setStorybookActionStatus(
+        copied
+          ? "已生成本地分享文案并复制到剪贴板；外部分享服务未接入。"
+          : "已生成本地分享文案；浏览器未允许自动复制，请在分享结果中手动复制。"
+      );
+    } catch (error) {
+      setStorybookActionStatus(error instanceof Error ? error.message : "成长绘本分享失败。");
+    } finally {
+      setIsStorybookActionPending(false);
+    }
+  }
+
   return (
     <StoryBookViewer
       status={status}
@@ -504,6 +599,8 @@ export default function ParentStoryBookPage() {
       errorMessage={errorMessage}
       refreshMessage={refreshMessage}
       isRefreshing={isRefreshing}
+      isStorybookActionPending={isStorybookActionPending}
+      storybookActionStatus={storybookActionStatus}
       cacheState={cacheState}
       selectedChildName={selectedFeed?.child.name}
       hasChildContext={hasChildContext}
@@ -564,6 +661,12 @@ export default function ParentStoryBookPage() {
         if (!request) return;
         networkOnlyRef.current = true;
         setReloadToken((previousToken) => previousToken + 1);
+      }}
+      onExportStorybook={(format) => {
+        void handleExportStorybook(format);
+      }}
+      onShareStorybook={() => {
+        void handleShareStorybook();
       }}
     />
   );

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BrainCircuit } from "lucide-react";
+import { toast } from "sonner";
 import DirectorAgentReplica from "@/components/admin/pixel-replica/DirectorAgentReplica";
 import DirectorWeeklyReportReplica from "@/components/admin/pixel-replica/DirectorWeeklyReportReplica";
 import EmptyState from "@/components/EmptyState";
@@ -22,6 +23,15 @@ import type {
   AdminDispatchEvent,
 } from "@/lib/agent/admin-types";
 import type { AiFollowUpMessage } from "@/lib/ai/types";
+import {
+  archiveWeeklyReport,
+  createWeeklyReport,
+  exportWeeklyReport,
+  getWeeklyReport,
+  listWeeklyReports,
+  shareWeeklyReport,
+} from "@/lib/api/weekly-reports";
+import type { ApiWeeklyReport, WeeklyReportExportFormat } from "@/lib/api/types";
 import { INSTITUTION_NAME, useApp } from "@/lib/store";
 
 type PageMode = "daily" | "weekly";
@@ -82,6 +92,47 @@ function getPageMode(action: string | null): PageMode {
   return action === "weekly-report" ? "weekly" : "daily";
 }
 
+function currentWeekRange() {
+  const now = new Date();
+  const day = now.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const start = new Date(now);
+  start.setDate(now.getDate() + mondayOffset);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+  };
+}
+
+function downloadTextFile(filename: string, mimeType: string, content: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function copyText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
 export default function AdminAgentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -133,6 +184,11 @@ export default function AdminAgentPage() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [weeklyReports, setWeeklyReports] = useState<ApiWeeklyReport[]>([]);
+  const [selectedWeeklyReport, setSelectedWeeklyReport] = useState<ApiWeeklyReport | null>(null);
+  const [includeArchivedReports, setIncludeArchivedReports] = useState(false);
+  const [weeklyReportActionStatus, setWeeklyReportActionStatus] = useState<string | null>(null);
+  const [weeklyReportHistoryLoading, setWeeklyReportHistoryLoading] = useState(false);
   const lastAutoRunModeRef = useRef<PageMode | null>(null);
 
   const payload = useMemo<AdminAgentRequestPayload>(
@@ -277,6 +333,132 @@ export default function AdminAgentPage() {
     );
   }, [notificationEvents, notificationReady]);
 
+  const refreshWeeklyReports = useCallback(async () => {
+    setWeeklyReportHistoryLoading(true);
+    try {
+      const reports = await listWeeklyReports({ includeArchived: includeArchivedReports });
+      setWeeklyReports(reports);
+      setSelectedWeeklyReport((previous) => {
+        if (!previous) return reports[0] ?? null;
+        return reports.find((report) => report.reportId === previous.reportId) ?? reports[0] ?? null;
+      });
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : "周报历史加载失败");
+    } finally {
+      setWeeklyReportHistoryLoading(false);
+    }
+  }, [includeArchivedReports]);
+
+  useEffect(() => {
+    if (!isWeeklyMode) return;
+    void refreshWeeklyReports();
+  }, [isWeeklyMode, refreshWeeklyReports]);
+
+  function upsertWeeklyReport(report: ApiWeeklyReport) {
+    setWeeklyReports((previous) => {
+      const next = [report, ...previous.filter((item) => item.reportId !== report.reportId)];
+      return includeArchivedReports ? next : next.filter((item) => item.status !== "archived");
+    });
+    setSelectedWeeklyReport(report);
+  }
+
+  async function handleSaveWeeklyReport() {
+    const range = currentWeekRange();
+    setWeeklyReportActionStatus("saving");
+    setRequestError(null);
+    try {
+      const report = await createWeeklyReport({
+        title: `${INSTITUTION_NAME} 周报 ${range.start}~${range.end}`,
+        scopeType: "institution",
+        scopeId: currentUser.institutionId,
+        periodStart: range.start,
+        periodEnd: range.end,
+        summary: displayResult?.summary,
+        payload: displayResult ? { adminAgentResult: displayResult } : undefined,
+      });
+      upsertWeeklyReport(report);
+      toast.success("周报已保存归档");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "周报保存失败";
+      setRequestError(message);
+      toast.error(message);
+    } finally {
+      setWeeklyReportActionStatus(null);
+    }
+  }
+
+  async function handleSelectWeeklyReport(reportId: string) {
+    setWeeklyReportActionStatus("loading-detail");
+    try {
+      const report = await getWeeklyReport(reportId);
+      upsertWeeklyReport(report);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "周报详情加载失败";
+      setRequestError(message);
+      toast.error(message);
+    } finally {
+      setWeeklyReportActionStatus(null);
+    }
+  }
+
+  async function handleExportWeeklyReport(format: WeeklyReportExportFormat) {
+    if (!selectedWeeklyReport) return;
+    setWeeklyReportActionStatus(`export-${format}`);
+    try {
+      const data = await exportWeeklyReport(selectedWeeklyReport.reportId, format);
+      if (format === "share-text") {
+        await copyText(data.content);
+        toast.success("分享文本已复制");
+      } else {
+        downloadTextFile(data.filename, data.mimeType, data.content);
+        toast.success("周报已导出");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "周报导出失败";
+      setRequestError(message);
+      toast.error(message);
+    } finally {
+      setWeeklyReportActionStatus(null);
+    }
+  }
+
+  async function handleShareWeeklyReport() {
+    if (!selectedWeeklyReport) return;
+    setWeeklyReportActionStatus("sharing");
+    try {
+      const report = await shareWeeklyReport(selectedWeeklyReport.reportId);
+      upsertWeeklyReport(report);
+      await copyText(report.share?.localText ?? report.share?.summary ?? report.title);
+      toast.success("周报分享文本已复制");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "周报分享失败";
+      setRequestError(message);
+      toast.error(message);
+    } finally {
+      setWeeklyReportActionStatus(null);
+    }
+  }
+
+  async function handleArchiveWeeklyReport(action: "archive" | "restore") {
+    if (!selectedWeeklyReport) return;
+    setWeeklyReportActionStatus(action);
+    try {
+      const report = await archiveWeeklyReport(selectedWeeklyReport.reportId, action);
+      upsertWeeklyReport(report);
+      if (action === "archive" && !includeArchivedReports) {
+        setWeeklyReports((previous) => previous.filter((item) => item.reportId !== report.reportId));
+        setSelectedWeeklyReport((previous) => (previous?.reportId === report.reportId ? null : previous));
+      }
+      toast.success(action === "archive" ? "周报已归档" : "周报已恢复");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "周报归档失败";
+      setRequestError(message);
+      toast.error(message);
+    } finally {
+      setWeeklyReportActionStatus(null);
+    }
+  }
+
   async function handleCreateDispatch(actionItem: AdminAgentActionItem) {
     setRequestError(null);
 
@@ -362,8 +544,19 @@ export default function AdminAgentPage() {
         trendLabels={directorViewModel.trendLabels}
         attendanceTrendSeries={directorViewModel.attendanceTrendSeries}
         classDistribution={directorViewModel.classDistribution}
+        savedReports={weeklyReports}
+        selectedReport={selectedWeeklyReport}
+        includeArchivedReports={includeArchivedReports}
+        historyLoading={weeklyReportHistoryLoading}
+        actionStatus={weeklyReportActionStatus}
         onRerun={rerunCurrentMode}
         onSwitchDaily={() => switchMode("daily")}
+        onSaveReport={() => void handleSaveWeeklyReport()}
+        onSelectReport={(reportId) => void handleSelectWeeklyReport(reportId)}
+        onToggleArchived={() => setIncludeArchivedReports((value) => !value)}
+        onExportReport={(format) => void handleExportWeeklyReport(format)}
+        onShareReport={() => void handleShareWeeklyReport()}
+        onArchiveReport={(action) => void handleArchiveWeeklyReport(action)}
         onCreateDispatch={(actionItem) => void handleCreateDispatch(actionItem)}
         isCreatingNotification={isCreatingNotification}
       />

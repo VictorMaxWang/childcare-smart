@@ -19,6 +19,7 @@ import {
   forwardBrainRequest,
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import { normalizeHighRiskConsultationResult } from "@/lib/consultation/normalize-result";
 import { toFollowUpFeedbackLite } from "@/lib/feedback/normalize";
 import { buildMemoryContextForPrompt } from "@/lib/server/memory-context";
@@ -43,18 +44,18 @@ function isValidPayload(payload: unknown): payload is HighRiskConsultationReques
   );
 }
 
-function resolveNextLlmSource(provider: string, mode: "mock" | "real") {
+function resolveNextLlmSource(provider: string, mode: "fallback" | "mock" | "real") {
+  if (mode === "fallback") return "local-rules-fallback";
   if (provider === "mock-llm" || mode === "mock") return "mock";
-  if (provider === "dashscope-llm") return "dashscope";
+  if (provider === "vivo") return "vivo";
   return provider.replace(/-llm$/u, "") || "unknown";
 }
 
-function resolveNextLlmModel(provider: string, mode: "mock" | "real") {
+function resolveNextLlmModel(provider: string, mode: "fallback" | "mock" | "real") {
+  if (mode === "fallback") return "local-health-rules";
   if (provider === "mock-llm" || mode === "mock") return "mock-local-llm";
-  if (provider === "dashscope-llm") {
-    return process.env.AI_MODEL || process.env.BAILIAN_MODEL || "qwen-plus";
-  }
-  return "";
+  if (provider === "vivo") return process.env.VIVO_LLM_MODEL || "Volc-DeepSeek-V3.2";
+  return provider;
 }
 
 function buildLocalFallbackHeaders(brainForward: BrainForwardResult) {
@@ -67,6 +68,9 @@ function buildLocalFallbackHeaders(brainForward: BrainForwardResult) {
 }
 
 export async function POST(request: Request) {
+  const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
+  if (authError) return authError;
+
   const brainForward = await forwardBrainRequest(request, "/api/v1/agents/consultations/high-risk");
   if (brainForward.response) return brainForward.response;
   const localFallbackHeaders = buildLocalFallbackHeaders(brainForward);
@@ -202,6 +206,8 @@ export async function POST(request: Request) {
 
   const llmSource = resolveNextLlmSource(llmResult.provider, llmResult.mode);
   const llmModel = resolveNextLlmModel(llmResult.provider, llmResult.mode);
+  const isRealLlmProvider = llmResult.mode === "real";
+  const usedProviderFallback = !isRealLlmProvider;
   const providerTrace = {
     llm: llmResult.provider,
     provider: llmResult.provider,
@@ -213,8 +219,8 @@ export async function POST(request: Request) {
     consultationSource: String(nextConsultation.source ?? ""),
     fallbackReason: brainForward.fallbackReason ?? "brain-proxy-unavailable",
     brainProvider: "next-fallback",
-    realProvider: false,
-    fallback: true,
+    realProvider: isRealLlmProvider,
+    fallback: usedProviderFallback,
     ocr: ocrResult?.provider ?? "unused",
     asr: asrResult?.provider ?? "unused",
     tts: ttsResult.provider,
@@ -233,8 +239,8 @@ export async function POST(request: Request) {
       autoContext,
       provider: providerTrace.provider,
       model: providerTrace.model,
-      realProvider: false,
-      fallback: true,
+      realProvider: isRealLlmProvider,
+      fallback: usedProviderFallback,
       providerTrace,
       audioNarrationScript: ttsResult.output.script,
       multimodalNotes: {

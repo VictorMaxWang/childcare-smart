@@ -86,10 +86,16 @@ async def teacher_voice_understand(
         raise HTTPException(status_code=400, detail="Missing transcript or audio input")
 
     request_id = request.headers.get("x-request-id") or uuid4().hex
-    return understand_teacher_voice(
+    result = understand_teacher_voice(
         payload,
         audio_bytes=audio_bytes,
         settings=settings,
         request_id=request_id,
         input_mode=input_mode,
     )
+    if result.source.asr == "provider_unavailable" and not result.transcript.text.strip():
+        raise HTTPException(
+            status_code=503,
+            detail="ASR provider unavailable; audio-only input was not transcribed.",
+        )
+    return result

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-01",
+  "generatedAt": "2026-05-02",
   "taskId": "D90",
   "sourceFiles": {
     "resultJsonFiles": [
@@ -41,10 +41,10 @@
   },
   "counts": {
     "total": 92,
-    "verified": 70,
-    "partial": 6,
-    "needs-product-spec": 6,
-    "needs-backend": 10
+    "verified": 86,
+    "partial": 2,
+    "needs-product-spec": 0,
+    "needs-backend": 4
   },
   "resultTaskStatus": {
     "D01": "complete",
@@ -54,7 +54,8 @@
     "D05": "completed",
     "D06": "pending",
     "D07": "completed",
-    "D08": "completed-with-known-bugbash-smoke-failure"
+    "D08": "completed-with-known-bugbash-smoke-failure",
+    "E10": "completed"
   },
   "implementedFindingIds": [
     "C10-001",
@@ -154,21 +155,40 @@
   ],
   "qualityGateScan": {
     "fakeSuccessRemaining": [],
-    "uiOnlyRemaining": [
-      "C12-002",
-      "C20-013",
-      "C20-015",
-      "C22-015",
-      "C22-016"
-    ],
-    "mockOnlyRemaining": [
-      "C12-005",
-      "C20-009"
-    ],
-    "notPersistedRemaining": [
-      "C12-003"
-    ],
+    "uiOnlyRemaining": [],
+    "mockOnlyRemaining": [],
+    "notPersistedRemaining": [],
     "backendMissingUnmarked": []
+  },
+  "e10Reconciliation": {
+    "status": "completed",
+    "closedFindingIds": [
+      "C12-001",
+      "C12-002",
+      "C12-003",
+      "C12-004",
+      "C12-005",
+      "C15-010",
+      "C15-011",
+      "C15-012",
+      "C20-009",
+      "C20-010",
+      "C20-013",
+      "C20-014",
+      "C20-015",
+      "C22-005",
+      "C22-015",
+      "C22-016",
+      "C23-007"
+    ],
+    "remainingFindingIds": [
+      "C21-001",
+      "C21-002",
+      "C21-004",
+      "C21-007",
+      "C21-010"
+    ],
+    "notes": "E10 reconciles stale D90 remaining items against E01-E09 implementation. Remaining items are production authorization/data-model/backend-exposure risks and are tracked in docs/product-completion/REMAINING_GAPS.md."
   },
   "remainingFindings": [
     {

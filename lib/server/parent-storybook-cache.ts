@@ -30,6 +30,8 @@ type StoryBookMediaCacheEntry = {
   expiresAt: number;
   contentType: string;
   bytes: Buffer;
+  ownerChildId: string | null;
+  ownerStorybookId: string | null;
 };
 
 const storyResponseCache = new Map<string, StoryBookResponseCacheEntry>();
@@ -189,7 +191,11 @@ export function setCachedParentStoryBookResponse(
   });
 }
 
-export function cacheParentStoryBookMediaDataUrl(dataUrl: string, seed: string) {
+export function cacheParentStoryBookMediaDataUrl(
+  dataUrl: string,
+  seed: string,
+  owner?: { childId?: string | null; storybookId?: string | null }
+) {
   cleanupExpired();
   const parsed = parseDataUrl(dataUrl);
   if (!parsed) return null;
@@ -203,6 +209,8 @@ export function cacheParentStoryBookMediaDataUrl(dataUrl: string, seed: string) 
     expiresAt: now() + STORYBOOK_MEDIA_TTL_SECONDS * 1000,
     contentType: parsed.contentType,
     bytes: parsed.bytes,
+    ownerChildId: owner?.childId ?? null,
+    ownerStorybookId: owner?.storybookId ?? null,
   });
 
   return `/api/ai/parent-storybook/media/${mediaId}`;
@@ -228,6 +236,8 @@ export function readCachedParentStoryBookMedia(mediaId: string) {
   return {
     contentType: entry.contentType,
     bytes: entry.bytes,
+    ownerChildId: entry.ownerChildId,
+    ownerStorybookId: entry.ownerStorybookId,
   };
 }
 
@@ -259,7 +269,8 @@ export function prepareParentStoryBookResponseForDelivery(
     ) {
       const cachedUrl = cacheParentStoryBookMediaDataUrl(
         nextScene.audioUrl,
-        `${nextStory.storyId}:${nextScene.sceneIndex}`
+        `${nextStory.storyId}:${nextScene.sceneIndex}`,
+        { childId: nextStory.childId, storybookId: nextStory.storyId }
       );
       if (cachedUrl) {
         audioDelivery = "stream-url";
@@ -289,7 +300,8 @@ export function prepareParentStoryBookResponseForDelivery(
     ) {
       const cachedImageUrl = cacheParentStoryBookMediaDataUrl(
         nextScene.imageUrl,
-        `${nextStory.storyId}:image:${nextScene.sceneIndex}`
+        `${nextStory.storyId}:image:${nextScene.sceneIndex}`,
+        { childId: nextStory.childId, storybookId: nextStory.storyId }
       );
       if (cachedImageUrl) {
         nextScene = {
@@ -310,7 +322,8 @@ export function prepareParentStoryBookResponseForDelivery(
     ) {
       const cachedAssetUrl = cacheParentStoryBookMediaDataUrl(
         nextScene.assetRef,
-        `${nextStory.storyId}:asset:${nextScene.sceneIndex}`
+        `${nextStory.storyId}:asset:${nextScene.sceneIndex}`,
+        { childId: nextStory.childId, storybookId: nextStory.storyId }
       );
       if (cachedAssetUrl) {
         nextScene = {

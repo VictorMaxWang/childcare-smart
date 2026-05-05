@@ -1,11 +1,108 @@
 {
   "taskId": "E09",
-  "title": "Parent voice skills",
-  "status": "pending",
-  "dependencies": ["E06"],
-  "writeScope": ["parent voice skills", "parent message feedback and storybook commands"],
-  "mustWriteMarkdown": "docs/product-completion/results/E09-result.md",
-  "requiredChecks": ["npm run lint", "npm run build", "parent voice regression"],
-  "notes": "Parent commands are limited to authorized childIds."
+  "status": "done",
+  "completedItems": [
+    "Implemented parent voice commands for teacher messages, feedback, child status, meals, health records, reminders, teacher replies, storybook share/export, and parent navigation.",
+    "Added confirmation previews for message, feedback, reminder read, storybook share, and storybook export.",
+    "Added E01 storybook service/API/client support for scoped list/get/upsert/export/share.",
+    "Rewired parent reminders to E01 reminder APIs so read state persists after refresh.",
+    "Added VoiceOrb download/copy result actions for storybook export/share.",
+    "Hardened child scope for parent commands, object ids, and child deeplinks.",
+    "Added parser and Playwright regression coverage with screenshots."
+  ],
+  "remainingItems": [
+    "External storybook share/export service integration remains a future product decision.",
+    "Full feature:smoke has non-E09 legacy failures in D08/E03 paths."
+  ],
+  "supportedIntents": [
+    "send_message",
+    "create_feedback",
+    "query_child_status",
+    "query_today_tasks",
+    "query_teacher_replies",
+    "mark_reminder_read",
+    "share_storybook",
+    "export_storybook",
+    "navigate"
+  ],
+  "changedFiles": [
+    "app/api/storybooks/route.ts",
+    "app/api/storybooks/[storybookId]/route.ts",
+    "app/api/storybooks/[storybookId]/export/route.ts",
+    "app/api/storybooks/[storybookId]/share/route.ts",
+    "app/parent/reminders/page.tsx",
+    "app/parent/storybook/page.tsx",
+    "components/voice-assistant/VoiceOrb.tsx",
+    "docs/product-completion/COMMAND_INTENT_MAP.md",
+    "docs/product-completion/VOICE_ASSISTANT_SPEC.md",
+    "docs/product-completion/IMPLEMENTATION_LOG.md",
+    "docs/product-completion/results/E09-result.md",
+    "docs/product-completion/results/E09-result.json",
+    "lib/api/reminders.ts",
+    "lib/api/storybooks.ts",
+    "lib/api/types.ts",
+    "lib/persistence/snapshot.ts",
+    "lib/server/api-handlers.ts",
+    "lib/server/app-data-service.ts",
+    "lib/voice-assistant/command-bus.ts",
+    "lib/voice-assistant/executors.ts",
+    "lib/voice-assistant/intents.ts",
+    "lib/voice-assistant/parser.ts",
+    "lib/voice-assistant/parser.test.ts",
+    "lib/voice-assistant/permissions.ts",
+    "lib/voice-assistant/types.ts",
+    "package.json",
+    "proxy.ts",
+    "tests/product-completion/e09-parent-voice-assistant.spec.ts"
+  ],
+  "apiMethodsUsed": [
+    "AppDataService.listMessages",
+    "AppDataService.sendMessage",
+    "AppDataService.listFeedback",
+    "AppDataService.createFeedback",
+    "AppDataService.getParentHome",
+    "AppDataService.listRecords",
+    "AppDataService.listReminders",
+    "AppDataService.updateReminder",
+    "AppDataService.getChildTrend",
+    "AppDataService.listStorybooks",
+    "AppDataService.getStorybook",
+    "AppDataService.upsertStorybook",
+    "AppDataService.exportStorybookData",
+    "AppDataService.shareStorybook",
+    "lib/api/client.ts",
+    "lib/api/communication.ts",
+    "lib/api/reminders.ts",
+    "lib/api/storybooks.ts"
+  ],
+  "scopeHelpersUsed": [
+    "requireSession",
+    "requireChildAccess",
+    "getAccessibleChildren",
+    "getAccessibleClassNames",
+    "assertSameInstitution"
+  ],
+  "browserUseEvidence": [
+    "artifacts/product-completion/E09/01-parent-message-executed.png",
+    "artifacts/product-completion/E09/02-teacher-sees-parent-message.png",
+    "artifacts/product-completion/E09/03-parent-query-diet.png",
+    "artifacts/product-completion/E09/04-open-storybook.png",
+    "artifacts/product-completion/E09/05-storybook-export.png",
+    "artifacts/product-completion/E09/06-storybook-share.png",
+    "artifacts/product-completion/E09/07-reminder-read-refresh.png",
+    "artifacts/product-completion/E09/08-forbidden-other-child.png",
+    "artifacts/product-completion/E09/09-mobile-voice-orb.png"
+  ],
+  "checks": {
+    "lint": "passed: npm run lint",
+    "build": "passed: npm run build",
+    "featureSmoke": "failed: npm run feature:smoke failed in non-E09 full-suite paths (D08 communication/director-summary assertions, then E03 timeout and downstream ECONNREFUSED).",
+    "productVoice": "passed: parser 13/13 and E06-E09 Playwright 15/15"
+  },
+  "risks": [
+    "Storybook share/export currently uses local fallback text/download content because no external service is configured.",
+    "Demo persistence survives refresh in the running Next.js process but is not durable across process restarts.",
+    "Full feature:smoke remains blocked by unrelated legacy D08/E03 failures."
+  ],
+  "notes": "E09 parent voice skills reuse E06 command bus, E01 API/service/scope, and E05 provider status/fallback. No direct vivo calls or new vivo client were added."
 }
-

@@ -1,11 +1,132 @@
 {
   "taskId": "E05",
-  "title": "OCR ASR providers and health material parsing",
-  "status": "pending",
-  "dependencies": ["E01"],
-  "writeScope": ["lib/ai/providers", "OCR/ASR routes", "health material parsing"],
-  "mustWriteMarkdown": "docs/product-completion/results/E05-result.md",
-  "requiredChecks": ["npm run lint", "npm run build", "provider fallback regression"],
-  "notes": "Provider fallback must be visible and cannot be presented as real provider success."
+  "status": "done",
+  "completedItems": [
+    "Read vivo AIGC docs and documented chat/OCR/ASR endpoints, auth, request/response shapes and limitations.",
+    "Added vivo provider status/auth/error/client/chat/OCR/ASR adapter files.",
+    "Rewired OCR/ASR/LLM resolvers to prefer vivo and expose explicit fallback/missing-env state.",
+    "Added /api/ai route guard using E01 requireDemoSession and scope helpers.",
+    "Updated health material parsing to expose provider status, extracted text, save parse result and create consultation through E01 APIs.",
+    "Removed fake OCR/ASR success for image/audio without real provider.",
+    "Added E05 Playwright verification and product:ai provider smoke."
+  ],
+  "remainingItems": [
+    "Run real vivo provider smoke after VIVO_APP_KEY/VIVO_APP_ID/ASR runtime metadata are configured.",
+    "E06 can reuse ASR interface for browser SpeechRecognition and voice-ball UI.",
+    "PDF OCR and webm ASR remain unavailable until vivo docs confirm support or a conversion/provider path is added."
+  ],
+  "fixedFindings": [
+    "Legacy /api/ai/* routes now perform server-side demo session auth before generating, parsing or transcribing.",
+    "Health material image/PDF without real OCR no longer returns fake success.",
+    "Teacher audio upload without real ASR no longer fabricates a transcript."
+  ],
+  "changedFiles": [
+    ".env.example",
+    "app/api/ai/*/route.ts",
+    "app/api/ai/high-risk-consultation/feed/route.ts",
+    "app/api/ai/high-risk-consultation/stream/route.ts",
+    "app/api/ai/parent-storybook/media/[mediaKey]/route.ts",
+    "app/teacher/health-file-bridge/page.tsx",
+    "lib/agent/health-file-bridge.ts",
+    "lib/ai/providers/asr-provider.ts",
+    "lib/ai/providers/llm-provider.ts",
+    "lib/ai/providers/ocr-provider.ts",
+    "lib/ai/types.ts",
+    "lib/mobile/voice-assistant-upload.ts",
+    "lib/providers/vivo/*",
+    "lib/server/ai-route-guard.ts",
+    "package.json",
+    "proxy.ts",
+    "scripts/product-ai-smoke.mjs",
+    "tests/product-completion/e05-vivo-provider.spec.ts",
+    "docs/product-completion/OCR_ASR_PROVIDER_SPEC.md",
+    "docs/product-completion/VIVO_AIGC_PROVIDER_NOTES.md",
+    "docs/product-completion/IMPLEMENTATION_LOG.md",
+    "docs/product-completion/PRODUCT_DECISIONS.md"
+  ],
+  "apiMethodsUsed": [
+    "POST /api/ai/health-file-bridge",
+    "POST /api/ai/teacher-voice-upload",
+    "POST /api/health-materials",
+    "POST /api/health-materials/[materialId]/parse",
+    "POST /api/consultations",
+    "POST https://api-ai.vivo.com.cn/v1/chat/completions",
+    "POST http://api-ai.vivo.com.cn/ocr/general_recognition",
+    "POST /lasr/create",
+    "POST /lasr/upload",
+    "POST /lasr/run",
+    "POST /lasr/progress",
+    "POST /lasr/result"
+  ],
+  "scopeHelpersUsed": [
+    "requireDemoSession",
+    "requireChildAccess",
+    "requireClassAccess",
+    "requireDirector"
+  ],
+  "aiRoutesSecured": [
+    "/api/ai/admin-agent",
+    "/api/ai/admin-quality-metrics",
+    "/api/ai/diet-evaluation",
+    "/api/ai/follow-up",
+    "/api/ai/health-file-bridge",
+    "/api/ai/high-risk-consultation",
+    "/api/ai/high-risk-consultation/feed",
+    "/api/ai/high-risk-consultation/stream",
+    "/api/ai/intent-router",
+    "/api/ai/parent-message-reflexion",
+    "/api/ai/parent-storybook",
+    "/api/ai/parent-storybook/media/[mediaKey]",
+    "/api/ai/parent-trend-query",
+    "/api/ai/react-agent",
+    "/api/ai/stream",
+    "/api/ai/suggestions",
+    "/api/ai/teacher-agent",
+    "/api/ai/teacher-voice-understand",
+    "/api/ai/teacher-voice-upload",
+    "/api/ai/vision-meal",
+    "/api/ai/weekly-report"
+  ],
+  "vivoDocsRead": true,
+  "vivoProviderCapabilities": {
+    "chat": "supported",
+    "ocr": "supported",
+    "asr": "supported"
+  },
+  "providerStatus": {
+    "chat": "missing-env",
+    "ocr": "missing-env",
+    "asr": "missing-env"
+  },
+  "requiredEnv": [
+    "VIVO_APP_KEY",
+    "VIVO_APP_ID",
+    "VIVO_BASE_URL",
+    "VIVO_LLM_MODEL",
+    "VIVO_OCR_PATH",
+    "VIVO_ASR_PACKAGE",
+    "VIVO_ASR_CLIENT_VERSION",
+    "VIVO_ASR_USER_ID",
+    "VIVO_ASR_ENGINE_ID"
+  ],
+  "browserUseEvidence": [
+    "Browser Use skill was attempted but in-app browser runtime was blocked by local node_repl Node version v22.20.0 requiring >= v22.22.0.",
+    "Used Playwright fallback for E05 targeted verification.",
+    "artifacts/product-completion/E05/e05-01-text-fallback-provider-status.png",
+    "artifacts/product-completion/E05/e05-02-saved-refresh.png",
+    "artifacts/product-completion/E05/e05-03-consultation-created.png",
+    "artifacts/product-completion/E05/e05-04-provider-unavailable-no-fake-success.png"
+  ],
+  "checks": {
+    "lint": "passed",
+    "build": "passed",
+    "featureSmoke": "timed out after 364s; observed existing D08 failures in communication/director/visual-only smoke artifacts, not E05 targeted flow",
+    "productAi": "passed; reported vivo chat/ocr/asr missing-env"
+  },
+  "risks": [
+    "Current environment has no vivo env configured, so real external provider smoke was not executed.",
+    "Some legacy /api/ai/* business responses still keep their old success payload shape for compatibility, while auth/provider errors use E01 error envelope.",
+    "Full feature smoke remains affected by pre-existing D08 smoke failures from earlier product-completion work."
+  ],
+  "notes": "E05 targeted Playwright passed on http://127.0.0.1:3331. npm run lint and npm run build passed. npm run product:ai passed with missing-env status."
 }
-

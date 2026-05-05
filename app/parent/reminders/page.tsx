@@ -8,6 +8,7 @@ import { useParentD01Data } from "@/components/parent/useParentD01Data";
 import { InlineLinkButton, RolePageShell, SectionCard } from "@/components/role-shell/RoleScaffold";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { listReminders as listApiReminders, updateReminder as updateApiReminder, type ApiReminder } from "@/lib/api/reminders";
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
@@ -28,9 +29,11 @@ export default function ParentRemindersPage() {
     selectedChildId,
     invalidChildId,
     parentHomeData,
-    markParentReminderRead,
   } = useParentD01Data(childFromQuery);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [apiReminders, setApiReminders] = useState<ApiReminder[] | null>(null);
+  const [isReminderLoading, setIsReminderLoading] = useState(false);
+  const [reminderError, setReminderError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedChildId || invalidChildId || childFromQuery === selectedChildId) return;
@@ -39,25 +42,58 @@ export default function ParentRemindersPage() {
     router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
   }, [childFromQuery, invalidChildId, pathname, router, searchParams, selectedChildId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (!selectedChildId || invalidChildId) {
+        if (!cancelled) {
+          setApiReminders(null);
+          setReminderError(null);
+          setIsReminderLoading(false);
+        }
+        return;
+      }
+
+      setIsReminderLoading(true);
+      setReminderError(null);
+      listApiReminders({ childId: selectedChildId })
+        .then((items) => {
+          if (!cancelled) setApiReminders(items);
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setApiReminders(null);
+            setReminderError(error instanceof Error ? error.message : "提醒读取失败。");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setIsReminderLoading(false);
+        });
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [invalidChildId, selectedChildId]);
+
   const reminders = useMemo(
-    () => [...(parentHomeData?.reminders ?? [])].sort((left, right) => right.scheduledAt.localeCompare(left.scheduledAt)),
-    [parentHomeData?.reminders]
+    () => [...(apiReminders ?? parentHomeData?.reminders ?? [])].sort((left, right) => right.scheduledAt.localeCompare(left.scheduledAt)),
+    [apiReminders, parentHomeData?.reminders]
   );
   const pendingCount = reminders.filter((item) => item.status === "pending").length;
 
-  function handleMarkRead(reminderId: string) {
+  async function handleMarkRead(reminderId: string) {
     setStatusMessage("正在保存已读状态...");
-    const result = markParentReminderRead(reminderId);
-    if (result.status === "failed") {
-      setStatusMessage(`已读状态保存失败：${result.error ?? result.message}`);
-      return;
+    try {
+      const updated = await updateApiReminder(reminderId, { status: "acknowledged" });
+      setApiReminders((current) =>
+        current ? current.map((item) => (item.reminderId === reminderId ? updated : item)) : current
+      );
+      setStatusMessage("已读状态已通过 E01 提醒服务保存，刷新后仍会保留。");
+    } catch (error) {
+      setStatusMessage(`已读状态保存失败：${error instanceof Error ? error.message : "未知错误"}`);
     }
-
-    setStatusMessage(
-      result.status === "local_only"
-        ? "已读状态已写入 D01 本地演示持久化，刷新后仍会保留。"
-        : "已读状态已保存。"
-    );
   }
 
   if (invalidChildId) {
@@ -88,7 +124,7 @@ export default function ParentRemindersPage() {
     <RolePageShell
       badge={`日常提醒 · ${selectedChild.name}`}
       title="日常提醒"
-      description="提醒来自 D01 store，按 childId 隔离；标记已读会写入持久化层。"
+      description="提醒来自 E01 服务，按 childId 隔离；标记已读会写入服务端持久化层。"
       className="max-w-[76rem]"
       actions={
         <>
@@ -109,6 +145,16 @@ export default function ParentRemindersPage() {
         {statusMessage ? (
           <div className="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
             {statusMessage}
+          </div>
+        ) : null}
+        {isReminderLoading ? (
+          <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            正在读取 E01 提醒服务...
+          </div>
+        ) : null}
+        {reminderError ? (
+          <div className="mb-4 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            提醒读取失败：{reminderError}
           </div>
         ) : null}
 
@@ -142,7 +188,7 @@ export default function ParentRemindersPage() {
                       className="rounded-2xl"
                       disabled={isRead}
                       data-testid={`parent-reminder-mark-read-${reminder.reminderId}`}
-                      onClick={() => handleMarkRead(reminder.reminderId)}
+                      onClick={() => void handleMarkRead(reminder.reminderId)}
                     >
                       <CheckCircle2 className="mr-2 h-4 w-4" />
                       {isRead ? "已读" : "标记已读"}
@@ -156,7 +202,7 @@ export default function ParentRemindersPage() {
           <EmptyState
             icon={<Bell className="h-6 w-6" />}
             title="暂无日常提醒"
-            description="D01 store 中没有当前孩子的提醒，不会用固定 mock 补数据。"
+            description="E01 服务中没有当前孩子的提醒，不会用固定 mock 补数据。"
           />
         )}
       </SectionCard>

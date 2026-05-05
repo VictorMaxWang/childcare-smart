@@ -1,0 +1,10 @@
+
+> childcare-smart@0.1.0 start
+> next start -p 3331
+
+▲ Next.js 16.1.6
+- Local:         http://localhost:3331
+- Network:       http://192.168.0.111:3331
+
+✓ Starting...
+✓ Ready in 5.9s
