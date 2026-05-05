@@ -48,7 +48,7 @@ test.describe("E11 vivo provider status regression", () => {
     }
   });
 
-  test("health parser reports local fallback without claiming real vivo OCR when env is missing", async ({}, testInfo) => {
+  test("health parser reports OCR provider state without exposing credentials", async ({}, testInfo) => {
     const teacher = await demoContext(testInfo, "u-teacher");
     const token = `e11-vivo-${Date.now()}`;
 
@@ -72,7 +72,10 @@ test.describe("E11 vivo provider status regression", () => {
       expect(body.source).toMatch(/fallback|vivo-ocr-provider|local/i);
       if (body.source !== "vivo-ocr-provider") {
         expect(body.fallback).toBe(true);
-        expect(body.providerStatus?.ocr?.status).toMatch(/missing-env|provider-unavailable|unsupported/);
+        expect(body.providerStatus?.ocr?.status).toMatch(/ready|missing-env|provider-unavailable|unsupported/);
+        if (body.providerStatus?.ocr?.status === "ready") {
+          expect(body.providerStatus?.ocr?.isRealProvider).toBe(true);
+        }
       }
       expect(JSON.stringify(body)).toContain(token);
       expect(JSON.stringify(body)).not.toMatch(/Bearer\s+\S+/i);

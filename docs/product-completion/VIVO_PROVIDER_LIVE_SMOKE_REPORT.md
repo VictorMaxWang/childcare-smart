@@ -5,51 +5,91 @@ Generated: 2026-05-05
 ## Current Status
 
 - Local `.env.local`: SET
-- Chat: missing-env
-- OCR: missing-env
-- ASR: missing-env
+- Chat: `live-pass`
+- OCR: `live-pass`
+- ASR: `live-pass`
 - `NEXT_PUBLIC_VIVO_*`: MISSING
-- Live provider verified: no
-- Release gate: demo-ok-production-blocked
+- Live provider verified: yes, local Chat/OCR/ASR
+- Release gate: local-live-provider-verified
 
-The AppKEY shared in chat is treated as leaked and was not used.
+No real vivo key, token, signature, secret, authorization header, or credential value is recorded in this report.
+
+## Local Env Readiness
+
+`npm run vivo:check-env` passed and only emitted SET/MISSING/readiness status:
+
+| Item | Result |
+| --- | --- |
+| `.env.local` | SET |
+| 9 server-side `VIVO_*` variables | SET |
+| `NEXT_PUBLIC_VIVO_*` | MISSING |
+| Chat | ready |
+| OCR | ready |
+| ASR | ready |
 
 ## product:ai Result
 
-`npm run product:ai` passed in missing-env mode:
+`npm run product:ai` passed.
 
-- Node live smoke generated `artifacts/product-completion/R04/product-ai-live-smoke.json`.
-- Chat live request: not sent, missing-env.
-- OCR live request: not sent, missing-env.
-- ASR live request: not sent, missing-env.
-- Playwright provider/auth regression: pass 6/6.
+| Capability | Smoke result | Provider error classification |
+| --- | --- | --- |
+| Chat | `live-pass` | none |
+| OCR | `live-pass` | none |
+| ASR | `live-pass` | none |
 
-This is acceptable for demo release only. It is not a production live-provider verification. The report intentionally records `missing-env` instead of reporting a fake success.
+Additional checks:
+
+- Node live smoke release gate: `live-provider-verified`
+- Playwright provider/auth regression: 6/6 passed
+- `secretsExposed`: false
+- `missingEnv`: none
+- `publicVivoEnv`: none
+
+## Error Classification
+
+No live provider failure was observed in this run.
+
+| Classification | Result |
+| --- | --- |
+| auth/signature | none |
+| endpoint | none |
+| model | none |
+| permission | none |
+| network | none for live provider; prior bugbash `ERR_NETWORK_CHANGED` was not reproduced |
+| unsupported format | none for live smoke; browser `webm` ASR remains fail-closed unless supported/converted |
+| unknown | none |
 
 ## Vercel Status
 
-- Vercel CLI: MISSING
-- `.vercel/project.json`: MISSING
-- Auto env configuration: manual-required
-- Manual checklist: `artifacts/product-completion/R04/vercel-env-manual-checklist.md`
+Unauthenticated online check:
 
-After adding the 9 `VIVO_*` variables in Vercel, redeploy the Vercel project and rerun live provider smoke. Tencent Docker env does not prove that `www.smartchildcare.cn` Next `/api/ai/*` has the required Vercel env.
+- `https://www.smartchildcare.cn/api/ai/provider-status`
+- Result: `307 Temporary Redirect` to `/login`; `/login` returns `200 OK`
+- Classification: `login-protected`
+
+This is not treated as failure. Because no authenticated online page/provider-state evidence was captured in this run:
+
+- Vercel env configured: `unknown`
+- Vercel redeployed: `unknown`
+- Vercel provider status: `login-protected`
+
+Production release still needs an authenticated online provider-state check through the deployed Vercel app.
+
+## Tencent Cloud Backend
+
+The supplied Tencent Docker check is recorded as:
+
+- Container: `childcare-smart-backend-staging`
+- 9 server-side `VIVO_*`: all SET
+- Real values: not read and not written
+
+`https://api.smartchildcare.cn/health` is reachable and reports staging health `ok`, `brain_provider` as vivo, and vivo configuration present. This confirms Tencent backend health/configuration only. It does not replace Vercel Next `/api/ai/*` provider verification.
 
 ## Security Notes
 
-- No vivo key, token, authorization header, or account metadata was written to this report.
-- `.env.example` must keep placeholders only.
-- No provider code should be changed to force a success state.
-- Do not add `NEXT_PUBLIC_VIVO_*`, and do not write real AppKEY values into tracked files or reports.
+- No real secret value was printed or persisted.
+- No `NEXT_PUBLIC_VIVO_*` variable was added.
+- Reports store only provider readiness/result classifications.
+- Provider errors are not converted into pass states.
+- Missing env is not converted into live-pass.
 
-## Required Before Production
-
-1. Reset the vivo AppKEY because an AppKEY was shared in chat.
-2. Configure the reset AppKEY and all required server-side `VIVO_*` variables in local `.env.local`.
-3. Configure the same variables in Vercel Project Environment Variables for Production, Preview, and Development.
-4. Redeploy Vercel.
-5. Rerun `npm run vivo:check-env`, `npm run product:ai`, and the final release gate.
-
-## R99 Gate
-
-R99 final acceptance is not ready. Configure the real vivo runtime env outside tracked files, rerun R04, and record live Chat/OCR/ASR outcomes before starting R99.

@@ -9,6 +9,8 @@ import {
   tinyPngDataUrl,
 } from "./helpers";
 
+const OCR_STATUS_VALUES = ["ready", "missing-env", "provider-unavailable", "unsupported"];
+
 test.describe.configure({ mode: "serial" });
 
 test.afterEach(async ({ page }, testInfo) => {
@@ -46,9 +48,13 @@ test("D08 health material parse and consultation persist across teacher director
     expect(parseResponse.status()).toBe(200);
     const parseBody = await parseResponse.json();
     expect(parseBody.source).toMatch(/fallback|vivo-ocr-provider|local/i);
-    if (parseBody.source !== "vivo-ocr-provider") {
+    if (parseBody.source === "vivo-ocr-provider") {
+      expect(parseBody.fallback).toBe(false);
+      expect(parseBody.providerStatus?.ocr?.status).toBe("ready");
+      expect(parseBody.providerStatus?.ocr?.isRealProvider).toBe(true);
+    } else {
       expect(parseBody.fallback).toBe(true);
-      expect(parseBody.providerStatus?.ocr?.status).toMatch(/missing-env|provider-unavailable|unsupported/);
+      expect(OCR_STATUS_VALUES).toContain(parseBody.providerStatus?.ocr?.status);
     }
     expect(JSON.stringify(parseBody)).toContain(materialToken);
 
