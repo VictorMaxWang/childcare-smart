@@ -1,33 +1,29 @@
-# R05/R06 Result
+# R05 Result
 
 Generated: 2026-05-06
 
-Status: `blocked`
+Status: `done`
 
 Base URL: `https://www.smartchildcare.cn`
 
-Local commit: `bf85945`
-
-Vercel Production deployment: `bf85945 READY`, user-confirmed
-
 ## Summary
 
-The production Vercel deployment was user-confirmed as `bf85945 READY`, and `NEXT_PUBLIC_FORCE_MOCK_MODE` was user-confirmed as `false` or deleted. The production runtime still returns `404` for logged-in `/api/ai/provider-status`, `/api/voice-assistant/commands`, and `/api/ai/voice-asr`.
-
-Because the local build includes these routes and local gates are green, R05/R06 remains blocked by a production runtime/deployment artifact mismatch. This is not a proven Vercel env missing state.
+R05 is complete after the R09 OCR provenance recheck. The production domain no longer has the R08 route/artifact mismatch, and `/api/ai/provider-status` now returns Chat/OCR/ASR with `ready` status after login.
 
 ## Online Checks
 
-- Login-protected provider status: passed, unauthenticated `307 /login`.
-- Logged-in provider status: blocked by production `404`.
-- Chat: `unknown` online.
-- OCR: `unknown` online.
-- ASR: `unknown` online.
-- Health material parsing: UI parsed and saved through `backend-text-fallback`; live OCR not verified.
-- Voice orb: missing for 陈园长, 李老师, 周老师, and 林妈妈.
+- Login-protected provider status: passed; unauthenticated request returns `401`.
+- Logged-in provider status: passed; `200`.
+- Chat: `ready`.
+- OCR: `ready`.
+- ASR: `ready`.
+- Text health material: `backend-text-fallback`, expected for text-only input.
+- Image health material: `vivo-ocr-provider;vivo;ready;false`, live-confirmed.
+- Health material save/refresh: passed.
+- Voice orb: visible for 陈园长, 李老师, and 林妈妈 with `vivo provider ready`.
+- Voice command API: logged-in `200`.
 - Fake success: not detected.
 - Secret exposure: not found.
-- Mock mode risk: low from the flag itself; current value is user-confirmed false/deleted.
 
 ## Local Command Results
 
@@ -36,10 +32,10 @@ Because the local build includes these routes and local gates are green, R05/R06
 - `npm run product:ai`: passed; local Chat/OCR/ASR live-pass.
 - `npm run product:voice`: passed.
 - `npm run product:journey`: passed.
-- `npm run feature:smoke`: passed.
-- `npm run bugbash:smoke`: passed on rerun; first run hit transient `ERR_NETWORK_CHANGED`.
+- `npm run feature:smoke`: passed on rerun with longer timeout.
+- `npm run bugbash:smoke`: passed.
 - `npx tsc --noEmit`: passed.
 
 ## Release Recommendation
 
-Production release is not recommended. Verify the production domain is serving the current deployment artifact/root, then rerun R05 until provider-status, voice commands, ASR, and voice orb are available online.
+R05 supports demo release and production release from a feature/security standpoint. Commit and push the R09 source changes before formal production handoff so GitHub main and the deployed Vercel artifact are aligned, then run R99.

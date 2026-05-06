@@ -90,6 +90,25 @@ function hasTextMaterial(payload: HealthFileBridgeRequest) {
   );
 }
 
+function needsServerOcrEnrichment(payload: HealthFileBridgeRequest) {
+  return payload.files.some((file) => isBinaryHealthFile(file) && readFileBase64(file));
+}
+
+function buildPayloadRequest(request: Request, payload: HealthFileBridgeRequest) {
+  const headers = new Headers(request.headers);
+  headers.set("content-type", "application/json");
+  headers.delete("content-length");
+  return new Request(request.url, {
+    method: request.method,
+    headers,
+    body: JSON.stringify(payload),
+  });
+}
+
+function mergeUnique(left?: string[], right?: string[]) {
+  return Array.from(new Set([...(left ?? []), ...(right ?? [])]));
+}
+
 async function enrichPayloadWithOcr(payload: HealthFileBridgeRequest) {
   const ocrProvider = resolveOcrProvider();
   const providerStatus = ocrProvider.getStatus();
@@ -158,6 +177,34 @@ async function enrichPayloadWithOcr(payload: HealthFileBridgeRequest) {
   };
 }
 
+type OcrEnrichment = Awaited<ReturnType<typeof enrichPayloadWithOcr>>;
+
+function mergeOcrProvenance(
+  bridgeResponse: HealthFileBridgeResponse,
+  enriched?: OcrEnrichment | null
+): HealthFileBridgeResponse {
+  if (!enriched?.usedRealProvider) return bridgeResponse;
+
+  const providerStatus =
+    bridgeResponse.providerStatus && typeof bridgeResponse.providerStatus === "object"
+      ? bridgeResponse.providerStatus
+      : {};
+
+  return {
+    ...bridgeResponse,
+    source: "vivo-ocr-provider",
+    fallback: false,
+    provider: "vivo",
+    model: bridgeResponse.model ?? "vivo-general-ocr",
+    extractedText: enriched.extractedText || bridgeResponse.extractedText,
+    providerStatus: {
+      ...providerStatus,
+      ...enriched.providerStatus,
+    },
+    warnings: mergeUnique(bridgeResponse.warnings, enriched.warnings),
+  };
+}
+
 async function persistHealthFileBridgeWriteback(
   request: Request,
   payload: HealthFileBridgeWritebackRequest
@@ -193,11 +240,13 @@ async function buildAugmentedBridgeResponse(
   request: Request,
   payload: HealthFileBridgeRequest,
   bridgeResponse: HealthFileBridgeResponse,
-  init: ResponseInit
+  init: ResponseInit,
+  enriched?: OcrEnrichment | null
 ) {
-  const bridgeWriteback = buildHealthFileBridgeWriteback(payload, bridgeResponse);
+  const responseWithProvenance = mergeOcrProvenance(bridgeResponse, enriched);
+  const bridgeWriteback = buildHealthFileBridgeWriteback(payload, responseWithProvenance);
   const enhancedResponse: HealthFileBridgeResponse = {
-    ...bridgeResponse,
+    ...responseWithProvenance,
     bridgeWriteback,
   };
 
@@ -212,7 +261,11 @@ async function buildAugmentedBridgeResponse(
   return buildJsonResponse(enhancedResponse, init);
 }
 
-async function maybeAugmentRemoteBridgeResponse(request: Request, response: Response) {
+async function maybeAugmentRemoteBridgeResponse(
+  request: Request,
+  response: Response,
+  enriched?: OcrEnrichment | null
+) {
   if (!response.ok) return response;
 
   let bridgeResponse: HealthFileBridgeResponse | null = null;
@@ -251,40 +304,57 @@ async function maybeAugmentRemoteBridgeResponse(request: Request, response: Resp
     status: response.status,
     statusText: response.statusText,
     headers: response.headers,
-  });
+  }, enriched);
 }
 
 export async function POST(request: Request) {
   const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
   if (authError) return authError;
 
-  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/health-file-bridge");
-  if (brainForward.response) {
-    return maybeAugmentRemoteBridgeResponse(request, brainForward.response);
-  }
-
-  const headers = buildLocalFallbackHeaders(brainForward);
-
   let payload: HealthFileBridgeRequest | null = null;
   try {
     payload = (await request.json()) as HealthFileBridgeRequest;
   } catch (error) {
     console.error("[AI] Invalid health-file-bridge payload", error);
-    return apiError("invalid_request", "Invalid JSON body", { status: 400, headers });
+    return apiError("invalid_request", "Invalid JSON body", { status: 400 });
   }
 
   if (!isValidHealthFileBridgeRequest(payload)) {
-    return apiError("invalid_request", "Invalid health-file-bridge payload", { status: 400, headers });
+    return apiError("invalid_request", "Invalid health-file-bridge payload", { status: 400 });
   }
 
-  let enriched: Awaited<ReturnType<typeof enrichPayloadWithOcr>>;
+  let enriched: OcrEnrichment | null = null;
+  let forwardedRequest = buildPayloadRequest(request, payload);
   try {
-    enriched = await enrichPayloadWithOcr(payload);
+    if (needsServerOcrEnrichment(payload)) {
+      enriched = await enrichPayloadWithOcr(payload);
+      payload = enriched.payload;
+      forwardedRequest = buildPayloadRequest(request, payload);
+    }
   } catch (error) {
     if (error instanceof VivoProviderError) {
-      return apiError("provider_unavailable", error.message, { status: 503, headers });
+      return apiError("provider_unavailable", error.message, { status: 503 });
     }
     throw error;
+  }
+
+  const brainForward = await forwardBrainRequest(forwardedRequest, "/api/v1/agents/health-file-bridge");
+  if (brainForward.response) {
+    return maybeAugmentRemoteBridgeResponse(forwardedRequest, brainForward.response, enriched);
+  }
+
+  const headers = buildLocalFallbackHeaders(brainForward);
+
+  if (!enriched) {
+    try {
+      enriched = await enrichPayloadWithOcr(payload);
+      payload = enriched.payload;
+    } catch (error) {
+      if (error instanceof VivoProviderError) {
+        return apiError("provider_unavailable", error.message, { status: 503, headers });
+      }
+      throw error;
+    }
   }
 
   const bridgeResponse = buildHealthFileBridgeResponse(enriched.payload, {
@@ -302,5 +372,5 @@ export async function POST(request: Request) {
   return buildAugmentedBridgeResponse(request, enriched.payload, bridgeResponse, {
     status: 200,
     headers,
-  });
+  }, enriched);
 }

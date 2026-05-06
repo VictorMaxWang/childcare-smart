@@ -185,6 +185,7 @@ export interface VoiceProviderCapabilityStatus {
 
 export interface AssistantProviderStatus {
   chat: VoiceProviderCapabilityStatus;
+  ocr: VoiceProviderCapabilityStatus;
   asr: VoiceProviderCapabilityStatus;
   fallbackText: string;
 }

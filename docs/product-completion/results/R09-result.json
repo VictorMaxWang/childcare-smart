@@ -1,0 +1,60 @@
+{
+  "taskId": "R09",
+  "status": "done",
+  "onlineBaseUrl": "https://www.smartchildcare.cn",
+  "localHead": "a281129",
+  "branch": "main",
+  "deployment": {
+    "method": "vercel --prod --force --yes",
+    "url": "https://childcare-smart-gvmdmmo1t-victormaxwangs-projects.vercel.app",
+    "id": "dpl_5F1sxSwT5Tg9274ZSarjuvh6ppD9",
+    "createdAt": "2026-05-06 20:16:58 +08:00",
+    "target": "production",
+    "status": "READY",
+    "alias": "https://www.smartchildcare.cn"
+  },
+  "providerStatus": {
+    "chat": "ready",
+    "ocr": "ready",
+    "asr": "ready"
+  },
+  "textMaterialProvenance": "backend-text-fallback",
+  "imageMaterialProvenance": "vivo-ocr-provider;vivo;ready;false",
+  "imageOcrLiveConfirmed": "yes",
+  "healthMaterialSaveConfirmed": "saved-and-refreshed",
+  "voiceOrbSmoke": "passed; director, teacher, and parent all visible with vivo provider ready",
+  "commandApi": "logged-in /api/voice-assistant/commands returned 200",
+  "secretExposureCheck": "passed; no high-risk vivo markers found in /login HTML or 17 frontend JS assets; publicVivoEnv NONE",
+  "onlineErrors": [],
+  "changedFiles": [
+    "lib/voice-assistant/types.ts",
+    "lib/voice-assistant/command-bus.ts",
+    "app/api/ai/health-file-bridge/route.ts",
+    "tests/product-completion/e05-vivo-provider.spec.ts",
+    "tests/product-completion/r09-online-ocr-provider-provenance.spec.ts",
+    "docs/product-completion/R09_ONLINE_OCR_PROVIDER_PROVENANCE_REPORT.md",
+    "docs/product-completion/results/R09-result.md",
+    "docs/product-completion/results/R09-result.json",
+    "docs/product-completion/R05_VERCEL_LIVE_PROVIDER_REPORT.md",
+    "docs/product-completion/results/R05-result.md",
+    "docs/product-completion/results/R05-result.json",
+    "docs/product-completion/FINAL_RELEASE_READINESS_REPORT.md",
+    "docs/product-completion/FINAL_PRODUCT_COMPLETION_REPORT.md",
+    "docs/product-completion/VIVO_PROVIDER_FINAL_STATUS.md"
+  ],
+  "checks": {
+    "lint": "passed",
+    "build": "passed",
+    "productAi": "passed; Chat/OCR/ASR live-pass",
+    "productVoice": "passed",
+    "productJourney": "passed",
+    "featureSmoke": "passed on rerun with longer timeout",
+    "bugbashSmoke": "passed",
+    "tsc": "passed",
+    "e05Targeted": "passed",
+    "r09Local": "passed",
+    "r09Online": "passed"
+  },
+  "releaseRecommendation": "Demo release recommended. Production release functionally recommended after committing and pushing the R09 source changes so GitHub main matches the deployed Vercel artifact, then running final R99.",
+  "notes": "No env values, AppKEY, cookies, tokens, authorization headers, signatures, secrets, or full sensitive response headers were recorded. Vercel env and .env.local were not modified. Login protection and permissions were not loosened. Only safe test text was used."
+}
