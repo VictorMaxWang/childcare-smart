@@ -62,13 +62,15 @@ function storybookTitleOf(storybook: { pages?: Array<Record<string, unknown>>; s
 
 export function getAssistantProviderStatus(): AssistantProviderStatus {
   const chat = getVivoProviderStatus("chat");
+  const ocr = getVivoProviderStatus("ocr");
   const asr = getVivoProviderStatus("asr");
 
   return {
     chat,
+    ocr,
     asr,
     fallbackText:
-      !chat.configured || !asr.configured
+      !chat.configured || !ocr.configured || !asr.configured
         ? "当前使用文本/本地规则 fallback"
         : "vivo provider 已配置，可用于后续增强。",
   };

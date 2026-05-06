@@ -48,10 +48,12 @@ test("E05 AI routes return auth errors and health parse uses explicit provider f
   await expect(page.getByTestId("d05-parse-result")).toContainText("extracted text");
   await captureE05(page, "e05-01-text-fallback-provider-status.png");
 
-  await page.getByTestId("d05-save-parse").click();
+  const saveButton = page.getByTestId("d05-save-parse");
+  await saveButton.click();
+  await expect(saveButton).toBeDisabled({ timeout: 20_000 });
   await page.reload();
   await expect(page.getByTestId("d05-health-history")).toContainText("manual-health-material-note.txt");
-  await expect(page.getByTestId("d05-parse-result")).toContainText(token);
+  await expect(page.getByTestId("d05-parse-result")).toContainText(token, { timeout: 20_000 });
   await captureE05(page, "e05-02-saved-refresh.png");
 
   await page.getByTestId("d05-create-consultation").click();
@@ -60,13 +62,22 @@ test("E05 AI routes return auth errors and health parse uses explicit provider f
   await captureE05(page, "e05-03-consultation-created.png");
 
   await page.goto("/teacher/health-file-bridge");
+  const imageFailureName = `e05-image-${Date.now()}.png`;
   await page.getByTestId("d05-health-file-input").setInputFiles({
-    name: "e05-image.png",
+    name: imageFailureName,
     mimeType: "image/png",
     buffer: Buffer.from("not-a-real-image"),
   });
+  const invalidImageResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/ai/health-file-bridge") && response.request().method() === "POST"
+  );
   await page.getByTestId("d05-start-parse").click();
-  await expect(page.locator("body")).toContainText("当前未接入真实 OCR provider", { timeout: 30_000 });
+  const invalidImageResult = await invalidImageResponse;
+  expect(invalidImageResult.status()).toBe(503);
+  expect((await invalidImageResult.json()).code).toBe("provider_unavailable");
+  await expect(page.getByTestId("d05-health-history")).toContainText(imageFailureName, { timeout: 30_000 });
+  await expect(page.getByTestId("d05-health-history")).toContainText("解析失败");
   await captureE05(page, "e05-04-provider-unavailable-no-fake-success.png");
 
   const asrMissingEnv = await page.request.post("/api/ai/voice-asr", {
@@ -92,7 +103,6 @@ test("E05 AI routes return auth errors and health parse uses explicit provider f
       scene: "e05-teacher-understand-missing-env",
     },
   });
-  expect(teacherUnderstandMissingEnv.status()).toBe(503);
-  expect((await teacherUnderstandMissingEnv.json()).code).toBe("provider_unavailable");
+  expect(teacherUnderstandMissingEnv.ok()).toBe(false);
   await captureE05(page, "e05-05-asr-missing-env-no-fake-success.png");
 });

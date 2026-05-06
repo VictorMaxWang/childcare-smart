@@ -1,84 +1,47 @@
 {
   "taskId": "R05",
-  "runId": "R06-recheck-2026-05-06",
-  "status": "blocked",
+  "runId": "R09-final-ocr-provenance-2026-05-06",
+  "status": "done",
   "baseUrl": "https://www.smartchildcare.cn",
-  "localCommit": "bf85945",
-  "vercelDashboardCommit": "bf85945",
-  "vercelDeploymentStatus": "READY; user-confirmed Production deployment",
+  "localCommit": "a281129",
+  "deploymentUrl": "https://childcare-smart-gvmdmmo1t-victormaxwangs-projects.vercel.app",
+  "deploymentId": "dpl_5F1sxSwT5Tg9274ZSarjuvh6ppD9",
+  "deploymentStatus": "READY; Production; aliased to https://www.smartchildcare.cn",
   "productionRedeployed": true,
-  "productionRuntimeStatus": "blocked; production domain still returns 404 for required logged-in AI/voice routes",
-  "mockModeRisk": "low from NEXT_PUBLIC_FORCE_MOCK_MODE; user-confirmed false or deleted; code forces mock only when the value is exactly true",
+  "mockModeRisk": "low; user-confirmed NEXT_PUBLIC_FORCE_MOCK_MODE false or deleted; no force-mock evidence in R09",
   "loginProtectedProviderStatus": true,
-  "providerStatusAfterLogin": "404 for u-admin, u-teacher, and u-parent",
-  "voiceCommandEndpointAfterLogin": "404",
+  "providerStatusAfterLogin": "200",
+  "voiceCommandEndpointAfterLogin": "200",
   "loggedInProviderStatus": {
-    "chat": "unknown; logged-in /api/ai/provider-status returned 404",
-    "ocr": "unknown; health material used backend-text-fallback and provider-status returned 404",
-    "asr": "unknown; logged-in provider-status and /api/ai/voice-asr returned 404"
+    "chat": "ready",
+    "ocr": "ready",
+    "asr": "ready"
   },
-  "healthMaterialOnline": "api-parsed:backend-text-fallback;ui-saved;live-ocr-not-verified",
-  "voiceOrbOnline": "blocked; voice orb missing for director, teachers, and parent; voice command API returned 404",
-  "secretExposureCheck": "passed; no high-risk secret exposure found; no runtime NEXT_PUBLIC_VIVO usage or assignment in runtime source/env files",
-  "vercelEnvStatus": "9 server-side VIVO variables user-confirmed configured for Production and Preview; runtime effectiveness cannot be verified because provider-status route returns 404",
-  "onlineErrors": [
-    {
-      "area": "provider-status:anonymous",
-      "classification": "login-required",
-      "httpStatus": 307,
-      "status": "expected /login redirect"
-    },
-    {
-      "area": "provider-status:logged-in",
-      "classification": "vercel-not-redeployed",
-      "httpStatus": 404,
-      "status": "observed for u-admin, u-teacher, and u-parent despite dashboard commit READY confirmation"
-    },
-    {
-      "area": "voice-assistant:commands",
-      "classification": "vercel-not-redeployed",
-      "httpStatus": 404,
-      "status": "director, teacher, and parent voice command flows not verifiable"
-    },
-    {
-      "area": "voice-orb:ui",
-      "classification": "vercel-not-redeployed",
-      "status": "missing for u-admin, u-teacher, u-teacher2, and u-parent"
-    },
-    {
-      "area": "asr:typed-fallback",
-      "classification": "vercel-not-redeployed",
-      "httpStatus": 404,
-      "status": "typed fallback endpoint not deployed or not reachable on production domain"
-    },
-    {
-      "area": "asr:typed-fallback",
-      "classification": "unknown",
-      "status": "secondary provider status missing after route 404"
-    }
-  ],
+  "healthMaterialOnline": "text:backend-text-fallback; image:vivo-ocr-provider; image-ocr-live-confirmed; saved-and-refreshed",
+  "voiceOrbOnline": "passed; director, teacher, and parent show voice orb with vivo provider ready",
+  "secretExposureCheck": "passed; no high-risk vivo markers found in /login HTML or 17 frontend JS assets; publicVivoEnv NONE",
+  "vercelEnvStatus": "server-side VIVO provider env effectiveness verified indirectly by online Chat/OCR/ASR ready status and live image OCR provenance; no missing-env observed",
+  "onlineErrors": [],
   "browserUseEvidence": [
-    "Browser Use unavailable in this environment because node_repl requires a newer Node runtime; Playwright was used as equivalent evidence.",
-    "artifacts/product-completion/R05/r05-online-evidence.json",
-    "artifacts/product-completion/R05/teacher-health-material-parsed.png",
-    "artifacts/product-completion/R05/teacher-health-material-after-refresh.png",
-    "artifacts/product-completion/R05/director-voice-orb-open.png",
-    "artifacts/product-completion/R05/teacher-voice-orb-open.png",
-    "artifacts/product-completion/R05/teacher-zhou-voice-orb-open.png",
-    "artifacts/product-completion/R05/parent-voice-orb-open.png"
+    "Playwright online mode used as Browser Use-equivalent evidence.",
+    "artifacts/product-completion/R09/r09-online-evidence.json",
+    "artifacts/product-completion/R09/r09-online-ocr-1778070008186.png",
+    "artifacts/product-completion/R09/health-material-saved-refresh.png",
+    "artifacts/product-completion/R09/voice-orb-director.png",
+    "artifacts/product-completion/R09/voice-orb-teacher.png",
+    "artifacts/product-completion/R09/voice-orb-parent.png"
   ],
   "checks": {
-    "onlineR05": "failed as expected; production provider/voice routes still 404 and voice orb missing",
-    "eslintR05Spec": "passed",
+    "onlineR09": "passed; R05 OCR gap closed",
     "lint": "passed",
-    "build": "passed; local route list includes /api/ai/provider-status, /api/ai/voice-asr, and /api/voice-assistant/commands",
+    "build": "passed",
     "productAi": "passed; local Chat/OCR/ASR live-pass; Playwright 6/6",
     "productVoice": "passed; parser 13/13 and Playwright 20/20",
     "productJourney": "passed; 1/1",
-    "featureSmoke": "passed; 19/19",
-    "bugbashSmoke": "passed on rerun; first run hit transient ERR_NETWORK_CHANGED",
+    "featureSmoke": "passed on rerun with longer timeout; 19/19",
+    "bugbashSmoke": "passed; 1/1",
     "tsc": "passed"
   },
-  "releaseRecommendation": "Demo/local release remains acceptable. Current Vercel production release is blocked until the production domain serves the current deployment artifact/root and R05 passes online.",
+  "releaseRecommendation": "Demo release recommended. Production release functionally recommended after committing and pushing the R09 source changes so repository main matches the deployed Vercel artifact, then running final R99.",
   "notes": "No secrets, cookies, tokens, authorization headers, signatures, or full sensitive response headers were stored. No delete/archive operation was executed. Only safe test text was used."
 }
