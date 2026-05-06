@@ -1,53 +1,56 @@
-# R05 Vercel Live Provider Acceptance Report
+# R05/R06 Vercel Live Provider Recheck Report
 
-Generated: 2026-05-05
+Generated: 2026-05-06
 
 Base URL: `https://www.smartchildcare.cn`
 
 ## Result
 
-R05 is **blocked** for production release.
+R05/R06 remains **blocked** for production release.
 
-The deployed Vercel site is reachable and unauthenticated `/api/ai/provider-status` is correctly login-protected with `307 /login`. After demo-account login, the current production deployment returns `404` for the protected provider status route and the voice-assistant command route. The local build contains these routes, so the online failure is classified as `vercel-not-redeployed`, not `vercel-env-missing`.
+Local commit is `bf85945`. The Vercel Dashboard state was user-confirmed as Production deployment `bf85945 READY`, and `NEXT_PUBLIC_FORCE_MOCK_MODE` was user-confirmed as `false` or deleted. The production domain still behaves as if the AI/voice routes and voice orb UI from the local build are not present.
 
-No high-risk secret exposure was found in the checked page source, frontend bundles, browser network requests, or local `NEXT_PUBLIC_VIVO_*` usage scan.
+No AppKEY, token, secret, signature, authorization header, cookie, or full sensitive response header was recorded.
+
+## Vercel Deployment And Mock Mode
+
+| Check | Result |
+| --- | --- |
+| Local commit | `bf85945` |
+| Vercel Production deployment | `bf85945 READY`, user-confirmed |
+| Production redeploy | user-confirmed READY |
+| Production runtime | still returns `404` for required logged-in AI/voice routes |
+| `NEXT_PUBLIC_FORCE_MOCK_MODE` | user-confirmed `false` or deleted |
+| Mock mode risk | low from the flag itself; code would force mock only when the value is exactly `"true"` |
+
+The remaining blocker is not the visible presence of the nine VIVO variables in Vercel. It is that the production runtime at `www.smartchildcare.cn` still does not expose the required deployed routes/UI.
 
 ## Online Provider Status
 
 | Check | Result | Classification |
 | --- | --- | --- |
-| Unauthenticated `/api/ai/provider-status` | `307 /login` | `login-required`, expected |
-| Logged-in `/api/ai/provider-status` as 陈园长 | `404` | `vercel-not-redeployed` |
-| Logged-in `/api/ai/provider-status` as 李老师 | `404` | `vercel-not-redeployed` |
-| Logged-in `/api/ai/provider-status` as 林妈妈 | `404` | `vercel-not-redeployed` |
-| Chat | `unknown` online | blocked by missing deployed route |
-| OCR | `unknown` online | blocked by missing deployed route |
-| ASR | `unknown` online | blocked by missing deployed route |
+| Unauthenticated `/api/ai/provider-status` | `307 /login` | expected login protection |
+| Logged-in `/api/ai/provider-status` as 陈园长 | `404` | production route/deployment mismatch |
+| Logged-in `/api/ai/provider-status` as 李老师 | `404` | production route/deployment mismatch |
+| Logged-in `/api/ai/provider-status` as 林妈妈 | `404` | production route/deployment mismatch |
+| Chat | `unknown` online | not live-confirmed |
+| OCR | `unknown` online | not live-confirmed |
+| ASR | `unknown` online | not live-confirmed |
 
-There is no evidence from R05 that Vercel production is `missing-env`; the deployed route needed to inspect the Vercel provider state is not present.
+The local build contains `/api/ai/provider-status`, `/api/ai/voice-asr`, and `/api/voice-assistant/commands`, but the production domain returns `404` for them after login.
 
 ## Health Material Parsing
 
-Teacher page `/teacher/health-file-bridge` was verified with the safe text:
-
-`线上验收测试，请忽略。儿童今日体温正常，无明显异常。`
+李老师 `/teacher/health-file-bridge` was checked with safe test text only.
 
 Result:
 
-- The page opens in the 李老师 login state.
-- The UI produced a parse result.
-- The save action completed and the refreshed page showed the health-material history area.
+- The page opened in a logged-in teacher session.
+- The UI produced a parse result and save completed.
 - The API provenance was `backend-text-fallback`.
-- Live OCR on Vercel was **not verified**, because the provider status route returned `404` and OCR status remained `unknown`.
-
-Evidence screenshots:
-
-- `artifacts/product-completion/R05/teacher-health-material-parsed.png`
-- `artifacts/product-completion/R05/teacher-health-material-after-refresh.png`
+- Live OCR on Vercel was not verified because provider status remains unavailable online.
 
 ## Voice Orb And Voice Commands
-
-Voice orb UI was checked for all required demo roles.
 
 | Role | Account | Result |
 | --- | --- | --- |
@@ -56,49 +59,19 @@ Voice orb UI was checked for all required demo roles.
 | 周老师 | `u-teacher2` | voice orb missing |
 | 林妈妈 | `u-parent` | voice orb missing |
 
-The deployed `/api/voice-assistant/commands` endpoint returned `404`, so the following command checks were not verifiable online:
-
-- `查看高风险儿童`
-- `生成本周周报`
-- `给李老师派单，线上验收测试，请忽略`
-- Unknown-command fail-closed behavior
-- Write-command confirmation/cancel behavior
-- Parent/teacher message preview-and-cancel flow
-
-No delete, archive, or sensitive write was executed.
+`/api/voice-assistant/commands` returned `404`, so director AI commands, write-confirmation behavior, unknown-command fail-closed behavior, and parent/teacher message preview flow were not verifiable online.
 
 ## Secret Exposure Check
 
 Result: passed.
 
-Checked areas:
-
-- Login page source and discovered frontend JavaScript bundles.
-- Browser network requests during R05 page flows.
-- Local tracked files for `NEXT_PUBLIC_VIVO_*`.
-
 Findings:
 
-- No `VIVO_APP_KEY` exposure found.
-- No `sk-xuanji` exposure found.
-- No provider credential context was found in frontend bundles.
+- No high-risk credential exposure found in checked page source or frontend bundles.
 - Browser requests did not send provider credentials to the client.
-- Browser calls stayed on same-origin app APIs such as `/api/ai/*`.
-- `NEXT_PUBLIC_VIVO_*` appears only in guard/check references; no runtime `process.env.NEXT_PUBLIC_VIVO_*` usage or assignment was found.
-
-## Browser Evidence
-
-Browser Use could not be used in this environment because the available Node runtime was older than the browser-use node_repl requirement. Playwright was used as equivalent online browser evidence.
-
-Artifacts:
-
-- `artifacts/product-completion/R05/r05-online-evidence.json`
-- `artifacts/product-completion/R05/teacher-health-material-parsed.png`
-- `artifacts/product-completion/R05/teacher-health-material-after-refresh.png`
-- `artifacts/product-completion/R05/director-voice-orb-open.png`
-- `artifacts/product-completion/R05/teacher-voice-orb-open.png`
-- `artifacts/product-completion/R05/teacher-zhou-voice-orb-open.png`
-- `artifacts/product-completion/R05/parent-voice-orb-open.png`
+- No direct browser request to vivo provider hosts was observed.
+- No runtime `process.env.NEXT_PUBLIC_VIVO_*` usage or public vivo env assignment was found in runtime source/env files.
+- R05 spec was hardened so docs/tests/scripts safety text is not misclassified as runtime public-vivo usage.
 
 ## Local Final Commands
 
@@ -110,13 +83,22 @@ Artifacts:
 | `npm run product:voice` | passed; parser 13/13 and Playwright 20/20 |
 | `npm run product:journey` | passed; 1/1 |
 | `npm run feature:smoke` | passed; 19/19 |
-| `npm run bugbash:smoke` | passed; 1/1 |
+| `npm run bugbash:smoke` | passed on rerun; first run hit transient `ERR_NETWORK_CHANGED` |
 | `npx tsc --noEmit` | passed |
+
+## Artifacts
+
+- `artifacts/product-completion/R05/r05-online-evidence.json`
+- `artifacts/product-completion/R05/teacher-health-material-parsed.png`
+- `artifacts/product-completion/R05/teacher-health-material-after-refresh.png`
+- `artifacts/product-completion/R05/director-voice-orb-open.png`
+- `artifacts/product-completion/R05/teacher-voice-orb-open.png`
+- `artifacts/product-completion/R05/teacher-zhou-voice-orb-open.png`
+- `artifacts/product-completion/R05/parent-voice-orb-open.png`
 
 ## Release Decision
 
-- Demo release: local/demo build remains acceptable because all local gates are green.
-- Online AI demo using current Vercel production: not recommended until Vercel is redeployed.
+- Demo/local release: acceptable; local gates are green.
 - Production release: not recommended.
 
-Production must redeploy the current Vercel build, then rerun R05 and verify logged-in Chat/OCR/ASR provider status is configured or live-capable with no secret exposure.
+Before production release, verify that the production domain is actually serving the current deployment artifact/root and that logged-in `/api/ai/provider-status`, `/api/voice-assistant/commands`, `/api/ai/voice-asr`, and voice orb UI are present.

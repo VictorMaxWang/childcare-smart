@@ -647,8 +647,8 @@ async function checkFrontendSecretExposure() {
     const content = await fs.readFile(path.join(process.cwd(), file), "utf8").catch(() => "");
     if (!content.includes("NEXT_PUBLIC_VIVO_")) continue;
     guardOnly += 1;
-    if (/process\.env\.NEXT_PUBLIC_VIVO_/u.test(content)) runtimeUse = true;
-    if (/NEXT_PUBLIC_VIVO_[A-Z0-9_]*\s*=/u.test(content)) assignment = true;
+    if (isRuntimeSourceFile(file) && /process\.env\.NEXT_PUBLIC_VIVO_/u.test(content)) runtimeUse = true;
+    if (isRuntimeOrEnvFile(file) && /NEXT_PUBLIC_VIVO_[A-Z0-9_]*\s*=/u.test(content)) assignment = true;
   }
 
   evidence.secretExposure.highRiskMatches = Array.from(highRiskMatches).sort();
@@ -678,6 +678,18 @@ async function listTrackedFiles() {
     .split(/\r?\n/u)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function isRuntimeSourceFile(file: string) {
+  const normalized = file.replace(/\\/gu, "/");
+  if (/^(docs|tests|scripts)\//u.test(normalized)) return false;
+  return /\.(?:js|mjs|cjs|ts|tsx)$/u.test(normalized);
+}
+
+function isRuntimeOrEnvFile(file: string) {
+  const normalized = file.replace(/\\/gu, "/");
+  if (/^(docs|tests|scripts)\//u.test(normalized)) return false;
+  return /(^|\/)\.env(?:\.|$)|\.(?:js|mjs|cjs|ts|tsx)$/u.test(normalized);
 }
 
 function trackBrowserNetwork(page: Page) {
