@@ -5,49 +5,67 @@ Generated: 2026-05-05
 ## Overall Status
 
 - Local vivo provider status: live verified for Chat, OCR, and ASR.
-- R04 status: done.
-- Secret exposure: none observed in generated reports or command output.
-- Vercel online provider state: login-protected when unauthenticated; authenticated verification still required before production.
-- Tencent Docker backend env: recorded as all 9 server-side `VIVO_*` SET for `childcare-smart-backend-staging`.
+- R05 Vercel online status: blocked.
+- Secret exposure: none observed in R05 page, bundle, network, public-env, report, or artifact checks.
+- Vercel online provider state: unauthenticated provider-status is login-protected; logged-in provider-status route returns `404` in the current production deployment.
+- Tencent Docker backend env: previously recorded as all 9 server-side `VIVO_*` SET for `childcare-smart-backend-staging`.
 
 ## Provider Status
 
-| Capability | Final status | Local provider status | Smoke result | Notes |
+| Capability | Local provider status | Local smoke | Vercel R05 status | Notes |
 | --- | --- | --- | --- | --- |
-| Chat | live-verified-local | `ready` | `live-pass` | Real provider request completed successfully. |
-| OCR | live-verified-local | `ready` | `live-pass` | Health-material parser tests now distinguish live `vivo-ocr-provider` from fallback provenance. |
-| ASR | live-verified-local | `ready` | `live-pass` | Browser unsupported formats still fail closed unless supported or converted. |
+| Chat | `ready` | `live-pass` | `unknown` | `/api/ai/provider-status` returns `404` after login in production. |
+| OCR | `ready` | `live-pass` | `unknown` | Health material parsing used `backend-text-fallback`; live OCR not verified online. |
+| ASR | `ready` | `live-pass` | `unknown` | Provider status and `/api/ai/voice-asr` typed fallback routes return `404` online. |
 
-## API Auth Status
+## Vercel R05 Classification
 
-- `/api/ai/provider-status` remains authenticated.
-- Unauthenticated Vercel access returns `307 /login`; this is classified as `login-protected`.
-- Product AI/voice tests continue to cover unauthenticated, wrong-role, parent child scope, teacher class scope, and director institution scope behavior.
+| Classification | Status |
+| --- | --- |
+| `login-required` | expected unauthenticated `307 /login` |
+| `vercel-not-redeployed` | present; logged-in AI/voice routes missing from production |
+| `vercel-env-missing` | not observed or proven |
+| `auth/signature` | not observed |
+| `endpoint` | raw `404` symptom, classified as deployment mismatch |
+| `model` | not observed |
+| `permission` | not observed |
+| `network` | not observed for production provider path |
+| `unsupported format` | not observed |
+| `scope-403` | not observed |
+| `provider-unavailable` | not proven |
+| `unknown` | ASR secondary status missing after route `404` |
 
 ## Fallback And No-Fake-Success Status
 
-- `missing-env` is no longer the local state, but fallback paths remain covered.
-- `product:voice` accepts `vivo provider ready`, `fallback`, and `missing-env` UI states while preserving permission and confirmation checks.
-- Health-material parsing accepts OCR provider `ready` only when live provenance is explicit; fallback still requires fallback provenance.
-- ASR audio-only unsupported/provider failure paths remain fail-closed and are not treated as recognized transcript success.
+- R05 did not fake provider success: online Chat/OCR/ASR remain `unknown` because required production routes are missing.
+- Health-material UI parsed and saved safe test material through `backend-text-fallback`; this is recorded as fallback, not live OCR.
+- Voice orb and voice command online checks are blocked by missing UI/API in the current production deployment.
+- No delete/archive operation or sensitive write was executed.
 
-## Local R04/R99 Evidence
+## Secret Exposure Status
+
+- No `VIVO_APP_KEY` exposure found.
+- No `sk-xuanji` exposure found.
+- No frontend provider credential context found.
+- No browser request leaked provider credentials.
+- No runtime `process.env.NEXT_PUBLIC_VIVO_*` usage or public vivo env assignment found.
+
+## Local Evidence
 
 | Command | Result |
 | --- | --- |
-| `npm run vivo:check-env` | passed |
 | `npm run product:ai` | passed; Chat/OCR/ASR `live-pass`; Playwright 6/6 |
 | `npm run product:voice` | passed; parser 13/13 and Playwright 20/20 |
-| `npm run feature:smoke` | passed, 19/19 |
-| `npm run bugbash:smoke` | passed, 1/1 |
+| `npm run feature:smoke` | passed; 19/19 |
+| `npm run bugbash:smoke` | passed; 1/1 |
 | `npm run lint` | passed |
 | `npm run build` | passed |
 | `npx tsc --noEmit` | passed |
 
 ## Remaining Production Actions
 
-- Complete one authenticated online Vercel provider-state check after redeploy.
-- Verify the deployed Vercel app reports live provider readiness without exposing secrets.
+- Redeploy the current Vercel production build.
+- Rerun R05 after redeploy.
+- Confirm logged-in provider status reports Chat/OCR/ASR as configured or live-capable.
+- Confirm there is still no secret exposure after redeploy.
 - Keep Tencent backend health/configuration evidence separate from Vercel Next `/api/ai/*` evidence.
-- Decide separately whether browser `webm` audio should be converted/supported for live ASR, or remain outside production scope.
-
