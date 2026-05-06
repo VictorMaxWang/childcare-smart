@@ -4,84 +4,82 @@ Generated: 2026-05-05
 
 ## Executive Summary
 
-R04 local live provider smoke and R99 local release gates have been re-run after updating legacy live-provider assertions. The local release gate is green.
+R05 authenticated online Vercel provider acceptance is complete and the production release gate is **blocked**.
 
-- Demo release: recommended.
-- Production release: not recommended until authenticated Vercel provider-state verification is complete.
+Local release gates are still green, and local vivo Chat/OCR/ASR remain `live-pass`. The deployed Vercel production site is reachable and correctly login-protects `/api/ai/provider-status` for unauthenticated requests. However, after demo-account login, the production deployment returns `404` for `/api/ai/provider-status`, `/api/voice-assistant/commands`, and `/api/ai/voice-asr`. The local build contains these routes, so the R05 online failure is classified as `vercel-not-redeployed`.
+
+- Demo release: recommended for the current local/demo build.
+- Online Vercel AI demo: not recommended until redeploy.
+- Production release: not recommended.
 - Local vivo provider: Chat/OCR/ASR `live-pass`.
-- Vercel provider endpoint: `login-protected` for unauthenticated requests.
-- Tencent Docker backend env: all 9 server-side `VIVO_*` recorded as SET from the supplied container check.
-- Secrets exposed: false.
+- Vercel provider endpoint: `login-protected` when unauthenticated, missing after login in the current deployment.
+- Vercel env status: `unknown`; the deployed provider-status route needed to inspect it is not present.
+- Missing env: not observed on Vercel R05; cannot be proven until redeploy exposes the protected route.
+- Secrets exposed: false in R05 checks.
 
-## R04 Live Smoke
+## R05 Online Vercel Evidence
 
-| Capability | Env | Smoke |
+| Capability | Online result | Classification |
 | --- | --- | --- |
-| Chat | `ready` | `live-pass` |
-| OCR | `ready` | `live-pass` |
-| ASR | `ready` | `live-pass` |
+| Unauthenticated provider status | `307 /login` | `login-required`, expected |
+| Logged-in provider status | `404` | `vercel-not-redeployed` |
+| Chat | `unknown` | provider route missing online |
+| OCR | `unknown` | provider route missing online; health material used fallback |
+| ASR | `unknown` | provider route and ASR typed fallback route missing online |
+| Health material parsing | parsed and saved with `backend-text-fallback` | page works, live OCR not verified |
+| Voice orb | missing for 陈园长, 李老师, 周老师, 林妈妈 | `vercel-not-redeployed` |
+| Voice commands | `404` | `vercel-not-redeployed` |
+| Secret exposure | none found | passed |
 
-`npm run vivo:check-env` passed with only SET/MISSING/readiness output. `NEXT_PUBLIC_VIVO_*` remains MISSING.
+Browser Use was unavailable because the available node_repl runtime required a newer Node version. Playwright online evidence was used instead.
 
-`npm run product:ai` passed with Chat/OCR/ASR all `live-pass`; provider-error and missing-env were not treated as passing states.
+R05 artifacts:
 
-## Vercel And Tencent
+- `docs/product-completion/R05_VERCEL_LIVE_PROVIDER_REPORT.md`
+- `docs/product-completion/results/R05-result.md`
+- `docs/product-completion/results/R05-result.json`
+- `artifacts/product-completion/R05/r05-online-evidence.json`
 
-Vercel:
-
-- `https://www.smartchildcare.cn/api/ai/provider-status` unauthenticated response: `307 /login`.
-- Classification: `login-protected`.
-- Env configured: `unknown` from this run.
-- Redeployed: `unknown` from this run.
-- Required before production: authenticated online provider-state/page-flow evidence.
-
-Tencent Cloud:
-
-- Container: `childcare-smart-backend-staging`.
-- 9 server-side `VIVO_*`: all SET per supplied Docker verification.
-- Health endpoint: reachable, staging status `ok`.
-- Note: Tencent backend health is not a substitute for Vercel Next `/api/ai/*` verification.
-
-## R99 Command Results
+## Local Command Results
 
 | Command | Result |
 | --- | --- |
-| `npm run vivo:check-env` | passed |
 | `npm run lint` | passed |
 | `npm run build` | passed |
-| `npm run product:smoke` | passed, 2/2 |
-| `npm run product:api` | passed, 8/8 |
-| `npm run product:ai` | passed; Chat/OCR/ASR live-pass; Playwright 6/6 |
+| `npm run product:ai` | passed; Chat/OCR/ASR local live-pass; Playwright 6/6 |
 | `npm run product:voice` | passed; parser 13/13 and Playwright 20/20 |
-| `npm run product:journey` | passed, 1/1 |
-| `npm run feature:smoke` | passed, 19/19 |
-| `npm run bugbash:smoke` | passed, 1/1 |
+| `npm run product:journey` | passed; 1/1 |
+| `npm run feature:smoke` | passed; 19/19 |
+| `npm run bugbash:smoke` | passed; 1/1 |
 | `npx tsc --noEmit` | passed |
-
-The earlier `ERR_NETWORK_CHANGED` bugbash failure was re-run and did not reproduce.
 
 ## Provider Error Classification
 
 | Classification | Result |
 | --- | --- |
-| auth/signature | none |
-| endpoint | none |
-| model | none |
-| permission | none |
-| network | none for live provider; prior bugbash network change was transient on rerun |
-| unsupported format | none for local live smoke; unsupported browser audio remains fail-closed |
-| unknown | none |
+| `vercel-env-missing` | none proven in R05 |
+| `vercel-not-redeployed` | present; logged-in provider-status/voice/ASR routes are missing online |
+| `auth/signature` | none observed |
+| `endpoint` | raw symptom was `404`, classified as `vercel-not-redeployed` based on local build evidence |
+| `model` | none observed |
+| `permission` | none observed |
+| `network` | none observed for production provider path |
+| `unsupported format` | none observed in R05 online path |
+| `login-required` | expected unauthenticated `307 /login` |
+| `scope-403` | none observed |
+| `provider-unavailable` | none proven |
+| `unknown` | ASR typed fallback secondary status missing after route `404` |
 
 ## Release Decision
 
-Demo release is recommended because lint/build and all product, feature, bugbash, and TypeScript gates passed, and vivo live provider is verified locally.
+Demo release for the local/demo build remains recommended because the local provider and local product gates are green.
 
-Production release is not recommended yet. Local live provider and Tencent Docker env are ready, but the deployed Vercel provider state has only been classified as login-protected from an unauthenticated request. Production needs authenticated online verification after redeploy.
+Production release is not recommended. The current Vercel production deployment is not running the code required for R05 logged-in provider verification. Redeploy Vercel with the current build, then rerun R05 and verify logged-in Chat/OCR/ASR statuses are configured or live-capable.
 
 ## Production Must Complete
 
-- Log in to the deployed Vercel app and verify AI provider status through the protected page/API flow.
-- Verify health-material parsing provider state on Vercel.
-- Verify voice orb provider live/fallback state on Vercel.
-- Confirm no secret value is exposed in UI, API responses, logs, docs, snapshots, or source.
-
+- Redeploy the current Vercel production build.
+- Confirm `/api/ai/provider-status` exists after login and reports Chat/OCR/ASR without `missing-env`.
+- Verify health-material parsing shows live OCR or an explicitly classified fallback on the redeployed Vercel app.
+- Verify voice orb UI and `/api/voice-assistant/commands` are available for director, teacher, and parent roles.
+- Keep all vivo credentials out of client env, source, docs, screenshots, logs, traces, and browser network payloads.
