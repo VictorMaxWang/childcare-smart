@@ -1,0 +1,71 @@
+{
+  "taskId": "R08",
+  "status": "partial",
+  "baseUrl": "https://www.smartchildcare.cn",
+  "localHead": "7c00e52",
+  "localHeadSubject": "Fix Vercel Analytics Next import",
+  "branch": "main",
+  "gitStatus": "clean before R08 report files",
+  "localBuildRoutes": {
+    "providerStatus": true,
+    "voiceAsr": true,
+    "voiceCommands": true
+  },
+  "vercelProject": "victormaxwangs-projects/childcare-smart",
+  "vercelRootDirectory": "repo root by observed build behavior; no local root override file found",
+  "productionBranch": "main",
+  "deploymentMethod": "Vercel CLI 53.1.1: vercel --prod --force",
+  "deploymentUrl": "https://childcare-smart-gv1cv0ks8-victormaxwangs-projects.vercel.app",
+  "deploymentId": "dpl_EBrreqXHBJpwwrwF2TrbXdZ3S5DV",
+  "deploymentCreatedAt": "2026-05-06 16:54:22 +08:00",
+  "deploymentTarget": "production",
+  "deploymentStatus": "READY",
+  "deploymentCommit": "CLI local artifact from local HEAD 7c00e52; Vercel inspect git metadata was null",
+  "productionAliases": [
+    "https://www.smartchildcare.cn",
+    "https://smartchildcare.cn",
+    "https://childcare-smart.vercel.app"
+  ],
+  "deploymentUrlRoutes": {
+    "providerStatus": "401 unauthenticated; route exists and is not 404",
+    "voiceAsr": "401 unauthenticated; route exists and is not 404",
+    "voiceCommands": "401 unauthenticated; route exists and is not 404",
+    "loggedInNotes": "logged-in checks were performed against the assigned production domain because direct deployment-host demo login returned unauthorized/protected behavior"
+  },
+  "productionDomainRoutes": {
+    "providerStatus": "401 unauthenticated; 200 logged-in; not 404",
+    "voiceAsr": "401 unauthenticated; 200 logged-in typed transcript path; not 404",
+    "voiceCommands": "400 unauthenticated empty POST; 200 logged-in command plan; not 404"
+  },
+  "loggedInProviderStatus": {
+    "chat": "ready; configured; supported; real provider",
+    "ocr": "unknown in /api/ai/provider-status response shape; health material route returned backend-text-fallback",
+    "asr": "ready; configured; supported; real provider"
+  },
+  "voiceOrbOnline": "passed; director, teacherLi, teacherZhou, and parentLin all show voice-orb-button and voice-orb-panel with vivo provider ready text",
+  "healthMaterialOnline": "partial; API returned 200 with backend-text-fallback and save endpoint returned 201, but UI parse result did not become visible within the R08 Playwright wait window",
+  "rootCause": "most likely stale or mismatched Vercel Production artifact/alias/cache state before R08; no source rewrite, middleware, root-directory, or local build artifact cause was found",
+  "fixApplied": "installed Vercel CLI 53.1.1, linked victormaxwangs-projects/childcare-smart, ran vercel --prod --force, verified READY production deployment assigned to www.smartchildcare.cn",
+  "checks": {
+    "lint": "passed",
+    "build": "passed",
+    "productAi": "passed; local Chat/OCR/ASR live-pass",
+    "productVoice": "passed",
+    "productJourney": "passed",
+    "featureSmoke": "passed",
+    "bugbashSmoke": "passed",
+    "tsc": "passed"
+  },
+  "artifacts": [
+    "artifacts/product-completion/R08/r08-online-evidence.json",
+    "artifacts/product-completion/R08/director-voice-orb.png",
+    "artifacts/product-completion/R08/teacher-li-voice-orb.png",
+    "artifacts/product-completion/R08/teacher-zhou-voice-orb.png",
+    "artifacts/product-completion/R08/parent-voice-orb.png",
+    "artifacts/product-completion/R08/teacher-health-material.png",
+    "artifacts/product-completion/R08/diagnostic-admin-network.json",
+    "artifacts/product-completion/R08/diagnostic-admin-loading.png"
+  ],
+  "nextStep": "R05 can be rerun now because the route/artifact blocker is cleared; run R99 only after the next R05 pass settles the remaining OCR/health material provenance gap",
+  "notes": "No env values, AppKEY, cookies, tokens, authorization headers, signatures, secrets, or full sensitive response headers were recorded. .env.local and Vercel environment variables were not modified. Login protection was not disabled."
+}
