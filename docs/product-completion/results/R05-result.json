@@ -1,8 +1,17 @@
 {
   "taskId": "R05",
+  "runId": "R06-recheck-2026-05-06",
   "status": "blocked",
   "baseUrl": "https://www.smartchildcare.cn",
+  "localCommit": "bf85945",
+  "vercelDashboardCommit": "bf85945",
+  "vercelDeploymentStatus": "READY; user-confirmed Production deployment",
+  "productionRedeployed": true,
+  "productionRuntimeStatus": "blocked; production domain still returns 404 for required logged-in AI/voice routes",
+  "mockModeRisk": "low from NEXT_PUBLIC_FORCE_MOCK_MODE; user-confirmed false or deleted; code forces mock only when the value is exactly true",
   "loginProtectedProviderStatus": true,
+  "providerStatusAfterLogin": "404 for u-admin, u-teacher, and u-parent",
+  "voiceCommandEndpointAfterLogin": "404",
   "loggedInProviderStatus": {
     "chat": "unknown; logged-in /api/ai/provider-status returned 404",
     "ocr": "unknown; health material used backend-text-fallback and provider-status returned 404",
@@ -10,8 +19,8 @@
   },
   "healthMaterialOnline": "api-parsed:backend-text-fallback;ui-saved;live-ocr-not-verified",
   "voiceOrbOnline": "blocked; voice orb missing for director, teachers, and parent; voice command API returned 404",
-  "secretExposureCheck": "passed; no high-risk secret exposure found; NEXT_PUBLIC_VIVO references are guard-only with no runtime use or assignment",
-  "vercelEnvStatus": "unknown; cannot inspect because logged-in provider-status route is missing in production; evidence points to vercel-not-redeployed",
+  "secretExposureCheck": "passed; no high-risk secret exposure found; no runtime NEXT_PUBLIC_VIVO usage or assignment in runtime source/env files",
+  "vercelEnvStatus": "9 server-side VIVO variables user-confirmed configured for Production and Preview; runtime effectiveness cannot be verified because provider-status route returns 404",
   "onlineErrors": [
     {
       "area": "provider-status:anonymous",
@@ -23,7 +32,7 @@
       "area": "provider-status:logged-in",
       "classification": "vercel-not-redeployed",
       "httpStatus": 404,
-      "status": "observed for u-admin, u-teacher, and u-parent"
+      "status": "observed for u-admin, u-teacher, and u-parent despite dashboard commit READY confirmation"
     },
     {
       "area": "voice-assistant:commands",
@@ -40,7 +49,7 @@
       "area": "asr:typed-fallback",
       "classification": "vercel-not-redeployed",
       "httpStatus": 404,
-      "status": "typed fallback endpoint not deployed"
+      "status": "typed fallback endpoint not deployed or not reachable on production domain"
     },
     {
       "area": "asr:typed-fallback",
@@ -59,15 +68,17 @@
     "artifacts/product-completion/R05/parent-voice-orb-open.png"
   ],
   "checks": {
+    "onlineR05": "failed as expected; production provider/voice routes still 404 and voice orb missing",
+    "eslintR05Spec": "passed",
     "lint": "passed",
-    "build": "passed",
+    "build": "passed; local route list includes /api/ai/provider-status, /api/ai/voice-asr, and /api/voice-assistant/commands",
     "productAi": "passed; local Chat/OCR/ASR live-pass; Playwright 6/6",
     "productVoice": "passed; parser 13/13 and Playwright 20/20",
     "productJourney": "passed; 1/1",
     "featureSmoke": "passed; 19/19",
-    "bugbashSmoke": "passed; 1/1",
+    "bugbashSmoke": "passed on rerun; first run hit transient ERR_NETWORK_CHANGED",
     "tsc": "passed"
   },
-  "releaseRecommendation": "Demo release remains acceptable for the local/demo build. Current online Vercel AI demo and production release are blocked until Vercel is redeployed and R05 is rerun.",
+  "releaseRecommendation": "Demo/local release remains acceptable. Current Vercel production release is blocked until the production domain serves the current deployment artifact/root and R05 passes online.",
   "notes": "No secrets, cookies, tokens, authorization headers, signatures, or full sensitive response headers were stored. No delete/archive operation was executed. Only safe test text was used."
 }

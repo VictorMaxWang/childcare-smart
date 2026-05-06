@@ -1,20 +1,24 @@
-# R05 Result
+# R05/R06 Result
 
-Generated: 2026-05-05
+Generated: 2026-05-06
 
 Status: `blocked`
 
 Base URL: `https://www.smartchildcare.cn`
 
+Local commit: `bf85945`
+
+Vercel Production deployment: `bf85945 READY`, user-confirmed
+
 ## Summary
 
-The production Vercel site is reachable and unauthenticated `/api/ai/provider-status` is correctly protected by `307 /login`. In logged-in demo-account sessions, `/api/ai/provider-status`, `/api/voice-assistant/commands`, and `/api/ai/voice-asr` returned `404`.
+The production Vercel deployment was user-confirmed as `bf85945 READY`, and `NEXT_PUBLIC_FORCE_MOCK_MODE` was user-confirmed as `false` or deleted. The production runtime still returns `404` for logged-in `/api/ai/provider-status`, `/api/voice-assistant/commands`, and `/api/ai/voice-asr`.
 
-Because the local build contains these routes and all local AI/voice gates are green, the online failure is classified as `vercel-not-redeployed`. R05 did not prove `vercel-env-missing`; the deployed production route needed to inspect the Vercel environment is missing.
+Because the local build includes these routes and local gates are green, R05/R06 remains blocked by a production runtime/deployment artifact mismatch. This is not a proven Vercel env missing state.
 
 ## Online Checks
 
-- Login-protected provider status: passed, `307 /login`.
+- Login-protected provider status: passed, unauthenticated `307 /login`.
 - Logged-in provider status: blocked by production `404`.
 - Chat: `unknown` online.
 - OCR: `unknown` online.
@@ -23,21 +27,7 @@ Because the local build contains these routes and all local AI/voice gates are g
 - Voice orb: missing for 陈园长, 李老师, 周老师, and 林妈妈.
 - Fake success: not detected.
 - Secret exposure: not found.
-
-## Error Classification
-
-- `login-required`: unauthenticated provider-status returned expected `307 /login`.
-- `vercel-not-redeployed`: logged-in provider-status `404`, voice command endpoint `404`, ASR endpoint `404`, and voice orb missing for all four roles.
-- `unknown`: ASR typed fallback secondary status remained missing after route `404`.
-- `vercel-env-missing`: not observed.
-- `auth/signature`: not observed.
-- `endpoint`: raw symptom was `404`, classified as `vercel-not-redeployed` based on local build evidence.
-- `model`: not observed.
-- `permission`: not observed.
-- `network`: not observed for the production provider path.
-- `unsupported format`: not observed.
-- `scope-403`: not observed.
-- `provider-unavailable`: not observed.
+- Mock mode risk: low from the flag itself; current value is user-confirmed false/deleted.
 
 ## Local Command Results
 
@@ -47,15 +37,9 @@ Because the local build contains these routes and all local AI/voice gates are g
 - `npm run product:voice`: passed.
 - `npm run product:journey`: passed.
 - `npm run feature:smoke`: passed.
-- `npm run bugbash:smoke`: passed.
+- `npm run bugbash:smoke`: passed on rerun; first run hit transient `ERR_NETWORK_CHANGED`.
 - `npx tsc --noEmit`: passed.
 
-## Artifacts
+## Release Recommendation
 
-- `artifacts/product-completion/R05/r05-online-evidence.json`
-- `artifacts/product-completion/R05/teacher-health-material-parsed.png`
-- `artifacts/product-completion/R05/teacher-health-material-after-refresh.png`
-- `artifacts/product-completion/R05/director-voice-orb-open.png`
-- `artifacts/product-completion/R05/teacher-voice-orb-open.png`
-- `artifacts/product-completion/R05/teacher-zhou-voice-orb-open.png`
-- `artifacts/product-completion/R05/parent-voice-orb-open.png`
+Production release is not recommended. Verify the production domain is serving the current deployment artifact/root, then rerun R05 until provider-status, voice commands, ASR, and voice orb are available online.
