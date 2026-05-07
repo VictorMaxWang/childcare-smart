@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-label="DEMO health material placeholder">
+  <rect width="1200" height="900" fill="#eef2ff"/>
+  <rect x="300" y="90" width="600" height="720" rx="18" fill="#ffffff" stroke="#a5b4fc" stroke-width="4"/>
+  <text x="600" y="170" text-anchor="middle" font-family="Arial, sans-serif" font-size="46" font-weight="700" fill="#3730a3">DEMO / 示例</text>
+  <line x1="370" y1="240" x2="830" y2="240" stroke="#c7d2fe" stroke-width="12" stroke-linecap="round"/>
+  <line x1="370" y1="310" x2="780" y2="310" stroke="#c7d2fe" stroke-width="12" stroke-linecap="round"/>
+  <line x1="370" y1="380" x2="820" y2="380" stroke="#c7d2fe" stroke-width="12" stroke-linecap="round"/>
+  <rect x="370" y="470" width="460" height="180" rx="12" fill="#f8fafc" stroke="#c7d2fe" stroke-width="3"/>
+  <text x="600" y="575" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" fill="#64748b">虚构健康材料占位</text>
+  <text x="600" y="735" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" fill="#64748b">无真实姓名 / 手机号 / 医疗机构信息</text>
+</svg>

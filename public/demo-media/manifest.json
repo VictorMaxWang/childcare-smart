@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "dseed-demo-media-v1",
+  "generatedAt": "2026-05-07T00:00:00.000Z",
+  "assetRoot": "/demo-media",
+  "demoOnly": true,
+  "notice": "All bundled assets are safe placeholders with DEMO labels. GPT Image 2 synthetic assets can be added later under public/demo-media/gpt-image2/ and mapped here.",
+  "fallbacks": {
+    "default": "/demo-media/placeholders/demo-placeholder.svg",
+    "meal": "/demo-media/meals/demo-meal-placeholder.svg",
+    "healthMaterial": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+    "growth": "/demo-media/growth/demo-growth-placeholder.svg",
+    "storybook": "/demo-media/storybooks/demo-storybook-placeholder.svg"
+  },
+  "assets": [
+    {
+      "id": "demo-meal-fallback",
+      "kind": "meal",
+      "path": "/demo-media/meals/demo-meal-placeholder.svg",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": ["meals"],
+      "seedRefs": ["meal-*"],
+      "demoLabelRequired": true
+    },
+    {
+      "id": "demo-health-material-fallback",
+      "kind": "health-material",
+      "path": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": ["health"],
+      "seedRefs": ["health-material-*"],
+      "demoLabelRequired": true
+    },
+    {
+      "id": "demo-growth-fallback",
+      "kind": "growth",
+      "path": "/demo-media/growth/demo-growth-placeholder.svg",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": ["growth"],
+      "seedRefs": ["growth-*"],
+      "demoLabelRequired": true
+    },
+    {
+      "id": "demo-storybook-fallback",
+      "kind": "storybook",
+      "path": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": ["storybooks"],
+      "seedRefs": ["storybook-*"],
+      "demoLabelRequired": true
+    }
+  ]
+}

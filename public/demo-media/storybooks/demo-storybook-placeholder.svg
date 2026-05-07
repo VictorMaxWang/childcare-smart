@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500" role="img" aria-label="DEMO storybook placeholder">
+  <rect width="1200" height="1500" fill="#fff7ed"/>
+  <rect x="80" y="80" width="1040" height="1340" rx="44" fill="#ffffff" stroke="#fed7aa" stroke-width="5"/>
+  <circle cx="600" cy="460" r="180" fill="#fde68a"/>
+  <path d="M315 880 C450 730, 710 730, 885 880" fill="none" stroke="#fb923c" stroke-width="22" stroke-linecap="round"/>
+  <path d="M430 1030 C520 960, 680 960, 770 1030" fill="none" stroke="#38bdf8" stroke-width="18" stroke-linecap="round"/>
+  <text x="600" y="190" text-anchor="middle" font-family="Arial, sans-serif" font-size="58" font-weight="700" fill="#9a3412">DEMO STORYBOOK</text>
+  <text x="600" y="1240" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" fill="#92400e">成长绘本安全占位插图</text>
+  <text x="600" y="1300" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#a16207">Synthetic only, no real child face</text>
+</svg>

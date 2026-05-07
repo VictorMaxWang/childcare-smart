@@ -35,6 +35,7 @@ import {
   buildLegacyDemoUserNamespace,
   getCurrentDemoContext,
 } from "@/lib/demo-data/persistence";
+import { createDemoSeedSnapshot } from "@/lib/demo-data/seed";
 import {
   addConsultationNote as addDemoConsultationNote,
   createConsultation as createDemoConsultation,
@@ -118,8 +119,10 @@ export interface Guardian {
 export interface Child {
   id: string;
   name: string;
+  displayName?: string;
   nickname?: string;
   birthDate: string;
+  age?: string;
   gender: Gender;
   allergies: string[];
   heightCm: number;
@@ -127,6 +130,11 @@ export interface Child {
   guardians: Guardian[];
   institutionId: string;
   className: string;
+  classId?: string;
+  teacherId?: string;
+  parentId?: string;
+  enrollmentDate?: string;
+  status?: string;
   specialNotes: string;
   avatar: string;
   parentUserId?: string;
@@ -137,6 +145,9 @@ export interface AttendanceRecord {
   childId: string;
   date: string;
   isPresent: boolean;
+  classId?: string;
+  teacherId?: string;
+  parentId?: string;
   checkInAt?: string;
   checkOutAt?: string;
   absenceReason?: string;
@@ -150,6 +161,9 @@ export interface HealthCheckRecord {
   mood: string;
   handMouthEye: "正常" | "异常";
   isAbnormal: boolean;
+  classId?: string;
+  teacherId?: string;
+  parentId?: string;
   remark?: string;
   checkedBy: string;
   checkedByRole: Role;
@@ -181,6 +195,10 @@ export interface MealRecord {
   meal: MealType;
   foods: FoodItem[];
   photoUrls?: string[];
+  mediaRefs?: string[];
+  classId?: string;
+  teacherId?: string;
+  parentId?: string;
   intakeLevel: IntakeLevel;
   preference: PreferenceStatus;
   allergyReaction?: string;
@@ -206,6 +224,10 @@ export interface GrowthRecord {
   reviewDate?: string;
   reviewStatus?: "待复查" | "已完成";
   mediaUrls?: string[];
+  mediaRefs?: string[];
+  classId?: string;
+  teacherId?: string;
+  parentId?: string;
 }
 
 export interface ParentMediaItem {
@@ -2714,7 +2736,15 @@ function validateDemoSnapshotCoverage(snapshot: AppStateSnapshot, targetToday: s
   const todayAttendanceCount = snapshot.attendance.filter((record) => record.date === targetToday && record.isPresent).length;
   const todayMealCount = snapshot.meals.filter((record) => record.date === targetToday).length;
   const childIds = new Set(snapshot.children.map((child) => child.id));
-  const allowedTaskIds = new Set(["task_001", "task_002", "task_003", "task_004", "task_005", "task_006"]);
+  const allowedTaskIds = new Set([
+    "task_001",
+    "task_002",
+    "task_003",
+    "task_004",
+    "task_005",
+    "task_006",
+    ...snapshot.tasks.map((task) => task.taskId),
+  ]);
   const attendanceLookup = buildAttendanceLookup(snapshot.attendance);
   const orphanMealCount = snapshot.meals.filter(
     (record) => !attendanceLookup.get(buildRecordKey(record.childId, record.date))?.isPresent
@@ -2770,6 +2800,11 @@ function isExplicitEmptyRecordsSnapshot(snapshot: AppStateSnapshot) {
 }
 
 function buildFreshDemoSnapshot(targetToday = getLocalToday()): AppStateSnapshot {
+  const dSeedSnapshot = normalizeAppStateSnapshot(createDemoSeedSnapshot(`${targetToday}T08:00:00.000Z`));
+  if (dSeedSnapshot) {
+    return dSeedSnapshot;
+  }
+
   const template = cloneDemoSnapshotTemplate();
   const attendanceLookup = buildAttendanceLookup(template.attendance);
   const normalizedTemplate = applyDemoNarrativeScaffold({

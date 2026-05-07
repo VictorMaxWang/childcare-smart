@@ -129,10 +129,27 @@ type CommunicationItem = {
   attention: boolean;
   avatar: string;
   threadMessages: ReturnType<typeof buildHomeSchoolThreads>[number]["messages"];
+  feedbackId?: string;
 };
 
 function isWorkflow(value: string | null): value is TeacherAgentWorkflowType {
   return value === "communication" || value === "follow-up" || value === "weekly-summary";
+}
+
+function feedbackTime(feedback: ApiFeedback) {
+  const record = feedback as ApiFeedback & {
+    updatedAt?: string;
+    submittedAt?: string;
+    createdAt?: string;
+    date?: string;
+  };
+  return record.updatedAt ?? record.submittedAt ?? record.createdAt ?? record.date ?? "";
+}
+
+function latestFeedbackForChild(feedbacks: ApiFeedback[], childId: string) {
+  return feedbacks
+    .filter((feedback) => feedback.childId === childId)
+    .sort((left, right) => feedbackTime(right).localeCompare(feedbackTime(left)))[0];
 }
 
 export default function TeacherAgentPage() {
@@ -909,6 +926,7 @@ export default function TeacherAgentPage() {
     const latestMessage = thread.latestMessage;
     const latestParentMessage = thread.latestParentMessage ?? latestMessage;
     const latestTeacherMessage = thread.latestTeacherMessage;
+    const latestFeedback = latestFeedbackForChild(apiFeedbacks, thread.childId);
     const teacherHasReplied = thread.messages.some(
       (message) => message.senderRole === "teacher" && message.senderId === currentUser.id
     );
@@ -932,6 +950,7 @@ export default function TeacherAgentPage() {
       attention: thread.status === "pending",
       avatar: latestParentMessage?.senderName?.includes("爸爸") ? "👨🏻" : "👩🏻",
       threadMessages: thread.messages,
+      feedbackId: latestFeedback?.feedbackId,
     };
   });
   const pendingCommunicationItems = allCommunicationItems.filter((item) => item.status === "待回复");
@@ -1298,17 +1317,16 @@ export default function TeacherAgentPage() {
                           <Lightbulb className="mr-2 h-5 w-5" />
                           沟通建议
                         </Button>
-                        {apiFeedbacks.some((feedback) => feedback.childId === item.childId) ? (
+                        {item.feedbackId ? (
                           <Button
                             data-testid="teacher-open-feedback-detail"
-                            data-feedback-id={apiFeedbacks.find((feedback) => feedback.childId === item.childId)?.feedbackId}
+                            data-feedback-id={item.feedbackId}
                             type="button"
                             variant="outline"
                             className="h-12 rounded-full border-emerald-100 bg-emerald-50/60 text-base font-bold text-emerald-600"
                             onClick={() => {
-                              const feedback = apiFeedbacks.find((candidate) => candidate.childId === item.childId);
-                              setFeedbackDetailId(feedback?.feedbackId ?? null);
-                              setFeedbackDetailOpen(Boolean(feedback));
+                              setFeedbackDetailId(item.feedbackId ?? null);
+                              setFeedbackDetailOpen(true);
                             }}
                           >
                             查看反馈详情
