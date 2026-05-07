@@ -1,0 +1,76 @@
+{
+  "taskId": "M00",
+  "status": "done",
+  "imageDiagnosis": {
+    "gptImage2DirExists": false,
+    "gptImage2ImageCount": 0,
+    "placeholderCount": 4,
+    "manifestStatus": "placeholder-only; no /gpt-image2 refs",
+    "needsImageGeneration": true,
+    "mealMediaCount": 2016,
+    "mealPlaceholderMediaCount": 2016,
+    "mealGptImage2MediaCount": 0,
+    "healthMaterialMediaCount": 36,
+    "healthMaterialPlaceholderMediaCount": 36,
+    "healthMaterialGptImage2MediaCount": 0,
+    "growthMediaCount": 432,
+    "growthPlaceholderMediaCount": 432,
+    "growthGptImage2MediaCount": 0,
+    "storybookMediaCount": 576,
+    "storybookPlaceholderMediaCount": 576,
+    "storybookGptImage2MediaCount": 0
+  },
+  "dietDiagnosis": {
+    "directorChildren": 36,
+    "teacherLiChildren": 18,
+    "teacherZhouChildren": 18,
+    "directorDietRecords": 1008,
+    "teacherLiDietRecords": 504,
+    "teacherZhouDietRecords": 504,
+    "storybookCount": 36,
+    "dietVisibleForTeacher": "yes; teacher pages link to /diet and /diet scopes children/meal records by role",
+    "suspectedCause": "seed/API correct; online mismatch most likely stale browser localStorage/AppProvider demo snapshot migration gap, or presentChildren vs class-size confusion"
+  },
+  "onlineDiagnosis": {
+    "latestCommit": "09d82df6019c959ee365408302798fb0551190f2",
+    "latestCommitShort": "09d82df",
+    "latestCommitSubject": "stabilize demo accounts and seed data",
+    "productionDeployment": "childcare-smart-31a5dw590-victormaxwangs-projects.vercel.app",
+    "productionDeploymentId": "dpl_39i5r4ARWf28GvNEnSuYX9pKTL3C",
+    "productionDeploymentCreatedAt": "2026-05-07T10:49:49+08:00",
+    "needsRedeploy": "no for current D-SEED artifact; yes after M01 migration fix",
+    "possibleLocalStorageStaleSeed": "yes"
+  },
+  "verification": {
+    "gitStatusShort": "clean",
+    "commandsPassed": [
+      "npm run lint",
+      "npm run build",
+      "npm run product:smoke",
+      "npm run product:journey",
+      "npm run feature:smoke",
+      "npm run bugbash:smoke",
+      "npx tsc --noEmit"
+    ]
+  },
+  "recommendedTasks": [
+    {
+      "taskId": "M01",
+      "title": "修教师饮食和 seed 迁移",
+      "priority": 1,
+      "reason": "本地 seed/API 已满足 18/18/36，但线上可能被旧 localStorage snapshot 污染。"
+    },
+    {
+      "taskId": "M02",
+      "title": "生成 GPT Image 2 出图交付包",
+      "priority": 2,
+      "reason": "当前只有 prompt pack，没有真实 GPT Image 2 图片文件。"
+    },
+    {
+      "taskId": "M03",
+      "title": "接入 GPT Image 2 图片",
+      "priority": 3,
+      "reason": "真实图片生成后需要更新 manifest 与 seed/media refs，并保留 fallback。"
+    }
+  ]
+}
