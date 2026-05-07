@@ -1,0 +1,1978 @@
+{
+  "version": "1",
+  "expectedDirectory": "public/demo-media/gpt-image2",
+  "assets": [
+    {
+      "targetFilename": "meals/demo-meal-breakfast-01.png",
+      "category": "meal",
+      "intendedUsage": "breakfast meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-1-2026-05-07-1"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-breakfast-02.png",
+      "category": "meal",
+      "intendedUsage": "breakfast meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-2-2026-05-07-1"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-breakfast-03.png",
+      "category": "meal",
+      "intendedUsage": "breakfast meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-3-2026-05-07-1"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-breakfast-04.png",
+      "category": "meal",
+      "intendedUsage": "breakfast meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-4-2026-05-07-1"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-breakfast-05.png",
+      "category": "meal",
+      "intendedUsage": "breakfast meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-5-2026-05-07-1"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-breakfast-06.png",
+      "category": "meal",
+      "intendedUsage": "breakfast meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-6-2026-05-07-1"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-breakfast-07.png",
+      "category": "meal",
+      "intendedUsage": "breakfast meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-7-2026-05-07-1"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-breakfast-08.png",
+      "category": "meal",
+      "intendedUsage": "breakfast meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-8-2026-05-07-1"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-lunch-01.png",
+      "category": "meal",
+      "intendedUsage": "lunch meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-9-2026-05-07-2"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-lunch-02.png",
+      "category": "meal",
+      "intendedUsage": "lunch meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-10-2026-05-07-2"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-lunch-03.png",
+      "category": "meal",
+      "intendedUsage": "lunch meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-11-2026-05-07-2"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-lunch-04.png",
+      "category": "meal",
+      "intendedUsage": "lunch meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-12-2026-05-07-2"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-lunch-05.png",
+      "category": "meal",
+      "intendedUsage": "lunch meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-13-2026-05-07-2"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-lunch-06.png",
+      "category": "meal",
+      "intendedUsage": "lunch meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-14-2026-05-07-2"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-lunch-07.png",
+      "category": "meal",
+      "intendedUsage": "lunch meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-15-2026-05-07-2"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-lunch-08.png",
+      "category": "meal",
+      "intendedUsage": "lunch meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-16-2026-05-07-2"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-snack-01.png",
+      "category": "meal",
+      "intendedUsage": "snack meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-17-2026-05-07-3"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-snack-02.png",
+      "category": "meal",
+      "intendedUsage": "snack meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-18-2026-05-07-3"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-snack-03.png",
+      "category": "meal",
+      "intendedUsage": "snack meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-19-2026-05-07-3"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-snack-04.png",
+      "category": "meal",
+      "intendedUsage": "snack meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-20-2026-05-07-3"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-snack-05.png",
+      "category": "meal",
+      "intendedUsage": "snack meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-21-2026-05-07-3"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-snack-06.png",
+      "category": "meal",
+      "intendedUsage": "snack meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-22-2026-05-07-3"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-snack-07.png",
+      "category": "meal",
+      "intendedUsage": "snack meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-23-2026-05-07-3"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-dinner-01.png",
+      "category": "meal",
+      "intendedUsage": "dinner meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-24-2026-05-07-4"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-dinner-02.png",
+      "category": "meal",
+      "intendedUsage": "dinner meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-25-2026-05-07-4"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-dinner-03.png",
+      "category": "meal",
+      "intendedUsage": "dinner meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-26-2026-05-07-4"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-dinner-04.png",
+      "category": "meal",
+      "intendedUsage": "dinner meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-27-2026-05-07-4"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-dinner-05.png",
+      "category": "meal",
+      "intendedUsage": "dinner meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-28-2026-05-07-4"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-dinner-06.png",
+      "category": "meal",
+      "intendedUsage": "dinner meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-29-2026-05-07-4"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-dinner-07.png",
+      "category": "meal",
+      "intendedUsage": "dinner meal record photo replacement",
+      "linkedSeedIds": [
+        "meal-c-30-2026-05-07-4"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-observation-01.png",
+      "category": "health-material",
+      "intendedUsage": "health observation material",
+      "linkedSeedIds": [
+        "health-material-c-1"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-observation-02.png",
+      "category": "health-material",
+      "intendedUsage": "health observation material",
+      "linkedSeedIds": [
+        "health-material-c-2"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-observation-03.png",
+      "category": "health-material",
+      "intendedUsage": "health observation material",
+      "linkedSeedIds": [
+        "health-material-c-3"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-observation-04.png",
+      "category": "health-material",
+      "intendedUsage": "health observation material",
+      "linkedSeedIds": [
+        "health-material-c-4"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-observation-05.png",
+      "category": "health-material",
+      "intendedUsage": "health observation material",
+      "linkedSeedIds": [
+        "health-material-c-5"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-report-01.png",
+      "category": "health-material",
+      "intendedUsage": "fictional health check report",
+      "linkedSeedIds": [
+        "health-material-c-6"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-report-02.png",
+      "category": "health-material",
+      "intendedUsage": "fictional health check report",
+      "linkedSeedIds": [
+        "health-material-c-7"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-report-03.png",
+      "category": "health-material",
+      "intendedUsage": "fictional health check report",
+      "linkedSeedIds": [
+        "health-material-c-8"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-report-04.png",
+      "category": "health-material",
+      "intendedUsage": "fictional health check report",
+      "linkedSeedIds": [
+        "health-material-c-9"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-report-05.png",
+      "category": "health-material",
+      "intendedUsage": "fictional health check report",
+      "linkedSeedIds": [
+        "health-material-c-10"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-temperature-01.png",
+      "category": "health-material",
+      "intendedUsage": "temperature log material",
+      "linkedSeedIds": [
+        "health-material-c-11"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-temperature-02.png",
+      "category": "health-material",
+      "intendedUsage": "temperature log material",
+      "linkedSeedIds": [
+        "health-material-c-12"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-temperature-03.png",
+      "category": "health-material",
+      "intendedUsage": "temperature log material",
+      "linkedSeedIds": [
+        "health-material-c-13"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-temperature-04.png",
+      "category": "health-material",
+      "intendedUsage": "temperature log material",
+      "linkedSeedIds": [
+        "health-material-c-14"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-temperature-05.png",
+      "category": "health-material",
+      "intendedUsage": "temperature log material",
+      "linkedSeedIds": [
+        "health-material-c-15"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-reminder-01.png",
+      "category": "health-material",
+      "intendedUsage": "health reminder material",
+      "linkedSeedIds": [
+        "health-material-c-16"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-reminder-02.png",
+      "category": "health-material",
+      "intendedUsage": "health reminder material",
+      "linkedSeedIds": [
+        "health-material-c-17"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-reminder-03.png",
+      "category": "health-material",
+      "intendedUsage": "health reminder material",
+      "linkedSeedIds": [
+        "health-material-c-18"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-reminder-04.png",
+      "category": "health-material",
+      "intendedUsage": "health reminder material",
+      "linkedSeedIds": [
+        "health-material-c-19"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-reminder-05.png",
+      "category": "health-material",
+      "intendedUsage": "health reminder material",
+      "linkedSeedIds": [
+        "health-material-c-20"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-blocks-01.png",
+      "category": "growth",
+      "intendedUsage": "growth activity blocks",
+      "linkedSeedIds": [
+        "growth-c-1-2"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-blocks-02.png",
+      "category": "growth",
+      "intendedUsage": "growth activity blocks",
+      "linkedSeedIds": [
+        "growth-c-2-2"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-blocks-03.png",
+      "category": "growth",
+      "intendedUsage": "growth activity blocks",
+      "linkedSeedIds": [
+        "growth-c-3-2"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-blocks-04.png",
+      "category": "growth",
+      "intendedUsage": "growth activity blocks",
+      "linkedSeedIds": [
+        "growth-c-4-2"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-art-01.png",
+      "category": "growth",
+      "intendedUsage": "growth activity drawing",
+      "linkedSeedIds": [
+        "growth-c-5-6"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-art-02.png",
+      "category": "growth",
+      "intendedUsage": "growth activity drawing",
+      "linkedSeedIds": [
+        "growth-c-6-6"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-art-03.png",
+      "category": "growth",
+      "intendedUsage": "growth activity drawing",
+      "linkedSeedIds": [
+        "growth-c-7-6"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-art-04.png",
+      "category": "growth",
+      "intendedUsage": "growth activity drawing",
+      "linkedSeedIds": [
+        "growth-c-8-6"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-reading-01.png",
+      "category": "growth",
+      "intendedUsage": "growth activity reading",
+      "linkedSeedIds": [
+        "growth-c-9-1"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-reading-02.png",
+      "category": "growth",
+      "intendedUsage": "growth activity reading",
+      "linkedSeedIds": [
+        "growth-c-10-1"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-reading-03.png",
+      "category": "growth",
+      "intendedUsage": "growth activity reading",
+      "linkedSeedIds": [
+        "growth-c-11-1"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-reading-04.png",
+      "category": "growth",
+      "intendedUsage": "growth activity reading",
+      "linkedSeedIds": [
+        "growth-c-12-1"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-motor-01.png",
+      "category": "growth",
+      "intendedUsage": "growth activity motor skills",
+      "linkedSeedIds": [
+        "growth-c-13-4"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-motor-02.png",
+      "category": "growth",
+      "intendedUsage": "growth activity motor skills",
+      "linkedSeedIds": [
+        "growth-c-14-4"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-motor-03.png",
+      "category": "growth",
+      "intendedUsage": "growth activity motor skills",
+      "linkedSeedIds": [
+        "growth-c-15-4"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-motor-04.png",
+      "category": "growth",
+      "intendedUsage": "growth activity motor skills",
+      "linkedSeedIds": [
+        "growth-c-16-4"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-craft-01.png",
+      "category": "growth",
+      "intendedUsage": "growth activity craft",
+      "linkedSeedIds": [
+        "growth-c-17-6"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-craft-02.png",
+      "category": "growth",
+      "intendedUsage": "growth activity craft",
+      "linkedSeedIds": [
+        "growth-c-18-6"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-craft-03.png",
+      "category": "growth",
+      "intendedUsage": "growth activity craft",
+      "linkedSeedIds": [
+        "growth-c-19-6"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-craft-04.png",
+      "category": "growth",
+      "intendedUsage": "growth activity craft",
+      "linkedSeedIds": [
+        "growth-c-20-6"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-outdoor-01.png",
+      "category": "growth",
+      "intendedUsage": "growth activity outdoor exploration",
+      "linkedSeedIds": [
+        "growth-c-21-4"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-outdoor-02.png",
+      "category": "growth",
+      "intendedUsage": "growth activity outdoor exploration",
+      "linkedSeedIds": [
+        "growth-c-22-4"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-outdoor-03.png",
+      "category": "growth",
+      "intendedUsage": "growth activity outdoor exploration",
+      "linkedSeedIds": [
+        "growth-c-23-4"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-outdoor-04.png",
+      "category": "growth",
+      "intendedUsage": "growth activity outdoor exploration",
+      "linkedSeedIds": [
+        "growth-c-24-4"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-1"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-2"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-03.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-3"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-04.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-4"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-05.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-5"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-06.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-6"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-07.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-7"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-08.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-8"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-09.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-9"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-10.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-10"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-11.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-11"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-12.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-12"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-13.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-13"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-14.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-14"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-15.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-15"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-16.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-16"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-17.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-17"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-18.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-18"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-19.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-19"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-20.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-20"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-21.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-21"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-22.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-22"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-23.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-23"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-24.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-24"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-25.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-25"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-26.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-26"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-27.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-27"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-28.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-28"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-29.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-29"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-30.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-30"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-31.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-31"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-32.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-32"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-33.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-33"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-34.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-34"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-35.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-35"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-cover-c-36.png",
+      "category": "storybook",
+      "intendedUsage": "storybook cover illustration",
+      "linkedSeedIds": [
+        "storybook-c-36"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-01-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-1",
+        "growth-c-1-1"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-01-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-1",
+        "growth-c-1-4"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-02-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-2",
+        "growth-c-2-2"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-02-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-2",
+        "growth-c-2-5"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-03-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-3",
+        "growth-c-3-3"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-03-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-3",
+        "growth-c-3-6"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-04-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-4",
+        "growth-c-4-4"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-04-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-4",
+        "growth-c-4-1"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-05-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-5",
+        "growth-c-5-5"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-05-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-5",
+        "growth-c-5-2"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-06-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-6",
+        "growth-c-6-6"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-06-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-6",
+        "growth-c-6-3"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-07-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-7",
+        "growth-c-7-1"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-07-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-7",
+        "growth-c-7-4"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-08-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-8",
+        "growth-c-8-2"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-08-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-8",
+        "growth-c-8-5"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-09-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-9",
+        "growth-c-9-3"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-09-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-9",
+        "growth-c-9-6"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-10-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-10",
+        "growth-c-10-4"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-10-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-10",
+        "growth-c-10-1"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-11-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-11",
+        "growth-c-11-5"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-11-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-11",
+        "growth-c-11-2"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-12-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-12",
+        "growth-c-12-6"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-12-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-12",
+        "growth-c-12-3"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-13-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-13",
+        "growth-c-13-1"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-13-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-13",
+        "growth-c-13-4"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-14-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-14",
+        "growth-c-14-2"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-14-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-14",
+        "growth-c-14-5"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-15-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-15",
+        "growth-c-15-3"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-15-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-15",
+        "growth-c-15-6"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-16-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-16",
+        "growth-c-16-4"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-16-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-16",
+        "growth-c-16-1"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-17-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-17",
+        "growth-c-17-5"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-17-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-17",
+        "growth-c-17-2"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-18-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-18",
+        "growth-c-18-6"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-18-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-18",
+        "growth-c-18-3"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-19-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-19",
+        "growth-c-19-1"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-19-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-19",
+        "growth-c-19-4"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-20-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-20",
+        "growth-c-20-2"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-20-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-20",
+        "growth-c-20-5"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-21-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-21",
+        "growth-c-21-3"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-21-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-21",
+        "growth-c-21-6"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-22-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-22",
+        "growth-c-22-4"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-22-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-22",
+        "growth-c-22-1"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-23-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-23",
+        "growth-c-23-5"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-23-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-23",
+        "growth-c-23-2"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-24-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-24",
+        "growth-c-24-6"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-24-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-24",
+        "growth-c-24-3"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-25-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-25",
+        "growth-c-25-1"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-25-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-25",
+        "growth-c-25-4"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-26-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-26",
+        "growth-c-26-2"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-26-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-26",
+        "growth-c-26-5"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-27-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-27",
+        "growth-c-27-3"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-27-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-27",
+        "growth-c-27-6"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-28-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-28",
+        "growth-c-28-4"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-28-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-28",
+        "growth-c-28-1"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-29-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-29",
+        "growth-c-29-5"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-29-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-29",
+        "growth-c-29-2"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-30-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-30",
+        "growth-c-30-6"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-30-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-30",
+        "growth-c-30-3"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-31-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-31",
+        "growth-c-31-1"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-31-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-31",
+        "growth-c-31-4"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-32-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-32",
+        "growth-c-32-2"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-32-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-32",
+        "growth-c-32-5"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-33-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-33",
+        "growth-c-33-3"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-33-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-33",
+        "growth-c-33-6"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-34-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-34",
+        "growth-c-34-4"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-34-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-34",
+        "growth-c-34-1"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-35-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-35",
+        "growth-c-35-5"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-35-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-35",
+        "growth-c-35-2"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-36-01.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-36",
+        "growth-c-36-6"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-page-c-36-02.png",
+      "category": "storybook",
+      "intendedUsage": "storybook page illustration",
+      "linkedSeedIds": [
+        "storybook-c-36",
+        "growth-c-36-3"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-fallback-tabletop-01.png",
+      "category": "meal",
+      "intendedUsage": "optional generic meal fallback",
+      "linkedSeedIds": [
+        "meal-*"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "meals/demo-meal-fallback-tray-02.png",
+      "category": "meal",
+      "intendedUsage": "optional generic meal fallback",
+      "linkedSeedIds": [
+        "meal-*"
+      ],
+      "fallbackIfMissing": "/demo-media/meals/demo-meal-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-fallback-document-01.png",
+      "category": "health-material",
+      "intendedUsage": "optional generic health material fallback",
+      "linkedSeedIds": [
+        "health-material-*"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "health-materials/demo-health-fallback-card-02.png",
+      "category": "health-material",
+      "intendedUsage": "optional generic health material fallback",
+      "linkedSeedIds": [
+        "health-material-*"
+      ],
+      "fallbackIfMissing": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-fallback-classroom-01.png",
+      "category": "growth",
+      "intendedUsage": "optional generic growth fallback",
+      "linkedSeedIds": [
+        "growth-*"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "growth/demo-growth-fallback-outdoor-02.png",
+      "category": "growth",
+      "intendedUsage": "optional generic growth fallback",
+      "linkedSeedIds": [
+        "growth-*"
+      ],
+      "fallbackIfMissing": "/demo-media/growth/demo-growth-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-fallback-garden-01.png",
+      "category": "storybook",
+      "intendedUsage": "optional generic storybook fallback",
+      "linkedSeedIds": [
+        "storybook-*"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    },
+    {
+      "targetFilename": "storybooks/demo-storybook-fallback-classroom-02.png",
+      "category": "storybook",
+      "intendedUsage": "optional generic storybook fallback",
+      "linkedSeedIds": [
+        "storybook-*"
+      ],
+      "fallbackIfMissing": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "required": false
+    }
+  ]
+}
