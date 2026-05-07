@@ -89,6 +89,64 @@ function readJson<T>(storage: DemoStorage, key: string, fallback: T): T {
   }
 }
 
+function readNumericSeedChildId(childId: string) {
+  const match = /^c-(\d+)$/.exec(childId);
+  return match ? Number(match[1]) : null;
+}
+
+function isDSeedBaselineChildId(childId: string) {
+  const value = readNumericSeedChildId(childId);
+  return typeof value === "number" && value >= 1 && value <= 36;
+}
+
+function isDSeedBaselineStale(snapshot: AppStateSnapshot) {
+  const baselineChildCount = snapshot.children.filter((child) => isDSeedBaselineChildId(child.id)).length;
+  return (
+    baselineChildCount < 36 ||
+    snapshot.growth.length < 36 * 6 ||
+    snapshot.meals.length < 36 * 7 ||
+    snapshot.health.length < 36 * 7 ||
+    snapshot.healthMaterials.length < 36 ||
+    snapshot.storybooks.length < 36
+  );
+}
+
+function mergeBucketByKey<T>(fallbackItems: T[], currentItems: T[], readKey: (item: T) => string | null | undefined) {
+  const fallbackKeys = new Set(fallbackItems.map(readKey).filter((key): key is string => Boolean(key)));
+  const currentCustomItems = currentItems.filter((item) => {
+    const key = readKey(item);
+    return !key || !fallbackKeys.has(key);
+  });
+  return [...fallbackItems, ...currentCustomItems];
+}
+
+function mergeDSeedBaseline(current: AppStateSnapshot, fallback: AppStateSnapshot) {
+  if (!isDSeedBaselineStale(current)) return current;
+
+  return normalizeAppStateSnapshot({
+    ...fallback,
+    children: mergeBucketByKey(fallback.children, current.children, (item) => item.id),
+    attendance: mergeBucketByKey(fallback.attendance, current.attendance, (item) => item.id),
+    meals: mergeBucketByKey(fallback.meals, current.meals, (item) => item.id),
+    growth: mergeBucketByKey(fallback.growth, current.growth, (item) => item.id),
+    feedback: mergeBucketByKey(fallback.feedback, current.feedback, (item) => item.id),
+    health: mergeBucketByKey(fallback.health, current.health, (item) => item.id),
+    taskCheckIns: mergeBucketByKey(fallback.taskCheckIns, current.taskCheckIns, (item) => item.id),
+    interventionCards: mergeBucketByKey(fallback.interventionCards, current.interventionCards, (item) => item.id),
+    consultations: mergeBucketByKey(fallback.consultations, current.consultations, (item) => item.consultationId),
+    mobileDrafts: mergeBucketByKey(fallback.mobileDrafts, current.mobileDrafts, (item) => item.draftId),
+    reminders: mergeBucketByKey(fallback.reminders, current.reminders, (item) => item.reminderId),
+    tasks: mergeBucketByKey(fallback.tasks, current.tasks, (item) => item.taskId),
+    messages: mergeBucketByKey(fallback.messages, current.messages, (item) => item.messageId),
+    conversations: mergeBucketByKey(fallback.conversations, current.conversations, (item) => item.conversationId),
+    healthMaterials: mergeBucketByKey(fallback.healthMaterials, current.healthMaterials, (item) => item.materialId),
+    nutritionMenus: mergeBucketByKey(fallback.nutritionMenus, current.nutritionMenus, (item) => item.menuId),
+    storybooks: mergeBucketByKey(fallback.storybooks, current.storybooks, (item) => item.storybookId),
+    updatedAt: fallback.updatedAt,
+    demoPersistenceSchemaVersion: DEMO_PERSISTENCE_SCHEMA_VERSION,
+  }) ?? fallback;
+}
+
 export function readSnapshotFromStorage(
   storage: DemoStorage,
   namespace: string,
@@ -120,7 +178,12 @@ export function readSnapshotFromStorage(
     demoPersistenceSchemaVersion: DEMO_PERSISTENCE_SCHEMA_VERSION,
   } satisfies AppStateSnapshot;
 
-  return normalizeAppStateSnapshot(candidate) ?? fallback;
+  const normalized = normalizeAppStateSnapshot(candidate) ?? fallback;
+  const upgraded = mergeDSeedBaseline(normalized, fallback);
+  if (upgraded !== normalized) {
+    writeSnapshotToStorage(storage, namespace, upgraded);
+  }
+  return upgraded;
 }
 
 export function writeSnapshotToStorage(storage: DemoStorage, namespace: string, snapshot: AppStateSnapshot) {

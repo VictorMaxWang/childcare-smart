@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-label="DEMO meal placeholder">
+  <rect width="1200" height="900" fill="#f1f5f9"/>
+  <rect x="70" y="70" width="1060" height="760" rx="28" fill="#ffffff" stroke="#dbe3ea" stroke-width="4"/>
+  <circle cx="600" cy="430" r="210" fill="#f8fafc" stroke="#94a3b8" stroke-width="8"/>
+  <circle cx="520" cy="380" r="46" fill="#facc15"/>
+  <circle cx="660" cy="390" r="52" fill="#86efac"/>
+  <rect x="505" y="500" width="210" height="42" rx="21" fill="#fda4af"/>
+  <text x="600" y="170" text-anchor="middle" font-family="Arial, sans-serif" font-size="54" font-weight="700" fill="#334155">DEMO MEAL</text>
+  <text x="600" y="740" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" fill="#64748b">示例餐盘占位图，等待 GPT Image 2 合成素材</text>
+</svg>

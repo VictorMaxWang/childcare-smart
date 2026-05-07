@@ -119,12 +119,14 @@ function readReminderChildId(reminder: SnapshotReminder) {
 }
 
 function resolveAuthorizedClassNameSet(children: SnapshotChild[], authorizedChildIds: Set<string>) {
-  return new Set(
-    children
-      .filter((child) => authorizedChildIds.has(child.id))
-      .map((child) => child.className)
-      .filter((className): className is string => Boolean(className))
-  );
+  const classKeys = new Set<string>();
+  for (const child of children) {
+    if (!authorizedChildIds.has(child.id)) continue;
+    if (child.className) classKeys.add(child.className);
+    const classId = (child as { classId?: string }).classId;
+    if (classId) classKeys.add(classId);
+  }
+  return classKeys;
 }
 
 function filterMenusForScope(

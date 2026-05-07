@@ -104,10 +104,6 @@ function PasswordToggleButton({
   );
 }
 
-function startsOnMobileViewport() {
-  return typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches;
-}
-
 function useDesktopReplicaImage() {
   const [enabled, setEnabled] = useState(false);
 
@@ -128,11 +124,11 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const { demoAccounts, login, loginWithDemo, register, isAuthenticated, authLoading, currentUser } = useApp();
 
-  const [username, setUsername] = useState(() => (startsOnMobileViewport() ? "" : "demo-user"));
-  const [password, setPassword] = useState(() => (startsOnMobileViewport() ? "" : "sample-password"));
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(() => !startsOnMobileViewport());
+  const [showPassword, setShowPassword] = useState(false);
   const [demoLoadingId, setDemoLoadingId] = useState<string | null>(null);
   const [rememberLogin, setRememberLogin] = useState(true);
   const [agreementAccepted, setAgreementAccepted] = useState(true);
@@ -366,6 +362,7 @@ export default function LoginPage() {
                   <button
                     key={account.id}
                     type="button"
+                    data-testid={`demo-account-${account.id}`}
                     onClick={() => handleDemoLogin(account.id, account.role)}
                     disabled={demoLoadingId !== null}
                     aria-busy={isLoading || undefined}
@@ -464,6 +461,7 @@ export default function LoginPage() {
                   <UserRound className={styles.inputIcon} aria-hidden="true" />
                   <input
                     id="username"
+                    data-testid="login-username"
                     value={username}
                     onChange={(event) => setUsername(event.target.value)}
                     placeholder="账号 / 手机号"
@@ -483,6 +481,7 @@ export default function LoginPage() {
                   <LockKeyhole className={styles.inputIcon} aria-hidden="true" />
                   <input
                     id="password"
+                    data-testid="login-password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}

@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit --pretty false --incremental false",
     "test:parent-message-mapper": "node --import ./scripts/register-test-path-loader.mjs --test ./lib/agent/parent-message-reflexion.test.ts",
     "test:voice-assistant-parser": "node --import ./scripts/register-test-path-loader.mjs --test ./lib/voice-assistant/parser.test.ts",
+    "test:demo-data-consistency": "node --import ./scripts/register-test-path-loader.mjs --test ./lib/demo-data/demo-data-consistency.test.ts && playwright test tests/product-completion/demo-data-consistency.spec.ts --config=playwright.product.config.ts",
     "ai:smoke": "node ./scripts/ai-suggestions-smoke.mjs",
     "ai:smoke:trend": "node ./scripts/ai-parent-trend-smoke.mjs",
     "ai:smoke:storybook": "node ./scripts/parent-storybook-smoke.mjs",

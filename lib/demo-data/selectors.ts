@@ -102,7 +102,8 @@ export function listNutritionMenus(input: {
 }) {
   const context = input.context ?? getCurrentDemoContext(input.childId ? "parent" : "teacher");
   const snapshot = scopeSnapshotForSessionUser(readContextSnapshot(context), context.user);
-  const childClassId = input.childId ? snapshot.children.find((child) => child.id === input.childId)?.className : undefined;
+  const child = input.childId ? snapshot.children.find((item) => item.id === input.childId) : undefined;
+  const childClassId = (child as { classId?: string } | undefined)?.classId ?? child?.className;
   const classId = input.classId ?? childClassId;
   return snapshot.nutritionMenus.filter((menu) => {
     if (classId && menu.classId !== classId) return false;
