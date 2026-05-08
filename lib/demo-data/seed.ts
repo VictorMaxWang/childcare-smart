@@ -9,6 +9,11 @@ import type { GuardianFeedback } from "@/lib/feedback/types";
 import type { InterventionCard } from "@/lib/agent/intervention-card";
 import type { AppStateSnapshot, DemoHealthMaterial } from "@/lib/persistence/snapshot";
 import type { CanonicalTask } from "@/lib/tasks/types";
+import {
+  DEMO_MEDIA_FALLBACKS,
+  getDemoMediaPath,
+  isGptImage2Path,
+} from "@/lib/demo-media/assets";
 
 export type DemoSeedSnapshot = AppStateSnapshot & {
   teachers: ApiTeacher[];
@@ -60,11 +65,35 @@ const CLASSES: DemoClass[] = [
 ];
 
 const DEMO_MEDIA = {
-  meal: "/demo-media/meals/demo-meal-placeholder.svg",
-  health: "/demo-media/health-materials/demo-health-material-placeholder.svg",
-  growth: "/demo-media/growth/demo-growth-placeholder.svg",
-  storybook: "/demo-media/storybooks/demo-storybook-placeholder.svg",
+  meal: DEMO_MEDIA_FALLBACKS.meal,
+  health: DEMO_MEDIA_FALLBACKS.health,
+  growth: DEMO_MEDIA_FALLBACKS.growth,
+  storybook: DEMO_MEDIA_FALLBACKS.storybook,
 };
+
+function demoMealMediaRef(childId: string, date: string, meal: string) {
+  return getDemoMediaPath("meals", `${childId}-${date}-${meal}`, DEMO_MEDIA.meal);
+}
+
+function demoGrowthMediaRef(childId: string, recordId: string) {
+  return getDemoMediaPath("growth", `${childId}-${recordId}`, DEMO_MEDIA.growth);
+}
+
+function demoHealthMediaRef(childId: string) {
+  return getDemoMediaPath("health-materials", childId, DEMO_MEDIA.health);
+}
+
+function demoStorybookCoverMediaRef(childId: string) {
+  return getDemoMediaPath("storybooks", `${childId}-cover`, DEMO_MEDIA.storybook);
+}
+
+function demoStorybookPageMediaRef(childId: string, sceneIndex: number, recordId?: string) {
+  return getDemoMediaPath("storybooks", `${childId}-page-${sceneIndex}-${recordId ?? "scene"}`, DEMO_MEDIA.storybook);
+}
+
+function demoStorybookImageStatus(imageUrl: string): ParentStoryBookScene["imageStatus"] {
+  return isGptImage2Path(imageUrl) ? "ready" : "fallback";
+}
 
 const CHILD_NAMES = [
   ["林小雨", "小雨", "女"],
@@ -319,6 +348,7 @@ function buildMeals(children: DemoChild[], today: string): AppStateSnapshot["mea
       return MEALS.map((mealTemplate, mealIndex) => {
         const lowIntake = (childIndex + dayIndex + mealIndex) % 19 === 0;
         const allergyRisk = child.allergies.length > 0 && mealIndex === 2 && dayIndex === 0;
+        const mealMediaRef = demoMealMediaRef(child.id, date, mealTemplate.meal);
         return {
           id: `meal-${child.id}-${date}-${mealIndex + 1}`,
           childId: child.id,
@@ -330,8 +360,8 @@ function buildMeals(children: DemoChild[], today: string): AppStateSnapshot["mea
             category,
             amount,
           })),
-          photoUrls: [DEMO_MEDIA.meal],
-          mediaRefs: [DEMO_MEDIA.meal],
+          photoUrls: [mealMediaRef],
+          mediaRefs: [mealMediaRef],
           classId: child.classId,
           teacherId: child.teacherId,
           parentId: child.parentId,
@@ -353,6 +383,7 @@ function buildGrowth(children: DemoChild[], today: string): AppStateSnapshot["gr
     GROWTH_THEMES.map((theme, themeIndex) => {
       const date = shiftDate(today, -(themeIndex + (childIndex % 3)));
       const recordId = `growth-${child.id}-${themeIndex + 1}`;
+      const growthMediaRef = demoGrowthMediaRef(child.id, recordId);
       return {
         id: recordId,
         childId: child.id,
@@ -370,8 +401,8 @@ function buildGrowth(children: DemoChild[], today: string): AppStateSnapshot["gr
             : undefined,
         reviewDate: shiftDate(date, 2),
         reviewStatus: (childIndex + themeIndex) % 11 === 0 ? "待复查" : "已完成",
-        mediaUrls: [DEMO_MEDIA.growth],
-        mediaRefs: [DEMO_MEDIA.growth],
+        mediaUrls: [growthMediaRef],
+        mediaRefs: [growthMediaRef],
         classId: child.classId,
         teacherId: child.teacherId,
         parentId: child.parentId,
@@ -383,12 +414,14 @@ function buildGrowth(children: DemoChild[], today: string): AppStateSnapshot["gr
 function buildHealthMaterials(children: DemoChild[], today: string): DemoHealthMaterial[] {
   return children.map((child, index) => {
     const createdAt = at(shiftDate(today, -(index % 10)), 14, 20);
+    const healthMediaRef = demoHealthMediaRef(child.id);
+    const healthMediaIsGpt = isGptImage2Path(healthMediaRef);
     return {
       materialId: `health-material-${child.id}`,
       childId: child.id,
       uploadedBy: child.teacherId,
-      filename: `DEMO-${child.id}-health-note.svg`,
-      fileType: "image/svg+xml",
+      filename: healthMediaIsGpt ? `DEMO-${child.id}-health-note.webp` : `DEMO-${child.id}-health-note.svg`,
+      fileType: healthMediaIsGpt ? "image/webp" : "image/svg+xml",
       parseStatus: "completed",
       description: "虚构演示健康材料，图片仅使用本地占位和 DEMO 标识。",
       parseResult: {
@@ -400,7 +433,7 @@ function buildHealthMaterials(children: DemoChild[], today: string): DemoHealthM
           liveProvider: false,
           demoOnly: true,
         },
-        mediaRefs: [DEMO_MEDIA.health],
+        mediaRefs: [healthMediaRef],
         summary: index % 8 === 0 ? "近期晨检有轻微波动，建议连续观察。" : "基础健康状态稳定，持续常规观察。",
         suggestions: ["保持晨检记录连续", "必要时同步家长补充居家观察"],
         demoLabel: "DEMO / 示例",
@@ -644,6 +677,8 @@ function buildFeedback(children: DemoChild[], tasks: DemoTask[], today: string):
     const submittedAt = at(shiftDate(today, -(21 + (index % 5))), 20, 15);
     const feedbackId = `feedback-${child.id}`;
     const relatedTask = tasks.find((task) => task.childId === child.id);
+    const growthMediaRef = demoGrowthMediaRef(child.id, `feedback-${child.id}`);
+    const growthMediaIsGpt = isGptImage2Path(growthMediaRef);
     return {
       feedbackId,
       childId: child.id,
@@ -659,7 +694,13 @@ function buildFeedback(children: DemoChild[], tasks: DemoTask[], today: string):
       barriers: index % 4 === 0 ? ["晚间作息较晚"] : [],
       notes: `${child.name} 家长反馈：今晚已完成轻量观察，孩子整体配合。`,
       attachments: {
-        image: [{ url: DEMO_MEDIA.growth, name: "demo-growth-placeholder.svg", mimeType: "image/svg+xml" }],
+        image: [
+          {
+            url: growthMediaRef,
+            name: growthMediaIsGpt ? "demo-growth-gpt-image2.webp" : "demo-growth-placeholder.svg",
+            mimeType: growthMediaIsGpt ? "image/webp" : "image/svg+xml",
+          },
+        ],
       },
       submittedAt,
       source: {
@@ -767,15 +808,18 @@ function buildNutritionMenus(today: string): AppStateSnapshot["nutritionMenus"] 
 
 function storybookScenesFor(child: DemoChild, growth: AppStateSnapshot["growth"]): ParentStoryBookScene[] {
   const records = growth.filter((record) => record.childId === child.id).slice(0, 4);
-  return records.map((record, index) => ({
+  return records.map((record, index) => {
+    const imageUrl = demoStorybookPageMediaRef(child.id, index + 1, record.id);
+    const imageStatus = demoStorybookImageStatus(imageUrl);
+    return {
     sceneIndex: index + 1,
     sceneTitle: `${child.nickname ?? child.name}的${record.category}`,
     sceneText: `${record.description} 老师把这一刻记录下来，作为 ${child.name} 成长绘本的一页。`,
     imagePrompt: `warm children's storybook illustration, childcare classroom, no identifiable child face, ${record.category}`,
-    imageUrl: DEMO_MEDIA.storybook,
+    imageUrl,
     assetRef: DEMO_MEDIA.storybook,
-    imageSourceKind: "svg-fallback",
-    imageStatus: "fallback",
+    imageSourceKind: imageStatus === "ready" ? "real" : "svg-fallback",
+    imageStatus,
     audioUrl: null,
     audioRef: null,
     audioScript: `${record.description} 这是 ${child.name} 的成长故事。`,
@@ -786,7 +830,8 @@ function storybookScenesFor(child: DemoChild, growth: AppStateSnapshot["growth"]
       mode: "duration-derived",
       segmentTexts: [record.description],
     },
-  }));
+    };
+  });
 }
 
 function buildStorybooks(children: DemoChild[], growth: AppStateSnapshot["growth"], today: string): AppStateSnapshot["storybooks"] {
@@ -794,6 +839,8 @@ function buildStorybooks(children: DemoChild[], growth: AppStateSnapshot["growth
     const generatedAt = at(shiftDate(today, -1), 21, 0);
     const sourceRecordIds = growth.filter((record) => record.childId === child.id).map((record) => record.id);
     const scenes = storybookScenesFor(child, growth);
+    const coverMediaRef = demoStorybookCoverMediaRef(child.id);
+    const hasStorybookGptImage = isGptImage2Path(coverMediaRef) || scenes.some((scene) => isGptImage2Path(scene.imageUrl));
     const response: ParentStoryBookResponse = {
       storyId: `storybook-${child.id}`,
       childId: child.id,
@@ -811,13 +858,13 @@ function buildStorybooks(children: DemoChild[], growth: AppStateSnapshot["growth
         provider: "dseed-demo-seed",
         mode: "saved-storybook",
         transport: "next-json-fallback",
-        imageProvider: "demo-media-fallback",
+        imageProvider: hasStorybookGptImage ? "gpt-image2-demo-media" : "demo-media-fallback",
         audioProvider: "browser-preview",
-        imageDelivery: "svg-fallback",
+        imageDelivery: hasStorybookGptImage ? "real" : "svg-fallback",
         audioDelivery: "preview-only",
         requestSource: "dseed-prebuilt",
-        fallbackReason: "no-gpt-image2-assets-yet",
-        realProvider: false,
+        fallbackReason: hasStorybookGptImage ? "gpt-image2-local-demo-assets" : "no-gpt-image2-assets-yet",
+        realProvider: hasStorybookGptImage,
         highlightCount: sourceRecordIds.length,
         sceneCount: scenes.length,
       },
@@ -826,7 +873,7 @@ function buildStorybooks(children: DemoChild[], growth: AppStateSnapshot["growth
         storyResponse: "hit",
         audioDelivery: "preview-only",
         ttlSeconds: 86400,
-        realSceneCount: 0,
+        realSceneCount: scenes.filter((scene) => scene.imageStatus === "ready").length,
       },
     };
 
@@ -837,7 +884,7 @@ function buildStorybooks(children: DemoChild[], growth: AppStateSnapshot["growth
         text: response.summary,
         date: generatedAt.slice(0, 10),
         sourceGrowthRecordIds: sourceRecordIds.slice(0, 1),
-        mediaRef: DEMO_MEDIA.storybook,
+        mediaRef: coverMediaRef,
         fallbackMediaRef: DEMO_MEDIA.storybook,
         response,
       },
@@ -856,7 +903,7 @@ function buildStorybooks(children: DemoChild[], growth: AppStateSnapshot["growth
         text: `${child.name} 在语言、社交、自理、运动和情绪表达上都有稳定记录。`,
         date: generatedAt.slice(0, 10),
         sourceGrowthRecordIds: sourceRecordIds,
-        mediaRef: DEMO_MEDIA.storybook,
+        mediaRef: coverMediaRef,
         fallbackMediaRef: DEMO_MEDIA.storybook,
       },
     ];
@@ -939,23 +986,27 @@ function buildWeeklyReports(children: DemoChild[], growth: AppStateSnapshot["gro
 }
 
 function buildAttachments(children: DemoChild[], today: string): ApiAttachment[] {
-  return children.map((child, index) => ({
-    attachmentId: `attachment-health-${child.id}`,
-    institutionId: INSTITUTION_ID,
-    childId: child.id,
-    relatedType: "health-material",
-    relatedId: `health-material-${child.id}`,
-    kind: "image",
-    fileName: `DEMO-${child.id}-health-placeholder.svg`,
-    mimeType: "image/svg+xml",
-    byteSize: 1024,
-    storageMode: "metadata_only",
-    uploadStatus: "metadata_saved",
-    localPreviewUrl: DEMO_MEDIA.health,
-    createdBy: child.teacherId,
-    createdAt: at(shiftDate(today, -(index % 10)), 14, 25),
-    updatedAt: at(shiftDate(today, -(index % 10)), 14, 25),
-  }));
+  return children.map((child, index) => {
+    const healthMediaRef = demoHealthMediaRef(child.id);
+    const healthMediaIsGpt = isGptImage2Path(healthMediaRef);
+    return {
+      attachmentId: `attachment-health-${child.id}`,
+      institutionId: INSTITUTION_ID,
+      childId: child.id,
+      relatedType: "health-material",
+      relatedId: `health-material-${child.id}`,
+      kind: "image",
+      fileName: healthMediaIsGpt ? `DEMO-${child.id}-health-material.webp` : `DEMO-${child.id}-health-placeholder.svg`,
+      mimeType: healthMediaIsGpt ? "image/webp" : "image/svg+xml",
+      byteSize: 1024,
+      storageMode: "metadata_only",
+      uploadStatus: "metadata_saved",
+      localPreviewUrl: healthMediaRef,
+      createdBy: child.teacherId,
+      createdAt: at(shiftDate(today, -(index % 10)), 14, 25),
+      updatedAt: at(shiftDate(today, -(index % 10)), 14, 25),
+    };
+  });
 }
 
 function buildTeachers(today: string): ApiTeacher[] {

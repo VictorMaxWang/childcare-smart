@@ -1,0 +1,52 @@
+# GPT Image 2 Duplicate Assets
+
+Duplicate detection uses sha256 of the original source image. The kept file favors project naming and structured package paths.
+
+| Duplicate | Kept | sha256 |
+| --- | --- | --- |
+| generated_images_part_01_of_13/root-generated/autumn_exploration_on_a_peaceful_path.png | generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-28.png | e9f2b68f794d |
+| generated_images_part_01_of_13/root-generated/a_cheerful_classroom_morning_greeting.png | generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-21.png | ef8eb0c3f984 |
+| generated_images_part_01_of_13/root-generated/a_cozy_nook_of_stories.png | generated_images_part_08_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-14-02.png | efc52aeb79d4 |
+| generated_images_part_01_of_13/root-generated/a_heart_in_the_garden.png | generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-29.png | 671322e0b349 |
+| generated_images_part_08_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-12-01.png | generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-29.png | 671322e0b349 |
+| generated_images_part_01_of_13/root-generated/a_helping_hand_in_a_cozy_classroom.png | generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-30.png | 22e3073a3ea5 |
+| generated_images_part_02_of_13/root-generated/autumn_wanderer_with_a_magnifying_glass.png | generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-34.png | aad1726c6dc0 |
+| generated_images_part_02_of_13/root-generated/braving_the_balance_beam_together.png | generated_images_part_08_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-13-02.png | a07711aca927 |
+| generated_images_part_02_of_13/root-generated/bright_morning_in_a_cozy_playroom.png | generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-31.png | c45a29c2a15f |
+| generated_images_part_08_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-13-01.png | generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-31.png | c45a29c2a15f |
+| generated_images_part_02_of_13/root-generated/building_dreams_together_in_playtime_fun.png | generated_images_part_07_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-11-02.png | 85f17c014e25 |
+| generated_images_part_02_of_13/root-generated/building_the_castle_together.png | generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-23.png | fc17f3b5bdd9 |
+| generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_bright_softly_lit_indoor_scene_in_what_looks_li_2_batch_2.png | generated_images_part_03_of_13/root-generated/child_s_meal_in_a_cozy_classroom_setting.png | 88b75953a296 |
+| generated_images_part_03_of_13/root-generated/child_s_playful_meal_setup.png | generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_top_down_angled_tabletop_food_scene_a_light_woo_2_batch_2.png | 6f8eab19fe26 |
+| generated_images_part_04_of_13/root-generated/cozy_breakfast_tray_in_a_playful_setting.png | generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_bright_softly_lit_indoor_scene_of_a_small_meal_1_batch_1.png | a1638689063a |
+| generated_images_part_04_of_13/root-generated/cozy_children_s_breakfast_setting.png | generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_bright_indoor_cafeteria_kitchen_like_scene_phot_1_batch_1.png | 9279fb07119a |
+| generated_images_part_04_of_13/root-generated/cozy_children_s_classroom_kitchen_setting.png | generated_images_part_11_of_13/structured/round_011_storybooks/demo-storybook-cover-c-36.png | 3791da872135 |
+| generated_images_part_08_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-15-01.png | generated_images_part_11_of_13/structured/round_011_storybooks/demo-storybook-cover-c-36.png | 3791da872135 |
+| generated_images_part_08_of_13/structured/next_batch_storybook_pages_71_72/demo-storybook-page-c-36-02.png | generated_images_part_11_of_13/structured/round_011_storybooks/demo-storybook-cover-c-36.png | 3791da872135 |
+| generated_images_part_04_of_13/root-generated/creative_craft_time_in_the_classroom.png | generated_images_part_08_of_13/structured/next_batch_storybook_pages_71_72/demo-storybook-page-c-36-01.png | 81f65a52651f |
+| generated_images_part_05_of_13/root-generated/dreamy_bedtime_reading_nook_scene.png | generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-32.png | 07b4ae79044f |
+| generated_images_part_07_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-11-01.png | generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-32.png | 07b4ae79044f |
+| generated_images_part_09_of_13/root-generated/playful_snack_tray_by_the_window.png | generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_bright_softly_lit_indoor_near_window_food_scene_7_batch_7.png | a580a17b4413 |
+| generated_images_part_11_of_13/root-generated/simple_cafeteria_meal_setup.png | generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_close_top_down_angled_view_of_a_cafeteria_style_8_batch_8.png | ae4d92db2ad8 |
+| generated_images_part_11_of_13/root-generated/simple_home_cooked_meal_arrangement.png | generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_close_top_down_angled_view_of_a_meal_on_a_light_3_batch_3.png | 8c16681ba2e5 |
+| generated_images_part_11_of_13/root-generated/simple_home_cooked_meal_on_tray.png | generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_close_up_overhead_angled_photo_of_a_meal_tray_on_5_batch_5.png | 91119aac1f2a |
+| generated_images_part_06_of_13/root-generated/healthy_snack_tray_on_wooden_table.png | generated_images_part_06_of_13/structured/ghostwriter_images/generated/a_top_down_angled_view_of_a_simple_snack_tray_scen_6_batch_6.png | d0ecb11a6269 |
+| generated_images_part_09_of_13/root-generated/playful_moments_in_a_sunny_classroom.png | generated_images_part_06_of_13/root-generated/imagegen.png | 7576d4f33bc0 |
+| generated_images_part_12_of_13/root-generated/simple_meal_on_a_wooden_table.png | generated_images_part_06_of_13/structured/ghostwriter_images/generated/a_top_down_overhead_view_of_a_meal_on_a_light_wood_9_batch_9.png | 706e4322f863 |
+| generated_images_part_11_of_13/root-generated/simple_cafeteria_meal_on_a_tray.png | generated_images_part_06_of_13/structured/ghostwriter_images/generated/a_top_down_slightly_angled_cafeteria_style_food_ph_4_batch_4.png | 3303a383cf4d |
+| generated_images_part_06_of_13/structured/ghostwriter_images/generated/a_top_down_slightly_overhead_close_up_photo_of_a_m_3_batch_3.png | generated_images_part_11_of_13/root-generated/simple_asian_inspired_meal_on_tray.png | f998f3d7578e |
+| generated_images_part_11_of_13/root-generated/simple_lunch_tray_with_steamed_rice.png | generated_images_part_06_of_13/structured/ghostwriter_images/generated/overhead_angled_tabletop_photo_of_a_meal_tray_on_a_10_batch_10.png | a72941867ddd |
+| generated_images_part_07_of_13/root-generated/laughter_under_the_rainbow_parachute.png | generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-19.png | ab740cd70eee |
+| generated_images_part_07_of_13/root-generated/learning_to_eat_on_my_own.png | generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-18.png | 27a9030d8726 |
+| generated_images_part_08_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-12-02.png | generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-18.png | 27a9030d8726 |
+| generated_images_part_07_of_13/root-generated/learning_to_wash_hands_happily.png | generated_images_part_10_of_13/structured/round_010_storybooks/demo-storybook-cover-c-24.png | ccf81447e548 |
+| generated_images_part_07_of_13/root-generated/little_seeds_big_hopes_garden_tale.png | generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-20.png | a19984f40e40 |
+| generated_images_part_07_of_13/root-generated/little_warrior_on_the_balance_beam.png | generated_images_part_10_of_13/structured/round_010_storybooks/demo-storybook-cover-c-26.png | 10cce1ee2dd2 |
+| generated_images_part_07_of_13/root-generated/morning_sunshine_in_the_classroom.png | generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-17.png | 452499114943 |
+| generated_images_part_08_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-14-01.png | generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-33.png | 6c74b3fc8d73 |
+| generated_images_part_13_of_13/root-generated/whimsical_toy_bridge_in_a_sunlit_forest.png | generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-33.png | 6c74b3fc8d73 |
+| generated_images_part_09_of_13/root-generated/planting_seeds_with_care_and_wonder.png | generated_images_part_08_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-15-02.png | 5d32bbdd1421 |
+| generated_images_part_12_of_13/root-generated/tidying_up_time_in_the_playroom.png | generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-22.png | a43f8a3a3933 |
+| generated_images_part_12_of_13/root-generated/storytime_under_the_stars.png | generated_images_part_10_of_13/structured/round_010_storybooks/demo-storybook-cover-c-25.png | f90dec233b4d |
+| generated_images_part_12_of_13/root-generated/sunrise_bridge_in_a_whimsical_forest.png | generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-27.png | 38aa14b59127 |
+| generated_images_part_12_of_13/root-generated/sunny_day_in_a_playful_garden.png | generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-35.png | 0cf0886c2e50 |

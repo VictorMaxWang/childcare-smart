@@ -114,9 +114,11 @@ test("D-SEED parent storybooks are scoped and refreshable", async ({ page, conte
   const loginResponse = await page.request.post("/api/auth/demo-login", { data: { accountId: "u-parent" } });
   expect(loginResponse.ok()).toBeTruthy();
   await page.goto("/parent/storybook?child=c-1");
-  await expect(page.locator('img[src*="demo-storybook-placeholder"]').first()).toBeVisible();
+  await expect(page.locator('img[src*="gpt-image2"], img[src*="demo-storybook-placeholder"]').first()).toBeVisible();
+  expect(await page.locator('img[src*="gpt-image2"]').count()).toBeGreaterThan(0);
   await page.reload();
-  await expect(page.locator('img[src*="demo-storybook-placeholder"]').first()).toBeVisible();
+  await expect(page.locator('img[src*="gpt-image2"], img[src*="demo-storybook-placeholder"]').first()).toBeVisible();
+  expect(await page.locator('img[src*="gpt-image2"]').count()).toBeGreaterThan(0);
   await page.goto("/parent/storybook?child=c-3");
   await expect(page.locator("body")).not.toHaveText("");
   await page.waitForTimeout(300);

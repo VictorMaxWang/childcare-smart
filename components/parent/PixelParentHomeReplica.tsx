@@ -345,7 +345,7 @@ export default function PixelParentHomeReplica({
                       src={item.src}
                       alt={item.title}
                       fill
-                      unoptimized={item.src.startsWith("/pixel-replica/")}
+                      unoptimized
                       className="object-cover"
                       sizes="220px"
                     />

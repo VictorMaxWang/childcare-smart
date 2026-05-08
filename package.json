@@ -51,6 +51,8 @@
     "feature:communication": "playwright test tests/feature-completion/communication-flow.spec.ts tests/feature-completion/parent-features.spec.ts --config=playwright.feature.config.ts",
     "feature:persistence": "playwright test tests/feature-completion/teacher-records-persistence.spec.ts tests/feature-completion/health-consultation.spec.ts tests/feature-completion/visual-only-safety.spec.ts --config=playwright.feature.config.ts",
     "package:gpt-image2": "node scripts/package-gpt-image2-input.mjs",
+    "demo-media:ingest": "node scripts/ingest-gpt-image2-local-assets.mjs",
+    "demo-media:test": "playwright test tests/product-completion/demo-media-ingest.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
     "pixel:extract-assets": "node scripts/extract-pixel-assets.mjs",
     "pixel:capture": "node scripts/capture-pixel-pages.mjs",
     "pixel:compare": "node scripts/compare-pixel-parity.mjs"

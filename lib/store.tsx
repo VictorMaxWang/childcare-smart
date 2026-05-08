@@ -36,6 +36,7 @@ import {
   getCurrentDemoContext,
 } from "@/lib/demo-data/persistence";
 import { createDemoSeedSnapshot } from "@/lib/demo-data/seed";
+import { getDemoMediaPath } from "@/lib/demo-media/assets";
 import {
   addConsultationNote as addDemoConsultationNote,
   createConsultation as createDemoConsultation,
@@ -2600,7 +2601,8 @@ function getDemoMealPhotoPaths(meal: MealType, childId: string, date: string) {
   if (library.length === 0) return undefined;
 
   const seed = `${childId}-${date}-${meal}`.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return [library[seed % library.length]];
+  const legacyFallback = library[seed % library.length] ?? library[0];
+  return [getDemoMediaPath("meals", `${childId}-${date}-${meal}`, legacyFallback)];
 }
 
 function attachDemoMealPhotos(records: MealRecord[]) {
@@ -2616,7 +2618,8 @@ function attachDemoMealPhotos(records: MealRecord[]) {
 
 function getDemoGrowthMediaPaths(childId: string, createdAt: string) {
   const seed = `${childId}-${createdAt}`.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return [DEMO_GROWTH_MEDIA_LIBRARY[seed % DEMO_GROWTH_MEDIA_LIBRARY.length]];
+  const legacyFallback = DEMO_GROWTH_MEDIA_LIBRARY[seed % DEMO_GROWTH_MEDIA_LIBRARY.length] ?? DEMO_GROWTH_MEDIA_LIBRARY[0];
+  return [getDemoMediaPath("growth", `${childId}-${createdAt}`, legacyFallback)];
 }
 
 function attachDemoGrowthMedia(records: GrowthRecord[]) {
