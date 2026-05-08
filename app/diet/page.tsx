@@ -1488,12 +1488,11 @@ function MealEditorCard({
             <p className="text-xs font-medium text-slate-500">示例餐食图</p>
             <div className="grid gap-2">
               {record.photoUrls.map((photoUrl, index) => (
-                <Image
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
                   key={`${record.id}-demo-photo-${index}`}
                   src={photoUrl}
                   alt={`${meal}示例餐食图 ${index + 1}`}
-                  width={640}
-                  height={240}
                   className="h-32 w-full rounded-2xl object-cover ring-1 ring-slate-100"
                 />
               ))}

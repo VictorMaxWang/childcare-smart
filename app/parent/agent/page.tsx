@@ -1832,6 +1832,7 @@ export default function ParentAgentPage() {
                                 src={item.thumbnailUrl}
                                 alt={item.title}
                                 fill
+                                unoptimized
                                 className="object-cover"
                                 sizes="(max-width: 768px) 100vw, 260px"
                               />
@@ -2187,6 +2188,7 @@ export default function ParentAgentPage() {
                           src={item.thumbnailUrl}
                           alt={item.title}
                           fill
+                          unoptimized
                           className="object-cover"
                           sizes="(max-width: 768px) 100vw, 260px"
                         />

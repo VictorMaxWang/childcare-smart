@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -554,12 +553,11 @@ export default function ParentHomePage() {
                 {viewModel.mediaGallery.slice(0, 4).map((item) => (
                   <div key={item.id} className="overflow-hidden rounded-3xl border border-slate-100 bg-white">
                     <div className="relative aspect-[4/3] bg-slate-100">
-                      <Image
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
                         src={item.thumbnailUrl}
                         alt={item.title}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, 320px"
+                        className="absolute inset-0 h-full w-full object-cover"
                       />
                     </div>
                     <div className="space-y-2 p-4">

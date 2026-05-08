@@ -1,9 +1,9 @@
 {
   "schemaVersion": "dseed-demo-media-v1",
-  "generatedAt": "2026-05-07T00:00:00.000Z",
+  "generatedAt": "2026-05-08T08:02:01.555Z",
   "assetRoot": "/demo-media",
   "demoOnly": true,
-  "notice": "All bundled assets are safe placeholders with DEMO labels. GPT Image 2 synthetic assets can be added later under public/demo-media/gpt-image2/ and mapped here.",
+  "notice": "All bundled GPT Image 2 assets under public/demo-media/gpt-image2 are synthetic demo media. SVG fallbacks remain available for missing media.",
   "fallbacks": {
     "default": "/demo-media/placeholders/demo-placeholder.svg",
     "meal": "/demo-media/meals/demo-meal-placeholder.svg",
@@ -17,8 +17,12 @@
       "kind": "meal",
       "path": "/demo-media/meals/demo-meal-placeholder.svg",
       "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
-      "allowedUse": ["meals"],
-      "seedRefs": ["meal-*"],
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [
+        "meal-*"
+      ],
       "demoLabelRequired": true
     },
     {
@@ -26,8 +30,12 @@
       "kind": "health-material",
       "path": "/demo-media/health-materials/demo-health-material-placeholder.svg",
       "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
-      "allowedUse": ["health"],
-      "seedRefs": ["health-material-*"],
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [
+        "health-material-*"
+      ],
       "demoLabelRequired": true
     },
     {
@@ -35,8 +43,12 @@
       "kind": "growth",
       "path": "/demo-media/growth/demo-growth-placeholder.svg",
       "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
-      "allowedUse": ["growth"],
-      "seedRefs": ["growth-*"],
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [
+        "growth-*"
+      ],
       "demoLabelRequired": true
     },
     {
@@ -44,9 +56,3806 @@
       "kind": "storybook",
       "path": "/demo-media/storybooks/demo-storybook-placeholder.svg",
       "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
-      "allowedUse": ["storybooks"],
-      "seedRefs": ["storybook-*"],
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-*"
+      ],
       "demoLabelRequired": true
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-001",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-001.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-001.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "balance_obstacle_course_activity_for_kids.png",
+      "originalRelativePath": "generated_images_part_02_of_13/root-generated/balance_obstacle_course_activity_for_kids.png",
+      "optimizedFilename": "demo-growth-auto-001.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 161270,
+      "sha256": "41b8f9e581e22a2d0ddb0b1c043b4630b46d2c26ff4302c8622c1efd10eb0337",
+      "originalSha256": "be34268c09e0a96622a6a0adc7e460727bb062d94be83bca5efd9443e4ad3cfb",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 1
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-002",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-002.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-002.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "balancing_fun_in_the_sunny_playground.png",
+      "originalRelativePath": "generated_images_part_02_of_13/root-generated/balancing_fun_in_the_sunny_playground.png",
+      "optimizedFilename": "demo-growth-auto-002.webp",
+      "width": 991,
+      "height": 1400,
+      "sizeBytes": 145786,
+      "sha256": "55754e74120fa1dfcb4893e8e59043fcc60951a88862832a42e81f839ee0c1ef",
+      "originalSha256": "6806cd21e822a9e21c1a95210bd28a369288ffbdb956eab03cb1a903cdbacd93",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 2
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-003",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-003.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-003.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "child_growth_assessment_form_on_wood.png",
+      "originalRelativePath": "generated_images_part_03_of_13/root-generated/child_growth_assessment_form_on_wood.png",
+      "optimizedFilename": "demo-growth-auto-003.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 175990,
+      "sha256": "c7406a40bd7532431e2e02c4acb9c4d2e4b68a0c433c9b0502c22b177570fca8",
+      "originalSha256": "d4d1b4ed76ce22d69ae2f181e8eb589b9da967e5eb90833b761de0723015ead0",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 3
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-004",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-004.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-004.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "children_navigating_a_colorful_obstacle_course.png",
+      "originalRelativePath": "generated_images_part_03_of_13/root-generated/children_navigating_a_colorful_obstacle_course.png",
+      "optimizedFilename": "demo-growth-auto-004.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 92642,
+      "sha256": "58ec1f900324d729d7dec81be97e5f2728dbd95c66f18d0299be312255c19a3b",
+      "originalSha256": "251ef8c0ed46889b503e6c53190d8736264629ffc6bf31d2c6cd1b6e7f92edd3",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 4
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-005",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-005.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-005.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "children_painting_in_a_sunlit_classroom.png",
+      "originalRelativePath": "generated_images_part_03_of_13/root-generated/children_painting_in_a_sunlit_classroom.png",
+      "optimizedFilename": "demo-growth-auto-005.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 106904,
+      "sha256": "edbd34c6d59b2b3686f0bd132021fd23c333594eda69284b70f1f765fe526d60",
+      "originalSha256": "dd3d6049aff8101754831d589b1415a27866270fba2c04efc41fab37f22b374c",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 5
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-006",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-006.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-006.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "colorful_clay_crafting_in_preschool_classroom.png",
+      "originalRelativePath": "generated_images_part_04_of_13/root-generated/colorful_clay_crafting_in_preschool_classroom.png",
+      "optimizedFilename": "demo-growth-auto-006.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 118350,
+      "sha256": "a1e8cb5a7734ad165d95d52353af7c1f640a8168fb4d9af28b55923189b0e88b",
+      "originalSha256": "01405fa18bfc2788873bdcf25e7d65362d2b401bae04e500615a1ad31449e3e4",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 6
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-007",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-007.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-007.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "colorful_playtime_in_the_classroom.png",
+      "originalRelativePath": "generated_images_part_04_of_13/root-generated/colorful_playtime_in_the_classroom.png",
+      "optimizedFilename": "demo-growth-auto-007.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 87852,
+      "sha256": "3aefdc2c8ffec828aed0d66353ecc0ceb4f7fb8db7b946afc1618811caa996d0",
+      "originalSha256": "e9b11fe3cae49235f0c45c8de7d1def967536347656da0dc2346aa3fe1e05838",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 7
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-008",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-008.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-008.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "focused_playtime_in_a_montessori_classroom.png",
+      "originalRelativePath": "generated_images_part_05_of_13/root-generated/focused_playtime_in_a_montessori_classroom.png",
+      "optimizedFilename": "demo-growth-auto-008.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 115166,
+      "sha256": "9fd570ae2d5ec51224709604d0a486f74240833986b54373bfcf456f8f2ad507",
+      "originalSha256": "34e87863022c030acf4aef3b382b84e97a1e06aaa2b395797bcbee389ff30eb4",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 8
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-009",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-009.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-009.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "gardening_fun_with_little_learners.png",
+      "originalRelativePath": "generated_images_part_05_of_13/root-generated/gardening_fun_with_little_learners.png",
+      "optimizedFilename": "demo-growth-auto-009.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 135744,
+      "sha256": "2c060ccd61e513235094b3a7ec44df36aa5981495b957d759bad9e2b920a475a",
+      "originalSha256": "79efa4e98b005375208f9253454fbb67cd3fed6179c845384d9d8499bb35cb53",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 9
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-010",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-010.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-010.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "interactive_music_activity_in_preschool_classroom.png",
+      "originalRelativePath": "generated_images_part_07_of_13/root-generated/interactive_music_activity_in_preschool_classroom.png",
+      "optimizedFilename": "demo-growth-auto-010.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 152542,
+      "sha256": "e4723a4ff2b25f026b4eec04a4659d2eb1d0e13e24e75ac76e8645a63b9b87dd",
+      "originalSha256": "1a86fb48ef04c120c03680dfed2b634f0693621cc68f7c9810ca651ac4c1420a",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 10
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-011",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-011.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-011.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "playful_parachute_game_in_the_sun.png",
+      "originalRelativePath": "generated_images_part_09_of_13/root-generated/playful_parachute_game_in_the_sun.png",
+      "optimizedFilename": "demo-growth-auto-011.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 208548,
+      "sha256": "d302a05ec3e1be8c7f91e26e6fa5987c88fe999464819fd34326959701b47854",
+      "originalSha256": "1fd3cc7c4d8e88dbc9be7d446154691f6148758af780cee4284e1d7173bf3476",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 11
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-012",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-012.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-012.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "teacher_reading_to_engaged_children.png",
+      "originalRelativePath": "generated_images_part_12_of_13/root-generated/teacher_reading_to_engaged_children.png",
+      "optimizedFilename": "demo-growth-auto-012.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 155098,
+      "sha256": "4704e0130716b9cff835f063a85e84f5f342f35e1f901ddbc1b0e40143db0ae5",
+      "originalSha256": "85b03a5577f2c1904f40b1c8cc9816eb354bd441ce5de729675dcc11fde9c607",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 12
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-013",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-013.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-013.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "triumphant_balance_course_celebration.png",
+      "originalRelativePath": "generated_images_part_12_of_13/root-generated/triumphant_balance_course_celebration.png",
+      "optimizedFilename": "demo-growth-auto-013.webp",
+      "width": 1083,
+      "height": 1400,
+      "sizeBytes": 127480,
+      "sha256": "b981af431d7d3177d95f8849c7792c02b22dcc8502e213062555651385d58262",
+      "originalSha256": "f9553f4ccec458090422378649bd0313b7fe8e62fef8ca23b4895cefa91334f7",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 13
+    },
+    {
+      "id": "gpt-image2-growth-demo-growth-auto-014",
+      "kind": "growth",
+      "category": "growth",
+      "src": "/demo-media/gpt-image2/growth/demo-growth-auto-014.webp",
+      "path": "/demo-media/gpt-image2/growth/demo-growth-auto-014.webp",
+      "fallbackPath": "/demo-media/growth/demo-growth-placeholder.svg",
+      "originalFilename": "victory_cheer_at_the_playground_race.png",
+      "originalRelativePath": "generated_images_part_13_of_13/root-generated/victory_cheer_at_the_playground_race.png",
+      "optimizedFilename": "demo-growth-auto-014.webp",
+      "width": 991,
+      "height": 1400,
+      "sizeBytes": 223372,
+      "sha256": "bd3a50adad6a235c858b1a1cdb11e35b7e9b6e9a241120008590bcafcda5adba",
+      "originalSha256": "ed81899fa0746ff1b15817249b05051825790a23ff90848aa18dd007376f769b",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "growth-records",
+        "parent-growth-gallery"
+      ],
+      "fallbackOf": "/demo-media/growth/demo-growth-placeholder.svg",
+      "allowedUse": [
+        "growth"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 14
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-001",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-001.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-001.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "child_cough_care_guide_on_desk.png",
+      "originalRelativePath": "generated_images_part_02_of_13/root-generated/child_cough_care_guide_on_desk.png",
+      "optimizedFilename": "demo-health-auto-001.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 224160,
+      "sha256": "6adc395bb4bb070fabb919fc4bbde6bc59fe93428c48fbf99914c45c2c27ccc3",
+      "originalSha256": "be0d15b550f3af203c9c94d15995f92f3ff99ac3668893b080804f84e6c4e653",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 15
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-002",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-002.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-002.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "child_vaccination_reminder_on_desk.png",
+      "originalRelativePath": "generated_images_part_03_of_13/root-generated/child_vaccination_reminder_on_desk.png",
+      "optimizedFilename": "demo-health-auto-002.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 123568,
+      "sha256": "b8253cac2494dde2b907bf402736a0089353d5cdf23560d03a3fded14ba9090f",
+      "originalSha256": "4d923858f2e9a142a98ba632ac32e14355e381428867d3d0c68fbc1d8cc45ec8",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 16
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-003",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-003.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-003.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "childcare_home_care_instructions_sheet.png",
+      "originalRelativePath": "generated_images_part_03_of_13/root-generated/childcare_home_care_instructions_sheet.png",
+      "optimizedFilename": "demo-health-auto-003.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 144512,
+      "sha256": "5c8771021bafa2b23e394c05856119dbdcf995e8d25a4de88b2067f92520e2eb",
+      "originalSha256": "682d4898971ef3de9945ad34cfc28bb3eac8a10bfc2dacf75eb1f4de74ef189f",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 17
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-004",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-004.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-004.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "children_nutrition_evaluation_sample_report.png",
+      "originalRelativePath": "generated_images_part_03_of_13/root-generated/children_nutrition_evaluation_sample_report.png",
+      "optimizedFilename": "demo-health-auto-004.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 118908,
+      "sha256": "2503d3bc0746340275f897ea286f06bbd817301eb5260fa5cded4ebcb95469ba",
+      "originalSha256": "fa3415cad13160140ef3581e747f9f15801b7be95f707fdcfa141e3800297ca5",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 18
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-005",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-005.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-005.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "children_s_blood_test_report_on_wood_desk.png",
+      "originalRelativePath": "generated_images_part_03_of_13/root-generated/children_s_blood_test_report_on_wood_desk.png",
+      "optimizedFilename": "demo-health-auto-005.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 205328,
+      "sha256": "6f1e0a9dfc9de67481b326065ae212b638dd86305e233576a8f8d68b0cf749fd",
+      "originalSha256": "881c593d076014cc05e85a223d359892956d2211b8e72d767565a163b1547b9a",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 19
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-006",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-006.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-006.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "children_s_eye_care_advisory_sheet.png",
+      "originalRelativePath": "generated_images_part_03_of_13/root-generated/children_s_eye_care_advisory_sheet.png",
+      "optimizedFilename": "demo-health-auto-006.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 191170,
+      "sha256": "71791789b5ee20daf9b82b73ec5fea54915bba9c13b7b279476e7ba6f73439ef",
+      "originalSha256": "0df4ed734dd4fb9cf16bb858eaf0ea11b00185f35d9418ca207d5a1ad2f46f7b",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 20
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-007",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-007.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-007.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "children_s_fever_observation_form_mockup.png",
+      "originalRelativePath": "generated_images_part_03_of_13/root-generated/children_s_fever_observation_form_mockup.png",
+      "optimizedFilename": "demo-health-auto-007.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 110908,
+      "sha256": "2d33d61ba82db757e77dc921d0593603c2d5b210c511c37e3dd145aadc5d3bd7",
+      "originalSha256": "e7fa822dbb421d85d010763951f0ddae3f4cd99c799ca06c95c5e2a598d90dd8",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 21
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-008",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-008.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-008.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "children_s_hearing_screening_report_demo.png",
+      "originalRelativePath": "generated_images_part_03_of_13/root-generated/children_s_hearing_screening_report_demo.png",
+      "optimizedFilename": "demo-health-auto-008.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 181508,
+      "sha256": "315a819e6fc98a0bd5bdd4fdb4e6b9272112292cbe7d39b14e19b2147636ff85",
+      "originalSha256": "1f5c93cc0f4588a99cd1ca9fabd9f5ef1739949a75075e69ea997cd6b9b8f8f9",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 22
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-009",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-009.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-009.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "children_s_medication_guidance_sheet_demo.png",
+      "originalRelativePath": "generated_images_part_03_of_13/root-generated/children_s_medication_guidance_sheet_demo.png",
+      "optimizedFilename": "demo-health-auto-009.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 190180,
+      "sha256": "0c547806b1aeccb6aff1062a28f2b66703afa4ae4e6365a09190de9e5d4e2a05",
+      "originalSha256": "40d174a732c0ca97ec24b79d2b7cf274ea2b947872d5a2dd8259c8dec2d1f745",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 23
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-010",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-010.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-010.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "children_s_morning_health_tracking_form.png",
+      "originalRelativePath": "generated_images_part_04_of_13/root-generated/children_s_morning_health_tracking_form.png",
+      "optimizedFilename": "demo-health-auto-010.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 121546,
+      "sha256": "d2d86c3501063bbe883d6b1798e053986ee482878908c991e773f42dc4f046d3",
+      "originalSha256": "94818a751f1063b706dbc258142cccf5dca4a46f308eb399b8b84f6dc19a60ef",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 24
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-011",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-011.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-011.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "chinese_childcare_health_flyer_on_wood.png",
+      "originalRelativePath": "generated_images_part_04_of_13/root-generated/chinese_childcare_health_flyer_on_wood.png",
+      "optimizedFilename": "demo-health-auto-011.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 183944,
+      "sha256": "d0e75cb440bfef981969ff1bbfede1cfaa242abd79bd44c45c7cd4abf4ca765e",
+      "originalSha256": "f668714105f90ba0cd38dad1e02831e057dbca33520eb8e482bb88a678bd6d74",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 25
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-012",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-012.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-012.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "chinese_health_flyer_on_wooden_table.png",
+      "originalRelativePath": "generated_images_part_04_of_13/root-generated/chinese_health_flyer_on_wooden_table.png",
+      "optimizedFilename": "demo-health-auto-012.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 188568,
+      "sha256": "f88638029180f6d8515517772108a05eca11826e324b23190bb83a39d072de6b",
+      "originalSha256": "9791dc09d0d2993ece1edc394f9bbf41f5602245f48f0bfbe459e904cd477794",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 26
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-013",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-013.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-013.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "chinese_health_follow_up_form_on_desk.png",
+      "originalRelativePath": "generated_images_part_04_of_13/root-generated/chinese_health_follow_up_form_on_desk.png",
+      "optimizedFilename": "demo-health-auto-013.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 150504,
+      "sha256": "015a3180e916fef9d6428234b6876cccfd9385b0388b38d9a2a93f4f8c3ef1b4",
+      "originalSha256": "67ac79ff684e1aa878e15506602b4e7893ba06c5edb1405edc65d772378a6c61",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 27
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-014",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-014.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-014.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "dental_checkup_record_form_demo.png",
+      "originalRelativePath": "generated_images_part_05_of_13/root-generated/dental_checkup_record_form_demo.png",
+      "optimizedFilename": "demo-health-auto-014.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 96670,
+      "sha256": "fb84a8a4f93071429523e969009d61f1f77e13a09c7af4b81e5c2ffd92202cdc",
+      "originalSha256": "052694387af081853f6b4aa2bc9c2524fe5a737e10791aa5a3fa06c59e9d1143",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 28
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-015",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-015.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-015.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "growing_with_care_and_curiosity.png",
+      "originalRelativePath": "generated_images_part_06_of_13/root-generated/growing_with_care_and_curiosity.png",
+      "optimizedFilename": "demo-health-auto-015.webp",
+      "width": 1103,
+      "height": 1426,
+      "sizeBytes": 190392,
+      "sha256": "70fe8a54c5db15c728c338eb591585a4b10a126b804f3e6470f2332a3a9ae875",
+      "originalSha256": "4d4dccb47d13400a3373eccb327df99dad119c153a5501957592b8e998297842",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 29
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-016",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-016.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-016.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "health_observation_form_on_desk.png",
+      "originalRelativePath": "generated_images_part_06_of_13/root-generated/health_observation_form_on_desk.png",
+      "optimizedFilename": "demo-health-auto-016.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 131926,
+      "sha256": "33caba2a7d02778340d6793a414e91324b05fe728f948d5a5a73f1eb8ccfbcb3",
+      "originalSha256": "c99ed95fa6a82767eb42fdc46f71760d51ae83f7ba64e347a8f36dc9005d5039",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 30
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-017",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-017.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-017.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "medical_allergy_test_report_on_desk.png",
+      "originalRelativePath": "generated_images_part_07_of_13/root-generated/medical_allergy_test_report_on_desk.png",
+      "optimizedFilename": "demo-health-auto-017.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 118614,
+      "sha256": "dade9c6e0569ac8adf34134e35996d64740b52be6fe768d2babacfd73afdbe55",
+      "originalSha256": "34604bfab5ec972226511d5f6ea4596567b13c4b6430bd478e029342dc392493",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 31
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-018",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-018.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-018.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "medical_observation_and_advice_form.png",
+      "originalRelativePath": "generated_images_part_07_of_13/root-generated/medical_observation_and_advice_form.png",
+      "optimizedFilename": "demo-health-auto-018.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 209886,
+      "sha256": "5e1cde83cb1d137fa8c539f9ef803441ad2f424d21da2a1d542b313baf6a8c1e",
+      "originalSha256": "0ca4f6331f210a133f04bb6d543844b01830df75a9e216d42c6d16fb7ca1d8a7",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 32
+    },
+    {
+      "id": "gpt-image2-health-materials-demo-health-auto-019",
+      "kind": "health-material",
+      "category": "health-materials",
+      "src": "/demo-media/gpt-image2/health-materials/demo-health-auto-019.webp",
+      "path": "/demo-media/gpt-image2/health-materials/demo-health-auto-019.webp",
+      "fallbackPath": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "originalFilename": "vision_screening_report_on_wooden_desk.png",
+      "originalRelativePath": "generated_images_part_13_of_13/root-generated/vision_screening_report_on_wooden_desk.png",
+      "optimizedFilename": "demo-health-auto-019.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 187946,
+      "sha256": "685ac2bdf46df6227cfca3acf7e80834f25689651ff7a6d05d03642092264297",
+      "originalSha256": "d67893ac22e21243872982ff96e8f1d0d21ab114f5d6d005f842e9a93e2d6a0b",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "teacher-health-materials",
+        "parent-health-summary"
+      ],
+      "fallbackOf": "/demo-media/health-materials/demo-health-material-placeholder.svg",
+      "allowedUse": [
+        "health"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": true,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 33
+    },
+    {
+      "id": "gpt-image2-meals-batch06-meal-01",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch06-meal-01.webp",
+      "path": "/demo-media/gpt-image2/meals/batch06-meal-01.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch06_meal_01.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_06_split_meal_images/batch06_meal_01.png",
+      "optimizedFilename": "batch06-meal-01.webp",
+      "width": 485,
+      "height": 485,
+      "sizeBytes": 13334,
+      "sha256": "c520212762f254e384449b5bb1c43ac5be932ffac833dcfa85435ab6a04b10da",
+      "originalSha256": "c4419d85335b603433985892dc5d3e1ada58da25207b6b8aede5d80e75ec627c",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 34
+    },
+    {
+      "id": "gpt-image2-meals-batch06-meal-02",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch06-meal-02.webp",
+      "path": "/demo-media/gpt-image2/meals/batch06-meal-02.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch06_meal_02.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_06_split_meal_images/batch06_meal_02.png",
+      "optimizedFilename": "batch06-meal-02.webp",
+      "width": 485,
+      "height": 485,
+      "sizeBytes": 12078,
+      "sha256": "a924674e7df5d25532ce956bf3ea6b096d1a84d88efe594ae0397c8eada9b2cc",
+      "originalSha256": "650c6d11be30bdb1cbf42d9c0adb914ced2f3af75fdebcb5e72bfb87888dc1fc",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 35
+    },
+    {
+      "id": "gpt-image2-meals-batch06-meal-03",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch06-meal-03.webp",
+      "path": "/demo-media/gpt-image2/meals/batch06-meal-03.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch06_meal_03.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_06_split_meal_images/batch06_meal_03.png",
+      "optimizedFilename": "batch06-meal-03.webp",
+      "width": 485,
+      "height": 485,
+      "sizeBytes": 20722,
+      "sha256": "44b1bec96d4fd28178c4c2186a3da0b8d063344f85c4674c4c8d27294bccb778",
+      "originalSha256": "107e0666e18f42f14b8aaedfd4811c42232e9901837c0e5573e912993fd8a6c4",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 36
+    },
+    {
+      "id": "gpt-image2-meals-batch06-meal-04",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch06-meal-04.webp",
+      "path": "/demo-media/gpt-image2/meals/batch06-meal-04.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch06_meal_04.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_06_split_meal_images/batch06_meal_04.png",
+      "optimizedFilename": "batch06-meal-04.webp",
+      "width": 485,
+      "height": 485,
+      "sizeBytes": 22262,
+      "sha256": "943bbd4f46214abae9089cb52f2f9f5ec58616c44ee0453ad83b58d8bd6ef99e",
+      "originalSha256": "53a09698b5e9928f606186cb26e3067e41eec1f37fc78cd178e6153409bbff35",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 37
+    },
+    {
+      "id": "gpt-image2-meals-batch06-meal-05",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch06-meal-05.webp",
+      "path": "/demo-media/gpt-image2/meals/batch06-meal-05.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch06_meal_05.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_06_split_meal_images/batch06_meal_05.png",
+      "optimizedFilename": "batch06-meal-05.webp",
+      "width": 485,
+      "height": 485,
+      "sizeBytes": 17580,
+      "sha256": "9440cfb9c057ea6e8aec4259505bae54ec89153723fd2a511a6ea92a8b7dd2d7",
+      "originalSha256": "ebca7cf37dce05cbb316daef5fae1c6ce2c46219689595737a17ef90c048203d",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 38
+    },
+    {
+      "id": "gpt-image2-meals-batch06-meal-06",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch06-meal-06.webp",
+      "path": "/demo-media/gpt-image2/meals/batch06-meal-06.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch06_meal_06.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_06_split_meal_images/batch06_meal_06.png",
+      "optimizedFilename": "batch06-meal-06.webp",
+      "width": 485,
+      "height": 485,
+      "sizeBytes": 16666,
+      "sha256": "75c37302ae8fcf359f3863789f6a145c4e8bef4b3c9ffb1b611e2007c9c16833",
+      "originalSha256": "74d340539444c40048253fdc447f5c4a17e2cdb268c7f9bf7b36b971b258c65b",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 39
+    },
+    {
+      "id": "gpt-image2-meals-batch06-meal-07",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch06-meal-07.webp",
+      "path": "/demo-media/gpt-image2/meals/batch06-meal-07.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch06_meal_07.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_06_split_meal_images/batch06_meal_07.png",
+      "optimizedFilename": "batch06-meal-07.webp",
+      "width": 485,
+      "height": 485,
+      "sizeBytes": 12556,
+      "sha256": "a5c927eeceb729a829f7683e876af66a90b446c3543fcb33ed438cd97580b71d",
+      "originalSha256": "6ca0990f94e578ee648ed9f6f73fcc4e8203fa638e8241fa03f206e4489cc395",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 40
+    },
+    {
+      "id": "gpt-image2-meals-batch06-meal-08",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch06-meal-08.webp",
+      "path": "/demo-media/gpt-image2/meals/batch06-meal-08.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch06_meal_08.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_06_split_meal_images/batch06_meal_08.png",
+      "optimizedFilename": "batch06-meal-08.webp",
+      "width": 485,
+      "height": 485,
+      "sizeBytes": 22952,
+      "sha256": "f1454b1bf2311d6c6e69ee326f4f87d37266125f4cc2900d557b14492347f119",
+      "originalSha256": "554e6f7c6a68da9f9251c896eb9b4b110417b4cb586d64668d9a5ce7cc3bd35d",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 41
+    },
+    {
+      "id": "gpt-image2-meals-batch06-meal-09",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch06-meal-09.webp",
+      "path": "/demo-media/gpt-image2/meals/batch06-meal-09.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch06_meal_09.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_06_split_meal_images/batch06_meal_09.png",
+      "optimizedFilename": "batch06-meal-09.webp",
+      "width": 485,
+      "height": 485,
+      "sizeBytes": 17096,
+      "sha256": "eb91e57cae061b9c3245e395071e608bd95de77625b9744a4aebb3978372a8c2",
+      "originalSha256": "8f1238c3b50912c00869a1cea72381621b0583b93438d0992eea3d1f707dfdf7",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 42
+    },
+    {
+      "id": "gpt-image2-meals-batch06-meal-10",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch06-meal-10.webp",
+      "path": "/demo-media/gpt-image2/meals/batch06-meal-10.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch06_meal_10.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_06_split_meal_images/batch06_meal_10.png",
+      "optimizedFilename": "batch06-meal-10.webp",
+      "width": 485,
+      "height": 485,
+      "sizeBytes": 15972,
+      "sha256": "69de1def5056b7d9f77af09500651e342245df1fe1dab44bb78d3c6d05a8fe9b",
+      "originalSha256": "02e0b3f682d0ffb4744f91084d244fbf02e1bed4cc4bcdf118aff5278a96f896",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 43
+    },
+    {
+      "id": "gpt-image2-meals-batch07-meal-01",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch07-meal-01.webp",
+      "path": "/demo-media/gpt-image2/meals/batch07-meal-01.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch07_meal_01.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch07_meal_images/batch07_meal_01.png",
+      "optimizedFilename": "batch07-meal-01.webp",
+      "width": 590,
+      "height": 590,
+      "sizeBytes": 15854,
+      "sha256": "12d19ccd798746fc725520ebeaeb424289bae330bb80228c124058a1e4c42cb4",
+      "originalSha256": "2076d0e052a597a1a91b5f08ef0464081659e94925082d24deafb7fc97bcdc62",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 44
+    },
+    {
+      "id": "gpt-image2-meals-batch07-meal-02",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch07-meal-02.webp",
+      "path": "/demo-media/gpt-image2/meals/batch07-meal-02.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch07_meal_02.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch07_meal_images/batch07_meal_02.png",
+      "optimizedFilename": "batch07-meal-02.webp",
+      "width": 590,
+      "height": 590,
+      "sizeBytes": 18188,
+      "sha256": "ae5d12b028e83ca7b396e96233dc3d0e6a3024b50e413c5f5724b5a2c6b9c62c",
+      "originalSha256": "9d78f61a70916f977c0db1e24eebe8ee31ba858c50cb6ef1f00828cb4f127964",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 45
+    },
+    {
+      "id": "gpt-image2-meals-batch07-meal-03",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch07-meal-03.webp",
+      "path": "/demo-media/gpt-image2/meals/batch07-meal-03.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch07_meal_03.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch07_meal_images/batch07_meal_03.png",
+      "optimizedFilename": "batch07-meal-03.webp",
+      "width": 590,
+      "height": 590,
+      "sizeBytes": 22632,
+      "sha256": "22ca8057fc660eac07d496367349ae4392c308cd2414ffd188fa15cad6b664ce",
+      "originalSha256": "ac5aa8d59532597da9dc03c01785c4e9e5f807c72ad92f8b877cab6c66286823",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 46
+    },
+    {
+      "id": "gpt-image2-meals-batch07-meal-04",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch07-meal-04.webp",
+      "path": "/demo-media/gpt-image2/meals/batch07-meal-04.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch07_meal_04.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch07_meal_images/batch07_meal_04.png",
+      "optimizedFilename": "batch07-meal-04.webp",
+      "width": 590,
+      "height": 590,
+      "sizeBytes": 16522,
+      "sha256": "d404ee9eccc0c7bfdcdea25ba6033805afebf036e9834cb0de2cd7633ec84551",
+      "originalSha256": "30d60237e6c742aa7df31687c94009171a4764fcc9d2dab603c3894371a0220d",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 47
+    },
+    {
+      "id": "gpt-image2-meals-batch07-meal-05",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch07-meal-05.webp",
+      "path": "/demo-media/gpt-image2/meals/batch07-meal-05.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch07_meal_05.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch07_meal_images/batch07_meal_05.png",
+      "optimizedFilename": "batch07-meal-05.webp",
+      "width": 590,
+      "height": 590,
+      "sizeBytes": 22024,
+      "sha256": "2b903133aa904996d56db16075b37bf9a52b7fa1c3363707e8bb6ce2fb8bcd22",
+      "originalSha256": "b4747b8b38eacfeec74fdf765accb138e96fad781bd33b9223dac8937584a83c",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 48
+    },
+    {
+      "id": "gpt-image2-meals-batch07-meal-06",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch07-meal-06.webp",
+      "path": "/demo-media/gpt-image2/meals/batch07-meal-06.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch07_meal_06.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch07_meal_images/batch07_meal_06.png",
+      "optimizedFilename": "batch07-meal-06.webp",
+      "width": 590,
+      "height": 590,
+      "sizeBytes": 15216,
+      "sha256": "4151c19bba04d14cdc8111e3f5532aed279953ae4f357405010082e6d4dceb3d",
+      "originalSha256": "e5bb1a072f3b9d7438b1c149965ca7a209ff4ced2e7b369de00800411cfecaf5",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 49
+    },
+    {
+      "id": "gpt-image2-meals-batch07-meal-07",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch07-meal-07.webp",
+      "path": "/demo-media/gpt-image2/meals/batch07-meal-07.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch07_meal_07.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch07_meal_images/batch07_meal_07.png",
+      "optimizedFilename": "batch07-meal-07.webp",
+      "width": 590,
+      "height": 590,
+      "sizeBytes": 16360,
+      "sha256": "ea1134a00ede3335557781270c954edf06fdcadef39fed6b4bfcf132d517e557",
+      "originalSha256": "583a91db3d23f26aa48b99aef1d0d5dd90f4c0787e3ec6b825701602578476a0",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 50
+    },
+    {
+      "id": "gpt-image2-meals-batch07-meal-08",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch07-meal-08.webp",
+      "path": "/demo-media/gpt-image2/meals/batch07-meal-08.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch07_meal_08.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch07_meal_images/batch07_meal_08.png",
+      "optimizedFilename": "batch07-meal-08.webp",
+      "width": 590,
+      "height": 590,
+      "sizeBytes": 20226,
+      "sha256": "09867fdba4bb2ab81733c818ce9b9595020d044b95307340b27b3e9f5e050271",
+      "originalSha256": "1ac2f6613eacc333047a978fda502b9b47e92f92384edcd38610404d81d2abf1",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 51
+    },
+    {
+      "id": "gpt-image2-meals-batch07-meal-09",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch07-meal-09.webp",
+      "path": "/demo-media/gpt-image2/meals/batch07-meal-09.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch07_meal_09.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch07_meal_images/batch07_meal_09.png",
+      "optimizedFilename": "batch07-meal-09.webp",
+      "width": 590,
+      "height": 590,
+      "sizeBytes": 18844,
+      "sha256": "a2732171a960ee0b5d7fbd21ae919b6f70bb2524f4ffbb74a4311fe56957ae7a",
+      "originalSha256": "0b0a5c3e5c45f77a4f59d0e5df9120b6426e6326d3e4cc942f673f11508be5cf",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 52
+    },
+    {
+      "id": "gpt-image2-meals-batch07-meal-10",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/batch07-meal-10.webp",
+      "path": "/demo-media/gpt-image2/meals/batch07-meal-10.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "batch07_meal_10.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch07_meal_images/batch07_meal_10.png",
+      "optimizedFilename": "batch07-meal-10.webp",
+      "width": 590,
+      "height": 590,
+      "sizeBytes": 14362,
+      "sha256": "1ce56944db70d968c412a21ff6970c0202a35d65f81e01e0d8ccdce6ef9156da",
+      "originalSha256": "512ada5d8f57ba6a67ffe9303b5d2df1b2fbd6288917989eba9fe4f4cb6bfc05",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 53
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-001",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-001.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-001.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "child_s_meal_in_a_cozy_classroom_setting.png",
+      "originalRelativePath": "generated_images_part_03_of_13/root-generated/child_s_meal_in_a_cozy_classroom_setting.png",
+      "optimizedFilename": "demo-meal-auto-001.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 116296,
+      "sha256": "d6e56a4ac9f6e263d30c457e41eb784dd60c0bae7065cb6d09ca6229450d8490",
+      "originalSha256": "88b75953a2968e60b3f376b2a1b9ed3fab86805d229b233b39da9166bf9943cf",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 54
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-002",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-002.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-002.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "colorful_cafeteria_meal_on_tray.png",
+      "originalRelativePath": "generated_images_part_04_of_13/root-generated/colorful_cafeteria_meal_on_tray.png",
+      "optimizedFilename": "demo-meal-auto-002.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 99178,
+      "sha256": "ded620da13c4065ae6ccab7612bfd08ab94e2e3224958cd9fca96190418eb372",
+      "originalSha256": "aa28a14c41e677f4d2a1dcf6468aef53350d3d51e8aee6d05ca67fc125fdf30f",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 55
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-003",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-003.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-003.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "cozy_breakfast_in_a_sunny_kitchen.png",
+      "originalRelativePath": "generated_images_part_04_of_13/root-generated/cozy_breakfast_in_a_sunny_kitchen.png",
+      "optimizedFilename": "demo-meal-auto-003.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 97698,
+      "sha256": "2c56c3a6fde7f8735c97b18f958c4e55838ca456de0e5f8ded7507a015c8d64b",
+      "originalSha256": "05ff1657704a568aa055968b1ae2b464dd5f4bce84b6ccbc8fe177a490c7812c",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 56
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-004",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-004.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-004.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "a_bright_indoor_cafeteria_kitchen_like_scene_phot_1_batch_1.png",
+      "originalRelativePath": "generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_bright_indoor_cafeteria_kitchen_like_scene_phot_1_batch_1.png",
+      "optimizedFilename": "demo-meal-auto-004.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 111600,
+      "sha256": "ef54287f9251edf7174de66028656fa308b89569c30336f4058d640828ced310",
+      "originalSha256": "9279fb07119accdaf82aadd34c99ce370395f07656ba7705f358b38f32b2440d",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 57
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-005",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-005.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-005.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "a_bright_softly_lit_indoor_near_window_food_scene_7_batch_7.png",
+      "originalRelativePath": "generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_bright_softly_lit_indoor_near_window_food_scene_7_batch_7.png",
+      "optimizedFilename": "demo-meal-auto-005.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 63506,
+      "sha256": "b37f7eeff0eb7b80625a66332cdcf5458b8239169e36e9a533fa21a4537392c0",
+      "originalSha256": "a580a17b441379416fb5492ec81b8cf4853981f5f8b18f3c194a8d357942beed",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 58
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-006",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-006.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-006.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "a_bright_softly_lit_indoor_scene_of_a_small_meal_1_batch_1.png",
+      "originalRelativePath": "generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_bright_softly_lit_indoor_scene_of_a_small_meal_1_batch_1.png",
+      "optimizedFilename": "demo-meal-auto-006.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 90912,
+      "sha256": "7d6f9e7d8fc1175d3de0575c2efff8c9f0ddfb5b60423d57a37d51983b321698",
+      "originalSha256": "a1638689063a52f1ca060796a7e43d151e4a08cf966dd46e2a35393d5448fc13",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 59
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-007",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-007.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-007.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "a_close_top_down_angled_view_of_a_cafeteria_style_8_batch_8.png",
+      "originalRelativePath": "generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_close_top_down_angled_view_of_a_cafeteria_style_8_batch_8.png",
+      "optimizedFilename": "demo-meal-auto-007.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 92512,
+      "sha256": "c6e7699343e496c8bbd71062d06ea869ae5c1662ca91b145b731939db6521efd",
+      "originalSha256": "ae4d92db2ad886cdf450e53ccd6e30bc90c6b535ff14cd848750b327fd27fc75",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 60
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-008",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-008.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-008.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "a_close_top_down_angled_view_of_a_meal_on_a_light_3_batch_3.png",
+      "originalRelativePath": "generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_close_top_down_angled_view_of_a_meal_on_a_light_3_batch_3.png",
+      "optimizedFilename": "demo-meal-auto-008.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 113112,
+      "sha256": "824b777dde60d476ffb8581e9de60d50b73247747fc66a5bd99d3936b4b59cb1",
+      "originalSha256": "8c16681ba2e53acf63bf751b4f3b81602340fea8f2bd1468314fbdb058fcfefa",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 61
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-009",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-009.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-009.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "a_close_up_overhead_angled_photo_of_a_meal_tray_on_5_batch_5.png",
+      "originalRelativePath": "generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_close_up_overhead_angled_photo_of_a_meal_tray_on_5_batch_5.png",
+      "optimizedFilename": "demo-meal-auto-009.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 89574,
+      "sha256": "54628f4525947d6dac6dc338b6ce19bb5a02204be71eae5a729b72b9af4a5d1f",
+      "originalSha256": "91119aac1f2ac1893319ee9c910eb68fbc619de4f1cd194aa64dd0dde4a2285e",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 62
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-010",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-010.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-010.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "a_top_down_angled_tabletop_food_scene_a_light_woo_2_batch_2.png",
+      "originalRelativePath": "generated_images_part_05_of_13/structured/ghostwriter_images/generated/a_top_down_angled_tabletop_food_scene_a_light_woo_2_batch_2.png",
+      "optimizedFilename": "demo-meal-auto-010.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 120404,
+      "sha256": "56622ca3d3dc37b81af87d7eadb2414c7b565d73b24848e043c90aaac0bda1f1",
+      "originalSha256": "6f8eab19fe265ed0c4453f5e9fd5fc23cc8f63d924629e5b30b35530053f5e3e",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 63
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-011",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-011.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-011.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "a_top_down_angled_view_of_a_simple_snack_tray_scen_6_batch_6.png",
+      "originalRelativePath": "generated_images_part_06_of_13/structured/ghostwriter_images/generated/a_top_down_angled_view_of_a_simple_snack_tray_scen_6_batch_6.png",
+      "optimizedFilename": "demo-meal-auto-011.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 83926,
+      "sha256": "6da182505ab9b331b33e12537fdca8f5bacbadf312b9ed8aa913ada5eb7665ba",
+      "originalSha256": "d0ecb11a62699ceaa8ffc8693a2dc08febd46dec981fa972bb8cf971554a5176",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 64
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-012",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-012.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-012.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "a_top_down_overhead_view_of_a_meal_on_a_light_wood_9_batch_9.png",
+      "originalRelativePath": "generated_images_part_06_of_13/structured/ghostwriter_images/generated/a_top_down_overhead_view_of_a_meal_on_a_light_wood_9_batch_9.png",
+      "optimizedFilename": "demo-meal-auto-012.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 95158,
+      "sha256": "73abe129cf3ce0896f05cf0d72185c1a574b822394f435b029c67871b958ffc2",
+      "originalSha256": "706e4322f8634ad1c9e7c523096a7b50581dc8b5f1674cf48c4a0ede376b2478",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 65
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-013",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-013.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-013.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "a_top_down_slightly_angled_cafeteria_style_food_ph_4_batch_4.png",
+      "originalRelativePath": "generated_images_part_06_of_13/structured/ghostwriter_images/generated/a_top_down_slightly_angled_cafeteria_style_food_ph_4_batch_4.png",
+      "optimizedFilename": "demo-meal-auto-013.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 93060,
+      "sha256": "35c3f6db6981b098aec99e859040d5e5ae4d21e716d55df1d707a30252b088cc",
+      "originalSha256": "3303a383cf4d83463185a106c72dfca075b791401ff21862646510e7669d9edf",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 66
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-014",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-014.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-014.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "overhead_angled_tabletop_photo_of_a_meal_tray_on_a_10_batch_10.png",
+      "originalRelativePath": "generated_images_part_06_of_13/structured/ghostwriter_images/generated/overhead_angled_tabletop_photo_of_a_meal_tray_on_a_10_batch_10.png",
+      "optimizedFilename": "demo-meal-auto-014.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 121236,
+      "sha256": "a3731c3a2202705b0b5879180d97435b7d1eadfaf65439de089dee6702bfbb3e",
+      "originalSha256": "a72941867ddd81506ea4150a657b41986d9a45458286865f804566a98a5004f1",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 67
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-015",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-015.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-015.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "neat_cafeteria_meal_arrangement.png",
+      "originalRelativePath": "generated_images_part_07_of_13/root-generated/neat_cafeteria_meal_arrangement.png",
+      "optimizedFilename": "demo-meal-auto-015.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 59946,
+      "sha256": "477cf29ec2e5845e3d9713227dfecb3c93b38998a4fb9e722f11c3e040559b3d",
+      "originalSha256": "e69bfb19ba87e32e57ed951996d323900545318befa8535ab06cad15110f832f",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 68
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-016",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-016.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-016.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "nourishing_meal_in_a_bright_setting.png",
+      "originalRelativePath": "generated_images_part_08_of_13/root-generated/nourishing_meal_in_a_bright_setting.png",
+      "optimizedFilename": "demo-meal-auto-016.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 118108,
+      "sha256": "81e303bc3e7319242bf7bb3f0bd876e689a3458822f1cc8e3b7ac7f89bc58e2d",
+      "originalSha256": "303a83b6387d8d467a7b88e5245b1410749f211b717bb4d2e6d21a22c8828be9",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 69
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-017",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-017.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-017.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "nutritious_meal_in_a_child_friendly_setting.png",
+      "originalRelativePath": "generated_images_part_08_of_13/root-generated/nutritious_meal_in_a_child_friendly_setting.png",
+      "optimizedFilename": "demo-meal-auto-017.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 120540,
+      "sha256": "aecb68ebf61d5610e6fbb0eeabf9b2079793f5a5a204f0ac7a4edb677454d81c",
+      "originalSha256": "7ff1dead9f5d0160166de0853428a16aa3705365331571288397294b9c99f06e",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 70
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-018",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-018.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-018.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "simple_and_fresh_cafeteria_meal_spread.png",
+      "originalRelativePath": "generated_images_part_11_of_13/root-generated/simple_and_fresh_cafeteria_meal_spread.png",
+      "optimizedFilename": "demo-meal-auto-018.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 85628,
+      "sha256": "9bc03caf74c3776c85ce1c28f3a8abdb182b34a128d02129bdd73da2db8c1a88",
+      "originalSha256": "c4586392fff33fd7fd4e8a9e317c4a258655870db411af3b8a52e0417f554cde",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 71
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-019",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-019.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-019.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "simple_asian_inspired_meal_on_tray.png",
+      "originalRelativePath": "generated_images_part_11_of_13/root-generated/simple_asian_inspired_meal_on_tray.png",
+      "optimizedFilename": "demo-meal-auto-019.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 129690,
+      "sha256": "37add1ad4623dd6d155af9da362f32868e2359ccaa6045c3393b12fa1ffd468f",
+      "originalSha256": "f998f3d7578ead88511a3f0ad2decc99f10b06e544920d9a1803a60b6637b706",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 72
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-020",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-020.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-020.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "simple_asian_meal_tray_setup.png",
+      "originalRelativePath": "generated_images_part_11_of_13/root-generated/simple_asian_meal_tray_setup.png",
+      "optimizedFilename": "demo-meal-auto-020.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 118674,
+      "sha256": "460b80ab2819aea5233629d580a6fbbe612b81f93f1f7a6fb4a0511d6a10add3",
+      "originalSha256": "6b8e9c468e554e43eca52913a7d6e608ac362d991dc279feb9ce17a7804bcf9f",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 73
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-021",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-021.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-021.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "simple_breakfast_on_a_peaceful_tray.png",
+      "originalRelativePath": "generated_images_part_11_of_13/root-generated/simple_breakfast_on_a_peaceful_tray.png",
+      "optimizedFilename": "demo-meal-auto-021.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 98850,
+      "sha256": "6fb3d7e9885805bccb82fda6d0e6e7369b556294478a7bb69d0c3bff58eb03a2",
+      "originalSha256": "bd7c41b61c5576fa2f1a64da5709c996fb94adbf637596a7068d9fe6226b55dc",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 74
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-022",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-022.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-022.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "simple_cafeteria_meal_on_tray.png",
+      "originalRelativePath": "generated_images_part_11_of_13/root-generated/simple_cafeteria_meal_on_tray.png",
+      "optimizedFilename": "demo-meal-auto-022.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 138858,
+      "sha256": "e3d6743102bc7bb71f4782401617e2dc206428e63c5d4dae557fb547d0cff434",
+      "originalSha256": "2a448e88f07bc5d3780d017551a712a3e84304f15e4566d180d77ff93f512913",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 75
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-023",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-023.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-023.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "simple_cafeteria_meal_tray_setup.png",
+      "originalRelativePath": "generated_images_part_11_of_13/root-generated/simple_cafeteria_meal_tray_setup.png",
+      "optimizedFilename": "demo-meal-auto-023.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 106902,
+      "sha256": "e141af8d69ebe10d8b0750e91f5746d6ba666730e6f18f2259762204003c6df5",
+      "originalSha256": "ee784afa0f1b627ab3809a4170a7a89fe25904c2dab86b78282ac3275d700552",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 76
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-024",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-024.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-024.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "simple_meal_in_a_bright_cafeteria.png",
+      "originalRelativePath": "generated_images_part_11_of_13/root-generated/simple_meal_in_a_bright_cafeteria.png",
+      "optimizedFilename": "demo-meal-auto-024.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 124868,
+      "sha256": "939b40e686b2a7729628dbe146765cb26bba2c44e700779fdfb96e4f547db59c",
+      "originalSha256": "c99ba1d63a64ccb9fe83d1c2b78e437c95884ec25720ed3e65f4d528be0bc739",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 77
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-025",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-025.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-025.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "simple_meal_in_a_bright_room.png",
+      "originalRelativePath": "generated_images_part_12_of_13/root-generated/simple_meal_in_a_bright_room.png",
+      "optimizedFilename": "demo-meal-auto-025.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 71302,
+      "sha256": "ace2f229a7318b025f3382e4d0de643bb54fc7708d184019bfa84f4835ba78de",
+      "originalSha256": "6205acce04add7d2f815476604fb063da005f9c876a4d06303496a63978f7754",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 78
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-026",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-026.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-026.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "simple_snack_tray_in_bright_classroom_setting.png",
+      "originalRelativePath": "generated_images_part_12_of_13/root-generated/simple_snack_tray_in_bright_classroom_setting.png",
+      "optimizedFilename": "demo-meal-auto-026.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 94142,
+      "sha256": "abb91ac1d0f7b98854cca83a7e158e6b87caf6b08b1acf1bcb7d79e06978d312",
+      "originalSha256": "f20c75cdad5b5a68bc36855020f667b5c3d223c9b4bff6ac7e8bcdf34dc039f7",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 79
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-027",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-027.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-027.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "simple_tray_meal_with_porridge_and_eggs.png",
+      "originalRelativePath": "generated_images_part_12_of_13/root-generated/simple_tray_meal_with_porridge_and_eggs.png",
+      "optimizedFilename": "demo-meal-auto-027.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 90388,
+      "sha256": "03cddc0a7d6752ae40778369469876a7f05d3a645b437067d751d92a38bec505",
+      "originalSha256": "fad20172ca159da982f9acf80c4cdc28592f6b174aabed45cbba15076f7655c8",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 80
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-028",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-028.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-028.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "soft_pastel_meal_tray_setup.png",
+      "originalRelativePath": "generated_images_part_12_of_13/root-generated/soft_pastel_meal_tray_setup.png",
+      "optimizedFilename": "demo-meal-auto-028.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 65846,
+      "sha256": "963463282597799f80e91025a4e34a832caea927bd37e615ea20bc9b76e8f73a",
+      "originalSha256": "e26828c6a0dcd7266eb3ad3f6aa53b9f7fd5d995363bf613f3193cbadf5054e2",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 81
+    },
+    {
+      "id": "gpt-image2-meals-demo-meal-auto-029",
+      "kind": "meal",
+      "category": "meals",
+      "src": "/demo-media/gpt-image2/meals/demo-meal-auto-029.webp",
+      "path": "/demo-media/gpt-image2/meals/demo-meal-auto-029.webp",
+      "fallbackPath": "/demo-media/meals/demo-meal-placeholder.svg",
+      "originalFilename": "tidy_meal_on_a_cafeteria_tray.png",
+      "originalRelativePath": "generated_images_part_12_of_13/root-generated/tidy_meal_on_a_cafeteria_tray.png",
+      "optimizedFilename": "demo-meal-auto-029.webp",
+      "width": 1200,
+      "height": 1200,
+      "sizeBytes": 97166,
+      "sha256": "dc3d677af3ba913637b60dda820d9d4dbb964f964c37efa3feed45106e04008c",
+      "originalSha256": "096df4f81eeb7669fdb8481d0c40073e2928c904c868208a2272619b0ea9bd12",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "diet",
+        "teacher-diet-records",
+        "parent-meal-gallery"
+      ],
+      "fallbackOf": "/demo-media/meals/demo-meal-placeholder.svg",
+      "allowedUse": [
+        "meals"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 82
+    },
+    {
+      "id": "gpt-image2-storybooks-batch-next-storybook-cover-01",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-01.webp",
+      "path": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-01.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "batch_next_storybook_cover_01.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_next_storybook_covers_split/batch_next_storybook_cover_01.png",
+      "optimizedFilename": "batch-next-storybook-cover-01.webp",
+      "width": 272,
+      "height": 553,
+      "sizeBytes": 31390,
+      "sha256": "a2e0524dc9e21807314fb4a2e6ddaadc09ac4e6f731e1140e4367227b758bf05",
+      "originalSha256": "07868354ebf8eb4cb07334007a708d07b0b2e88510b7e31da830079d8f797f4e",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 83
+    },
+    {
+      "id": "gpt-image2-storybooks-batch-next-storybook-cover-02",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-02.webp",
+      "path": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-02.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "batch_next_storybook_cover_02.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_next_storybook_covers_split/batch_next_storybook_cover_02.png",
+      "optimizedFilename": "batch-next-storybook-cover-02.webp",
+      "width": 272,
+      "height": 553,
+      "sizeBytes": 46740,
+      "sha256": "8946f69044c74031b60690340054cef146f41be72c4044bcd466a8e230ea6150",
+      "originalSha256": "85838d6713ef3b936782282dfc8b1e7b0b0b3f2f4723ed0239ac2a5975c28cf2",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 84
+    },
+    {
+      "id": "gpt-image2-storybooks-batch-next-storybook-cover-03",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-03.webp",
+      "path": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-03.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "batch_next_storybook_cover_03.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_next_storybook_covers_split/batch_next_storybook_cover_03.png",
+      "optimizedFilename": "batch-next-storybook-cover-03.webp",
+      "width": 273,
+      "height": 553,
+      "sizeBytes": 39078,
+      "sha256": "64bd71e38b4be9d009862297e62280120a2e4600676f4e7f9ce5b081b62eca5b",
+      "originalSha256": "55dfcbc6d08eb891255ffc19bf7af780ea7b395aacecca04e31445692ceae079",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 85
+    },
+    {
+      "id": "gpt-image2-storybooks-batch-next-storybook-cover-04",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-04.webp",
+      "path": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-04.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "batch_next_storybook_cover_04.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_next_storybook_covers_split/batch_next_storybook_cover_04.png",
+      "optimizedFilename": "batch-next-storybook-cover-04.webp",
+      "width": 272,
+      "height": 553,
+      "sizeBytes": 39462,
+      "sha256": "beddfc3d05aad436572345242f796c5bd94d37184ed8ce91ca6975a416041d5d",
+      "originalSha256": "ed4d060edaec0c8970c060dffaa4d4ecd8953ff93cc3e61eef920de4a6beefa9",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 86
+    },
+    {
+      "id": "gpt-image2-storybooks-batch-next-storybook-cover-05",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-05.webp",
+      "path": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-05.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "batch_next_storybook_cover_05.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_next_storybook_covers_split/batch_next_storybook_cover_05.png",
+      "optimizedFilename": "batch-next-storybook-cover-05.webp",
+      "width": 273,
+      "height": 553,
+      "sizeBytes": 34364,
+      "sha256": "bc105585dddb9926979e9a3ecd073a7272d1821d7e95a5763288b9c6a5b87e7d",
+      "originalSha256": "f42ea951271326485f74c51812137afb6087d4c337027b3162756273099f6d95",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 87
+    },
+    {
+      "id": "gpt-image2-storybooks-batch-next-storybook-cover-06",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-06.webp",
+      "path": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-06.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "batch_next_storybook_cover_06.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_next_storybook_covers_split/batch_next_storybook_cover_06.png",
+      "optimizedFilename": "batch-next-storybook-cover-06.webp",
+      "width": 272,
+      "height": 553,
+      "sizeBytes": 35382,
+      "sha256": "40579680ef2b13208b6814498bb2da66112c832835d318700fdfb24794885217",
+      "originalSha256": "9187d5dbba1ea1473296c5d924978a925b09da96a3a5e8bb56aebc0e789b3d2a",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 88
+    },
+    {
+      "id": "gpt-image2-storybooks-batch-next-storybook-cover-07",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-07.webp",
+      "path": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-07.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "batch_next_storybook_cover_07.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_next_storybook_covers_split/batch_next_storybook_cover_07.png",
+      "optimizedFilename": "batch-next-storybook-cover-07.webp",
+      "width": 272,
+      "height": 553,
+      "sizeBytes": 35676,
+      "sha256": "c35f13966eb23ba32fe19105aafb3626bc1c796d230b5f3548e8a291d31bd46e",
+      "originalSha256": "1f2dc070f4ae6b179ca57ad07707798d075a7f4625f4f09d93b05eda7971ea33",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 89
+    },
+    {
+      "id": "gpt-image2-storybooks-batch-next-storybook-cover-08",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-08.webp",
+      "path": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-08.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "batch_next_storybook_cover_08.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_next_storybook_covers_split/batch_next_storybook_cover_08.png",
+      "optimizedFilename": "batch-next-storybook-cover-08.webp",
+      "width": 273,
+      "height": 553,
+      "sizeBytes": 43124,
+      "sha256": "953e96d80f444faab28596e0cf53631fcb927459b5d267e7cc813eaf3bfe2e2d",
+      "originalSha256": "5ed4f37b22390ca6f934c32b918992ae4cc4691c2efd0ce936eebf8cc485711e",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 90
+    },
+    {
+      "id": "gpt-image2-storybooks-batch-next-storybook-cover-09",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-09.webp",
+      "path": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-09.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "batch_next_storybook_cover_09.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_next_storybook_covers_split/batch_next_storybook_cover_09.png",
+      "optimizedFilename": "batch-next-storybook-cover-09.webp",
+      "width": 272,
+      "height": 553,
+      "sizeBytes": 41124,
+      "sha256": "5b977f3c4e44e9e5bceee3d8f5a22707f0fcf57c6ae8688e582525a23deb8c95",
+      "originalSha256": "11f8715f4d8fe3d94edf01b65f37e96563f586af81e8cc93d771e6a20bac766b",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 91
+    },
+    {
+      "id": "gpt-image2-storybooks-batch-next-storybook-cover-10",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-10.webp",
+      "path": "/demo-media/gpt-image2/storybooks/batch-next-storybook-cover-10.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "batch_next_storybook_cover_10.png",
+      "originalRelativePath": "generated_images_part_02_of_13/structured/batch_next_storybook_covers_split/batch_next_storybook_cover_10.png",
+      "optimizedFilename": "batch-next-storybook-cover-10.webp",
+      "width": 273,
+      "height": 553,
+      "sizeBytes": 34584,
+      "sha256": "d29086eea67d3f7aab35003d8b22455f6bd2ac14c053b63ca567160ed402cb85",
+      "originalSha256": "b34cfae6c60d292626025e69b6cb16a9af80d9d55646fca5b13445744c2f29d8",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 92
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-auto-001",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-auto-001.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-auto-001.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "curious_explorer_in_a_colorful_garden.png",
+      "originalRelativePath": "generated_images_part_04_of_13/root-generated/curious_explorer_in_a_colorful_garden.png",
+      "optimizedFilename": "demo-storybook-auto-001.webp",
+      "width": 1055,
+      "height": 1491,
+      "sizeBytes": 205856,
+      "sha256": "f4a26f4f0228eb4f65dac79a5d33f35df37148d7b860c870dc7dc704f9e2169d",
+      "originalSha256": "0a402109a3549f715f757fb4b239a8ea0f4c0dde8db4f7e1cc223e58b50ddf2b",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 93
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-page-c-11-02",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-page-c-11-02.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-page-c-11-02.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-page-c-11-02.png",
+      "originalRelativePath": "generated_images_part_07_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-11-02.png",
+      "optimizedFilename": "demo-storybook-page-c-11-02.webp",
+      "width": 1103,
+      "height": 1426,
+      "sizeBytes": 167272,
+      "sha256": "9e56e8af9c138cbeb617af1a5d8aa6786ac1f2950f3a5a8541c8a39cefba249b",
+      "originalSha256": "85f17c014e250d65e6cf36625d11b909a3aca13aa4e5fd1d31d59b7a08e2c553",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-11",
+        "growth-c-11-2"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 94
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-page-c-13-02",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-page-c-13-02.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-page-c-13-02.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-page-c-13-02.png",
+      "originalRelativePath": "generated_images_part_08_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-13-02.png",
+      "optimizedFilename": "demo-storybook-page-c-13-02.webp",
+      "width": 1103,
+      "height": 1426,
+      "sizeBytes": 145448,
+      "sha256": "fcedcf68431a44525170067d6ccb37803a4f0648470b6e0f1b37f871d2131c25",
+      "originalSha256": "a07711aca927a8b2c3f8dbdbbb71dd0fbd865b7924323159dba8e554032ce9e3",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-13",
+        "growth-c-13-4"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 95
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-page-c-14-02",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-page-c-14-02.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-page-c-14-02.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-page-c-14-02.png",
+      "originalRelativePath": "generated_images_part_08_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-14-02.png",
+      "optimizedFilename": "demo-storybook-page-c-14-02.webp",
+      "width": 1103,
+      "height": 1426,
+      "sizeBytes": 226732,
+      "sha256": "3610a23a7d2db0f6f6f4a55788bae3062fe116dbfe730dcc85f01ad1b00239eb",
+      "originalSha256": "efc52aeb79d41d31c4985c60d8a682f32e1c38b3a3babcb65d6d07f1c9ba69e7",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-14",
+        "growth-c-14-5"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 96
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-page-c-15-02",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-page-c-15-02.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-page-c-15-02.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-page-c-15-02.png",
+      "originalRelativePath": "generated_images_part_08_of_13/structured/next_batch_storybook_pages_21_30/demo-storybook-page-c-15-02.png",
+      "optimizedFilename": "demo-storybook-page-c-15-02.webp",
+      "width": 1103,
+      "height": 1426,
+      "sizeBytes": 192088,
+      "sha256": "113d47d44b0f0cd079b3b27e4365a6795db793a02f0d2d0b4ab51c1d295fc131",
+      "originalSha256": "5d32bbdd142171df96074cdc3479d07a8d09944524a19f06ac8854a1870591d2",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-15",
+        "growth-c-15-6"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 97
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-page-c-36-01",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-page-c-36-01.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-page-c-36-01.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-page-c-36-01.png",
+      "originalRelativePath": "generated_images_part_08_of_13/structured/next_batch_storybook_pages_71_72/demo-storybook-page-c-36-01.png",
+      "optimizedFilename": "demo-storybook-page-c-36-01.webp",
+      "width": 1254,
+      "height": 1254,
+      "sizeBytes": 153972,
+      "sha256": "53c87acb5dca61dfa8890f5bb6870f9c15f0280f00c6b943243fd54697909b85",
+      "originalSha256": "81f65a52651f17d4d35c77529bf2475832ab3bdbeb540b6518ae78631f7cf318",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-36",
+        "growth-c-36-6"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 98
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-17",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-17.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-17.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-17.png",
+      "originalRelativePath": "generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-17.png",
+      "optimizedFilename": "demo-storybook-cover-c-17.webp",
+      "width": 910,
+      "height": 1500,
+      "sizeBytes": 145032,
+      "sha256": "7ab6cfc3307d16e790a37639bffb636d0810e9aabae26580d5da14666c5d718e",
+      "originalSha256": "45249911494302e9400100c1668ba598ebe12a1afe7a35a40685159c2f44ff56",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-17"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 99
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-18",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-18.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-18.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-18.png",
+      "originalRelativePath": "generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-18.png",
+      "optimizedFilename": "demo-storybook-cover-c-18.webp",
+      "width": 910,
+      "height": 1500,
+      "sizeBytes": 154676,
+      "sha256": "1367184fb6421c424b9453e95344a16b9775c051b5b1b1a9bfa79d5bdf54867d",
+      "originalSha256": "27a9030d872662073b8a4246ad782a4cb2a76671562f2772ab20578a76503926",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-18"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 100
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-19",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-19.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-19.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-19.png",
+      "originalRelativePath": "generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-19.png",
+      "optimizedFilename": "demo-storybook-cover-c-19.webp",
+      "width": 910,
+      "height": 1500,
+      "sizeBytes": 189626,
+      "sha256": "ef23b047d69c317d689ec0815b515bd6862eda1d70a26194cb7a281a14c8100f",
+      "originalSha256": "ab740cd70eee7124efc458185282fd20074b46f154c7f902a4b0cf99e4842b76",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-19"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 101
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-20",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-20.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-20.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-20.png",
+      "originalRelativePath": "generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-20.png",
+      "optimizedFilename": "demo-storybook-cover-c-20.webp",
+      "width": 910,
+      "height": 1500,
+      "sizeBytes": 175252,
+      "sha256": "59842bd219c2f8e16d5fd58e0dad560708e6d28184f630047a51432b89c38730",
+      "originalSha256": "a19984f40e409f3bb0578c3e376163f2f24396f61ea4d1cfafbfca2377028e81",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-20"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 102
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-21",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-21.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-21.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-21.png",
+      "originalRelativePath": "generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-21.png",
+      "optimizedFilename": "demo-storybook-cover-c-21.webp",
+      "width": 910,
+      "height": 1500,
+      "sizeBytes": 147166,
+      "sha256": "f4845cd576b4f46ad6ff8e04ccea1a6051d6190ff4418b1348216df448f14d88",
+      "originalSha256": "ef8eb0c3f984f4332f04cda9fdb2ca30e3d40f7f3fee231f1233f835fc0734e6",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-21"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 103
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-22",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-22.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-22.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-22.png",
+      "originalRelativePath": "generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-22.png",
+      "optimizedFilename": "demo-storybook-cover-c-22.webp",
+      "width": 910,
+      "height": 1500,
+      "sizeBytes": 166268,
+      "sha256": "c2f91cc3b12e4faac0644dcf5733247844cac82091b406bbf950026f873577b7",
+      "originalSha256": "a43f8a3a3933792c7aa22130add61b9446f51f88c0e1cd5f6a64a4accf416539",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-22"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 104
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-23",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-23.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-23.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-23.png",
+      "originalRelativePath": "generated_images_part_09_of_13/structured/round_010_storybooks/demo-storybook-cover-c-23.png",
+      "optimizedFilename": "demo-storybook-cover-c-23.webp",
+      "width": 910,
+      "height": 1500,
+      "sizeBytes": 164034,
+      "sha256": "dac5cf22e4d530db950dd494c5c608cee0f46af4dee5ef7f683b71cec3e1a48d",
+      "originalSha256": "fc17f3b5bdd986f6aaa2ddffb3309eb4ccd3e9cb7d0c58afaf34582d5bf05133",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-23"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 105
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-24",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-24.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-24.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-24.png",
+      "originalRelativePath": "generated_images_part_10_of_13/structured/round_010_storybooks/demo-storybook-cover-c-24.png",
+      "optimizedFilename": "demo-storybook-cover-c-24.webp",
+      "width": 910,
+      "height": 1500,
+      "sizeBytes": 123932,
+      "sha256": "ca7554238f284cbc9862d146f74c75b6c459213274143fb1af284c808297e22f",
+      "originalSha256": "ccf81447e5480e5a5d4f6b5969c07131f773c06a215bfdd4105b5db2cee2337e",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-24"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 106
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-25",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-25.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-25.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-25.png",
+      "originalRelativePath": "generated_images_part_10_of_13/structured/round_010_storybooks/demo-storybook-cover-c-25.png",
+      "optimizedFilename": "demo-storybook-cover-c-25.webp",
+      "width": 910,
+      "height": 1500,
+      "sizeBytes": 150090,
+      "sha256": "e58a6f943cdbcd23cfcca5885851ea1a2926d80e7a8433958209129f89174225",
+      "originalSha256": "f90dec233b4dc980c7dfc8866915d2860c433444931dce5b6eaf4296aba72a4c",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-25"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 107
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-26",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-26.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-26.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-26.png",
+      "originalRelativePath": "generated_images_part_10_of_13/structured/round_010_storybooks/demo-storybook-cover-c-26.png",
+      "optimizedFilename": "demo-storybook-cover-c-26.webp",
+      "width": 910,
+      "height": 1500,
+      "sizeBytes": 144728,
+      "sha256": "3386412c7333b1167115256ad9b286f7c7fe6965597d22eb3f96b185275dacad",
+      "originalSha256": "10cce1ee2dd24b4638a1652cb7b77ab3b38f9961e668fbde74d4834b5c6b5652",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-26"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 108
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-27",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-27.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-27.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-27.png",
+      "originalRelativePath": "generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-27.png",
+      "optimizedFilename": "demo-storybook-cover-c-27.webp",
+      "width": 1122,
+      "height": 1402,
+      "sizeBytes": 341376,
+      "sha256": "15700cc50ad98cbed3e9a5c62cadeb4fe2ceae3e722661326fb7a92a4c48ef78",
+      "originalSha256": "38aa14b5912727c9013040c5a196d90ee408e0350635cac87155f232b2cb21e8",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-27"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 109
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-28",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-28.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-28.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-28.png",
+      "originalRelativePath": "generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-28.png",
+      "optimizedFilename": "demo-storybook-cover-c-28.webp",
+      "width": 1122,
+      "height": 1402,
+      "sizeBytes": 243942,
+      "sha256": "b5e6bf624c23fa4c07c1cbb0032e9a4fc47f67fca94bbe034387f77c344ad955",
+      "originalSha256": "e9f2b68f794da83556dc5d7b5cb78a541ad1de16f57da50023bfb6677904ba83",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-28"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 110
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-29",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-29.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-29.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-29.png",
+      "originalRelativePath": "generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-29.png",
+      "optimizedFilename": "demo-storybook-cover-c-29.webp",
+      "width": 1122,
+      "height": 1402,
+      "sizeBytes": 140010,
+      "sha256": "c7f65584a8b3e78bceba64e254c85e99851d3786877f49f9ee0ded99c51fe341",
+      "originalSha256": "671322e0b3496c32b3a5c87902138e7f8331e2006d8fd81ac85aa5bf97391031",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-29"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 111
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-30",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-30.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-30.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-30.png",
+      "originalRelativePath": "generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-30.png",
+      "optimizedFilename": "demo-storybook-cover-c-30.webp",
+      "width": 1122,
+      "height": 1402,
+      "sizeBytes": 159640,
+      "sha256": "1637da3a4ce83ef2dd9c7823a8831fdbac9be6b5245731a096eb8595dbf62243",
+      "originalSha256": "22e3073a3ea5553dbad4de3d8791c1e4bce705f18d95ae40e8e6e2a95093f4ea",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-30"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 112
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-31",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-31.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-31.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-31.png",
+      "originalRelativePath": "generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-31.png",
+      "optimizedFilename": "demo-storybook-cover-c-31.webp",
+      "width": 1122,
+      "height": 1402,
+      "sizeBytes": 116264,
+      "sha256": "39bed79bdfc2df3752efeb68d50557dadc0b3bd3d6165f8d052dc886b39119ff",
+      "originalSha256": "c45a29c2a15fffd3538f9e045cefe6ba6cccafa6100e9cda362ece98ef765326",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-31"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 113
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-32",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-32.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-32.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-32.png",
+      "originalRelativePath": "generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-32.png",
+      "optimizedFilename": "demo-storybook-cover-c-32.webp",
+      "width": 1122,
+      "height": 1402,
+      "sizeBytes": 253626,
+      "sha256": "1190dc2e47db9458875253ca56702f5f80a8efd131de1061cc63251b049b3945",
+      "originalSha256": "07b4ae79044fe3c7a7a01cc09faf9dc02eba165d68724ab1af62dc1e71c327ee",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-32"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 114
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-33",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-33.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-33.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-33.png",
+      "originalRelativePath": "generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-33.png",
+      "optimizedFilename": "demo-storybook-cover-c-33.webp",
+      "width": 1122,
+      "height": 1402,
+      "sizeBytes": 216590,
+      "sha256": "73ee5577129233115c642dec44caafc6aba2221750ccd319e71c7cd35b7616f0",
+      "originalSha256": "6c74b3fc8d7308daa3e57fbc1fbaa2b365c99efebc1c4b490af9bb6f8c74d0fc",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-33"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 115
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-34",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-34.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-34.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-34.png",
+      "originalRelativePath": "generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-34.png",
+      "optimizedFilename": "demo-storybook-cover-c-34.webp",
+      "width": 1122,
+      "height": 1402,
+      "sizeBytes": 194850,
+      "sha256": "4031ab08f4733fed63fc2d6add579fea900f914e8751029f7dcae5ae3fa31fa5",
+      "originalSha256": "aad1726c6dc022331e1fa16d39b3a69394b91e68a73d13aa97e08a04834d92fb",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-34"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 116
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-35",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-35.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-35.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-35.png",
+      "originalRelativePath": "generated_images_part_10_of_13/structured/round_011_storybooks/demo-storybook-cover-c-35.png",
+      "optimizedFilename": "demo-storybook-cover-c-35.webp",
+      "width": 1122,
+      "height": 1402,
+      "sizeBytes": 138752,
+      "sha256": "2f1492b7a7f676a20560fdec45a8a53395275ce24b3e737ec33683549b33f8c8",
+      "originalSha256": "0cf0886c2e50986cfffe7c53d801e5d88b51de8bd7d67d6aad4e53c5ed478669",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-35"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 117
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-cover-c-36",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-36.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-cover-c-36.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "demo-storybook-cover-c-36.png",
+      "originalRelativePath": "generated_images_part_11_of_13/structured/round_011_storybooks/demo-storybook-cover-c-36.png",
+      "optimizedFilename": "demo-storybook-cover-c-36.webp",
+      "width": 1122,
+      "height": 1402,
+      "sizeBytes": 163584,
+      "sha256": "b82cb2cec7c5ad19d692a96295195da4373f7181db82eaefe52f522c616446c3",
+      "originalSha256": "3791da8721359c2a6f276300c3ed67a1812cfff05dd469630612aaa7e1d67e59",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [
+        "storybook-c-36"
+      ],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 118
+    },
+    {
+      "id": "gpt-image2-storybooks-demo-storybook-auto-002",
+      "kind": "storybook",
+      "category": "storybooks",
+      "src": "/demo-media/gpt-image2/storybooks/demo-storybook-auto-002.webp",
+      "path": "/demo-media/gpt-image2/storybooks/demo-storybook-auto-002.webp",
+      "fallbackPath": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "originalFilename": "storytime_in_a_dream_filled_classroom.png",
+      "originalRelativePath": "generated_images_part_12_of_13/root-generated/storytime_in_a_dream_filled_classroom.png",
+      "optimizedFilename": "demo-storybook-auto-002.webp",
+      "width": 1103,
+      "height": 1426,
+      "sizeBytes": 217510,
+      "sha256": "505108f5174554233be07fcc48252964f2abb4d04182881b1eb8e20f0253bdb8",
+      "originalSha256": "929a3e78109163d6cf15f1b95143115aeeb3a72dbb5a8159cdbb266368353037",
+      "syntheticDemo": true,
+      "safetyStatus": "accepted",
+      "linkedUsage": [
+        "parent-storybook-cover",
+        "parent-storybook-page"
+      ],
+      "fallbackOf": "/demo-media/storybooks/demo-storybook-placeholder.svg",
+      "allowedUse": [
+        "storybooks"
+      ],
+      "seedRefs": [],
+      "demoLabelRequired": false,
+      "source": "gpt-image2-synthetic",
+      "ingestionTaskId": "M03-local-ingest",
+      "ingestionIndex": 119
     }
   ]
 }

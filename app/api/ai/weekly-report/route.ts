@@ -40,7 +40,6 @@ export async function POST(request: Request) {
   const brainForward = await forwardBrainRequest(request, "/api/v1/agents/reports/weekly");
   if (brainForward.response) return brainForward.response;
 
-  payload = (await request.json()) as WeeklyReportPayload;
   const result = await executeWeeklyReport(payload, getAiRuntimeOptions(request));
   return NextResponse.json(result, { status: 200 });
 }
