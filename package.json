@@ -53,6 +53,7 @@
     "package:gpt-image2": "node scripts/package-gpt-image2-input.mjs",
     "demo-media:ingest": "node scripts/ingest-gpt-image2-local-assets.mjs",
     "demo-media:test": "playwright test tests/product-completion/demo-media-ingest.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
+    "growth-media:test": "playwright test tests/product-completion/growth-media-render.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
     "pixel:extract-assets": "node scripts/extract-pixel-assets.mjs",
     "pixel:capture": "node scripts/capture-pixel-pages.mjs",
     "pixel:compare": "node scripts/compare-pixel-parity.mjs"

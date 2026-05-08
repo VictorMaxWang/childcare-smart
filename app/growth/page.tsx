@@ -52,6 +52,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { TeacherActionTile, TeacherContextStrip, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import { useParentD01Data } from "@/components/parent/useParentD01Data";
 import { buildRecentLocalDateRange, normalizeLocalDate } from "@/lib/date";
+import { DEMO_MEDIA_FALLBACKS } from "@/lib/demo-media/assets";
 import { OBSERVATION_INDICATOR_MAP, type ObservationIndicatorOption } from "@/lib/mock/observation";
 import { toast } from "sonner";
 
@@ -233,6 +234,7 @@ export default function GrowthPage() {
     const parentDetailRecord =
       parentGrowthRecords.find((record) => record.recordId === parentDetailRecordId) ?? parentGrowthRecords[0] ?? null;
     const parentDetailPayload = parentDetailRecord?.payload ?? null;
+    const parentDetailMediaSources = getGrowthMediaSources(parentDetailPayload);
 
     if (parentD01.invalidChildId) {
       return (
@@ -333,7 +335,12 @@ export default function GrowthPage() {
                   const category = typeof payload.category === "string" ? payload.category : "成长记录";
                   const description = typeof payload.description === "string" ? payload.description : "暂无详细描述";
                   return (
-                    <article key={record.recordId} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <article
+                      key={record.recordId}
+                      data-testid="growth-record-card"
+                      data-child-id={record.childId}
+                      className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
+                    >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
@@ -342,6 +349,12 @@ export default function GrowthPage() {
                             <Badge variant="secondary">{record.createdAt}</Badge>
                           </div>
                           <p className="mt-3 text-sm leading-6 text-slate-700">{description}</p>
+                          <GrowthRecordMediaStrip
+                            sources={getGrowthMediaSources(payload)}
+                            alt={`${parentChild.name} ${category} 成长影像`}
+                            recordId={record.recordId}
+                            childId={record.childId}
+                          />
                           {tags.length > 0 ? (
                             <div className="mt-3 flex flex-wrap gap-2">
                               {tags.map((tag) => (
@@ -382,6 +395,13 @@ export default function GrowthPage() {
                       <p className="mt-2 leading-6 text-slate-700">
                         {typeof parentDetailPayload.description === "string" ? parentDetailPayload.description : "暂无详细描述"}
                       </p>
+                      <GrowthRecordMediaStrip
+                        sources={parentDetailMediaSources}
+                        alt={`${parentChild.name} 成长记录详情影像`}
+                        recordId={parentDetailRecord.recordId}
+                        childId={parentDetailRecord.childId}
+                        compact
+                      />
                     </div>
                     {Array.isArray(parentDetailPayload.selectedIndicators) && parentDetailPayload.selectedIndicators.length > 0 ? (
                       <div>
@@ -488,7 +508,12 @@ export default function GrowthPage() {
                 {timelineRecords.slice(0, 4).map((record) => {
                   const child = visibleChildren.find((item) => item.id === record.childId);
                   return (
-                    <article key={`teacher-growth-feature-${record.id}`} className="grid gap-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-4 md:grid-cols-[76px_1fr_190px] md:items-center">
+                    <article
+                      key={`teacher-growth-feature-${record.id}`}
+                      data-testid="growth-record-card"
+                      data-child-id={record.childId}
+                      className="grid gap-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-4 md:grid-cols-[76px_1fr_190px] md:items-center"
+                    >
                       <div className="text-sm text-slate-500">
                         <p className="font-semibold text-slate-950">{formatShortDate(record.createdAt)}</p>
                         <p className="mt-1">{new Date(record.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</p>
@@ -501,6 +526,13 @@ export default function GrowthPage() {
                           {record.needsAttention ? <Badge variant="warning" className="rounded-full px-3 py-1">需关注</Badge> : null}
                         </div>
                         <p className="mt-3 text-sm leading-6 text-slate-600">{record.description}</p>
+                        <GrowthRecordMediaStrip
+                          sources={getGrowthMediaSources(record)}
+                          alt={`${child?.name ?? "幼儿"} ${record.category} 成长影像`}
+                          recordId={record.id}
+                          childId={record.childId}
+                          compact
+                        />
                         <div className="mt-3 flex flex-wrap gap-2">
                           {record.tags.slice(0, 3).map((tag) => (
                             <Badge key={tag} variant="secondary" className="rounded-full px-3 py-1">{tag}</Badge>
@@ -961,7 +993,12 @@ export default function GrowthPage() {
                 const child = visibleChildren.find((item) => item.id === record.childId);
                 if (!child) return null;
                 return (
-                  <article key={record.id} className="group/card relative rounded-3xl border border-slate-100 bg-white p-5 pl-7 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-lg hover:border-indigo-100">
+                  <article
+                    key={record.id}
+                    data-testid="growth-record-card"
+                    data-child-id={record.childId}
+                    className="group/card relative rounded-3xl border border-slate-100 bg-white p-5 pl-7 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-lg hover:border-indigo-100"
+                  >
                     <span className="absolute bottom-5 left-5 top-5 border-l-2 border-dashed border-slate-200" />
                     <span className="absolute left-3.25 top-8 h-4 w-4 rounded-full bg-indigo-500 ring-4 ring-indigo-100" />
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -977,6 +1014,12 @@ export default function GrowthPage() {
                           </Badge>
                         </div>
                         <p className="mt-3 text-sm leading-6 text-slate-700">{record.description}</p>
+                        <GrowthRecordMediaStrip
+                          sources={getGrowthMediaSources(record)}
+                          alt={`${child.name} ${record.category} 成长影像`}
+                          recordId={record.id}
+                          childId={record.childId}
+                        />
                         
                         {record.selectedIndicators && record.selectedIndicators.length > 0 && (
                           <div className="mt-3 flex flex-col gap-1.5">
@@ -1061,6 +1104,117 @@ export default function GrowthPage() {
 }
 
 const GROWTH_CHART_COLORS = ["#818cf8", "#f59e0b", "#34d399", "#f472b6", "#38bdf8", "#fb7185"];
+const GROWTH_MEDIA_FALLBACK = DEMO_MEDIA_FALLBACKS.growth;
+
+type GrowthMediaSourceRecord = {
+  mediaRefs?: unknown;
+  mediaUrls?: unknown;
+};
+
+type GrowthRecordMediaStripProps = {
+  sources: string[];
+  alt: string;
+  recordId: string;
+  childId: string;
+  compact?: boolean;
+};
+
+function readStringList(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function normalizeGrowthMediaPath(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("/") || trimmed.includes("\\") || /^[A-Za-z]:/.test(trimmed)) return null;
+  if (trimmed.startsWith("/demo-media/gpt-image2/growth/")) return trimmed;
+  if (trimmed.startsWith("/demo-media/growth/")) return trimmed;
+  return null;
+}
+
+function uniqueMediaSources(sources: string[]) {
+  return Array.from(new Set(sources));
+}
+
+function getGrowthMediaSources(record?: GrowthMediaSourceRecord | null) {
+  const sources = uniqueMediaSources(
+    [...readStringList(record?.mediaRefs), ...readStringList(record?.mediaUrls)]
+      .map(normalizeGrowthMediaPath)
+      .filter((source): source is string => Boolean(source))
+  );
+
+  return sources.length > 0 ? sources : [GROWTH_MEDIA_FALLBACK];
+}
+
+function growthImageFallbackChain(initialSrc: string) {
+  return initialSrc === GROWTH_MEDIA_FALLBACK
+    ? [GROWTH_MEDIA_FALLBACK]
+    : uniqueMediaSources([initialSrc, GROWTH_MEDIA_FALLBACK]);
+}
+
+function GrowthRecordImage({
+  src,
+  alt,
+  compact,
+  recordId,
+  childId,
+}: {
+  src: string;
+  alt: string;
+  compact?: boolean;
+  recordId: string;
+  childId: string;
+}) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [hidden, setHidden] = useState(false);
+  const fallbackChain = growthImageFallbackChain(src);
+  const activeSrc = fallbackChain[activeIndex];
+
+  if (!activeSrc || hidden) return null;
+
+  return (
+    <figure className={`relative overflow-hidden rounded-2xl border border-slate-100 bg-slate-100 ${compact ? "aspect-[4/3] max-w-44" : "aspect-[4/3]"}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        data-testid="growth-record-image"
+        data-record-id={recordId}
+        data-child-id={childId}
+        src={activeSrc}
+        alt={alt}
+        loading="lazy"
+        className="absolute inset-0 h-full w-full object-cover"
+        onError={() => {
+          if (activeIndex < fallbackChain.length - 1) {
+            setActiveIndex((index) => index + 1);
+            return;
+          }
+          setHidden(true);
+        }}
+      />
+      <figcaption className="absolute right-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-slate-500 shadow-sm">
+        示例素材
+      </figcaption>
+    </figure>
+  );
+}
+
+function GrowthRecordMediaStrip({ sources, alt, recordId, childId, compact = false }: GrowthRecordMediaStripProps) {
+  const displaySources = (sources.length > 0 ? sources : [GROWTH_MEDIA_FALLBACK]).slice(0, compact ? 1 : 3);
+
+  return (
+    <div className={`mt-3 grid gap-2 ${compact ? "grid-cols-1" : displaySources.length > 1 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-1 sm:max-w-64"}`}>
+      {displaySources.map((source, index) => (
+        <GrowthRecordImage
+          key={`${recordId}-${source}-${index}`}
+          src={source}
+          alt={alt}
+          compact={compact}
+          recordId={recordId}
+          childId={childId}
+        />
+      ))}
+    </div>
+  );
+}
 
 function buildRecentDateRange(days: number) {
   return buildRecentLocalDateRange(days);
