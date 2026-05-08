@@ -1,0 +1,38 @@
+{
+  "taskId": "M05",
+  "status": "done",
+  "rootCause": "Growth seed/API records already included mediaRefs/mediaUrls pointing at /demo-media/gpt-image2/growth, and manifest/fallback resolution was available, but app/growth/page.tsx rendered only growth text metadata and never rendered those media fields.",
+  "changedFiles": [
+    "app/growth/page.tsx",
+    "package.json",
+    "tests/product-completion/demo-media-ingest.spec.ts",
+    "tests/product-completion/growth-media-render.spec.ts",
+    "docs/demo-media/GROWTH_MEDIA_RENDER_FIX_REPORT.md",
+    "docs/demo-media/results/M05-result.md",
+    "docs/demo-media/results/M05-result.json"
+  ],
+  "growthMediaRefsPresent": true,
+  "growthPageRendersImages": true,
+  "growthImageRequests200": true,
+  "fallbackPreserved": true,
+  "dataConsistency": {
+    "directorChildren": 36,
+    "teacherLiChildren": 18,
+    "teacherZhouChildren": 18
+  },
+  "checks": {
+    "lint": "pass",
+    "build": "pass",
+    "productSmoke": "pass",
+    "productApi": "pass",
+    "productAi": "pass",
+    "productVoice": "pass",
+    "productJourney": "pass",
+    "featureSmoke": "pass",
+    "bugbashSmoke": "pass",
+    "tsc": "pass",
+    "demoMediaTest": "pass",
+    "growthMediaTest": "pass"
+  },
+  "notes": "Browser verification on 127.0.0.1:3335 confirmed parent and teacher growth pages render /demo-media/gpt-image2/growth images with HTTP 200 responses. Zhou teacher scope did not expose c-1. growth-media:test and bugbash:smoke were rerun on isolated ports after initial local port conflicts."
+}

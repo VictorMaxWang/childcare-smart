@@ -108,4 +108,13 @@ test("M03 key pages render GPT Image 2 media and tolerate fallback routes", asyn
 
   await page.goto("/parent/storybook?child=c-3");
   await expect(page.locator("body")).not.toHaveText("");
+
+  await page.goto("/growth?child=c-1");
+  const growthImage = page.getByTestId("growth-record-image").first();
+  await expect(growthImage).toBeVisible();
+  const growthSrc = await growthImage.getAttribute("src");
+  expect(growthSrc).toBeTruthy();
+  expect(growthSrc).not.toMatch(/[A-Za-z]:\\/);
+  expect(growthSrc).toMatch(/^\/demo-media\/(?:gpt-image2\/growth\/|growth\/)/);
+  expect((await page.request.get(growthSrc!)).status(), growthSrc!).toBe(200);
 });
