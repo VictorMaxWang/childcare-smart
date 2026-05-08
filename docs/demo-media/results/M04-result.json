@@ -1,0 +1,42 @@
+{
+  "taskId": "M04",
+  "status": "partial",
+  "gitStatus": "pre-report git status was clean; branch main; local HEAD b0f9ee0; GitHub main confirmed via gh api at b0f9ee084f4135493db2985fdc760b1d4be55c95 after git ls-remote connection reset; M04 report/artifact files were generated afterward",
+  "head": "b0f9ee0",
+  "vercelDeployment": "READY Production deployment https://childcare-smart-hlb18zqbo-victormaxwangs-projects.vercel.app; aliases include https://www.smartchildcare.cn; build logs show Branch: main, Commit: b0f9ee0; no redeploy required",
+  "onlineBaseUrl": "https://www.smartchildcare.cn",
+  "onlineChecks": {
+    "loginEmpty": "pass",
+    "director36": "pass",
+    "teacherLi18": "pass",
+    "teacherZhou18": "pass",
+    "dietRealImages": "pass",
+    "healthMaterialRealImages": "pass: API and /health page data include gpt-image2/health-materials refs; referenced assets are 200",
+    "storybookRealImages": "pass",
+    "growthRecordRealImages": "partial: API includes gpt-image2/growth media refs, but /growth?child=c-1 rendered text-only with 0 image elements",
+    "image404": "pass: accepted assets 119/119 returned 200; page image404 0; broken visible images 0",
+    "layoutCrash": "pass",
+    "voiceOrb": "pass",
+    "weeklyHistoryVisible": "pass",
+    "dispatchVisible": "pass",
+    "teacherDietRecordsVisible": "pass",
+    "parentCommunication": "pass",
+    "acceptedAssets200": "pass",
+    "noWindowsUserPathLeak": "pass"
+  },
+  "checks": {
+    "lint": "pass",
+    "build": "pass",
+    "productSmoke": "pass",
+    "productApi": "pass",
+    "productAi": "pass",
+    "productVoice": "pass",
+    "productJourney": "pass",
+    "featureSmoke": "pass",
+    "bugbashSmoke": "pass",
+    "tsc": "pass",
+    "demoMediaTest": "pass"
+  },
+  "releaseRecommendation": "conditional demo only: diet, health material refs/assets, storybook, role scope, and voice-orb flows are ready; do not claim growth record page image rendering is accepted until /growth renders the existing growth media refs. Production release is not recommended from M04 alone.",
+  "notes": "Accepted GPT Image 2 assets: 119 total, meals 49, health-materials 19, growth 14, storybooks 37. No Vercel env, .env.local, vivo provider, permissions, fallback, or business code was changed."
+}
