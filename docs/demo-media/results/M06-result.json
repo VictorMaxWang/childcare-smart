@@ -1,0 +1,48 @@
+{
+  "taskId": "M06",
+  "status": "done",
+  "git": {
+    "branch": "main",
+    "head": "46f0845",
+    "originMainContainsHead": true,
+    "workingTree": "pre-report clean; post-run changes limited to M06/final report files"
+  },
+  "vercel": {
+    "productionDomain": "https://www.smartchildcare.cn",
+    "deploymentCommit": "46f0845",
+    "deploymentStatus": "Ready"
+  },
+  "onlineChecks": {
+    "loginEmpty": "pass: username/password inputs default empty; demo account buttons visible/enabled and usable",
+    "director36": "pass: director scope returns 36 children; metrics, weekly report history, dispatch entry, and voice orb visible",
+    "teacherLi18": "pass: Li teacher scope returns 18 children; diet/growth pages render and voice orb ready",
+    "teacherZhou18": "pass: Zhou teacher scope returns 18 children; diet/growth pages render and voice orb ready",
+    "dietRealImages": "pass: Li/Zhou /diet render GPT Image 2 meal images; first checked meal images returned 200 image/webp; DEMO MEAL placeholders count 0 on Li check",
+    "healthMaterialRealImages": "pass with note: API and /health?child=c-1 expose GPT Image 2 health material refs; authenticated referenced health files return 200 image/webp; current UI displays data/refs rather than a dedicated gallery",
+    "growthRealImages": "pass: teacher /growth and parent /growth?child=c-1 render GPT Image 2 growth images with 200 image/webp responses",
+    "storybookRealImages": "pass: /parent/storybook?child=c-1 opens and refreshes without crash; GPT Image 2 storybook images render with 200 image/webp responses",
+    "image404": "pass: authenticated accepted assets 119/119 returned image 200; page image404 0; broken visible images 0",
+    "layoutCrash": "pass: page errors 0; image failures 0; no visible crash; no local absolute path leak observed",
+    "voiceOrb": "pass: voice orb visible and reports provider ready; /api/ai/provider-status is not missing-env"
+  },
+  "localChecks": {
+    "lint": "pass",
+    "build": "pass",
+    "productSmoke": "pass",
+    "productApi": "pass after retry from stale local .next cache state",
+    "productAi": "pass",
+    "productVoice": "pass",
+    "productJourney": "pass",
+    "featureSmoke": "pass",
+    "bugbashSmoke": "pass",
+    "demoMediaTest": "pass",
+    "growthMediaTest": "pass",
+    "tsc": "pass"
+  },
+  "releaseRecommendation": "Demo release recommended for the current online demo. Production release is not recommended until production data, object storage, observability, alerting, account lifecycle, audit, and operational controls are completed.",
+  "remainingGaps": [
+    "Health material UI currently displays material data/refs rather than a dedicated image gallery.",
+    "Production hardening remains outside M06: production data, object storage, monitoring, alerting, account lifecycle, audit, and operational controls."
+  ],
+  "notes": "Vercel Production deployment dpl_2deiGCWt2HZPN4qx1PbFRJFuNHvE is READY for https://www.smartchildcare.cn and was built from GitHub main commit 46f0845. Online API summary: 36 director children, 18 Li children, 18 Zhou children, 49 meal GPT refs, 14 growth GPT refs, 19 health GPT refs, 4 storybook GPT refs, 119 accepted GPT Image 2 assets. No business logic, env files, Vercel env, vivo provider, permissions, or fallback behavior was changed."
+}
