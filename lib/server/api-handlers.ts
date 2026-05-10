@@ -13,6 +13,7 @@ import { apiOk, readJsonBody, withApiErrors, ApiRouteError } from "@/lib/server/
 import { AppDataService } from "@/lib/server/app-data-service";
 import { DefaultAppDataRepository } from "@/lib/server/app-data-repository";
 import { requireSession, resolveRequestSession } from "@/lib/server/session";
+import { resolveLinXiaoyuChildId } from "@/lib/storybooks/lin-xiaoyu-bravery";
 
 export const runtime = "nodejs";
 
@@ -417,7 +418,9 @@ export function handleStorybooks(request: Request) {
     const { service } = await serviceFor(request);
     if (request.method === "GET") {
       const url = new URL(request.url);
-      return apiOk(await service.listStorybooks({ childId: url.searchParams.get("childId") ?? url.searchParams.get("child") ?? undefined }));
+      return apiOk(await service.listStorybooks({
+        childId: resolveLinXiaoyuChildId(url.searchParams.get("childId") ?? url.searchParams.get("child") ?? undefined),
+      }));
     }
     return apiOk(await service.upsertStorybook(await readJsonBody(request)), { status: 201 });
   });

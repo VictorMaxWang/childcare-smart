@@ -20,6 +20,13 @@ const PLACEHOLDER_VALUES = new Set([
   "your_vivo_asr_client_version",
   "your_vivo_asr_user_id",
   "your_vivo_asr_engine_id",
+  "your_storybook_tts_model",
+  "your_storybook_tts_product",
+  "your_storybook_tts_package",
+  "your_storybook_tts_client_version",
+  "your_storybook_tts_system_version",
+  "your_storybook_tts_sdk_version",
+  "your_storybook_tts_android_version",
   "placeholder",
   "changeme",
   "change_me",
@@ -29,6 +36,12 @@ function readEnv(name: string) {
   const value = process.env[name]?.trim() ?? "";
   if (value.startsWith("填入")) return "";
   return PLACEHOLDER_VALUES.has(value.toLowerCase()) ? "" : value;
+}
+
+function readNumberEnv(name: string, fallback: number) {
+  const value = readEnv(name);
+  const parsed = value ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 export function getVivoEnv() {
@@ -42,13 +55,26 @@ export function getVivoEnv() {
     asrClientVersion: readEnv("VIVO_ASR_CLIENT_VERSION"),
     asrUserId: readEnv("VIVO_ASR_USER_ID"),
     asrEngineId: readEnv("VIVO_ASR_ENGINE_ID") || "fileasrrecorder",
+    storybookTtsEngineId: readEnv("STORYBOOK_TTS_ENGINEID") || "short_audio_synthesis_jovi",
+    storybookTtsVoice: readEnv("STORYBOOK_TTS_VOICE") || "yige",
+    storybookTtsFallbackEngineId: readEnv("STORYBOOK_TTS_FALLBACK_ENGINEID") || "short_audio_synthesis_jovi",
+    storybookTtsFallbackVoice: readEnv("STORYBOOK_TTS_FALLBACK_VOICE") || "vivoHelper",
+    storybookTtsModel: readEnv("STORYBOOK_TTS_MODEL"),
+    storybookTtsProduct: readEnv("STORYBOOK_TTS_PRODUCT"),
+    storybookTtsPackage: readEnv("STORYBOOK_TTS_PACKAGE"),
+    storybookTtsClientVersion: readEnv("STORYBOOK_TTS_CLIENT_VERSION"),
+    storybookTtsSystemVersion: readEnv("STORYBOOK_TTS_SYSTEM_VERSION"),
+    storybookTtsSdkVersion: readEnv("STORYBOOK_TTS_SDK_VERSION"),
+    storybookTtsAndroidVersion: readEnv("STORYBOOK_TTS_ANDROID_VERSION"),
+    storybookTtsSpeed: readNumberEnv("STORYBOOK_TTS_SPEED", 45),
+    storybookTtsVolume: readNumberEnv("STORYBOOK_TTS_VOLUME", 50),
   };
 }
 
 function requiredEnvForCapability(capability: VivoCapability) {
   if (capability === "chat") return ["VIVO_APP_KEY", "VIVO_APP_ID", "VIVO_BASE_URL", "VIVO_LLM_MODEL"];
   if (capability === "ocr") return ["VIVO_APP_KEY", "VIVO_APP_ID", "VIVO_BASE_URL", "VIVO_OCR_PATH"];
-  return [
+  if (capability === "asr") return [
     "VIVO_APP_KEY",
     "VIVO_APP_ID",
     "VIVO_BASE_URL",
@@ -57,13 +83,27 @@ function requiredEnvForCapability(capability: VivoCapability) {
     "VIVO_ASR_USER_ID",
     "VIVO_ASR_ENGINE_ID",
   ];
+  return [
+    "VIVO_APP_KEY",
+    "VIVO_APP_ID",
+    "VIVO_BASE_URL",
+    "STORYBOOK_TTS_MODEL",
+    "STORYBOOK_TTS_PRODUCT",
+    "STORYBOOK_TTS_PACKAGE",
+    "STORYBOOK_TTS_CLIENT_VERSION",
+    "STORYBOOK_TTS_SYSTEM_VERSION",
+    "STORYBOOK_TTS_SDK_VERSION",
+    "STORYBOOK_TTS_ANDROID_VERSION",
+  ];
 }
 
 function hasRequiredEnv(capability: VivoCapability) {
   return requiredEnvForCapability(capability).every((name) => Boolean(readEnv(name)));
 }
 
-export function getVivoProviderStatus(capability: VivoCapability): VivoProviderStatus {
+export function getVivoProviderStatus<TCapability extends VivoCapability>(
+  capability: TCapability
+): VivoProviderStatus<TCapability> {
   const configured = hasRequiredEnv(capability);
   const warnings: string[] = [];
 
@@ -74,6 +114,10 @@ export function getVivoProviderStatus(capability: VivoCapability): VivoProviderS
 
   if (capability === "ocr") {
     warnings.push("vivo 通用 OCR 文档仅确认 jpg/png/bmp 图片识别，未确认 PDF。");
+  }
+
+  if (capability === "tts") {
+    warnings.push("vivo TTS 使用服务端 WebSocket 签名调用；前端只播放静态音频或受控服务端 endpoint。");
   }
 
   if (!configured) {

@@ -40,6 +40,13 @@ import {
   type ParentStoryBookClientCacheState,
   writeParentStoryBookCache,
 } from "@/lib/parent/storybook-cache";
+import {
+  LIN_XIAOYU_CHILD_ALIAS,
+  LIN_XIAOYU_CHILD_ID,
+  LIN_XIAOYU_FIXED_STORYBOOK_SUBTITLE,
+  buildLinXiaoyuFixedStorybookResponse,
+  resolveLinXiaoyuChildId,
+} from "@/lib/storybooks/lin-xiaoyu-bravery";
 
 type StoryBookPageStatus = "loading" | "storybook" | "card" | "empty" | "error";
 
@@ -79,7 +86,8 @@ export default function ParentStoryBookPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const childFromQuery = searchParams.get("child") ?? undefined;
+  const rawChildFromQuery = searchParams.get("child") ?? undefined;
+  const childFromQuery = resolveLinXiaoyuChildId(rawChildFromQuery);
   const presetFromQuery = searchParams.get("preset");
   const explicitDemoSeedId = resolveParentStoryBookDemoSeedId(
     searchParams.get("demoSeed")
@@ -135,6 +143,8 @@ export default function ParentStoryBookPage() {
     ].sort((left, right) => right.generatedAt.localeCompare(left.generatedAt));
   }, [parentD01.parentHomeData?.storybooks, selectedFeed, storybooks]);
   const latestSavedStorybook = savedStorybooks[0] ?? null;
+  const isLockedLinXiaoyuStorybook =
+    !parentD01.invalidChildId && selectedFeed?.child.id === LIN_XIAOYU_CHILD_ID;
 
   const resolvedDemoSeedId = explicitDemoSeedId;
   const seededPreset = useMemo(
@@ -180,13 +190,13 @@ export default function ParentStoryBookPage() {
   }, [hasChildContext, resolvedPreset]);
 
   useEffect(() => {
-    if (parentD01.invalidChildId || childFromQuery || !selectedFeed?.child.id) {
+    if (parentD01.invalidChildId || rawChildFromQuery || !selectedFeed?.child.id) {
       return;
     }
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.set("child", selectedFeed.child.id);
     router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
-  }, [childFromQuery, parentD01.invalidChildId, pathname, router, searchParams, selectedFeed?.child.id]);
+  }, [parentD01.invalidChildId, pathname, rawChildFromQuery, router, searchParams, selectedFeed?.child.id]);
 
   useEffect(() => {
     if (parentD01.invalidChildId) return;
@@ -194,7 +204,12 @@ export default function ParentStoryBookPage() {
 
     const url = new URL(window.location.href);
     if (selectedFeed?.child.id) {
-      url.searchParams.set("child", selectedFeed.child.id);
+      url.searchParams.set(
+        "child",
+        rawChildFromQuery === LIN_XIAOYU_CHILD_ALIAS
+          ? LIN_XIAOYU_CHILD_ALIAS
+          : selectedFeed.child.id
+      );
     } else {
       url.searchParams.delete("child");
     }
@@ -209,11 +224,31 @@ export default function ParentStoryBookPage() {
       url.searchParams.delete("demoSeed");
     }
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [draftControls.preset, parentD01.invalidChildId, resolvedDemoSeedId, selectedFeed?.child.id]);
+  }, [draftControls.preset, parentD01.invalidChildId, rawChildFromQuery, resolvedDemoSeedId, selectedFeed?.child.id]);
 
   useEffect(() => {
     storyRef.current = story;
   }, [story]);
+
+  useEffect(() => {
+    if (!isLockedLinXiaoyuStorybook) return;
+    const fixedStory = buildLinXiaoyuFixedStorybookResponse({
+      generatedAt: latestSavedStorybook?.generatedAt,
+    });
+    startTransition(() => {
+      setStory(fixedStory);
+      setStatus("storybook");
+      setErrorMessage(null);
+      setRefreshMessage(null);
+      setIsRefreshing(false);
+      setCacheState({
+        kind: latestSavedStorybook ? "saved" : "hit",
+        savedAt: latestSavedStorybook
+          ? new Date(latestSavedStorybook.generatedAt).getTime()
+          : Date.now(),
+      });
+    });
+  }, [isLockedLinXiaoyuStorybook, latestSavedStorybook]);
 
   useEffect(() => {
     if (!story || !shouldPollParentStoryBookMedia(story)) {
@@ -254,12 +289,16 @@ export default function ParentStoryBookPage() {
           ? "请输入主题，或先点一个快捷主题。"
           : null;
   const canGenerate =
+    !isLockedLinXiaoyuStorybook &&
     !parentD01.invalidChildId &&
     ((draftControls.generationMode === "child-personalized" && hasChildContext) ||
       (draftControls.generationMode === "manual-theme" && Boolean(manualTheme)) ||
       (draftControls.generationMode === "hybrid" && hasChildContext && Boolean(manualTheme)));
 
   const request = useMemo<ParentStoryBookRequest | null>(() => {
+    if (isLockedLinXiaoyuStorybook) {
+      return null;
+    }
     if (parentD01.invalidChildId) {
       return null;
     }
@@ -310,6 +349,7 @@ export default function ParentStoryBookPage() {
     guardianFeedbacks,
     growthRecords,
     healthCheckRecords,
+    isLockedLinXiaoyuStorybook,
     mealRecords,
     parentD01.invalidChildId,
     resolvedDemoSeedId,
@@ -323,6 +363,9 @@ export default function ParentStoryBookPage() {
   }, [appliedControls.preset, request]);
 
   useEffect(() => {
+    if (isLockedLinXiaoyuStorybook) {
+      return;
+    }
     if (!request || !cacheKey) {
       if (parentD01.invalidChildId || !storyRef.current) {
         setStatus("empty");
@@ -514,6 +557,7 @@ export default function ParentStoryBookPage() {
     appliedControls.preset,
     cacheKey,
     growthRecords,
+    isLockedLinXiaoyuStorybook,
     latestSavedStorybook,
     parentD01.invalidChildId,
     request,
@@ -615,6 +659,15 @@ export default function ParentStoryBookPage() {
       pageCountOptions={[...PAGE_COUNT_OPTIONS]}
       generationHint={themeHint}
       canGenerate={canGenerate}
+      lockedStorybook={
+        isLockedLinXiaoyuStorybook
+          ? {
+              subtitle: LIN_XIAOYU_FIXED_STORYBOOK_SUBTITLE,
+              paged: true,
+              disableGeneration: true,
+            }
+          : undefined
+      }
       parentHref={selectedFeed?.child.id ? `/parent?child=${selectedFeed.child.id}` : "/parent"}
       onSelectPreset={(preset) =>
         setDraftControls((current) => ({ ...current, preset }))

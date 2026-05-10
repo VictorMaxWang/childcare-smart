@@ -24,7 +24,7 @@ export interface AsrProviderOutput {
   providerName: string;
   isRealProvider: boolean;
   warnings: string[];
-  providerStatus: VivoProviderStatus;
+  providerStatus: VivoProviderStatus<"asr">;
 }
 
 export interface AsrProviderResult<T> {
@@ -36,7 +36,7 @@ export interface AsrProviderResult<T> {
 }
 
 export interface AsrProvider {
-  getStatus(): VivoProviderStatus;
+  getStatus(): VivoProviderStatus<"asr">;
   transcribe(input: AsrProviderInput): Promise<AsrProviderResult<AsrProviderOutput>>;
 }
 

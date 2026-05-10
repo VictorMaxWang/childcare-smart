@@ -54,6 +54,9 @@
     "demo-media:ingest": "node scripts/ingest-gpt-image2-local-assets.mjs",
     "demo-media:test": "playwright test tests/product-completion/demo-media-ingest.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
     "growth-media:test": "playwright test tests/product-completion/growth-media-render.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
+    "storybook:generate-xiaoyu-audio": "node scripts/generate-lin-xiaoyu-storybook-audio.mjs",
+    "storybook:xiaoyu:test": "playwright test tests/product-completion/lin-xiaoyu-fixed-storybook.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
+    "vivo:tts:test": "playwright test tests/product-completion/vivo-tts-provider.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
     "pixel:extract-assets": "node scripts/extract-pixel-assets.mjs",
     "pixel:capture": "node scripts/capture-pixel-pages.mjs",
     "pixel:compare": "node scripts/compare-pixel-parity.mjs"
@@ -77,7 +80,8 @@
     "react-markdown": "^10.1.0",
     "recharts": "^3.2.1",
     "sonner": "^2.0.7",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
@@ -85,6 +89,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.18.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "pixelmatch": "^7.1.0",

@@ -58,7 +58,7 @@ test("D08 parent child query survives core routes and mobile viewport", async ({
 
 test("D08 parent storybook demoSeed stays isolated from real provider and remote state", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  const childId = "c-1";
+  const childId = "c-4";
   const storybookId = `storybook-r02-${stamp}`;
   const storybookTitle = `R02 local share storybook ${stamp}`;
   const statePutRequests: string[] = [];
@@ -209,17 +209,17 @@ function buildStorybookAiRequest(input: {
   };
 }
 
-async function seedStorybook(api: APIRequestContext, storybookId: string, title: string) {
+async function seedStorybook(api: APIRequestContext, storybookId: string, title: string, childId = "c-4") {
   return expectOk(
     await api.post("/api/storybooks", {
       data: {
         storybookId,
-        childId: "c-1",
+        childId,
         generatedAt: new Date().toISOString(),
         sourceRecordIds: [`growth-${storybookId}`],
         response: {
           storyId: storybookId,
-          childId: "c-1",
+          childId,
           title,
           summary: "R02 verifies local storybook export and share.",
           moral: "Local MVP actions stay explicit and scoped.",

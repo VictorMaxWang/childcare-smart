@@ -1,6 +1,6 @@
 import "server-only";
 
-export type VivoCapability = "chat" | "ocr" | "asr";
+export type VivoCapability = "chat" | "ocr" | "asr" | "tts";
 
 export type VivoProviderRuntimeStatus =
   | "ready"
@@ -9,9 +9,9 @@ export type VivoProviderRuntimeStatus =
   | "provider-unavailable"
   | "error";
 
-export interface VivoProviderStatus {
+export interface VivoProviderStatus<TCapability extends VivoCapability = VivoCapability> {
   providerName: "vivo";
-  capability: VivoCapability;
+  capability: TCapability;
   configured: boolean;
   supported: boolean;
   isRealProvider: boolean;
@@ -44,7 +44,7 @@ export interface VivoChatResult {
   warnings: string[];
   rawResponse?: Record<string, unknown>;
   requestId: string;
-  status: VivoProviderStatus;
+  status: VivoProviderStatus<"chat">;
 }
 
 export interface VivoOcrInput {
@@ -63,7 +63,7 @@ export interface VivoOcrResult {
   warnings: string[];
   rawResponse?: Record<string, unknown>;
   requestId?: string;
-  status: VivoProviderStatus;
+  status: VivoProviderStatus<"ocr">;
 }
 
 export interface VivoAsrInput {
@@ -93,6 +93,27 @@ export interface VivoAsrResult {
   rawResponse?: Record<string, unknown>;
   segments?: VivoAsrSegment[];
   requestId?: string;
-  status: VivoProviderStatus;
+  status: VivoProviderStatus<"asr">;
   model?: string;
+}
+
+export interface VivoTtsInput {
+  text: string;
+  childId?: string;
+  storyId?: string;
+  page?: number;
+  voiceStyle?: string;
+  requestId?: string;
+}
+
+export interface VivoTtsResult {
+  audioBytes: Buffer;
+  audioContentType: "audio/wav";
+  providerName: "vivo";
+  engineId: string;
+  voiceName: string;
+  requestId: string;
+  isRealProvider: boolean;
+  status: VivoProviderStatus<"tts">;
+  warnings: string[];
 }
