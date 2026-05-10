@@ -1091,6 +1091,7 @@ export default function StoryBookViewer({
   onExportStorybook,
   onShareStorybook,
   parentHref = "/parent",
+  lockedStorybook,
 }: {
   status: StoryBookViewerStatus;
   story?: ParentStoryBookResponse | null;
@@ -1126,8 +1127,14 @@ export default function StoryBookViewer({
   onExportStorybook?: (format: StorybookExportFormat) => void;
   onShareStorybook?: () => void;
   parentHref?: string;
+  lockedStorybook?: {
+    subtitle: string;
+    paged?: boolean;
+    disableGeneration?: boolean;
+  };
 }) {
   const theme = getTheme(story?.stylePreset ?? selectedPresetId);
+  const isLockedStorybook = Boolean(lockedStorybook?.disableGeneration);
   const runtimeStory = story ? getRuntimeStory(story) : null;
   const selectedThemeChip = themeChips.includes(manualTheme.trim()) ? manualTheme.trim() : null;
   const requiresTheme =
@@ -1185,6 +1192,7 @@ export default function StoryBookViewer({
       key={story.storyId}
       story={story}
       theme={theme}
+      paged={lockedStorybook?.paged ?? false}
       onRuntimeStateChange={setSceneRuntimeState}
     />
   );
@@ -1470,11 +1478,12 @@ export default function StoryBookViewer({
                 {story?.title ?? "成长绘本"}
               </CardTitle>
               <CardDescription className="max-w-2xl text-sm leading-7 text-slate-600">
-                {story?.summary ??
+                {lockedStorybook?.subtitle ?? story?.summary ??
                   "把孩子的成长线索、家长反馈和教育主题，讲成一部图文音一体、移动端优先的成长绘本。"}
               </CardDescription>
             </div>
 
+            {!isLockedStorybook ? (
             <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">
@@ -1698,6 +1707,7 @@ export default function StoryBookViewer({
                 </div>
               </div>
             </div>
+            ) : null}
 
             {refreshMessage ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-6 text-amber-900">
@@ -1793,10 +1803,12 @@ export default function StoryBookViewer({
 function StoryBookSceneStream({
   story,
   theme,
+  paged = false,
   onRuntimeStateChange,
 }: {
   story: ParentStoryBookResponse;
   theme: StoryBookTheme;
+  paged?: boolean;
   onRuntimeStateChange?: (state: StoryBookSceneRuntimeState) => void;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -2149,6 +2161,23 @@ function StoryBookSceneStream({
       timeline.segments.length > 0
         ? timeline.segments
         : [scene.audioScript || scene.sceneText].filter(Boolean);
+    let triedRuntimeTts = false;
+    const tryRuntimeTtsFallback = () => {
+      if (triedRuntimeTts || !scene.audioRef || scene.audioRef === scene.audioUrl) {
+        return false;
+      }
+      triedRuntimeTts = true;
+      startAudio(
+        {
+          ...scene,
+          audioUrl: scene.audioRef,
+          audioRef: scene.audioRef,
+        },
+        index,
+        options
+      );
+      return true;
+    };
     audioRef.current = audio;
     setPlaybackSceneIndex(index);
     setPlaybackState("loading");
@@ -2199,6 +2228,9 @@ function StoryBookSceneStream({
     };
     audio.onerror = () => {
       if (tokenRef.current !== token) return;
+      if (tryRuntimeTtsFallback()) {
+        return;
+      }
       if (canUseLocalSpeech) {
         startLocalSpeech(scene, index, options);
         return;
@@ -2207,6 +2239,9 @@ function StoryBookSceneStream({
     };
     audio.play().catch(() => {
       if (tokenRef.current !== token) return;
+      if (tryRuntimeTtsFallback()) {
+        return;
+      }
       if (canUseLocalSpeech) {
         startLocalSpeech(scene, index, options);
         return;
@@ -2312,11 +2347,273 @@ function StoryBookSceneStream({
       return;
     }
 
-    const startIndex = Math.min(activeIndex, scenes.length - 1);
+    const startIndex = paged ? 0 : Math.min(activeIndex, scenes.length - 1);
+    if (paged) {
+      setActiveIndex(0);
+    }
     queueRef.current = scenes
       .map((_, index) => index)
       .filter((index) => index > startIndex);
     startScenePlayback(scenes[startIndex], startIndex, { continueBook: true });
+  }
+
+  function handlePageMove(nextIndex: number) {
+    if (!scenes.length) return;
+    const clampedIndex = Math.min(Math.max(nextIndex, 0), scenes.length - 1);
+    stopPlayback();
+    setActiveIndex(clampedIndex);
+  }
+
+  function handleRestartPage(scene: ParentStoryBookScene, index: number) {
+    stopPlayback();
+    startScenePlayback(scene, index);
+  }
+
+  if (paged) {
+    const safeActiveIndex = Math.min(Math.max(activeIndex, 0), Math.max(scenes.length - 1, 0));
+    const scene = scenes[safeActiveIndex];
+    if (!scene) {
+      return null;
+    }
+
+    const isPlaying = playbackSceneIndex === safeActiveIndex && playbackState !== "idle";
+    const isSceneActive = playbackSceneIndex === safeActiveIndex;
+    const sceneRuntime = scene as StoryBookRuntimeScene;
+    const captionTimeline = buildCaptionTimeline(scene);
+    const segments = captionTimeline.segments.length
+      ? captionTimeline.segments
+      : [scene.audioScript || scene.sceneText].filter(Boolean);
+    const sceneImageFallbackKey = getSceneImageFallbackKeyHotfix(
+      story.storyId,
+      scene.sceneIndex
+    );
+    const useAssetFallback =
+      Boolean(imageFallbackMap[sceneImageFallbackKey]) &&
+      Boolean(scene.assetRef) &&
+      scene.assetRef !== scene.imageUrl;
+    const imageDelivery = resolveRuntimeSceneImageDeliveryHotfix(sceneRuntime, {
+      useAssetFallback,
+    });
+    const sceneImageSrc = useAssetFallback
+      ? scene.assetRef || "/storybook/card.svg"
+      : scene.imageUrl || scene.assetRef || "/storybook/card.svg";
+
+    return (
+      <div className="space-y-4" data-testid="lin-xiaoyu-fixed-storybook">
+        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="info">
+              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              {safeActiveIndex + 1} / {scenes.length}
+            </Badge>
+            <Badge variant="success">成长绘本</Badge>
+            <Badge
+              variant={
+                imageDelivery === "real"
+                  ? "success"
+                  : imageDelivery === "dynamic-fallback"
+                    ? "info"
+                    : "warning"
+              }
+              data-testid="lin-xiaoyu-image-status"
+            >
+              {useAssetFallback ? "安全占位图" : "静态图片"}
+            </Badge>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={cn("rounded-full", theme.quiet)}
+              onClick={() => handleRestartPage(scene, safeActiveIndex)}
+              data-testid="lin-xiaoyu-replay-page"
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              重新播放
+            </Button>
+            <Button
+              type="button"
+              className={cn("rounded-full shadow-sm", theme.accent)}
+              onClick={handlePlayBook}
+              data-testid="lin-xiaoyu-play-book"
+            >
+              {isBookPlaying ? (
+                <Pause className="mr-2 h-4 w-4" />
+              ) : (
+                <Play className="mr-2 h-4 w-4" />
+              )}
+              {isBookPlaying ? "停止全书" : "连续朗读全书"}
+            </Button>
+          </div>
+        </div>
+
+        <article
+          ref={(node) => {
+            sceneRefs.current[safeActiveIndex] = node;
+          }}
+          data-scene-index={safeActiveIndex}
+          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="success">第 {safeActiveIndex + 1} 页</Badge>
+              <h3 className="text-xl font-bold text-slate-950">{scene.sceneTitle}</h3>
+            </div>
+            <Badge
+              variant={
+                isSceneActive
+                  ? playbackSource === "real"
+                    ? "success"
+                    : playbackSource === "local"
+                      ? "info"
+                      : "warning"
+                  : scene.audioStatus === "ready" && scene.audioUrl
+                    ? "success"
+                    : canUseLocalSpeech
+                      ? "info"
+                      : "warning"
+              }
+            >
+              {getRuntimeSceneAudioBadgeLabelHotfix(
+                scene,
+                playbackSource,
+                isSceneActive,
+                canUseLocalSpeech
+              )}
+            </Badge>
+          </div>
+
+          <div className="relative mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="relative aspect-[3/2] w-full">
+              <StoryBookImage
+                src={sceneImageSrc}
+                alt={scene.sceneTitle}
+                loading="eager"
+                className="absolute inset-0 h-full w-full object-contain"
+                onError={() => {
+                  if (!scene.assetRef || scene.assetRef === scene.imageUrl) return;
+                  setImageFallbackMap((current) => {
+                    if (current[sceneImageFallbackKey]) return current;
+                    return {
+                      ...current,
+                      [sceneImageFallbackKey]: true,
+                    };
+                  });
+                }}
+              />
+            </div>
+          </div>
+
+          <p
+            className="mt-4 whitespace-pre-line text-base leading-8 text-slate-700"
+            data-testid="lin-xiaoyu-page-text"
+          >
+            {scene.sceneText}
+          </p>
+
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-950">本页朗读</p>
+                <p className="mt-1 text-xs leading-6 text-slate-500">
+                  {getRuntimeCaptionStatusText(
+                    playbackSource,
+                    isPlaying,
+                    playbackState,
+                    canUseLocalSpeech
+                  )}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className={cn("rounded-full", theme.quiet)}
+                onClick={() => handlePlayScene(scene, safeActiveIndex)}
+                data-testid="lin-xiaoyu-play-page"
+              >
+                {isPlaying && playbackState !== "paused" ? (
+                  <Pause className="mr-2 h-4 w-4" />
+                ) : (
+                  <Play className="mr-2 h-4 w-4" />
+                )}
+                {isPlaying && playbackState !== "paused" ? "暂停" : "播放本页"}
+              </Button>
+            </div>
+
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-[width] duration-300",
+                  theme.progress
+                )}
+                style={{
+                  width: `${
+                    Math.max(
+                      isSceneActive ? progress * 100 : 0,
+                      isPlaying ? 8 : 0
+                    )
+                  }%`,
+                }}
+              />
+            </div>
+            <div className="mt-3 flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-slate-400">
+              <span>{formatStoryBookVoiceStyle(scene.voiceStyle)}</span>
+              <span>
+                {getRuntimePlaybackTimeLabel(
+                  playbackSource,
+                  isSceneActive,
+                  currentTime,
+                  duration,
+                  canUseLocalSpeech,
+                  playbackState
+                )}
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(segments.length > 0 ? segments : [scene.sceneText]).map((segment, segmentIndex) => (
+                <span
+                  key={`${scene.sceneIndex}-${segmentIndex}`}
+                  className={cn(
+                    "rounded-2xl border px-3 py-2 text-sm leading-6 transition-all duration-300",
+                    isPlaying && segmentIndex === captionIndex
+                      ? "border-transparent bg-slate-900 text-white"
+                      : "border-slate-200 bg-white text-slate-600"
+                  )}
+                >
+                  {segment}
+                </span>
+              ))}
+            </div>
+          </div>
+        </article>
+
+        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <Button
+            type="button"
+            variant="outline"
+            className={cn("rounded-full", theme.quiet)}
+            disabled={safeActiveIndex === 0}
+            onClick={() => handlePageMove(safeActiveIndex - 1)}
+            data-testid="lin-xiaoyu-prev-page"
+          >
+            上一页
+          </Button>
+          <span className="text-center text-sm font-semibold text-slate-600">
+            {safeActiveIndex + 1} / {scenes.length}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            className={cn("rounded-full", theme.quiet)}
+            disabled={safeActiveIndex >= scenes.length - 1}
+            onClick={() => handlePageMove(safeActiveIndex + 1)}
+            data-testid="lin-xiaoyu-next-page"
+          >
+            下一页
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (

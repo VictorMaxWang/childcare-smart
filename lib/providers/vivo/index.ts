@@ -9,9 +9,12 @@ export type {
   VivoOcrInput,
   VivoOcrResult,
   VivoProviderStatus,
+  VivoTtsInput,
+  VivoTtsResult,
 } from "./types";
 export { VivoProviderError } from "./vivo-errors";
 export { getVivoEnv, getVivoProviderStatus } from "./vivo-provider-status";
 export { requestVivoChat } from "./vivo-chat-provider";
 export { requestVivoOcr, isVivoOcrSupportedMimeType } from "./vivo-ocr-provider";
 export { requestVivoAsr, isVivoAsrSupportedMimeType } from "./vivo-asr-provider";
+export { requestVivoTts, classifyVivoTtsError, type VivoTtsErrorKind } from "./vivo-tts-provider";

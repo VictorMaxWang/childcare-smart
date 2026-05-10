@@ -1,0 +1,85 @@
+{
+  "taskId": "STORYBOOK-LOCK-01",
+  "status": "partial",
+  "fixedStorybook": {
+    "id": "lin-xiaoyu-one-small-brave-step",
+    "title": "林小雨的一小步勇敢",
+    "pages": 6,
+    "imagesReady": true,
+    "imagePaths": [
+      "public/demo-media/storybooks/lin-xiaoyu/images/page-01.webp",
+      "public/demo-media/storybooks/lin-xiaoyu/images/page-02.webp",
+      "public/demo-media/storybooks/lin-xiaoyu/images/page-03.webp",
+      "public/demo-media/storybooks/lin-xiaoyu/images/page-04.webp",
+      "public/demo-media/storybooks/lin-xiaoyu/images/page-05.webp",
+      "public/demo-media/storybooks/lin-xiaoyu/images/page-06.webp"
+    ],
+    "pageTextsReady": true
+  },
+  "tts": {
+    "provider": "vivo",
+    "providerStatus": "missing-env: STORYBOOK_TTS_MODEL, STORYBOOK_TTS_PRODUCT, STORYBOOK_TTS_PACKAGE, STORYBOOK_TTS_CLIENT_VERSION, STORYBOOK_TTS_SYSTEM_VERSION, STORYBOOK_TTS_SDK_VERSION, STORYBOOK_TTS_ANDROID_VERSION",
+    "staticAudioGenerated": false,
+    "audioFiles": [],
+    "runtimeTtsEndpoint": "/api/storybooks/lin-xiaoyu/tts",
+    "fallbackBehavior": "static audio first; authenticated runtime vivo TTS when static audio is missing; classified JSON errors and subtitle/text fallback when unavailable"
+  },
+  "onlineRisk": {
+    "requiresRuntimeGeneration": false,
+    "staticAssetsCommitted": true
+  },
+  "checks": {
+    "lint": "pass",
+    "build": "pass",
+    "productSmoke": "pass",
+    "productApi": "pass",
+    "productAi": "pass",
+    "productVoice": "pass",
+    "productJourney": "pass",
+    "featureSmoke": "pass",
+    "bugbashSmoke": "pass",
+    "demoMediaTest": "pass",
+    "growthMediaTest": "pass",
+    "storybookXiaoyuTest": "pass",
+    "vivoTtsTest": "pass",
+    "tsc": "pass"
+  },
+  "changedFiles": [
+    ".env.example",
+    ".env.release.example",
+    "app/api/storybooks/lin-xiaoyu/tts/route.ts",
+    "app/parent/storybook/page.tsx",
+    "components/parent/StoryBookViewer.tsx",
+    "docs/demo-media/LIN_XIAOYU_AUDIO_TTS_REPORT.md",
+    "docs/demo-media/LIN_XIAOYU_FIXED_STORYBOOK_REPORT.md",
+    "docs/demo-media/results/STORYBOOK-LOCK-01-result.json",
+    "docs/demo-media/results/STORYBOOK-LOCK-01-result.md",
+    "lib/ai/providers/asr-provider.ts",
+    "lib/demo-data/seed.ts",
+    "lib/providers/vivo/index.ts",
+    "lib/providers/vivo/types.ts",
+    "lib/providers/vivo/vivo-provider-status.ts",
+    "lib/providers/vivo/vivo-tts-provider.ts",
+    "lib/server/api-handlers.ts",
+    "lib/storybooks/lin-xiaoyu-bravery.ts",
+    "package-lock.json",
+    "package.json",
+    "public/demo-media/storybooks/lin-xiaoyu/images/page-01.webp",
+    "public/demo-media/storybooks/lin-xiaoyu/images/page-02.webp",
+    "public/demo-media/storybooks/lin-xiaoyu/images/page-03.webp",
+    "public/demo-media/storybooks/lin-xiaoyu/images/page-04.webp",
+    "public/demo-media/storybooks/lin-xiaoyu/images/page-05.webp",
+    "public/demo-media/storybooks/lin-xiaoyu/images/page-06.webp",
+    "scripts/generate-lin-xiaoyu-storybook-audio.mjs",
+    "tests/feature-completion/parent-features.spec.ts",
+    "tests/product-completion/demo-media-ingest.spec.ts",
+    "tests/product-completion/growth-media-render.spec.ts",
+    "tests/product-completion/lin-xiaoyu-fixed-storybook.spec.ts",
+    "tests/product-completion/vivo-tts-provider.spec.ts"
+  ],
+  "risks": [
+    "Static vivo audio files were not generated because required STORYBOOK_TTS_* runtime metadata is missing.",
+    "Runtime TTS can only live-generate audio after vivo TTS metadata is configured server-side."
+  ],
+  "notes": "Fixed image/text storybook is offline-ready. Audio fallback is safe and does not fake success."
+}

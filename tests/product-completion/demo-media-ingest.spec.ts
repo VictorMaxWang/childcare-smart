@@ -74,7 +74,7 @@ test("M03 demo data uses GPT Image 2 assets while preserving 36/18/18 scoping", 
     await director.get("/api/health-materials")
   );
   const storybooks = await expectOk<Array<{ pages?: Array<{ mediaRef?: string; fallbackMediaRef?: string }> }>>(
-    await parent.get("/api/storybooks?childId=c-1")
+    await parent.get("/api/storybooks?childId=c-4")
   );
 
   expect(liMeals.length).toBeGreaterThan(0);
@@ -99,6 +99,10 @@ test("M03 key pages render GPT Image 2 media and tolerate fallback routes", asyn
   await context.clearCookies();
   await page.request.post("/api/auth/demo-login", { data: { accountId: "u-parent" } });
   await page.goto("/parent/storybook?child=c-1");
+  await expect(page.getByText("林小雨的一小步勇敢").first()).toBeVisible();
+  await expect(page.locator('img[src*="/demo-media/storybooks/lin-xiaoyu/images/page-01.webp"]').first()).toBeVisible();
+  expect((await page.request.get("/demo-media/storybooks/lin-xiaoyu/images/page-01.webp")).status()).toBe(200);
+  await page.goto("/parent/storybook?child=c-4");
   await expect(page.locator('img[src*="gpt-image2"]').first()).toBeVisible();
   expect(await page.locator('img[src*="demo-storybook-placeholder"]').count()).toBeLessThan(
     await page.locator("img").count()

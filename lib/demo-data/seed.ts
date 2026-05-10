@@ -14,6 +14,11 @@ import {
   getDemoMediaPath,
   isGptImage2Path,
 } from "@/lib/demo-media/assets";
+import {
+  LIN_XIAOYU_CHILD_ID,
+  LIN_XIAOYU_FIXED_STORYBOOK_PAGES,
+  buildLinXiaoyuFixedStorybookResponse,
+} from "@/lib/storybooks/lin-xiaoyu-bravery";
 
 export type DemoSeedSnapshot = AppStateSnapshot & {
   teachers: ApiTeacher[];
@@ -838,6 +843,53 @@ function buildStorybooks(children: DemoChild[], growth: AppStateSnapshot["growth
   return children.map((child) => {
     const generatedAt = at(shiftDate(today, -1), 21, 0);
     const sourceRecordIds = growth.filter((record) => record.childId === child.id).map((record) => record.id);
+    if (child.id === LIN_XIAOYU_CHILD_ID) {
+      const response = buildLinXiaoyuFixedStorybookResponse({ generatedAt });
+      return {
+        storybookId: response.storyId,
+        childId: child.id,
+        sourceRecordIds,
+        pages: [
+          {
+            kind: "cover",
+            title: response.title,
+            text: response.summary,
+            date: generatedAt.slice(0, 10),
+            sourceGrowthRecordIds: sourceRecordIds.slice(0, 1),
+            mediaRef: LIN_XIAOYU_FIXED_STORYBOOK_PAGES[0].imageSrc,
+            fallbackMediaRef: response.scenes[0]?.assetRef,
+            response,
+          },
+          ...LIN_XIAOYU_FIXED_STORYBOOK_PAGES.map((page) => ({
+            kind: "page",
+            title: page.title,
+            text: page.text,
+            date: generatedAt.slice(0, 10),
+            sourceGrowthRecordIds: [page.pageId],
+            mediaRef: page.imageSrc,
+            fallbackMediaRef: response.scenes[0]?.assetRef,
+          })),
+          {
+            kind: "ending",
+            title: "勇敢的小雨",
+            text: response.moral,
+            date: generatedAt.slice(0, 10),
+            sourceGrowthRecordIds: sourceRecordIds,
+            mediaRef: LIN_XIAOYU_FIXED_STORYBOOK_PAGES[5].imageSrc,
+            fallbackMediaRef: response.scenes[0]?.assetRef,
+          },
+        ],
+        generatedAt,
+        updatedAt: generatedAt,
+        share: {
+          shareId: `share-${response.storyId}`,
+          sharedBy: child.parentId,
+          sharedAt: generatedAt,
+          summary: response.summary,
+          localText: `${response.title}\n${response.summary}\n${response.moral}`,
+        },
+      };
+    }
     const scenes = storybookScenesFor(child, growth);
     const coverMediaRef = demoStorybookCoverMediaRef(child.id);
     const hasStorybookGptImage = isGptImage2Path(coverMediaRef) || scenes.some((scene) => isGptImage2Path(scene.imageUrl));

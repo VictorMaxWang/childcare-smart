@@ -93,7 +93,7 @@ test("M05 existing meal, health material, and storybook media remain intact", as
   expect(mealSrc).toBeTruthy();
   expect((await page.request.get(mealSrc!)).status(), mealSrc!).toBe(200);
 
-  await loginAs(page, "u-parent", "/parent/storybook?child=c-1");
+  await loginAs(page, "u-parent", "/parent/storybook?child=c-4");
   await expect(page.locator('img[src*="/demo-media/gpt-image2/storybooks/"]').first()).toBeVisible();
   const storybookSrc = await page.locator('img[src*="/demo-media/gpt-image2/storybooks/"]').first().getAttribute("src");
   expect(storybookSrc).toBeTruthy();
