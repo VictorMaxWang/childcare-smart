@@ -139,7 +139,7 @@ function ConsultationInputCard({
           <div className="rounded-lg border border-slate-100 bg-white p-5">
             <div className="flex items-center gap-2">
               <Camera className="h-4 w-4 text-sky-500" />
-              <p className="text-sm font-semibold text-slate-900">图片占位</p>
+              <p className="text-sm font-semibold text-slate-900">图片文字补充</p>
             </div>
             <div className="mt-4 space-y-3">
               <Input value={imageAttachmentName} onChange={(event) => setImageAttachmentName(event.target.value)} placeholder="附件名，例如 morning-check-photo.jpg" />
@@ -149,7 +149,7 @@ function ConsultationInputCard({
           <div className="rounded-lg border border-slate-100 bg-white p-5">
             <div className="flex items-center gap-2">
               <Mic className="h-4 w-4 text-indigo-500" />
-              <p className="text-sm font-semibold text-slate-900">语音速记占位</p>
+              <p className="text-sm font-semibold text-slate-900">语音文字补充</p>
             </div>
             <div className="mt-4 space-y-3">
               <Input value={voiceAttachmentName} onChange={(event) => setVoiceAttachmentName(event.target.value)} placeholder="附件名，例如 teacher-voice-note.m4a" />
@@ -700,6 +700,7 @@ export default function TeacherHighRiskConsultationPage() {
       badge={`高风险儿童会诊 · ${classContext.className}`}
       title="高风险儿童一键会诊"
       description="按长期画像、最近会诊、当前建议分阶段流式展示，适合移动端录屏。"
+      testId="r06-high-risk-consultation-page"
       actions={
         <>
           <InlineLinkButton href="/teacher" label="返回教师工作台" />
@@ -1197,7 +1198,9 @@ export default function TeacherHighRiskConsultationPage() {
                         加入后续提醒
                       </Button>
                       <Button asChild variant="premium" className="rounded-xl">
-                        <Link href="/parent/agent">去家长端看今晚任务</Link>
+                        <Link href={`/teacher/agent?action=communication&childId=${selectedChild.id}`}>
+                          去家园沟通同步家长
+                        </Link>
                       </Button>
                     </div>
                   </div>

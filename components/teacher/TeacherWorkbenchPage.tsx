@@ -43,8 +43,6 @@ import {
 import { buildTeacherHomeViewModel } from "@/lib/view-models/role-home";
 import { useApp } from "@/lib/store";
 
-const DESIGN_DATE = "4月26日 星期五";
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function dateKey(value: string) {
@@ -57,6 +55,17 @@ function addDays(key: string, days: number) {
 
 function lastDateKey(values: string[]) {
   return values.filter(Boolean).sort().at(-1) ?? new Date().toISOString().slice(0, 10);
+}
+
+function formatTeacherReferenceDate(key: string) {
+  const parsed = new Date(`${key}T00:00:00+08:00`);
+  if (Number.isNaN(parsed.getTime())) return key;
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+    timeZone: "Asia/Shanghai",
+  }).format(parsed);
 }
 
 type WorkbenchTask = {
@@ -137,6 +146,7 @@ export default function TeacherWorkbenchPage() {
   ]);
   const recentDateKeys = Array.from({ length: 7 }, (_, index) => addDays(teacherReferenceDate, index - 6));
   const recentDateSet = new Set(recentDateKeys);
+  const teacherReferenceLabel = formatTeacherReferenceDate(teacherReferenceDate);
   const todayMealChildIds = new Set(
     mealRecords
       .filter((record) => classChildIds.has(record.childId) && dateKey(record.date) === teacherReferenceDate)
@@ -272,7 +282,13 @@ export default function TeacherWorkbenchPage() {
   ];
 
   return (
-    <div className="app-page max-w-[92rem] px-4 py-5 sm:px-6 lg:px-7">
+    <div
+      className="app-page max-w-[92rem] px-4 py-5 sm:px-6 lg:px-7"
+      data-testid="r06-teacher-replica-page"
+      data-teacher-id={currentUser.id}
+      data-visible-children={visualClassSize}
+      data-present-children={visualAttendance}
+    >
       <DesktopWorkbench
         abnormalCount={abnormalCount}
         className={className}
@@ -282,6 +298,7 @@ export default function TeacherWorkbenchPage() {
         pendingRecords={pendingRecords}
         pendingMorningChecks={pendingMorningChecks}
         teacherRiskRows={teacherRiskRows}
+        teacherReferenceLabel={teacherReferenceLabel}
         teacherSummaryRows={teacherSummaryRows}
         teacherTrendRows={teacherTrendRows}
         todayMealCompletionRate={todayMealCompletionRate}
@@ -300,6 +317,7 @@ export default function TeacherWorkbenchPage() {
         pendingRecords={pendingRecords}
         pendingMorningChecks={pendingMorningChecks}
         teacherRiskRows={teacherRiskRows}
+        teacherReferenceLabel={teacherReferenceLabel}
         teacherSummaryRows={teacherSummaryRows}
         teacherTrendRows={teacherTrendRows}
         todayMealCompletionRate={todayMealCompletionRate}
@@ -320,6 +338,7 @@ function DesktopWorkbench({
   pendingRecords,
   pendingMorningChecks,
   teacherRiskRows,
+  teacherReferenceLabel,
   teacherSummaryRows,
   teacherTrendRows,
   todayMealCompletionRate,
@@ -336,6 +355,7 @@ function DesktopWorkbench({
   pendingRecords: number;
   pendingMorningChecks: number;
   teacherRiskRows: ReplicaDonutDatum[];
+  teacherReferenceLabel: string;
   teacherSummaryRows: ReplicaChartDatum[];
   teacherTrendRows: ReplicaChartDatum[];
   todayMealCompletionRate: number;
@@ -371,11 +391,11 @@ function DesktopWorkbench({
           <div className="flex flex-wrap justify-end gap-3">
             <div className="inline-flex h-12 items-center gap-2 rounded-[0.9rem] border border-[#e3e9f5] bg-white px-4 text-sm font-semibold text-[#51607f]">
               <CalendarDays className="h-4 w-4" />
-              今日 {DESIGN_DATE}
+              数据日 {teacherReferenceLabel}
             </div>
             <div className="inline-flex h-12 items-center gap-2 rounded-[0.9rem] border border-[#e3e9f5] bg-white px-4 text-sm font-semibold text-[#51607f]">
               <CloudSun className="h-5 w-5 text-amber-400" />
-              27°C 多云　空气优
+              当前班级真实记录同步
             </div>
           </div>
         </div>
@@ -383,7 +403,7 @@ function DesktopWorkbench({
         <div className="mt-3 rounded-[1.1rem] border border-[#e4ebf7] bg-white/82 p-3.5">
           <PixelSectionTitle title="班级概览" />
           <div className="mt-3 grid gap-4 xl:grid-cols-4">
-            <PixelMetricCard label="在园人数" value={`${visualAttendance}人`} subLabel={`应到 ${visualClassSize}人`} tone="violet" icon={<UsersRound className="h-6 w-6" />} />
+            <PixelMetricCard label="在园人数" value={`${visualAttendance}人`} subLabel={`应到 ${visualClassSize}人`} tone="violet" icon={<UsersRound className="h-6 w-6" />} testId="r06-teacher-present-count" />
             <PixelMetricCard label="待处理记录" value={`${pendingRecords}条`} subLabel="晨检/饮食/成长" tone="blue" icon={<ClipboardCheck className="h-6 w-6" />} />
             <PixelMetricCard label="异常儿童" value={`${abnormalCount}人`} subLabel="需关注" tone="orange" icon={<AlertTriangle className="h-6 w-6" />} />
             <PixelMetricCard label="未回复家长消息" value={`${waitingMessages}条`} subLabel="真实待沟通" tone="green" icon={<MessageSquareText className="h-6 w-6" />} />
@@ -534,6 +554,7 @@ function MobileWorkbench({
   pendingRecords,
   pendingMorningChecks,
   teacherRiskRows,
+  teacherReferenceLabel,
   teacherSummaryRows,
   teacherTrendRows,
   todayMealCompletionRate,
@@ -550,6 +571,7 @@ function MobileWorkbench({
   pendingRecords: number;
   pendingMorningChecks: number;
   teacherRiskRows: ReplicaDonutDatum[];
+  teacherReferenceLabel: string;
   teacherSummaryRows: ReplicaChartDatum[];
   teacherTrendRows: ReplicaChartDatum[];
   todayMealCompletionRate: number;
@@ -629,7 +651,7 @@ function MobileWorkbench({
       </div>
 
       <PixelPanel className="rounded-[1.45rem] p-6">
-        <PixelSectionTitle title="今日概览" meta="更新于 08:30" />
+        <PixelSectionTitle title="今日概览" meta={`数据日 ${teacherReferenceLabel}`} />
         <div className="mt-6 grid grid-cols-4 gap-3 text-center">
           <MobileMetric icon={<CheckCircle2 className="h-6 w-6" />} value={visualAttendance} label="今日出勤" sub={attendanceRate} tone="green" />
           <MobileMetric icon={<UsersRound className="h-6 w-6" />} value={absentCount} label="今日缺勤" sub={visualClassSize > 0 ? `${Math.round((absentCount / visualClassSize) * 100)}%` : "0%"} tone="orange" />

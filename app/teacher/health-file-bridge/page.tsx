@@ -522,6 +522,7 @@ export default function TeacherHealthFileBridgePage() {
       badge={`健康文件解析 · ${currentUser.className ?? "当前班级"}`}
       title="把外部健康材料整理成可复核的关键信息"
       description="上传材料后，系统会先提取事实、风险提示和后续提醒，方便老师快速核对并继续处理。"
+      testId="r06-health-file-bridge-page"
       actions={
         <>
           <Button asChild variant="outline" className="min-h-11 rounded-xl">
@@ -596,8 +597,8 @@ export default function TeacherHealthFileBridgePage() {
                     <span className="flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">
                       <Upload className="h-8 w-8" />
                     </span>
-                    <span className="mt-4 text-base font-semibold text-slate-950">拖拽文件到此处，或点击上传</span>
-                    <span className="mt-2 text-sm text-slate-500">支持 JPG、PNG、PDF，单次最多 10 个文件，大小不超过 20MB</span>
+                    <span className="mt-4 text-base font-semibold text-slate-950">点击选择健康材料</span>
+                    <span className="mt-2 text-sm text-slate-500">支持图片与 PDF；图片进入 OCR，PDF 结合文件信息与预览文字解析</span>
                     <input type="file" accept="image/*,.pdf" multiple onChange={handleFileChange} className="sr-only" />
                   </label>
 
@@ -634,7 +635,7 @@ export default function TeacherHealthFileBridgePage() {
                     <p className="text-sm font-semibold text-slate-950">解析与核对流程</p>
                     <div className="mt-4 grid gap-3 md:grid-cols-4">
                       {[
-                        ["1", "上传材料", "选择或拖拽健康材料"],
+                        ["1", "上传材料", "选择健康材料并补充预览文字"],
                         ["2", "AI 解析", "提取关键信息"],
                         ["3", "人工核对", "确认信息准确性"],
                         ["4", "归档完成", "生成健康档案"],
