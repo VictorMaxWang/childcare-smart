@@ -1,5 +1,6 @@
 import type {
   AnalyticsMetric,
+  ApiAssignmentCounts,
   ApiAdminClassStat,
   ApiAdminQualityMetrics,
   ApiAdminSummary,
@@ -92,7 +93,9 @@ function recordId(item: unknown) {
     readString(item.reminderId) ||
     readString(item.messageId) ||
     readString(item.materialId) ||
-    readString(item.attachmentId)
+    readString(item.attachmentId) ||
+    readString(item.taskId) ||
+    readString(item.assignmentId)
   );
 }
 
@@ -311,17 +314,69 @@ function classStats(snapshot: ApiExtendedSnapshot, session: SessionUser, today: 
   });
 }
 
+function buildFeedbackCompletion(sources: ReturnType<typeof sourceItems>) {
+  const expectedChildIds = new Set(
+    sources.children
+      .filter((child) => readString(child.parentUserId) || child.guardians.length > 0)
+      .map((child) => child.id)
+  );
+  const completedChildIds = new Set(
+    sources.feedback
+      .filter((item) => childIdOf(item) && expectedChildIds.has(childIdOf(item)))
+      .map(childIdOf)
+  );
+  const expected = expectedChildIds.size;
+  const completed = completedChildIds.size;
+  return {
+    feedbackCompletionRate: expected > 0 ? Math.round((completed / expected) * 100) : 0,
+    feedbackCompletedChildCount: completed,
+    feedbackExpectedChildCount: expected,
+  };
+}
+
+function buildAssignmentCounts(snapshot: ApiExtendedSnapshot, session: SessionUser): ApiAssignmentCounts {
+  const ids = childSet(snapshot, session);
+  const tasks = snapshot.tasks.filter(
+    (task) =>
+      task.sourceType === "admin_dispatch" &&
+      task.ownerRole === "teacher" &&
+      ids.has(task.childId)
+  );
+  const counts = {
+    pending: 0,
+    inProgress: 0,
+    completed: 0,
+    overdue: 0,
+  };
+
+  for (const task of tasks) {
+    if (task.status === "completed") counts.completed += 1;
+    else if (task.status === "in_progress") counts.inProgress += 1;
+    else if (task.status === "overdue") counts.overdue += 1;
+    else counts.pending += 1;
+  }
+
+  return {
+    ...counts,
+    total: tasks.length,
+    sourceRecordIds: tasks.map((task) => task.taskId).filter(Boolean),
+  };
+}
+
 export function buildAdminSummary(snapshot: ApiExtendedSnapshot, session: SessionUser): ApiAdminSummary {
   const today = referenceDate(snapshot);
   const sources = sourceItems(snapshot, session);
   const todayRecords = sources.records.filter((item) => recordDate(item) === today);
   const recent7DayTrend = buildTrend(snapshot, session, { metric: "records", timeRange: "7d", referenceDate: today });
   const currentWeekTrend = buildTrend(snapshot, session, { metric: "records", timeRange: "this-week", referenceDate: today });
+  const feedbackCompletion = buildFeedbackCompletion(sources);
+  const assignmentCounts = buildAssignmentCounts(snapshot, session);
   const sourceRecordIds = uniqueSourceIds(
     sources.records,
     sources.feedback,
     sources.consultations,
     sources.reminders,
+    snapshot.tasks.filter((item) => assignmentCounts.sourceRecordIds.includes(item.taskId)),
     snapshot.attachments.filter((item) => item.institutionId === session.institutionId)
   );
 
@@ -336,8 +391,10 @@ export function buildAdminSummary(snapshot: ApiExtendedSnapshot, session: Sessio
     highRiskConsultationCount: sources.consultations.filter((item) => isHighRiskConsultation(item) && !isResolved(item)).length,
     reminderCount: sources.reminders.filter((item) => !isResolved(item)).length,
     feedbackCount: sources.feedback.length,
+    ...feedbackCompletion,
     activeConsultationCount: sources.consultations.filter((item) => !isResolved(item)).length,
     attachmentCount: snapshot.attachments.filter((item) => item.institutionId === session.institutionId).length,
+    assignmentCounts,
     recordCounts: {
       attendance: sources.attendance.length,
       health: sources.health.length,

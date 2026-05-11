@@ -64,7 +64,10 @@ function buildParentMessageFallbackResponse(
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, { requiredRole: "parent" });
+  const authError = await authorizeAiRoute(request, {
+    requiredRole: "parent",
+    collectJsonClassNames: false,
+  });
   if (authError) return authError;
 
   const body = (await request.clone().json().catch(() => null)) as ParentMessageReflexionRequest | null;

@@ -16,6 +16,15 @@ import {
 import type { AdminAgentActionItem, AdminAgentResult } from "@/lib/agent/admin-types";
 import type { ApiWeeklyReport, WeeklyReportExportFormat } from "@/lib/api/types";
 import {
+  ReplicaBarChart,
+  ReplicaComboChart,
+  ReplicaDonutChart,
+  ReplicaLineChart,
+  replicaChartColors,
+  type ReplicaChartDatum,
+  type ReplicaDonutDatum,
+} from "@/components/charts";
+import {
   directorReplicaAssets,
 } from "./directorReplicaData";
 import {
@@ -110,6 +119,71 @@ export default function DirectorWeeklyReportReplica({
   const feedbackExpectedCount = scope?.feedbackExpectedChildCount ?? 0;
   const feedbackCompletedCount = scope?.feedbackCompletedChildCount ?? 0;
   const summary = result?.summary ?? (loading ? "正在生成本周运营报表..." : "暂无周报结果，请重新生成。");
+
+  const weeklyTrendRows: ReplicaChartDatum[] = trendLabels.map((label, index) => ({
+    label,
+    attendance: attendanceTrendSeries[index] ?? 0,
+    health: scope?.healthAbnormalCount ?? 0,
+    growth: scope?.growthAttentionCount ?? 0,
+    feedback: scope?.feedbackCompletionRate ?? 0,
+  }));
+  const weeklyRiskRows: ReplicaDonutDatum[] = [
+    { label: "晨检异常", value: scope?.healthAbnormalCount ?? 0, color: replicaChartColors.red },
+    { label: "重点儿童", value: result?.riskChildren.length ?? 0, color: replicaChartColors.amber },
+    { label: "待复盘", value: scope?.pendingReviewCount ?? 0, color: replicaChartColors.sky },
+    { label: "待派单", value: actionItems.filter((item) => !item.relatedEventId).length, color: replicaChartColors.primary },
+  ];
+  const weeklyClassRows: ReplicaChartDatum[] = classDistribution.map((item) => ({
+    label: item.label,
+    children: item.value,
+    risk: result?.riskChildren.filter((child) => child.className === item.label).length ?? 0,
+    actions: actionItems.filter((action) => action.targetType === "class" && action.targetName === item.label).length,
+  }));
+  const weeklyQualityRows: ReplicaChartDatum[] = savedReports.slice(0, 6).map((report) => {
+    const itemSummary = reportSummary(report);
+    const completion =
+      report.status === "shared" ? 100 : report.status === "generated" ? 80 : report.status === "draft" ? 50 : 0;
+    return {
+      label: report.periodEnd.slice(5),
+      records: itemSummary.recordCount,
+      abnormal: itemSummary.healthAbnormalCount,
+      completion,
+    };
+  });
+  const weeklyClosureRows: ReplicaChartDatum[] = [
+    {
+      label: "反馈",
+      total: feedbackExpectedCount,
+      done: feedbackCompletedCount,
+      rate: scope?.feedbackCompletionRate ?? 0,
+    },
+    {
+      label: "派单",
+      total: actionItems.length,
+      done: actionItems.filter((item) => item.relatedEventId || item.status === "completed").length,
+      rate:
+        actionItems.length > 0
+          ? Math.round(
+              (actionItems.filter((item) => item.relatedEventId || item.status === "completed").length /
+                actionItems.length) *
+                100
+            )
+          : 0,
+    },
+    {
+      label: "周报",
+      total: savedReports.length,
+      done: savedReports.filter((report) => report.status === "shared" || report.status === "generated").length,
+      rate:
+        savedReports.length > 0
+          ? Math.round(
+              (savedReports.filter((report) => report.status === "shared" || report.status === "generated").length /
+                savedReports.length) *
+                100
+            )
+          : 0,
+    },
+  ];
 
   const metrics = [
     {
@@ -332,6 +406,52 @@ export default function DirectorWeeklyReportReplica({
             {metrics.map((metric) => (
               <ReplicaMetric key={metric.label} {...metric} />
             ))}
+          </div>
+
+          <div data-testid="r03-weekly-chart-suite" className="grid gap-5 xl:grid-cols-2">
+            <ReplicaPanel title="周报趋势折线" actions={<ReplicaPill tone="purple">真实周报数据</ReplicaPill>}>
+              <ReplicaLineChart
+                data={weeklyTrendRows}
+                testId="r03-weekly-trend-chart"
+                yUnit="%"
+                series={[
+                  { key: "attendance", label: "出勤率", color: replicaChartColors.primary, unit: "%" },
+                  { key: "health", label: "健康异常", color: replicaChartColors.red, unit: "项" },
+                  { key: "growth", label: "成长关注", color: replicaChartColors.green, unit: "项" },
+                  { key: "feedback", label: "反馈完成", color: replicaChartColors.amber, unit: "%" },
+                ]}
+              />
+            </ReplicaPanel>
+            <ReplicaPanel title="风险与派单分布" actions={<ReplicaPill tone="orange">闭环对象</ReplicaPill>}>
+              <ReplicaDonutChart
+                data={weeklyRiskRows}
+                testId="r03-weekly-risk-donut"
+                totalLabel="周报风险"
+                unit="项"
+              />
+            </ReplicaPanel>
+            <ReplicaPanel title="班级 ranking / 对比" actions={<ReplicaPill tone="blue">班级维度</ReplicaPill>}>
+              <ReplicaBarChart
+                data={weeklyClassRows}
+                testId="r03-weekly-class-ranking"
+                series={[
+                  { key: "children", label: "儿童数", color: replicaChartColors.primary, unit: "人" },
+                  { key: "risk", label: "重点儿童", color: replicaChartColors.amber, unit: "人" },
+                  { key: "actions", label: "周报动作", color: replicaChartColors.sky, unit: "项" },
+                ]}
+              />
+            </ReplicaPanel>
+            <ReplicaPanel title="周报质量与完成度" actions={<ReplicaPill tone="green">历史周报</ReplicaPill>}>
+              <ReplicaComboChart
+                data={weeklyQualityRows.length > 0 ? weeklyQualityRows : weeklyClosureRows}
+                testId="r03-weekly-quality-combo"
+                series={[
+                  { key: weeklyQualityRows.length > 0 ? "records" : "total", label: "记录量", color: replicaChartColors.sky, unit: "条" },
+                  { key: weeklyQualityRows.length > 0 ? "abnormal" : "done", label: "风险/完成", color: replicaChartColors.red, unit: "项" },
+                  { key: weeklyQualityRows.length > 0 ? "completion" : "rate", label: "完成度", color: replicaChartColors.primary, kind: "line", unit: "%" },
+                ]}
+              />
+            </ReplicaPanel>
           </div>
 
           <div className="grid gap-5 xl:grid-cols-[1.12fr_0.88fr]">

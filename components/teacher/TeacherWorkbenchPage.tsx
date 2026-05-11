@@ -24,6 +24,15 @@ import {
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import {
+  ReplicaBarChart,
+  ReplicaComboChart,
+  ReplicaDonutChart,
+  ReplicaLineChart,
+  replicaChartColors,
+  type ReplicaChartDatum,
+  type ReplicaDonutDatum,
+} from "@/components/charts";
+import {
   PixelMetricCard,
   PixelPanel,
   PixelQuickLink,
@@ -35,6 +44,20 @@ import { buildTeacherHomeViewModel } from "@/lib/view-models/role-home";
 import { useApp } from "@/lib/store";
 
 const DESIGN_DATE = "4月26日 星期五";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function dateKey(value: string) {
+  return value.slice(0, 10);
+}
+
+function addDays(key: string, days: number) {
+  return new Date(new Date(`${key}T00:00:00.000Z`).getTime() + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+function lastDateKey(values: string[]) {
+  return values.filter(Boolean).sort().at(-1) ?? new Date().toISOString().slice(0, 10);
+}
 
 type WorkbenchTask = {
   title: string;
@@ -67,9 +90,13 @@ export default function TeacherWorkbenchPage() {
     currentUser,
     visibleChildren,
     presentChildren,
+    attendanceRecords,
     healthCheckRecords,
+    mealRecords,
     growthRecords,
     guardianFeedbacks,
+    tasks,
+    messages,
   } = useApp();
   const viewModel = buildTeacherHomeViewModel({
     visibleChildren,
@@ -101,6 +128,67 @@ export default function TeacherWorkbenchPage() {
   const pendingMorningChecks = viewModel.uncheckedMorningChecks.length;
   const pendingReviews = viewModel.pendingReviews.length;
   const pendingRecords = pendingReviews + pendingMorningChecks + abnormalCount;
+  const classChildIds = new Set(visibleChildren.map((child) => child.id));
+  const teacherReferenceDate = lastDateKey([
+    ...attendanceRecords.filter((record) => classChildIds.has(record.childId)).map((record) => dateKey(record.date)),
+    ...healthCheckRecords.filter((record) => classChildIds.has(record.childId)).map((record) => dateKey(record.date)),
+    ...mealRecords.filter((record) => classChildIds.has(record.childId)).map((record) => dateKey(record.date)),
+    ...growthRecords.filter((record) => classChildIds.has(record.childId)).map((record) => dateKey(record.createdAt)),
+  ]);
+  const recentDateKeys = Array.from({ length: 7 }, (_, index) => addDays(teacherReferenceDate, index - 6));
+  const recentDateSet = new Set(recentDateKeys);
+  const todayMealChildIds = new Set(
+    mealRecords
+      .filter((record) => classChildIds.has(record.childId) && dateKey(record.date) === teacherReferenceDate)
+      .map((record) => record.childId)
+  );
+  const todayMealCompletionRate =
+    visualClassSize > 0 ? Math.round((todayMealChildIds.size / visualClassSize) * 100) : 0;
+  const recentGrowthCount = growthRecords.filter(
+    (record) => classChildIds.has(record.childId) && recentDateSet.has(dateKey(record.createdAt))
+  ).length;
+  const recentParentMessageCount = messages.filter(
+    (message) =>
+      classChildIds.has(message.childId) &&
+      recentDateSet.has(dateKey(message.createdAt)) &&
+      (message.senderRole === "parent" || message.receiverRole === "parent" || message.targetRole === "parent")
+  ).length;
+  const teacherAssignments = tasks.filter((task) => classChildIds.has(task.childId) && task.ownerRole === "teacher");
+  const activeTeacherAssignments = teacherAssignments.filter((task) => task.status !== "completed");
+  const teacherTrendRows: ReplicaChartDatum[] = recentDateKeys.map((date) => {
+    const attendanceCount = attendanceRecords.filter(
+      (record) => classChildIds.has(record.childId) && dateKey(record.date) === date && record.isPresent
+    ).length;
+    const healthAbnormal = healthCheckRecords.filter(
+      (record) => classChildIds.has(record.childId) && dateKey(record.date) === date && record.isAbnormal
+    ).length;
+    const mealChildCount = new Set(
+      mealRecords
+        .filter((record) => classChildIds.has(record.childId) && dateKey(record.date) === date)
+        .map((record) => record.childId)
+    ).size;
+    const growthCount = growthRecords.filter(
+      (record) => classChildIds.has(record.childId) && dateKey(record.createdAt) === date
+    ).length;
+    const communicationCount = messages.filter(
+      (message) => classChildIds.has(message.childId) && dateKey(message.createdAt) === date
+    ).length;
+
+    return {
+      label: date.slice(5),
+      attendance: attendanceCount,
+      health: healthAbnormal,
+      meal: visualClassSize > 0 ? Math.round((mealChildCount / visualClassSize) * 100) : 0,
+      growth: growthCount,
+      communication: communicationCount,
+    };
+  });
+  const teacherRiskRows: ReplicaDonutDatum[] = [
+    { label: "晨检异常", value: abnormalCount, color: replicaChartColors.red },
+    { label: "成长复核", value: pendingReviews, color: replicaChartColors.amber },
+    { label: "家长沟通", value: waitingMessages, color: replicaChartColors.sky },
+    { label: "派单待办", value: activeTeacherAssignments.length, color: replicaChartColors.primary },
+  ];
   const desktopTasks: WorkbenchTask[] = [
     {
       title: "晨检登记",
@@ -163,6 +251,16 @@ export default function TeacherWorkbenchPage() {
       avatar: item.child.gender === "女" ? "👧🏻" : "👦🏻",
     })),
   ].slice(0, 5);
+  const teacherSummaryRows: ReplicaChartDatum[] = [
+    { label: "班级人数", value: visualClassSize },
+    { label: "今日出勤", value: visualAttendance },
+    { label: "待处理事项", value: pendingRecords + activeTeacherAssignments.length },
+    { label: "晨检异常", value: abnormalCount },
+    { label: "饮食完成率", value: todayMealCompletionRate },
+    { label: "成长记录", value: recentGrowthCount },
+    { label: "高风险儿童", value: highPriorityChildren.length },
+    { label: "家长沟通", value: recentParentMessageCount },
+  ];
   const completedMorningChecks = Math.max(visualAttendance - pendingMorningChecks, 0);
   const timelineItems: TimelineItem[] = [
     { time: "08:00", title: "入园签到", value: `${visualAttendance}人已签到`, image: "✓", tone: "violet" },
@@ -183,6 +281,10 @@ export default function TeacherWorkbenchPage() {
         highPriorityChildren={highPriorityChildren}
         pendingRecords={pendingRecords}
         pendingMorningChecks={pendingMorningChecks}
+        teacherRiskRows={teacherRiskRows}
+        teacherSummaryRows={teacherSummaryRows}
+        teacherTrendRows={teacherTrendRows}
+        todayMealCompletionRate={todayMealCompletionRate}
         timelineItems={timelineItems}
         visualAttendance={visualAttendance}
         visualClassSize={visualClassSize}
@@ -197,6 +299,10 @@ export default function TeacherWorkbenchPage() {
         highPriorityChildren={highPriorityChildren}
         pendingRecords={pendingRecords}
         pendingMorningChecks={pendingMorningChecks}
+        teacherRiskRows={teacherRiskRows}
+        teacherSummaryRows={teacherSummaryRows}
+        teacherTrendRows={teacherTrendRows}
+        todayMealCompletionRate={todayMealCompletionRate}
         visualAttendance={visualAttendance}
         visualClassSize={visualClassSize}
         waitingMessages={waitingMessages}
@@ -213,6 +319,10 @@ function DesktopWorkbench({
   highPriorityChildren,
   pendingRecords,
   pendingMorningChecks,
+  teacherRiskRows,
+  teacherSummaryRows,
+  teacherTrendRows,
+  todayMealCompletionRate,
   timelineItems,
   visualAttendance,
   visualClassSize,
@@ -225,6 +335,10 @@ function DesktopWorkbench({
   highPriorityChildren: PriorityChild[];
   pendingRecords: number;
   pendingMorningChecks: number;
+  teacherRiskRows: ReplicaDonutDatum[];
+  teacherSummaryRows: ReplicaChartDatum[];
+  teacherTrendRows: ReplicaChartDatum[];
+  todayMealCompletionRate: number;
   timelineItems: TimelineItem[];
   visualAttendance: number;
   visualClassSize: number;
@@ -276,6 +390,13 @@ function DesktopWorkbench({
           </div>
         </div>
       </PixelPanel>
+
+      <TeacherChartsOverview
+        riskRows={teacherRiskRows}
+        summaryRows={teacherSummaryRows}
+        trendRows={teacherTrendRows}
+        todayMealCompletionRate={todayMealCompletionRate}
+      />
 
       <div className="grid gap-3.5 xl:grid-cols-[0.95fr_1.28fr_0.9fr]">
         <PixelPanel className="p-3.5">
@@ -412,6 +533,10 @@ function MobileWorkbench({
   highPriorityChildren,
   pendingRecords,
   pendingMorningChecks,
+  teacherRiskRows,
+  teacherSummaryRows,
+  teacherTrendRows,
+  todayMealCompletionRate,
   visualAttendance,
   visualClassSize,
   waitingMessages,
@@ -424,6 +549,10 @@ function MobileWorkbench({
   highPriorityChildren: PriorityChild[];
   pendingRecords: number;
   pendingMorningChecks: number;
+  teacherRiskRows: ReplicaDonutDatum[];
+  teacherSummaryRows: ReplicaChartDatum[];
+  teacherTrendRows: ReplicaChartDatum[];
+  todayMealCompletionRate: number;
   visualAttendance: number;
   visualClassSize: number;
   waitingMessages: number;
@@ -509,6 +638,13 @@ function MobileWorkbench({
         </div>
       </PixelPanel>
 
+      <TeacherChartsOverview
+        riskRows={teacherRiskRows}
+        summaryRows={teacherSummaryRows}
+        trendRows={teacherTrendRows}
+        todayMealCompletionRate={todayMealCompletionRate}
+      />
+
       <PixelPanel className="rounded-[1.45rem] border-rose-100 bg-rose-50/35 p-5">
         <PixelSectionTitle
           title="紧急提醒"
@@ -551,6 +687,68 @@ function MobileWorkbench({
       </PixelPanel>
 
       <div className="h-8" />
+    </div>
+  );
+}
+
+function TeacherChartsOverview({
+  riskRows,
+  summaryRows,
+  trendRows,
+  todayMealCompletionRate,
+}: {
+  riskRows: ReplicaDonutDatum[];
+  summaryRows: ReplicaChartDatum[];
+  trendRows: ReplicaChartDatum[];
+  todayMealCompletionRate: number;
+}) {
+  return (
+    <div data-testid="r03-teacher-chart-suite" className="grid gap-3.5 xl:grid-cols-[1.18fr_0.82fr]">
+      <PixelPanel className="p-4">
+        <PixelSectionTitle title="班级 7 天趋势" meta={`饮食完成率 ${todayMealCompletionRate}%`} />
+        <div className="mt-4">
+          <ReplicaLineChart
+            data={trendRows}
+            testId="r03-teacher-trend-chart"
+            series={[
+              { key: "attendance", label: "今日出勤", color: replicaChartColors.primary, unit: "人" },
+              { key: "health", label: "晨检异常", color: replicaChartColors.red, unit: "项" },
+              { key: "meal", label: "饮食完成率", color: replicaChartColors.amber, unit: "%" },
+              { key: "growth", label: "成长记录", color: replicaChartColors.green, unit: "条" },
+              { key: "communication", label: "家长沟通", color: replicaChartColors.sky, unit: "条" },
+            ]}
+          />
+        </div>
+      </PixelPanel>
+      <PixelPanel className="p-4">
+        <PixelSectionTitle title="班级关键指标" meta="真实班级数据" />
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(180px,0.72fr)]">
+          <ReplicaBarChart
+            data={summaryRows}
+            testId="r03-teacher-summary-bars"
+            series={[{ key: "value", label: "数量", color: replicaChartColors.primary }]}
+            height={205}
+          />
+          <ReplicaDonutChart
+            data={riskRows}
+            testId="r03-teacher-risk-donut"
+            totalLabel="待关注"
+            unit="项"
+            height={205}
+          />
+        </div>
+      </PixelPanel>
+      <PixelPanel className="p-4 xl:col-span-2">
+        <PixelSectionTitle title="记录完成与家园沟通" meta="饮食 / 成长 / 反馈 / 派单" />
+        <div className="mt-4">
+          <ReplicaComboChart
+            data={summaryRows.filter((row) => ["饮食完成率", "成长记录", "高风险儿童", "家长沟通"].includes(row.label))}
+            testId="r03-teacher-operations-combo"
+            series={[{ key: "value", label: "真实值", color: replicaChartColors.cyan, kind: "bar" }]}
+            height={200}
+          />
+        </div>
+      </PixelPanel>
     </div>
   );
 }
