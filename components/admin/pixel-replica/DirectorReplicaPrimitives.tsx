@@ -40,6 +40,7 @@ export function DirectorReplicaPage({
 }) {
   return (
     <main
+      data-testid="r05-director-replica-page"
       className={cn(
         "min-h-[calc(100vh-80px)] bg-[#F8FAFF] px-4 py-5 text-[#172554] sm:px-6 lg:px-8",
         className

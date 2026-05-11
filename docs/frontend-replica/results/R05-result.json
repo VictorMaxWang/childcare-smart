@@ -1,0 +1,140 @@
+{
+  "taskId": "R05",
+  "generatedAt": "2026-05-11T21:35:00+08:00",
+  "status": "passed",
+  "routes": [
+    {
+      "path": "/admin",
+      "status": "passed",
+      "coverage": ["director shell", "summary metrics", "feedback detail", "R03 chart suite", "36/18/18 API baseline"]
+    },
+    {
+      "path": "/admin/teachers",
+      "status": "passed",
+      "coverage": ["search", "create", "edit", "archive", "restore", "detail drawer"]
+    },
+    {
+      "path": "/children",
+      "status": "passed",
+      "coverage": ["36 children list", "filters", "detail", "attendance toggle", "create", "archive", "restore"]
+    },
+    {
+      "path": "/health",
+      "status": "passed",
+      "coverage": ["morning checks", "temperature chart", "mood charts", "save check", "parent consultation entry"]
+    },
+    {
+      "path": "/diet",
+      "status": "passed",
+      "coverage": ["meal records", "bulk confirm", "meal coverage chart", "category donut", "quality combo chart", "AI evaluate entry"]
+    },
+    {
+      "path": "/growth",
+      "status": "passed",
+      "coverage": ["growth observations", "category trend chart", "category donut", "review bars", "create record", "review/storybook entry"]
+    },
+    {
+      "path": "/admin/agent",
+      "status": "passed",
+      "coverage": ["AI workspace", "prompt input", "real response or provider unavailable", "dispatch notification", "consultation notification"]
+    },
+    {
+      "path": "/admin/agent?action=weekly-report",
+      "status": "passed",
+      "coverage": ["weekly charts", "generate", "save", "history detail", "export markdown", "share", "archive"]
+    }
+  ],
+  "charts": {
+    "status": "passed",
+    "components": ["ReplicaLineChart", "ReplicaBarChart", "ReplicaDonutChart", "ReplicaComboChart"],
+    "dataSource": "existing API/demo/aggregate data",
+    "fakeCharts": false
+  },
+  "aiAssistant": {
+    "status": "passed",
+    "workspace": "RoleAssistantWorkspace",
+    "api": "/api/ai/admin-agent",
+    "providerBehavior": "real call or explicit unavailable/fallback state",
+    "fakeSuccess": false,
+    "vivoProviderModified": false,
+    "permissionLogicModified": false
+  },
+  "weeklyDispatchFeedback": {
+    "weeklyReport": "passed",
+    "dispatch": "passed",
+    "feedback": "passed"
+  },
+  "childBaseline": {
+    "status": "passed",
+    "totalChildren": 36,
+    "classCounts": {
+      "小一班": 18,
+      "小二班": 18
+    }
+  },
+  "commands": [
+    {
+      "command": "npx playwright test tests/frontend-replica/director-replica.spec.ts --config=playwright.feature.config.ts --project=chromium --reporter=line",
+      "status": "passed",
+      "details": "6 passed"
+    },
+    {
+      "command": "npm run lint",
+      "status": "passed"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed"
+    },
+    {
+      "command": "npm run product:api",
+      "status": "passed",
+      "details": "8 passed"
+    },
+    {
+      "command": "npm run product:ai",
+      "status": "passed",
+      "details": "6 passed; Chat/OCR/ASR live-pass"
+    },
+    {
+      "command": "npm run product:voice",
+      "status": "passed",
+      "details": "13 parser tests and 20 browser tests passed"
+    },
+    {
+      "command": "npm run product:journey",
+      "status": "passed",
+      "details": "1 passed"
+    },
+    {
+      "command": "npm run feature:smoke",
+      "status": "passed",
+      "details": "19 passed"
+    },
+    {
+      "command": "npm run bugbash:smoke",
+      "status": "passed",
+      "details": "1 passed"
+    },
+    {
+      "command": "npx tsc --noEmit",
+      "status": "passed"
+    }
+  ],
+  "reports": [
+    "docs/frontend-replica/R05_DIRECTOR_REPLICA_REPORT.md",
+    "docs/frontend-replica/results/R05-result.md",
+    "docs/frontend-replica/results/R05-result.json"
+  ],
+  "notes": [
+    "Local brain proxy was unavailable during browser tests, so logs include fallback connection errors; tests passed.",
+    "No vivo provider or permission logic was modified."
+  ],
+  "git": {
+    "commitMessage": "replicate director frontend from design targets",
+    "targetBranch": "main",
+    "remote": "origin",
+    "commit": "pending-final-git-step",
+    "push": "pending-final-git-step"
+  }
+}

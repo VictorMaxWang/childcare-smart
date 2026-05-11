@@ -3,23 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Activity, AlertTriangle, CheckCircle2, HeartPulse, MessageSquareText, Search, ShieldAlert, Thermometer, Users, Utensils } from "lucide-react";
-import {
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { useApp } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  ReplicaDonutChart,
+  ReplicaLineChart,
+  replicaChartColors,
+  type ReplicaChartDatum,
+  type ReplicaDonutDatum,
+} from "@/components/charts";
 import { ChartCard } from "@/components/ui/chart-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterBar } from "@/components/ui/filter-bar";
@@ -181,6 +174,29 @@ export default function HealthPage() {
       return row;
     });
   }, [healthCheckRecords, visibleChildren, moodTrendKeys]);
+  const weeklyTemperatureChartRows = useMemo<ReplicaChartDatum[]>(
+    () =>
+      weeklyTemperatureData.map((item) => ({
+        label: item.label,
+        avgTemperature: item.avgTemperature,
+        abnormalCount: item.abnormalCount,
+        feverLine: TEMPERATURE_THRESHOLD,
+      })),
+    [weeklyTemperatureData]
+  );
+  const moodTrendChartRows = useMemo<ReplicaChartDatum[]>(
+    () => moodTrendData.map((item) => ({ ...item, label: String(item.label) })),
+    [moodTrendData]
+  );
+  const moodDistributionRows = useMemo<ReplicaDonutDatum[]>(
+    () =>
+      moodDistributionData.map((item, index) => ({
+        label: item.name,
+        value: item.value,
+        color: HEALTH_CHART_COLORS[index % HEALTH_CHART_COLORS.length],
+      })),
+    [moodDistributionData]
+  );
 
   // Actions
   const handleOpenDialog = (childId: string) => {
@@ -466,7 +482,7 @@ if (isParent) {
     Number.isFinite(previewTemperature) && previewTemperature >= TEMPERATURE_THRESHOLD;
 
   return (
-    <div className="app-page max-w-[86rem] page-enter">
+    <div className="app-page max-w-[86rem] page-enter" data-testid="r05-health-page">
       {isTeacher ? (
         <section className="mb-5 overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_45%,#eef2ff_100%)] p-4 shadow-[0_22px_64px_rgb(99_102_241_/_0.12)] sm:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -710,126 +726,43 @@ if (isParent) {
       </section>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <ChartCard title="一周体温趋势" description="对比平均体温和异常人数，红线为发热预警阈值。" minHeight="20rem">
-            <div className="h-[16.25rem] min-h-[16.25rem] w-full min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={weeklyTemperatureData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 12 }} />
-                  <YAxis yAxisId="temp" domain={[36, 38.5]} tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                  <YAxis yAxisId="count" orientation="right" allowDecimals={false} tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }} />
-                  <Legend />
-                  <ReferenceLine yAxisId="temp" y={TEMPERATURE_THRESHOLD} stroke="#ef4444" strokeDasharray="4 4" label="37.3°C" />
-                  <Line
-                    yAxisId="temp"
-                    type="monotone"
-                    dataKey="avgTemperature"
-                    name="平均体温"
-                    stroke="#0ea5e9"
-                    strokeWidth={3}
-                    dot={{ r: 4 }}
-                    connectNulls
-                  />
-                  <Line
-                    yAxisId="count"
-                    type="monotone"
-                    dataKey="abnormalCount"
-                    name="异常人数"
-                    stroke="#f97316"
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+      <div data-testid="r05-health-chart-suite" className="grid gap-6 xl:grid-cols-2">
+        <ChartCard title="一周体温趋势" description="对比平均体温、异常人数和发热阈值，使用 R03 共享图表组件。" minHeight="20rem">
+          <ReplicaLineChart
+            data={weeklyTemperatureChartRows}
+            testId="r05-health-temperature-chart"
+            height={270}
+            series={[
+              { key: "avgTemperature", label: "平均体温", color: replicaChartColors.sky, unit: "°C" },
+              { key: "abnormalCount", label: "异常人数", color: replicaChartColors.red, unit: "人" },
+              { key: "feverLine", label: "发热阈值", color: replicaChartColors.amber, unit: "°C" },
+            ]}
+          />
         </ChartCard>
 
         <ChartCard title="情绪分布图" description="近 7 天情绪趋势和占比，辅助园长识别班级压力。" minHeight="20rem">
-            <div className="rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-700">近 7 天情绪走势</p>
-                  <p className="text-xs text-slate-500">自动提取记录量最高的 3 类情绪，先看趋势再看占比。</p>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  {moodTrendKeys.map((key) => (
-                    <span key={key} className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs text-slate-600 ring-1 ring-slate-200">
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: moodColorMap.get(key) }} />
-                      {key}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div className="h-44 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={moodTrendData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 12 }} />
-                    <YAxis allowDecimals={false} tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                    <Tooltip formatter={(value) => [`${value}次`, "出现次数"]} contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }} />
-                    {moodTrendKeys.map((key) => (
-                      <Line
-                        key={key}
-                        type="monotone"
-                        dataKey={key}
-                        name={key}
-                        stroke={moodColorMap.get(key) ?? "#94a3b8"}
-                        strokeWidth={2.5}
-                        dot={{ r: 3 }}
-                        activeDot={{ r: 5 }}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            <div className="relative mt-5 h-[320px] w-full sm:h-[340px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={moodDistributionData}
-                    dataKey="value"
-                    nameKey="name"
-                    outerRadius={96}
-                    innerRadius={46}
-                    cy="50%"
-                    labelLine={(props) => (
-                      <path
-                        d={props.points?.length ? `M ${props.points.map((point: { x: number; y: number }) => `${point.x},${point.y}`).join(" L ")}` : undefined}
-                        fill="none"
-                        stroke={props.stroke}
-                        strokeWidth={1.5}
-                      />
-                    )}
-                    label={renderMoodPieLabel}
-                  >
-                    {moodDistributionData.map((item, index) => (
-                      <Cell key={item.name} fill={HEALTH_CHART_COLORS[index % HEALTH_CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [`${value}次`, "记录数"]} contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="rounded-full bg-white/92 px-6 py-4 text-center shadow-sm ring-1 ring-slate-100">
-                  <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">近7天记录</p>
-                  <p className="mt-1 text-2xl font-black text-slate-800">{moodDistributionData.reduce((sum, item) => sum + item.value, 0)}</p>
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {moodDistributionData.map((item, index) => (
-                <div key={item.name} className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: HEALTH_CHART_COLORS[index % HEALTH_CHART_COLORS.length] }} />
-                    <span>{item.name}</span>
-                  </div>
-                  <span className="font-semibold text-slate-800">{item.value}</span>
-                </div>
-              ))}
-            </div>
+          <div className="grid gap-5">
+            <ReplicaLineChart
+              data={moodTrendChartRows}
+              testId="r05-health-mood-trend"
+              height={170}
+              series={moodTrendKeys.map((key, index) => ({
+                key,
+                label: key,
+                color: moodColorMap.get(key) ?? HEALTH_CHART_COLORS[index % HEALTH_CHART_COLORS.length],
+                unit: "次",
+              }))}
+              emptyMessage="暂无近 7 天情绪趋势数据。"
+            />
+            <ReplicaDonutChart
+              data={moodDistributionRows}
+              testId="r05-health-mood-donut"
+              height={250}
+              totalLabel="近7天记录"
+              unit="次"
+              emptyMessage="暂无情绪分布数据。"
+            />
+          </div>
         </ChartCard>
       </div>
 
@@ -877,7 +810,7 @@ if (isParent) {
         className="mt-6"
       />
 
-      <Card className="mt-4 rounded-lg shadow-sm">
+      <Card className="mt-4 rounded-lg shadow-sm" data-testid="r05-health-record-list">
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1056,7 +989,7 @@ if (isParent) {
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               取消
             </Button>
-            <Button onClick={handleSaveHealthCheck}>
+            <Button onClick={handleSaveHealthCheck} data-testid="r05-health-save-check">
               保存记录
             </Button>
           </DialogFooter>
@@ -1081,49 +1014,4 @@ function formatShortDate(dateString: string) {
 
 function isRecentDate(dateString: string, days: number) {
   return isDateWithinLastDays(dateString, days);
-}
-
-function renderMoodPieLabel({
-  cx,
-  cy,
-  midAngle,
-  outerRadius,
-  x,
-  y,
-  name,
-  value,
-}: {
-  cx?: number;
-  cy?: number;
-  midAngle?: number;
-  outerRadius?: number;
-  x?: number;
-  y?: number;
-  name?: string;
-  value?: number;
-}) {
-  if (
-    typeof cx !== "number" ||
-    typeof cy !== "number" ||
-    typeof midAngle !== "number" ||
-    typeof outerRadius !== "number" ||
-    typeof x !== "number" ||
-    typeof y !== "number" ||
-    !name ||
-    typeof value !== "number"
-  ) {
-    return null;
-  }
-
-  const radius = outerRadius + 22;
-  const radians = (-midAngle * Math.PI) / 180;
-  const labelX = cx + radius * Math.cos(radians);
-  const labelY = cy + radius * Math.sin(radians);
-  const textAnchor = labelX > cx ? "start" : "end";
-
-  return (
-    <text x={labelX} y={labelY} fill="#475569" textAnchor={textAnchor} dominantBaseline="central" fontSize={12} fontWeight={600}>
-      {`${name} ${value}`}
-    </text>
-  );
 }

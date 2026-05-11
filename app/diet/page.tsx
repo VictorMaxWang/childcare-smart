@@ -36,6 +36,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ReplicaBarChart,
+  ReplicaComboChart,
+  ReplicaDonutChart,
+  replicaChartColors,
+  type ReplicaChartDatum,
+  type ReplicaDonutDatum,
+} from "@/components/charts";
+import { ChartCard } from "@/components/ui/chart-card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
@@ -257,10 +266,58 @@ export default function DietPage() {
   }, [selectedChildMeals]);
 
   const weeklyTrend = getWeeklyDietTrend(selectedChild?.id);
+  const directorWeeklyTrend = getWeeklyDietTrend();
   const hydrationDisplay = getHydrationDisplayState(weeklyTrend.hydrationAvg);
   const childInsights = selectedChild
     ? getSmartInsights().filter((item) => !item.childId || item.childId === selectedChild.id)
     : [];
+  const mealCoverageRows = useMemo<ReplicaChartDatum[]>(
+    () =>
+      MEAL_TYPES.map((meal) => {
+        const records = todayVisibleMealRecords.filter((record) => record.meal === meal);
+        const scoreSum = records.reduce((sum, record) => sum + (record.nutritionScore ?? 0), 0);
+        return {
+          label: meal,
+          records: records.length,
+          children: new Set(records.map((record) => record.childId)).size,
+          avgScore: records.length > 0 ? Math.round(scoreSum / records.length) : 0,
+        };
+      }),
+    [todayVisibleMealRecords]
+  );
+  const dietCategoryRows = useMemo<ReplicaDonutDatum[]>(
+    () => {
+      const counts = new Map<FoodCategory, number>();
+      todayVisibleMealRecords.forEach((record) => {
+        record.foods.forEach((food) => {
+          counts.set(food.category, (counts.get(food.category) ?? 0) + 1);
+        });
+      });
+      return FOOD_CATEGORY_OPTIONS.map((category, index) => ({
+        label: category,
+        value: counts.get(category) ?? 0,
+        color: [
+          replicaChartColors.green,
+          replicaChartColors.amber,
+          replicaChartColors.primary,
+          replicaChartColors.sky,
+          replicaChartColors.violet,
+          replicaChartColors.slate,
+        ][index % 6],
+      })).filter((item) => item.value > 0);
+    },
+    [todayVisibleMealRecords]
+  );
+  const dietQualityRows = useMemo<ReplicaChartDatum[]>(
+    () => [
+      { label: "均衡率", target: 100, current: directorWeeklyTrend.balancedRate },
+      { label: "蔬果天数", target: 7, current: directorWeeklyTrend.vegetableDays },
+      { label: "蛋白天数", target: 7, current: directorWeeklyTrend.proteinDays },
+      { label: "主食天数", target: 7, current: directorWeeklyTrend.stapleDays },
+      { label: "补水均值", target: 200, current: directorWeeklyTrend.hydrationAvg },
+    ],
+    [directorWeeklyTrend]
+  );
 
   const bulkPreview = useMemo(
     () =>
@@ -654,7 +711,7 @@ export default function DietPage() {
   }
 
   return (
-    <div className="app-page max-w-[86rem] page-enter">
+    <div className="app-page max-w-[86rem] page-enter" data-testid="r05-diet-page">
       {isTeacher ? (
         <section className="mb-5 overflow-hidden rounded-2xl border border-emerald-100 bg-[linear-gradient(135deg,#ecfdf5_0%,#ffffff_48%,#f5f3ff_100%)] p-4 shadow-[0_22px_64px_rgb(16_185_129_/_0.12)] sm:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -894,7 +951,45 @@ export default function DietPage() {
       </section>
       )}
 
-      <Card className="mb-6 rounded-lg border-emerald-100 bg-linear-to-r from-emerald-50 to-white">
+      <div data-testid="r05-diet-chart-suite" className="mb-6 grid gap-6 xl:grid-cols-3">
+        <ChartCard title="餐次覆盖" description="按今日真实饮食记录统计餐次、幼儿覆盖和营养均分。" minHeight="18rem">
+          <ReplicaBarChart
+            data={mealCoverageRows}
+            testId="r05-diet-meal-coverage-chart"
+            height={240}
+            series={[
+              { key: "records", label: "餐食记录", color: replicaChartColors.primary, unit: "条" },
+              { key: "children", label: "覆盖幼儿", color: replicaChartColors.green, unit: "人" },
+              { key: "avgScore", label: "营养均分", color: replicaChartColors.amber, unit: "分" },
+            ]}
+          />
+        </ChartCard>
+
+        <ChartCard title="食物分类" description="从今日餐食明细中提取真实食材分类占比。" minHeight="18rem">
+          <ReplicaDonutChart
+            data={dietCategoryRows}
+            testId="r05-diet-category-donut"
+            height={240}
+            totalLabel="食物项"
+            unit="项"
+            emptyMessage="暂无今日食材分类数据。"
+          />
+        </ChartCard>
+
+        <ChartCard title="7 天营养质量" description="基于全园可见幼儿的真实周饮食趋势。" minHeight="18rem">
+          <ReplicaComboChart
+            data={dietQualityRows}
+            testId="r05-diet-quality-combo"
+            height={240}
+            series={[
+              { key: "target", label: "目标", color: replicaChartColors.sky },
+              { key: "current", label: "当前", color: replicaChartColors.green, kind: "line" },
+            ]}
+          />
+        </ChartCard>
+      </div>
+
+      <Card className="mb-6 rounded-lg border-emerald-100 bg-linear-to-r from-emerald-50 to-white" data-testid="r05-diet-bulk-entry">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <ChefHat className="h-5 w-5 text-emerald-600" />
@@ -1137,7 +1232,7 @@ export default function DietPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmBulkOpen(false)}>取消</Button>
-            <Button onClick={confirmApplyBulkTemplate}>确认录入</Button>
+            <Button onClick={confirmApplyBulkTemplate} data-testid="r05-diet-confirm-bulk">确认录入</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1699,7 +1794,7 @@ function MealEditorCard({
         <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-slate-700">AI 营养评分与建议</p>
-            <Button size="sm" onClick={onGenerateEvaluation} disabled={evaluating || foods.length === 0}>
+            <Button size="sm" onClick={onGenerateEvaluation} disabled={evaluating || foods.length === 0} data-testid={`diet-ai-evaluate-${meal}`}>
               {evaluating ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1 h-4 w-4" />}
               生成建议
             </Button>

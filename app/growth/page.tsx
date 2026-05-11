@@ -17,20 +17,6 @@ import {
   Workflow,
 } from "lucide-react";
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
   BEHAVIOR_CATEGORIES,
   type AgeBand,
   getAgeBandFromBirthDate,
@@ -38,6 +24,14 @@ import {
   type BehaviorCategory,
   useApp,
 } from "../../lib/store";
+import {
+  ReplicaBarChart,
+  ReplicaDonutChart,
+  ReplicaLineChart,
+  replicaChartColors,
+  type ReplicaChartDatum,
+  type ReplicaDonutDatum,
+} from "@/components/charts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChartCard } from "@/components/ui/chart-card";
@@ -185,6 +179,23 @@ export default function GrowthPage() {
       { name: "已完成", value: completedRecords.length, fill: "#10b981" },
     ],
     [completedRecords.length, pendingRecords.length]
+  );
+  const categoryTrendRows = useMemo<ReplicaChartDatum[]>(
+    () => categoryTrendData.map((item) => ({ ...item, label: String(item.label) })),
+    [categoryTrendData]
+  );
+  const categoryDistributionRows = useMemo<ReplicaDonutDatum[]>(
+    () =>
+      categoryChartData.map((item, index) => ({
+        label: item.name,
+        value: item.value,
+        color: GROWTH_CHART_COLORS[index % GROWTH_CHART_COLORS.length],
+      })),
+    [categoryChartData]
+  );
+  const reviewStatusRows = useMemo<ReplicaChartDatum[]>(
+    () => reviewChartData.map((item) => ({ label: item.name, count: item.value })),
+    [reviewChartData]
   );
 
   function submitRecord() {
@@ -439,7 +450,7 @@ export default function GrowthPage() {
   }
 
   return (
-    <div className="app-page max-w-[86rem] page-enter">
+    <div className="app-page max-w-[86rem] page-enter" data-testid="r05-growth-page">
       {isTeacher ? (
         <section className="mb-5 overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_45%,#fff1f2_100%)] p-4 shadow-[0_22px_64px_rgb(99_102_241_/_0.12)] sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -762,7 +773,7 @@ export default function GrowthPage() {
                 {needsAttention ? "需要关注" : "正常观察"}
               </Button>
             </div>
-            <Button className="w-full gap-2" onClick={submitRecord}>
+            <Button className="w-full gap-2" onClick={submitRecord} data-testid="r05-growth-save-record">
               <PlusCircle className="h-4 w-4" />
               保存记录
             </Button>
@@ -837,110 +848,40 @@ export default function GrowthPage() {
             </div>
           ) : null}
 
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div data-testid="r05-growth-chart-suite" className="grid gap-6 xl:grid-cols-2">
             <ChartCard title="观察维度分布" description="把近期观察重点直接转成图表，更容易讲清楚班级关注面。" minHeight="22rem">
-                <div className="rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700">近 7 天维度趋势</p>
-                      <p className="text-xs text-slate-500">先看变化，再看占比。默认展示记录量最高的 3 个维度。</p>
-                    </div>
-                  </div>
-                  <div className="h-44 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={categoryTrendData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 12 }} />
-                        <YAxis allowDecimals={false} tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                        <Tooltip formatter={(value) => [`${value}条`, "记录数"]} contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }} />
-                        {trendKeys.map((key, index) => (
-                          <Line
-                            key={key}
-                            type="monotone"
-                            dataKey={key}
-                            name={key}
-                            stroke={GROWTH_CHART_COLORS[index % GROWTH_CHART_COLORS.length]}
-                            strokeWidth={2.5}
-                            dot={{ r: 3 }}
-                            activeDot={{ r: 5 }}
-                          />
-                        ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                <div className="relative mt-5 h-[320px] w-full sm:h-[340px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie 
-                        data={categoryChartData} 
-                        dataKey="value" 
-                        nameKey="name" 
-                        outerRadius={90} 
-                        innerRadius={52} 
-                        cy="50%" 
-                        stroke="#ffffff" 
-                        strokeWidth={3}
-                        labelLine={{ stroke: '#94a3b8', strokeWidth: 1.5 }}
-                        label={({ cx, x, y, name, value }) => (
-                          <text x={x} y={y} fill="#475569" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="13" fontWeight="600">
-                            {name} {value}
-                          </text>
-                        )}
-                      >
-                        {categoryChartData.map((item, index) => (
-                          <Cell key={item.name} fill={GROWTH_CHART_COLORS[index % GROWTH_CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => [`${value}条`, "记录数"]} contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <div className="rounded-full bg-white/92 px-6 py-4 text-center shadow-sm ring-1 ring-slate-100">
-                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">总记录</p>
-                    <p className="mt-1 text-2xl font-black text-slate-800">{filteredRecords.length}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  {categoryChartData.map((item, index) => (
-                    <div key={item.name} className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                      <div className="flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: GROWTH_CHART_COLORS[index % GROWTH_CHART_COLORS.length] }} />
-                        <span>{item.name}</span>
-                      </div>
-                      <span className="font-semibold text-slate-800">{item.value}</span>
-                    </div>
-                  ))}
-                </div>
+              <div className="grid gap-5">
+                <ReplicaLineChart
+                  data={categoryTrendRows}
+                  testId="r05-growth-category-trend"
+                  height={180}
+                  series={trendKeys.map((key, index) => ({
+                    key,
+                    label: key,
+                    color: GROWTH_CHART_COLORS[index % GROWTH_CHART_COLORS.length],
+                    unit: "条",
+                  }))}
+                  emptyMessage="暂无近 7 天成长观察趋势。"
+                />
+                <ReplicaDonutChart
+                  data={categoryDistributionRows}
+                  testId="r05-growth-category-donut"
+                  height={265}
+                  totalLabel="总记录"
+                  unit="条"
+                  emptyMessage="暂无观察维度分布数据。"
+                />
+              </div>
             </ChartCard>
 
             <ChartCard title="复查状态对比" description="用柱状图快速说明当前待追踪工作量和已闭环完成度。" minHeight="18rem">
-                <div className="h-[16.25rem] min-h-[16.25rem] w-full min-w-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={reviewChartData} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="growthReviewAmber" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#fbbf24" />
-                          <stop offset="100%" stopColor="#f59e0b" />
-                        </linearGradient>
-                        <linearGradient id="growthReviewGreen" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#34d399" />
-                          <stop offset="100%" stopColor="#10b981" />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 12 }} />
-                      <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} allowDecimals={false} />
-                      <Tooltip formatter={(value) => [`${value}条`, "数量"]} contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }} />
-                      <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                        {reviewChartData.map((item) => (
-                          <Cell key={item.name} fill={item.name === "待复查" ? "url(#growthReviewAmber)" : "url(#growthReviewGreen)"} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+              <ReplicaBarChart
+                data={reviewStatusRows}
+                testId="r05-growth-review-bars"
+                height={270}
+                series={[{ key: "count", label: "数量", color: replicaChartColors.amber, unit: "条" }]}
+                emptyMessage="暂无复查状态数据。"
+              />
             </ChartCard>
           </div>
 
