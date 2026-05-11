@@ -93,6 +93,15 @@ export interface ApiAdminClassStat {
   reminderCount: number;
 }
 
+export interface ApiAssignmentCounts {
+  pending: number;
+  inProgress: number;
+  completed: number;
+  overdue: number;
+  total: number;
+  sourceRecordIds: string[];
+}
+
 export interface ApiAdminSummary {
   childCount: number;
   teacherCount: number;
@@ -104,8 +113,12 @@ export interface ApiAdminSummary {
   highRiskConsultationCount: number;
   reminderCount: number;
   feedbackCount: number;
+  feedbackCompletionRate: number;
+  feedbackCompletedChildCount: number;
+  feedbackExpectedChildCount: number;
   activeConsultationCount: number;
   attachmentCount: number;
+  assignmentCounts: ApiAssignmentCounts;
   recordCounts: Record<RecordType, number>;
   classStats: ApiAdminClassStat[];
   recent7DayTrend: ApiAnalyticsTrend;

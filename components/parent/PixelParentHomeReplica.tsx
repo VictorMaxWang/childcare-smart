@@ -19,6 +19,12 @@ import {
 } from "lucide-react";
 import CareModeToggle from "@/components/parent/CareModeToggle";
 import ParentSpeakButton from "@/components/parent/ParentSpeakButton";
+import {
+  ReplicaComboChart,
+  ReplicaLineChart,
+  replicaChartColors,
+  type ReplicaChartDatum,
+} from "@/components/charts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -52,6 +58,10 @@ export interface ParentPixelTrendPoint {
   day: string;
   temp: number | null;
   mood: number | null;
+  mealScore: number | null;
+  growthCount: number;
+  feedbackCount: number;
+  reminderCount: number;
 }
 
 export interface PixelParentHomeReplicaProps {
@@ -126,6 +136,18 @@ export default function PixelParentHomeReplica({
   const displayImages = growthImages.slice(0, 4);
   const temperaturePoints = trendPoints.filter((point) => typeof point.temp === "number");
   const moodPoints = trendPoints.filter((point) => typeof point.mood === "number");
+  const healthTrendRows: ReplicaChartDatum[] = trendPoints.map((point) => ({
+    label: point.day,
+    temp: point.temp,
+    mood: point.mood,
+  }));
+  const dietGrowthTrendRows: ReplicaChartDatum[] = trendPoints.map((point) => ({
+    label: point.day,
+    meal: point.mealScore,
+    growth: point.growthCount,
+    feedback: point.feedbackCount,
+    reminders: point.reminderCount,
+  }));
 
   return (
     <div className="mx-auto max-w-[72rem] min-w-0 pb-24">
@@ -372,6 +394,28 @@ export default function PixelParentHomeReplica({
               </Link>
             </div>
             <div className="mt-5 rounded-[22px] bg-slate-50 px-4 py-5">
+              <div className="space-y-5">
+                <ReplicaLineChart
+                  data={healthTrendRows}
+                  testId="r03-parent-health-trend"
+                  series={[
+                    { key: "temp", label: "体温", color: replicaChartColors.green, unit: "°C" },
+                    { key: "mood", label: "情绪", color: replicaChartColors.primary },
+                  ]}
+                  height={180}
+                />
+                <ReplicaComboChart
+                  data={dietGrowthTrendRows}
+                  testId="r03-parent-diet-growth-trend"
+                  series={[
+                    { key: "meal", label: "饮食趋势", color: replicaChartColors.amber, kind: "line", unit: "分" },
+                    { key: "growth", label: "成长行为", color: replicaChartColors.green, unit: "条" },
+                    { key: "feedback", label: "反馈状态", color: replicaChartColors.sky, unit: "条" },
+                    { key: "reminders", label: "提醒状态", color: replicaChartColors.primary, unit: "条" },
+                  ]}
+                  height={180}
+                />
+              </div>
               <div className="mb-3 flex items-center gap-5 text-xs text-slate-500">
                 <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-emerald-500" />体温(°C)</span>
                 <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-violet-500" />情绪</span>

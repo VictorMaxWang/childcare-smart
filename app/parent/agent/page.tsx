@@ -32,6 +32,11 @@ import AttachmentMediaPicker, {
 import FeedbackDetailDialog from "@/components/communication/FeedbackDetailDialog";
 import ParentTrendResponseCard from "@/components/parent/ParentTrendResponseCard";
 import {
+  ReplicaComboChart,
+  replicaChartColors,
+  type ReplicaChartDatum,
+} from "@/components/charts";
+import {
   AgentWorkspaceCard,
   InlineLinkButton,
   RolePageShell,
@@ -107,6 +112,23 @@ type HistoryItem = {
   question: string;
   result: ParentAgentResult;
 };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parentAgentDateKey(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.slice(0, 10) : "";
+}
+
+function parentAgentAddDays(key: string, days: number) {
+  return new Date(new Date(`${key}T00:00:00.000Z`).getTime() + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+function parentAgentAverage(values: Array<number | null | undefined>) {
+  const finiteValues = values.filter((item): item is number => typeof item === "number" && Number.isFinite(item));
+  return finiteValues.length > 0
+    ? Math.round(finiteValues.reduce((sum, item) => sum + item, 0) / finiteValues.length)
+    : null;
+}
 
 function formatTimelineTime(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
@@ -1393,6 +1415,33 @@ export default function ParentAgentPage() {
       tone: agentHasPendingFeedback ? "amber" : "emerald",
     },
   ];
+  const agentTrendReferenceDate =
+    [
+      ...baseContext.weeklyHealthChecks.map((record) => parentAgentDateKey(record.date)),
+      ...baseContext.weeklyMeals.map((record) => parentAgentDateKey(record.date)),
+      ...baseContext.weeklyGrowthRecords.map((record) => parentAgentDateKey(record.createdAt)),
+      ...baseContext.weeklyFeedbacks.map((record) => parentAgentDateKey(record.date)),
+    ]
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? new Date().toISOString().slice(0, 10);
+  const agentTrendDates = Array.from({ length: 7 }, (_, index) => parentAgentAddDays(agentTrendReferenceDate, index - 6));
+  const agentTrendRows: ReplicaChartDatum[] = agentTrendDates.map((date) => {
+    const dayMeals = baseContext.weeklyMeals.filter((record) => parentAgentDateKey(record.date) === date);
+    const dayHealth = baseContext.weeklyHealthChecks.filter((record) => parentAgentDateKey(record.date) === date);
+    return {
+      label: date.slice(5),
+      health: parentAgentAverage(dayHealth.map((record) => record.temperature)),
+      diet: parentAgentAverage(dayMeals.map((record) => record.nutritionScore)),
+      growth: baseContext.weeklyGrowthRecords.filter((record) => parentAgentDateKey(record.createdAt) === date).length,
+      feedback: baseContext.weeklyFeedbacks.filter((record) => parentAgentDateKey(record.date) === date).length,
+      reminders: reminders.filter(
+        (record) =>
+          (record.childId === selectedFeed.child.id || record.targetId === selectedFeed.child.id) &&
+          parentAgentDateKey(record.scheduledAt) === date
+      ).length,
+    };
+  });
   const parentAiParityHero = (
     <section className="overflow-hidden rounded-[2rem] border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f4f7ff_48%,#fff7ed_100%)] p-4 shadow-[0_24px_70px_rgb(99_102_241_/_0.14)] sm:p-5">
       <div className="relative overflow-hidden rounded-[1.6rem] bg-[linear-gradient(135deg,#f8fbff_0%,#f5f3ff_55%,#fff7ed_100%)] p-5">
@@ -2124,6 +2173,19 @@ export default function ParentAgentPage() {
 
             <SectionCard title="近 7 天记录摘要" description="趋势只保留家长看得懂的关键指标，完整问答仍在 AI 回复区。">
               <ParentWeeklySignalGrid items={agentWeeklySignals} />
+              <div className="mt-5">
+                <ReplicaComboChart
+                  data={agentTrendRows}
+                  testId="r03-parent-agent-trend"
+                  series={[
+                    { key: "health", label: "健康趋势", color: replicaChartColors.green, kind: "line", unit: "°C" },
+                    { key: "diet", label: "饮食趋势", color: replicaChartColors.amber, kind: "line", unit: "分" },
+                    { key: "growth", label: "成长行为", color: replicaChartColors.primary, unit: "条" },
+                    { key: "feedback", label: "反馈状态", color: replicaChartColors.sky, unit: "条" },
+                    { key: "reminders", label: "提醒状态", color: replicaChartColors.red, unit: "条" },
+                  ]}
+                />
+              </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {baseContext.focusReasons.map((item) => (
                   <Badge key={item} variant="secondary">{item}</Badge>

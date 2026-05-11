@@ -1,0 +1,133 @@
+{
+  "task": "FRONTEND-REPLICA-R03",
+  "status": "done",
+  "generatedAt": "2026-05-11",
+  "coverage": {
+    "director": {
+      "status": "pass",
+      "charts": [
+        "overviewMetrics",
+        "riskDistribution",
+        "attendanceTrend",
+        "healthExceptionTrend",
+        "mealCompletionRate",
+        "growthBehaviorTrend",
+        "parentFeedbackTrend",
+        "weeklyReportQualityCompletion",
+        "classComparison",
+        "assignmentClosure"
+      ]
+    },
+    "teacher": {
+      "status": "pass",
+      "charts": [
+        "classSize",
+        "todayAttendance",
+        "pendingTasks",
+        "morningHealthExceptions",
+        "mealRecordCompletion",
+        "growthRecordCount",
+        "highRiskChildren",
+        "parentCommunicationStats"
+      ]
+    },
+    "parent": {
+      "status": "pass",
+      "charts": [
+        "childSevenDayHealthTrend",
+        "dietTrend",
+        "growthBehaviorTrend",
+        "reminderFeedbackStatus"
+      ]
+    }
+  },
+  "dataBinding": {
+    "realDataBound": true,
+    "uiFakeCharts": false,
+    "sources": [
+      "lib/demo-data",
+      "analyticsApi",
+      "useAppScopedRecords",
+      "attendanceRecords",
+      "healthCheckRecords",
+      "mealRecords",
+      "growthRecords",
+      "weeklyReports",
+      "feedback",
+      "assignments"
+    ],
+    "provenance": {
+      "sourceRecordIds": true,
+      "feedbackIds": true,
+      "assignmentIds": true,
+      "weeklyReportPayload": true
+    }
+  },
+  "dataIntegrity": {
+    "children": 36,
+    "classSplit": [18, 18],
+    "teacherSplit": [18, 18],
+    "preserved": true
+  },
+  "visualBehavior": {
+    "colors": true,
+    "roundedCorners": true,
+    "grid": true,
+    "tooltip": true,
+    "legend": true,
+    "labels": true,
+    "emptyState": true,
+    "loadingState": true,
+    "hover": true,
+    "responsive": true
+  },
+  "dependencies": {
+    "newExternalDependencies": false,
+    "rechartsUsed": true,
+    "svgComboChartUsed": true
+  },
+  "tests": {
+    "lint": {
+      "command": "npm run lint",
+      "status": "pass"
+    },
+    "build": {
+      "command": "npm run build",
+      "status": "pass"
+    },
+    "productApi": {
+      "command": "npm run product:api",
+      "status": "pass",
+      "passed": 8
+    },
+    "productJourney": {
+      "command": "npm run product:journey",
+      "status": "pass",
+      "passed": 1
+    },
+    "featureSmoke": {
+      "command": "npm run feature:smoke",
+      "status": "pass",
+      "passed": 19
+    },
+    "bugbashSmoke": {
+      "command": "npm run bugbash:smoke",
+      "status": "pass",
+      "passed": 1
+    },
+    "tsc": {
+      "command": "npx tsc --noEmit",
+      "status": "pass"
+    },
+    "charts": {
+      "command": "npx playwright test tests/frontend-replica/charts.spec.ts --config=playwright.feature.config.ts --project=chromium --reporter=line",
+      "status": "pass",
+      "passed": 6
+    }
+  },
+  "notes": [
+    "No external chart dependency was added.",
+    "Recharts is retained for line, bar, and donut charts; the mixed combo chart is SVG to avoid a Recharts 3 dev unmount loop.",
+    "Optional local brain-proxy fallback and ECONNRESET logs appeared during Playwright web-server shutdown, but all required commands passed."
+  ]
+}

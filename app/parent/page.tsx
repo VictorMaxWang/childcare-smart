@@ -38,6 +38,11 @@ import PixelParentHomeReplica, {
 import { useParentD01Data } from "@/components/parent/useParentD01Data";
 import WeeklyReportPreviewCard from "@/components/weekly-report/WeeklyReportPreviewCard";
 import {
+  ReplicaComboChart,
+  replicaChartColors,
+  type ReplicaChartDatum,
+} from "@/components/charts";
+import {
   InlineLinkButton,
   RolePageShell,
   RoleSplitLayout,
@@ -67,12 +72,28 @@ const TODAY_TEXT = new Date().toLocaleDateString("zh-CN", {
   day: "numeric",
   weekday: "long",
 });
+const DAY_MS = 24 * 60 * 60 * 1000;
 const PARENT_MEAL_PRIORITY: Record<string, number> = {
   早餐: 1,
   晚餐: 2,
   加餐: 3,
   午餐: 4,
 };
+
+function parentDateKey(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.slice(0, 10) : "";
+}
+
+function parentAddDays(key: string, days: number) {
+  return new Date(new Date(`${key}T00:00:00.000Z`).getTime() + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+function average(values: Array<number | null | undefined>) {
+  const finiteValues = values.filter((item): item is number => typeof item === "number" && Number.isFinite(item));
+  return finiteValues.length > 0
+    ? Math.round(finiteValues.reduce((sum, item) => sum + item, 0) / finiteValues.length)
+    : null;
+}
 
 function formatTimelineTime(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
@@ -618,6 +639,34 @@ export default function ParentHomePage() {
     </SectionCard>
   );
 
+  const parentReferenceDate =
+    [
+      ...healthCheckRecords.filter((record) => record.childId === feed.child.id).map((record) => parentDateKey(record.date)),
+      ...mealRecords.filter((record) => record.childId === feed.child.id).map((record) => parentDateKey(record.date)),
+      ...growthRecords.filter((record) => record.childId === feed.child.id).map((record) => parentDateKey(record.createdAt)),
+      ...guardianFeedbacks.filter((record) => record.childId === feed.child.id).map((record) => parentDateKey(record.date)),
+    ]
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? new Date().toISOString().slice(0, 10);
+  const parentRecentDates = Array.from({ length: 7 }, (_, index) => parentAddDays(parentReferenceDate, index - 6));
+  const parentTrendRows: ReplicaChartDatum[] = parentRecentDates.map((date) => {
+    const dayMeals = mealRecords.filter((record) => record.childId === feed.child.id && parentDateKey(record.date) === date);
+    const dayHealth = healthCheckRecords.filter((record) => record.childId === feed.child.id && parentDateKey(record.date) === date);
+    return {
+      label: date.slice(5),
+      health: average(dayHealth.map((record) => record.temperature)),
+      diet: average(dayMeals.map((record) => record.nutritionScore)),
+      growth: growthRecords.filter((record) => record.childId === feed.child.id && parentDateKey(record.createdAt) === date).length,
+      feedback: guardianFeedbacks.filter((record) => record.childId === feed.child.id && parentDateKey(record.date) === date).length,
+      reminders: reminders.filter(
+        (record) =>
+          (record.childId === feed.child.id || record.targetId === feed.child.id) &&
+          parentDateKey(record.scheduledAt) === date
+      ).length,
+    };
+  });
+
   const weeklyTrendSection = (
     <SectionCard
       title="近 7 天记录与趋势"
@@ -625,6 +674,19 @@ export default function ParentHomePage() {
       actions={<InlineLinkButton href={agentHref} label="进入趋势与追问" />}
     >
       <ParentWeeklySignalGrid items={weeklySignals} />
+      <div className="mt-5">
+        <ReplicaComboChart
+          data={parentTrendRows}
+          testId="r03-parent-weekly-trend"
+          series={[
+            { key: "health", label: "健康趋势", color: replicaChartColors.green, kind: "line", unit: "°C" },
+            { key: "diet", label: "饮食趋势", color: replicaChartColors.amber, kind: "line", unit: "分" },
+            { key: "growth", label: "成长行为", color: replicaChartColors.primary, unit: "条" },
+            { key: "feedback", label: "反馈状态", color: replicaChartColors.sky, unit: "条" },
+            { key: "reminders", label: "提醒状态", color: replicaChartColors.red, unit: "条" },
+          ]}
+        />
+      </div>
     </SectionCard>
   );
 
@@ -846,17 +908,15 @@ export default function ParentHomePage() {
     attendanceRecords
       .filter((record) => record.childId === feed.child.id)
       .sort((left, right) => right.date.localeCompare(left.date))[0];
-  const recentDates = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (6 - index));
-    return date.toISOString().slice(0, 10);
-  });
-  const pixelTrendPoints: ParentPixelTrendPoint[] = recentDates.map((date) => {
+  const pixelTrendPoints: ParentPixelTrendPoint[] = parentRecentDates.map((date) => {
     const health = healthCheckRecords.find((record) => record.childId === feed.child.id && record.date === date);
+    const dayMeals = mealRecords.filter((record) => record.childId === feed.child.id && record.date === date);
     const growthCount = growthRecords.filter(
       (record) => record.childId === feed.child.id && record.createdAt.slice(0, 10) === date
     ).length;
-    const mealCount = mealRecords.filter((record) => record.childId === feed.child.id && record.date === date).length;
+    const mealCount = dayMeals.length;
+    const feedbackCount = guardianFeedbacks.filter((record) => record.childId === feed.child.id && record.date === date).length;
+    const reminderCount = childScopedReminders.filter((record) => record.scheduledAt.slice(0, 10) === date).length;
 
     return {
       day: new Date(`${date}T00:00:00`).toLocaleDateString("zh-CN", {
@@ -865,6 +925,10 @@ export default function ParentHomePage() {
       }),
       temp: health?.temperature ?? null,
       mood: health ? Math.min(4.4, 3 + growthCount * 0.2 + mealCount * 0.1) : null,
+      mealScore: average(dayMeals.map((record) => record.nutritionScore)),
+      growthCount,
+      feedbackCount,
+      reminderCount,
     };
   });
   const latestTeacherMessage = [...childScopedMessages]

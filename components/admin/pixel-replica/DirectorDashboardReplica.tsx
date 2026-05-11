@@ -19,6 +19,15 @@ import type { ApiAdminSummary } from "@/lib/api/types";
 import type { AdminCommunicationSummary } from "@/lib/communication/home-school";
 import { formatHomeSchoolTime } from "@/lib/communication/home-school";
 import {
+  ReplicaBarChart,
+  ReplicaComboChart,
+  ReplicaDonutChart,
+  ReplicaLineChart,
+  replicaChartColors,
+  type ReplicaChartDatum,
+  type ReplicaDonutDatum,
+} from "@/components/charts";
+import {
   directorReplicaAssets,
   trendTabs,
 } from "./directorReplicaData";
@@ -92,6 +101,70 @@ export default function DirectorDashboardReplica({
   ];
   const feedbackExpectedCount = scope.feedbackExpectedChildCount ?? 0;
   const feedbackCompletedCount = scope.feedbackCompletedChildCount ?? 0;
+  const assignmentCounts = adminSummary?.assignmentCounts ?? {
+    pending: pendingDispatchCount,
+    inProgress: 0,
+    completed: 0,
+    overdue: 0,
+    total: pendingDispatchCount,
+    sourceRecordIds: [],
+  };
+  const assignmentCompletionRate =
+    assignmentCounts.total > 0 ? Math.round((assignmentCounts.completed / assignmentCounts.total) * 100) : 0;
+  const operationTrendRows: ReplicaChartDatum[] = home.trendLabels.map((label, index) => ({
+    label,
+    attendance: home.attendanceTrendSeries[index] ?? 0,
+    health: home.healthTrendSeries[index] ?? 0,
+    diet: home.dietTrendSeries[index] ?? 0,
+    growth: home.growthTrendSeries[index] ?? 0,
+  }));
+  const riskDistributionRows: ReplicaDonutDatum[] = [
+    { label: "晨检异常", value: adminSummary?.healthAbnormalCount ?? scope.healthAbnormalCount, color: replicaChartColors.red },
+    { label: "高风险儿童", value: riskChildrenCount, color: replicaChartColors.amber },
+    { label: "高风险会诊", value: adminSummary?.highRiskConsultationCount ?? 0, color: replicaChartColors.violet },
+    { label: "未处理反馈", value: adminSummary?.unresolvedFeedbackCount ?? 0, color: replicaChartColors.sky },
+    { label: "待派单", value: assignmentCounts.pending + assignmentCounts.inProgress + assignmentCounts.overdue, color: replicaChartColors.primary },
+  ];
+  const classComparisonRows: ReplicaChartDatum[] =
+    adminSummary?.classStats.map((item) => ({
+      label: item.classId,
+      children: item.childCount,
+      health: item.healthAbnormalCount,
+      meal: item.mealRecordCount,
+      growth: item.growthRecordCount,
+      feedback: item.unresolvedFeedbackCount,
+    })) ??
+    home.classDistribution.map((item) => ({
+      label: item.label,
+      children: item.value,
+      health: 0,
+      meal: 0,
+      growth: 0,
+      feedback: 0,
+    }));
+  const closureChartRows: ReplicaChartDatum[] = [
+    {
+      label: "家园反馈",
+      total: feedbackExpectedCount,
+      done: feedbackCompletedCount,
+      rate: scope.feedbackCompletionRate,
+    },
+    {
+      label: "沟通线程",
+      total: communicationSummary.totalThreads,
+      done: communicationSummary.handledThreads,
+      rate:
+        communicationSummary.totalThreads > 0
+          ? Math.round((communicationSummary.handledThreads / communicationSummary.totalThreads) * 100)
+          : 0,
+    },
+    {
+      label: "派单闭环",
+      total: assignmentCounts.total,
+      done: assignmentCounts.completed,
+      rate: assignmentCompletionRate,
+    },
+  ];
 
   const metrics = [
     {
@@ -183,6 +256,53 @@ export default function DirectorDashboardReplica({
               ))}
             </div>
           </ReplicaPanel>
+
+          <div data-testid="r03-admin-chart-suite" className="grid gap-5 xl:grid-cols-2">
+            <ReplicaPanel title="全园运营趋势" actions={<ReplicaPill tone="purple">真实记录 7 天</ReplicaPill>}>
+              <ReplicaLineChart
+                data={operationTrendRows}
+                testId="r03-admin-trend-chart"
+                yUnit="%"
+                series={[
+                  { key: "attendance", label: "出勤趋势", color: replicaChartColors.primary, unit: "%" },
+                  { key: "health", label: "健康异常趋势", color: replicaChartColors.red, unit: "%" },
+                  { key: "diet", label: "饮食完成率", color: replicaChartColors.amber, unit: "%" },
+                  { key: "growth", label: "成长行为趋势", color: replicaChartColors.green, unit: "%" },
+                ]}
+              />
+            </ReplicaPanel>
+            <ReplicaPanel title="风险儿童与待办分布" actions={<ReplicaPill tone="orange">风险分布</ReplicaPill>}>
+              <ReplicaDonutChart
+                data={riskDistributionRows}
+                testId="r03-admin-risk-donut"
+                totalLabel="风险/待办"
+                unit="项"
+              />
+            </ReplicaPanel>
+            <ReplicaPanel title="班级运营对比" actions={<ReplicaPill tone="blue">36/18/18 基线</ReplicaPill>}>
+              <ReplicaBarChart
+                data={classComparisonRows}
+                testId="r03-admin-class-comparison"
+                series={[
+                  { key: "children", label: "班级人数", color: replicaChartColors.primary, unit: "人" },
+                  { key: "health", label: "晨检异常", color: replicaChartColors.red, unit: "项" },
+                  { key: "meal", label: "饮食记录", color: replicaChartColors.amber, unit: "条" },
+                  { key: "growth", label: "成长记录", color: replicaChartColors.green, unit: "条" },
+                ]}
+              />
+            </ReplicaPanel>
+            <ReplicaPanel title="反馈与派单闭环" actions={<ReplicaPill tone="green">闭环统计</ReplicaPill>}>
+              <ReplicaComboChart
+                data={closureChartRows}
+                testId="r03-admin-closure-combo"
+                series={[
+                  { key: "total", label: "应处理", color: replicaChartColors.sky, unit: "项" },
+                  { key: "done", label: "已闭环", color: replicaChartColors.green, unit: "项" },
+                  { key: "rate", label: "完成率", color: replicaChartColors.primary, kind: "line", unit: "%" },
+                ]}
+              />
+            </ReplicaPanel>
+          </div>
 
           <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
             <ReplicaPanel title="关键趋势分析" actions={<ReplicaPill tone="purple">出勤趋势</ReplicaPill>}>
