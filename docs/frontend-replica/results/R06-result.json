@@ -1,0 +1,112 @@
+{
+  "id": "FRONTEND-REPLICA-R06",
+  "status": "pass",
+  "generatedAt": "2026-05-11T15:26:27.0503242+08:00",
+  "replicatedPages": [
+    "/teacher",
+    "/teacher/agent",
+    "/teacher/agent?action=communication",
+    "/teacher/health-file-bridge",
+    "/teacher/high-risk-consultation"
+  ],
+  "sharedTeacherAccessiblePages": [
+    "/children",
+    "/health",
+    "/diet",
+    "/growth"
+  ],
+  "teacherAiAssistant": {
+    "api": "/api/ai/teacher-agent",
+    "providerStatusVisible": true,
+    "communicationMode": true,
+    "attachments": true,
+    "feedbackDetail": true,
+    "visualFakeFunctionRemoved": [
+      "fixed wait-task badge",
+      "fixed AI generated time",
+      "fixed task timestamps"
+    ]
+  },
+  "mediaAndHealth": {
+    "dietRealImagesPreserved": true,
+    "growthRealImagesPreserved": true,
+    "healthFileBridgeApiPreserved": true,
+    "vivoOcrBoundaryPreserved": true,
+    "highRiskConsultationLoopPreserved": true
+  },
+  "dataConsistency": {
+    "liTeacherVisibleChildren": 18,
+    "zhouTeacherVisibleChildren": 18,
+    "seedDataChanged": false,
+    "crossClassLeakChecked": true
+  },
+  "voiceAssistant": {
+    "teacherLayoutEnabled": true,
+    "roleGuardPreserved": true,
+    "voiceProductTestsPassed": true
+  },
+  "tests": [
+    {
+      "command": "npx playwright test tests/frontend-replica/teacher-replica.spec.ts --config=playwright.feature.config.ts --project=chromium --reporter=line",
+      "status": "pass",
+      "summary": "6 passed"
+    },
+    {
+      "command": "npm run lint",
+      "status": "pass"
+    },
+    {
+      "command": "npm run build",
+      "status": "pass"
+    },
+    {
+      "command": "npm run product:api",
+      "status": "pass",
+      "summary": "8 passed"
+    },
+    {
+      "command": "npm run product:ai",
+      "status": "pass",
+      "summary": "live Chat/OCR/ASR passed; browser 6 passed"
+    },
+    {
+      "command": "npm run product:voice",
+      "status": "pass",
+      "summary": "13 parser tests and 20 browser tests passed"
+    },
+    {
+      "command": "npm run product:journey",
+      "status": "pass",
+      "summary": "1 passed"
+    },
+    {
+      "command": "npm run feature:smoke",
+      "status": "pass",
+      "summary": "19 passed"
+    },
+    {
+      "command": "npm run bugbash:smoke",
+      "status": "pass",
+      "summary": "1 passed after single rerun"
+    },
+    {
+      "command": "npm run demo-media:test",
+      "status": "pass",
+      "summary": "3 passed"
+    },
+    {
+      "command": "npm run growth-media:test",
+      "status": "pass",
+      "summary": "3 passed after single rerun"
+    },
+    {
+      "command": "npx tsc --noEmit",
+      "status": "pass"
+    }
+  ],
+  "knownDeviations": [
+    "/teacher/high-risk-consultation has no direct teacher PAGE_SPEC; supplemental consultation screenshots SCFR-146/048/047/064 were used.",
+    "Local brain proxy fallback logs appear when 127.0.0.1:8010 is not running; provider/degraded UI remains visible and all tests passed.",
+    "Initial parallel runs of bugbash:smoke and growth-media:test hit Playwright webServer port 3330; both passed when rerun individually."
+  ]
+}

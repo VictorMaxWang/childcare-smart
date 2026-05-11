@@ -99,6 +99,7 @@ export function PixelMetricCard({
   icon,
   tone = "violet",
   className,
+  testId,
 }: {
   label: string;
   value: string;
@@ -106,9 +107,11 @@ export function PixelMetricCard({
   icon: ReactNode;
   tone?: TeacherPixelTone;
   className?: string;
+  testId?: string;
 }) {
   return (
     <div
+      data-testid={testId}
       className={cn(
         "min-h-[4.9rem] rounded-[1rem] border border-[#e4ebf7] p-3 shadow-[0_12px_30px_rgb(70_88_140_/_0.045)]",
         toneGlow[tone],

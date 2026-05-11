@@ -1176,6 +1176,7 @@ export default function TeacherAgentPage() {
       badge={`教师 AI 助手 · ${currentUser.className ?? "当前班级"}`}
       title="把班级数据转成可执行的教师处理建议"
       description="这一页会围绕班级上下文、单个儿童上下文和三个核心任务展开：家长沟通建议、今日跟进行动、本周观察总结。"
+      testId="r06-teacher-agent-page"
       actions={
         <>
           <InlineLinkButton href="/teacher" label="返回教师工作台" />
@@ -1648,7 +1649,7 @@ export default function TeacherAgentPage() {
                           className={`flex h-10 items-center justify-between rounded-xl px-3 ${label === "AI 助手" ? "bg-violet-100 text-violet-700" : "hover:bg-slate-50"}`}
                         >
                           <span>{label}</span>
-                          {label === "待办任务" ? <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">12</span> : null}
+                          {label === "待办任务" ? <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">{pendingTaskCount}</span> : null}
                         </Link>
                       ))}
                     </div>
@@ -1678,7 +1679,7 @@ export default function TeacherAgentPage() {
                       <div className="rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-semibold text-indigo-700">AI 智能总结</p>
-                          <span className="text-xs text-slate-400">AI 生成于 08:25</span>
+                          <span className="text-xs text-slate-400">基于当前班级数据</span>
                         </div>
                         <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-7 text-slate-600">
                           {classContext.className} 今日出勤率稳定，晨检异常 {classContext.todayAbnormalChildren.length} 人，待复查 {classContext.pendingReviews.length} 项。建议先处理异常与补录，再完成家园沟通。
@@ -1765,10 +1766,10 @@ export default function TeacherAgentPage() {
                         </div>
                         <div className="mt-4 space-y-3">
                           {[
-                            ["晨检异常跟进", `${classContext.todayAbnormalChildren.length}人`, "健康照护", "08:00"],
-                            ["饮食异常观察", `${classContext.uncheckedMorningChecks.length}人`, "营养照护", "08:05"],
-                            ["家长沟通", `${waitingCommunicationCount}条`, "家园沟通", "08:10"],
-                            ["成长记录补录", `${classContext.pendingReviews.length}项`, "成长记录", "08:15"],
+                            ["晨检异常跟进", `${classContext.todayAbnormalChildren.length}人`, "健康照护", "按优先级"],
+                            ["饮食异常观察", `${classContext.uncheckedMorningChecks.length}人`, "营养照护", "按优先级"],
+                            ["家长沟通", `${waitingCommunicationCount}条`, "家园沟通", "按优先级"],
+                            ["成长记录补录", `${classContext.pendingReviews.length}项`, "成长记录", "按优先级"],
                           ].map(([title, count, tag, time]) => (
                             <div key={title as string} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl bg-slate-50 px-3 py-2 text-sm">
                               <span className="h-3.5 w-3.5 rounded border border-indigo-200 bg-white" />

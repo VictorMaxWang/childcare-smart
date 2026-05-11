@@ -19,6 +19,7 @@ export function RolePageShell({
   headerVariant = "default",
   className,
   contentClassName,
+  testId,
 }: {
   badge: string;
   title: string;
@@ -28,17 +29,18 @@ export function RolePageShell({
   headerVariant?: "default" | "compact" | "hidden";
   className?: string;
   contentClassName?: string;
+  testId?: string;
 }) {
   if (headerVariant === "hidden") {
     return (
-      <div className={cn("app-page page-enter", className)}>
+      <div className={cn("app-page page-enter", className)} data-testid={testId}>
         <div className={cn("pixel-content-frame", contentClassName)}>{children}</div>
       </div>
     );
   }
 
   return (
-    <div className={cn("app-page page-enter", className)}>
+    <div className={cn("app-page page-enter", className)} data-testid={testId}>
       <div
         className={cn(
           "pixel-page-hero overflow-hidden rounded-[1.55rem] border border-[#dfe7f5] bg-[linear-gradient(135deg,#ffffff_0%,#eef4ff_48%,#ecfeff_100%)] shadow-[0_18px_52px_rgb(79_70_229_/_0.09)] backdrop-blur-sm",
