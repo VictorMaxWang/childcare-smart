@@ -28,12 +28,12 @@ export default function RootLayout({
             closeButton
             toastOptions={{
               classNames: {
-                toast: "rounded-lg border border-(--border) bg-white text-(--text-primary) shadow-[var(--shadow-raised)]",
+                toast: "rounded-[var(--replica-radius-control)] border border-[var(--replica-border)] bg-white text-(--text-primary) shadow-[var(--replica-shadow-control)]",
                 title: "text-sm font-semibold text-(--text-primary)",
                 description: "text-sm leading-5 text-(--text-secondary)",
-                actionButton: "rounded-md bg-(--primary) px-3 py-2 text-sm font-medium text-white",
-                cancelButton: "rounded-md border border-(--border) bg-white px-3 py-2 text-sm font-medium text-(--text-secondary)",
-                closeButton: "border border-(--border) bg-white text-(--text-tertiary)",
+                actionButton: "rounded-[var(--replica-radius-control)] bg-[var(--replica-gradient-primary)] px-3 py-2 text-sm font-semibold text-white",
+                cancelButton: "rounded-[var(--replica-radius-control)] border border-[var(--replica-border)] bg-white px-3 py-2 text-sm font-semibold text-(--text-secondary)",
+                closeButton: "border border-[var(--replica-border)] bg-white text-(--text-tertiary)",
               },
             }}
           />

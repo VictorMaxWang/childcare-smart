@@ -23,7 +23,7 @@ function AppCard({
   const hasHeader = title || description || actions;
 
   return (
-    <Card className={cn("overflow-hidden rounded-[1.35rem] border-indigo-100 bg-white/92 shadow-[0_18px_52px_rgb(79_70_229_/_0.07)]", className)} {...props}>
+    <Card className={cn("replica-panel overflow-hidden", className)} {...props}>
       {hasHeader ? (
         <CardHeader className="flex flex-col gap-3 border-b border-indigo-50 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_100%)] sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { ArrowRight, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
+import { AssistantWorkspaceFrame } from "@/components/ai";
+import { ReplicaMetricCard, ReplicaPanel, type ReplicaTone } from "@/components/cards";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
 
@@ -94,18 +95,13 @@ export function MetricGrid({
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {items.map((item) => (
-        <Card
+        <ReplicaMetricCard
           key={item.label}
-          className={cn(
-            "min-h-31 overflow-hidden rounded-2xl border-[#dfe7f5] border-l-4 bg-white/94 shadow-[0_14px_34px_rgb(15_23_42_/_0.06)]",
-            toneClassMap[item.tone ?? "indigo"]
-          )}
-        >
-          <CardContent className="py-4">
-            <p className="text-sm font-medium text-(--text-tertiary)">{item.label}</p>
-            <p className="mt-2 text-3xl font-semibold leading-tight text-(--text-primary)">{item.value}</p>
-          </CardContent>
-        </Card>
+          className={cn("border-l-4", metricBorderClassMap[item.tone ?? "indigo"])}
+          label={item.label}
+          tone={metricToneMap[item.tone ?? "indigo"]}
+          value={item.value}
+        />
       ))}
     </div>
   );
@@ -125,16 +121,9 @@ export function SectionCard({
   className?: string;
 }) {
   return (
-    <Card className={cn("rounded-2xl border-[#dfe7f5] bg-white/94 shadow-[0_14px_34px_rgb(15_23_42_/_0.06)]", className)}>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <CardTitle className="text-lg text-(--text-primary)">{title}</CardTitle>
-          {description ? <CardDescription className="mt-2">{description}</CardDescription> : null}
-        </div>
-        {actions}
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
+    <ReplicaPanel title={title} description={description} actions={actions} className={className}>
+      {children}
+    </ReplicaPanel>
   );
 }
 
@@ -200,7 +189,7 @@ export function AgentWorkspaceCard({
   children: ReactNode;
 }) {
   return (
-    <SectionCard
+    <AssistantWorkspaceFrame
       title={title}
       description={description}
       actions={
@@ -209,14 +198,21 @@ export function AgentWorkspaceCard({
           {badgeLabel}
         </Badge>
       }
+      prompts={promptButtons}
     >
-      {promptButtons ? <div className="mb-4 flex flex-wrap gap-2">{promptButtons}</div> : null}
       {children}
-    </SectionCard>
+    </AssistantWorkspaceFrame>
   );
 }
 
-const toneClassMap = {
+const metricToneMap: Record<"indigo" | "emerald" | "amber" | "sky", ReplicaTone> = {
+  indigo: "primary",
+  emerald: "success",
+  amber: "warning",
+  sky: "info",
+};
+
+const metricBorderClassMap = {
   indigo: "border-l-indigo-300",
   emerald: "border-l-emerald-300",
   amber: "border-l-amber-300",

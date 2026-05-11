@@ -9,7 +9,6 @@ import {
   BookHeart,
   Bot,
   ChevronDown,
-  ChevronRight,
   FileText,
   Home,
   House,
@@ -25,6 +24,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import MobileNav from "@/components/MobileNav";
+import {
+  MobileBottomNav,
+  ShellBrandMark,
+  ShellBreadcrumb,
+  type MobileBottomNavItem,
+} from "@/components/layout";
 import { VoiceOrb } from "@/components/voice-assistant/VoiceOrb";
 import { RoleBadge, type RoleBadgeRole } from "@/components/ui/role-badge";
 import { LoadingState } from "@/components/ui/state-block";
@@ -232,6 +237,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   return (
     <div
       className="pixel-app-shell min-h-screen text-(--foreground)"
+      data-testid="r02-app-shell"
       data-role-shell={roleMeta.shellRole}
       data-shell-mode={roleMeta.shellMode}
     >
@@ -266,7 +272,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           {children}
         </main>
         <VoiceOrb />
-        <MobileBottomTabBar items={bottomNavItems} pathname={currentLocation} />
+        <MobileBottomNav items={bottomNavItems} pathname={currentLocation} />
       </div>
     </div>
   );
@@ -301,7 +307,7 @@ function ShellTopbar({
   const unavailableReason = "MVP 暂未接入真实业务消息与全局检索服务，E10 已记录为产品缺口。";
 
   return (
-    <header className="pixel-topbar sticky top-0 z-50 border-b border-slate-200/80 bg-white/94 shadow-[0_1px_0_rgb(15_23_42_/_0.03),0_10px_34px_rgb(79_70_229_/_0.06)] backdrop-blur-xl">
+    <header data-testid="r02-shell-topbar" className="pixel-topbar sticky top-0 z-50 border-b border-slate-200/80 bg-white/94 shadow-[0_1px_0_rgb(15_23_42_/_0.03),0_10px_34px_rgb(79_70_229_/_0.06)] backdrop-blur-xl">
       <div className="flex min-h-[86px] items-center justify-between gap-3 px-4 sm:min-h-[72px] sm:px-6 lg:min-h-20 lg:px-8">
         <div className="flex min-w-0 shrink-0 items-center gap-3">
           <MobileNav onLogout={onLogout} />
@@ -326,11 +332,7 @@ function ShellTopbar({
         ) : roleMeta.shellMode === "mobile-app" ? (
           <ParentDesktopPills items={topNavItems} pathname={pathname} />
         ) : (
-          <div className="hidden min-w-0 items-center gap-2 text-sm font-medium text-slate-500 xl:flex">
-            <span>{roleMeta.navCue}</span>
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            <span className="truncate text-slate-900">{activeItem?.label ?? pageTitle}</span>
-          </div>
+          <ShellBreadcrumb cue={roleMeta.navCue} active={activeItem?.label ?? pageTitle} />
         )}
 
         <div className="flex shrink-0 items-center gap-2">
@@ -466,7 +468,7 @@ function DesktopSidebar({
   roleMeta: (typeof ROLE_META)[AccountRole];
 }) {
   return (
-    <aside className="pixel-sidebar fixed bottom-0 left-0 top-[80px] z-40 hidden w-[196px] flex-col border-r border-slate-200/80 bg-white/92 shadow-[12px_0_36px_rgb(15_23_42_/_0.05)] backdrop-blur-xl lg:flex">
+    <aside data-testid="r02-shell-sidebar" className="pixel-sidebar fixed bottom-0 left-0 top-[80px] z-40 hidden w-[196px] flex-col border-r border-slate-200/80 bg-white/92 shadow-[12px_0_36px_rgb(15_23_42_/_0.05)] backdrop-blur-xl lg:flex">
       <div className="flex-1 overflow-y-auto px-5 py-6">
         <div className={cn("mb-6 rounded-2xl border px-4 py-3 text-xs font-semibold", roleMeta.accentClassName)}>
           {roleMeta.description}
@@ -549,15 +551,7 @@ function SidebarNavLink({ item, pathname }: { item: PrimaryNavItem; pathname: st
   );
 }
 
-type MobileBottomTabItem = {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  match: (pathname: string) => boolean;
-  highlight?: boolean;
-};
-
-function buildMobileBottomNavItems(role: RoleBadgeRole, childId?: string): MobileBottomTabItem[] {
+function buildMobileBottomNavItems(role: RoleBadgeRole, childId?: string): MobileBottomNavItem[] {
   const childQuery = childId ? `child=${encodeURIComponent(childId)}` : "";
   const withChild = (path: string) => (childQuery ? `${path}?${childQuery}` : path);
 
@@ -594,50 +588,6 @@ function stripLocationPath(value: string) {
   return (value.split("#")[0] ?? value).split("?")[0] || "/";
 }
 
-function MobileBottomTabBar({ items, pathname }: { items: MobileBottomTabItem[]; pathname: string }) {
-  return (
-    <nav
-      className="pixel-bottom-tabs fixed inset-x-3 bottom-3 z-40 rounded-[1.65rem] border border-white/85 bg-white/94 px-2 py-2 shadow-[0_18px_52px_rgb(15_23_42_/_0.18)] backdrop-blur-xl lg:hidden"
-      aria-label="移动端快捷导航"
-    >
-      <div className="grid grid-cols-5 gap-1">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const active = item.match(pathname);
-          return (
-            <Link
-              key={`${item.href}-${item.label}`}
-              href={item.href}
-              className={cn(
-                "flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-bold transition",
-                active
-                  ? "text-indigo-700"
-                  : item.highlight
-                    ? "text-indigo-600"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-              )}
-            >
-              <span
-                className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-2xl transition",
-                  item.highlight
-                    ? "bg-[linear-gradient(135deg,#6757ff,#8b5cf6)] text-white shadow-[0_10px_24px_rgb(99_102_241_/_0.26)]"
-                    : active
-                      ? "bg-indigo-50 text-indigo-700 shadow-sm"
-                      : "bg-slate-50 text-slate-500"
-                )}
-              >
-                <Icon className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <span className="max-w-full truncate">{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
-  );
-}
-
 function ShellIconButton({
   badge,
   children,
@@ -672,16 +622,7 @@ function ShellIconButton({
 }
 
 function BrandMark({ compact = false }: { compact?: boolean }) {
-  return (
-    <span
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#6656ff,#7c5cff_56%,#26c7bd)] text-white shadow-[0_14px_36px_rgb(99_102_241_/_0.25)]",
-        compact ? "h-11 w-11" : "h-12 w-12"
-      )}
-    >
-      <ShieldCheck className={compact ? "h-5 w-5" : "h-6 w-6"} aria-hidden="true" />
-    </span>
-  );
+  return <ShellBrandMark compact={compact} />;
 }
 
 function findActiveNavItem(currentLocation: string, navItems: PrimaryNavItem[]) {

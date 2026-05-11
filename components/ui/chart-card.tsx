@@ -1,8 +1,7 @@
 import * as React from "react";
-import { AppCard } from "@/components/ui/app-card";
-import { cn } from "@/lib/utils";
+import { ReplicaChartFrame, ReplicaChartLegendItem } from "@/components/charts";
 
-export interface ChartCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
+export interface ChartCardProps extends Omit<React.HTMLAttributes<HTMLElement>, "title"> {
   title: React.ReactNode;
   description?: React.ReactNode;
   actions?: React.ReactNode;
@@ -21,12 +20,17 @@ function ChartCard({
   ...props
 }: ChartCardProps) {
   return (
-    <AppCard title={title} description={description} actions={actions} className={className} {...props}>
-      <div className="min-w-0" style={{ minHeight }}>
-        {children}
-      </div>
-      {legend ? <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-(--text-tertiary)">{legend}</div> : null}
-    </AppCard>
+    <ReplicaChartFrame
+      title={title}
+      description={description}
+      actions={actions}
+      legend={legend}
+      minHeight={minHeight}
+      className={className}
+      {...props}
+    >
+      {children}
+    </ReplicaChartFrame>
   );
 }
 
@@ -39,12 +43,7 @@ function ChartLegendItem({
   label: React.ReactNode;
   className?: string;
 }) {
-  return (
-    <span className={cn("inline-flex items-center gap-1.5", className)}>
-      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
-      {label}
-    </span>
-  );
+  return <ReplicaChartLegendItem color={color} label={label} className={className} />;
 }
 
 export { ChartCard, ChartLegendItem };

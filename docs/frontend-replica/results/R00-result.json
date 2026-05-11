@@ -1,0 +1,40 @@
+{
+  "taskId": "FRONTEND-REPLICA-R00",
+  "status": "done",
+  "designSourceDir": "C:\\Users\\12804\\Desktop\\childcare-smart源代码\\前端重构",
+  "designFilesScanned": 247,
+  "routesMapped": 17,
+  "roles": [
+    "login",
+    "director/admin",
+    "teacher",
+    "parent",
+    "shared",
+    "mobile",
+    "tablet"
+  ],
+  "hasChartTargets": true,
+  "hasAiAssistantTargets": true,
+  "nextTasks": [
+    "R01-design-inventory-canonical",
+    "R02-route-map-query-states",
+    "R03-visual-token-extraction",
+    "R04-replica-component-foundation",
+    "R05-chart-replica",
+    "R06-vivo-ai-assistant-replica",
+    "R10-login-replica",
+    "R20-director-replica",
+    "R30-teacher-replica",
+    "R40-parent-replica",
+    "R50-shared-pages-replica",
+    "R90-visual-qa",
+    "R99-final-acceptance"
+  ],
+  "risks": [
+    "设计源是 PNG 截图库，不是源设计文件；R01 必须确认 canonical。",
+    "图表和 AI 助手视觉目标多，必须拆 R05/R06 独立验收。",
+    "现有 pixel compare 分数不等同最终验收，R90 必须逐页出差异报告。",
+    "vivo 文档需 R06 再次按官方入口复核，不可凭记忆改 provider。"
+  ],
+  "notes": "Generated docs/frontend-replica control docs, inventory, route map, status, and R00 result. No business UI changes."
+}
