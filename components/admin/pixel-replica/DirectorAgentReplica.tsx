@@ -27,7 +27,6 @@ import {
   ReplicaMetric,
   ReplicaPanel,
   ReplicaPill,
-  ReplicaUnavailableButton,
 } from "./DirectorReplicaPrimitives";
 
 function statusLabel(status: AdminDispatchEvent["status"] | AdminAgentActionItem["status"]) {
@@ -86,7 +85,9 @@ export default function DirectorAgentReplica({
   const actionItems = result?.actionItems ?? [];
   const recommendedOwners = result?.recommendedOwnerMap ?? [];
   const [questionText, setQuestionText] = useState("");
+  const [showHelp, setShowHelp] = useState(false);
   const trimmedQuestion = questionText.trim();
+  const dispatchableActionItems = actionItems.filter((item) => !item.relatedEventId && !isCreatingNotification(item.id));
   const closureValues = [
     scope?.riskChildrenCount ?? 0,
     actionItems.length,
@@ -100,6 +101,11 @@ export default function DirectorAgentReplica({
     setQuestionText("");
   }
 
+  function handleBatchDispatch() {
+    if (!dispatchAvailable || dispatchableActionItems.length === 0) return;
+    dispatchableActionItems.slice(0, 4).forEach((item) => onCreateDispatch(item));
+  }
+
   return (
     <DirectorReplicaPage
       eyebrow={`园长 AI 助手 · ${institutionName}`}
@@ -107,10 +113,10 @@ export default function DirectorAgentReplica({
       description="基于近 7 天数据分析，识别重点问题、生成建议动作、承接派单状态并保留周报入口。"
       actions={
         <>
-          <ReplicaUnavailableButton variant="outline">
+          <ReplicaButton variant="outline" onClick={() => setShowHelp((value) => !value)} data-testid="r05-admin-agent-help">
             <CircleHelp className="h-4 w-4" />
             使用说明
-          </ReplicaUnavailableButton>
+          </ReplicaButton>
           <ReplicaButton variant="outline" onClick={onOpenWeekly}>
             <FileText className="h-4 w-4" />
             周报工作区
@@ -129,6 +135,21 @@ export default function DirectorAgentReplica({
             {requestError}
           </span>
         </div>
+      ) : null}
+
+      {showHelp ? (
+        <ReplicaPanel title="使用说明" description="这些入口都连接真实园长端流程，不展示假成功状态。" bodyClassName="grid gap-3 sm:grid-cols-3">
+          {[
+            ["追问数据", "在 AI 工作台输入问题，调用 /api/ai/admin-agent 返回真实结果或明确 provider 状态。"],
+            ["生成派单", "点击建议动作会写入通知派单，已有派单不会重复创建。"],
+            ["周报闭环", "周报工作区支持生成、保存、导出、分享和归档。"],
+          ].map(([title, detail]) => (
+            <div key={title} className="rounded-[14px] border border-[#E8ECF7] bg-[#F8FAFF] p-4">
+              <p className="text-sm font-bold text-[#172554]">{title}</p>
+              <p className="mt-2 text-xs leading-5 text-[#596681]">{detail}</p>
+            </div>
+          ))}
+        </ReplicaPanel>
       ) : null}
 
       <RoleAssistantWorkspace
@@ -264,7 +285,14 @@ export default function DirectorAgentReplica({
               </div>
               <div className="mt-5 flex items-center justify-between">
                 <span className="text-sm text-[#7A86A6]">共 {actionItems.length} 条</span>
-                <ReplicaUnavailableButton variant="soft">批量派单</ReplicaUnavailableButton>
+                <ReplicaButton
+                  variant="soft"
+                  onClick={handleBatchDispatch}
+                  disabled={!dispatchAvailable || dispatchableActionItems.length === 0}
+                  data-testid="r05-admin-agent-batch-dispatch"
+                >
+                  批量派单
+                </ReplicaButton>
               </div>
             </ReplicaPanel>
 

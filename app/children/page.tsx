@@ -350,7 +350,7 @@ export default function ChildrenPage() {
   }
 
   return (
-    <div className="app-page max-w-[86rem] page-enter">
+    <div className="app-page max-w-[86rem] page-enter" data-testid="r05-children-page">
       <section className="mb-5 overflow-hidden rounded-2xl border border-indigo-100 bg-[linear-gradient(135deg,#f8fbff_0%,#eef2ff_48%,#ecfeff_100%)] p-4 shadow-[0_20px_60px_rgb(79_70_229_/_0.10)] sm:p-5">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
           <div>
