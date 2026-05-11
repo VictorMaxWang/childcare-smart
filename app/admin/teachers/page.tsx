@@ -5,7 +5,7 @@ import { Archive, Eye, GraduationCap, Pencil, RotateCcw, Search, UserPlus, Users
 import EmptyState from "@/components/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DataTableShell } from "@/components/ui/data-table-shell";
 import {
   Dialog,
@@ -27,6 +27,7 @@ import {
 import { FilterBar } from "@/components/ui/filter-bar";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { ErrorState, LoadingState } from "@/components/ui/state-block";
 import { StatusTag } from "@/components/ui/status-tag";
 import { ApiClientError } from "@/lib/api/errors";
 import { archiveTeacher, createTeacher, listTeachers, updateTeacher } from "@/lib/api/teachers";
@@ -76,6 +77,8 @@ export default function AdminTeachersPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingTeacherId, setEditingTeacherId] = useState<string | null>(null);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: "archive" | "restore"; teacher: ApiTeacher } | null>(null);
+  const [confirmSaving, setConfirmSaving] = useState(false);
   const [form, setForm] = useState<TeacherFormState>(DEFAULT_FORM);
 
   const loadTeachers = useCallback(async () => {
@@ -172,10 +175,15 @@ export default function AdminTeachersPage() {
     }
   }
 
-  async function handleArchive(teacher: ApiTeacher) {
-    const confirmed = window.confirm(`确认归档 ${teacher.name} 的教师档案？归档后默认列表会隐藏该教师。`);
-    if (!confirmed) return;
+  function requestArchive(teacher: ApiTeacher) {
+    setConfirmAction({ type: "archive", teacher });
+  }
 
+  function requestRestore(teacher: ApiTeacher) {
+    setConfirmAction({ type: "restore", teacher });
+  }
+
+  async function performArchive(teacher: ApiTeacher) {
     try {
       await archiveTeacher(teacher.teacherId, { action: "archive", archiveReason: "E02 页面归档" });
       toast.success("教师档案已归档", { description: "删除动作已按产品规则转为软归档。" });
@@ -186,16 +194,28 @@ export default function AdminTeachersPage() {
     }
   }
 
-  async function handleRestore(teacher: ApiTeacher) {
-    const confirmed = window.confirm(`确认恢复 ${teacher.name} 的教师档案？恢复后会重新出现在默认列表。`);
-    if (!confirmed) return;
-
+  async function performRestore(teacher: ApiTeacher) {
     try {
       await archiveTeacher(teacher.teacherId, { action: "restore" });
       toast.success("教师档案已恢复", { description: "恢复动作已写入审计字段。" });
       await loadTeachers();
     } catch (requestError) {
       toast.error("教师档案恢复失败", { description: apiErrorMessage(requestError) });
+    }
+  }
+
+  async function handleConfirmAction() {
+    if (!confirmAction) return;
+    setConfirmSaving(true);
+    try {
+      if (confirmAction.type === "archive") {
+        await performArchive(confirmAction.teacher);
+      } else {
+        await performRestore(confirmAction.teacher);
+      }
+      setConfirmAction(null);
+    } finally {
+      setConfirmSaving(false);
     }
   }
 
@@ -273,16 +293,21 @@ export default function AdminTeachersPage() {
       />
 
       {error ? (
-        <div className="mb-5 rounded-lg border border-(--danger-border) bg-(--danger-soft) px-4 py-3 text-sm text-(--danger-foreground)" role="alert">
-          {error}
-          <Button variant="outline" size="sm" className="ml-3" onClick={() => void loadTeachers()}>
-            重试
-          </Button>
+        <div className="mb-5">
+          <ErrorState
+            title="教师列表读取失败"
+            description={error}
+            action={
+              <Button type="button" variant="outline" onClick={() => void loadTeachers()}>
+                重试
+              </Button>
+            }
+          />
         </div>
       ) : null}
 
       {loading ? (
-        <Card className="border-indigo-100 p-6 text-sm text-slate-600">正在读取教师列表...</Card>
+        <LoadingState title="正在读取教师列表" description="系统正在同步 teachers API 与归档状态。" />
       ) : filteredTeachers.length === 0 ? (
         <EmptyState
           icon={<UsersRound className="h-6 w-6" />}
@@ -335,7 +360,7 @@ export default function AdminTeachersPage() {
                         详情
                       </Button>
                       {teacher.archivedAt ? (
-                        <Button variant="outline" size="sm" onClick={() => void handleRestore(teacher)} data-testid={`e02-restore-teacher-${teacher.teacherId}`}>
+                        <Button variant="outline" size="sm" onClick={() => requestRestore(teacher)} data-testid={`e02-restore-teacher-${teacher.teacherId}`}>
                           <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
                           恢复
                         </Button>
@@ -345,7 +370,7 @@ export default function AdminTeachersPage() {
                             <Pencil className="mr-1.5 h-3.5 w-3.5" />
                             编辑
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => void handleArchive(teacher)} data-testid={`e02-archive-teacher-${teacher.teacherId}`}>
+                          <Button variant="ghost" size="sm" onClick={() => requestArchive(teacher)} data-testid={`e02-archive-teacher-${teacher.teacherId}`}>
                             <Archive className="mr-1.5 h-3.5 w-3.5" />
                             归档
                           </Button>
@@ -411,7 +436,7 @@ export default function AdminTeachersPage() {
                   关闭
                 </Button>
                 {selectedTeacher.archivedAt ? (
-                  <Button onClick={() => void handleRestore(selectedTeacher)} data-testid="e02-detail-restore-teacher">
+                  <Button onClick={() => requestRestore(selectedTeacher)} data-testid="e02-detail-restore-teacher">
                     恢复教师
                   </Button>
                 ) : (
@@ -424,6 +449,25 @@ export default function AdminTeachersPage() {
           ) : null}
         </DrawerContent>
       </Drawer>
+      <ConfirmDialog
+        open={Boolean(confirmAction)}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAction(null);
+        }}
+        title={confirmAction?.type === "archive" ? "确认归档教师档案" : "确认恢复教师档案"}
+        description={
+          confirmAction
+            ? `${confirmAction.teacher.name} 的档案将在确认后${
+                confirmAction.type === "archive" ? "从默认列表隐藏" : "重新回到默认列表"
+              }。取消不会写入数据。`
+            : undefined
+        }
+        confirmLabel={confirmAction?.type === "archive" ? "确认归档" : "确认恢复"}
+        cancelLabel="取消"
+        variant={confirmAction?.type === "archive" ? "danger" : "default"}
+        loading={confirmSaving}
+        onConfirm={handleConfirmAction}
+      />
     </div>
   );
 }

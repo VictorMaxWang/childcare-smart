@@ -461,9 +461,15 @@ body {
   transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
-.app-table-scroll table tbody tr:hover {
+.app-table-scroll table tbody tr:hover,
+.app-table-scroll table tbody tr:focus-within {
   background: rgb(248 250 252 / 0.92);
   box-shadow: inset 3px 0 0 rgb(99 102 241 / 0.6);
+}
+
+.r08-focus-card:focus-within {
+  border-color: rgb(199 210 254 / 0.95);
+  box-shadow: 0 18px 42px rgb(99 102 241 / 0.12);
 }
 
 .focus-ring {

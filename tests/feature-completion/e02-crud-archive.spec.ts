@@ -40,10 +40,10 @@ async function capture(page: Page, fileName: string) {
   });
 }
 
-async function acceptNextDialog(page: Page) {
-  page.once("dialog", async (dialog) => {
-    await dialog.accept();
-  });
+async function confirmR08Dialog(page: Page) {
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByTestId("r08-confirm-dialog-confirm").click();
 }
 
 test.describe.serial("E02 CRUD archive and scope", () => {
@@ -215,8 +215,8 @@ test.describe.serial("E02 CRUD archive and scope", () => {
     await capture(page, "01-admin-child-created-edited.png");
 
     row = page.locator("tr", { hasText: token });
-    await acceptNextDialog(page);
     await row.locator('[data-testid^="e02-archive-child-"]').click();
+    await confirmR08Dialog(page);
     await expect(page.locator("tbody tr", { hasText: token })).toHaveCount(0);
 
     await page.getByTestId("e02-toggle-archived-children").click();
@@ -224,8 +224,8 @@ test.describe.serial("E02 CRUD archive and scope", () => {
     await capture(page, "02-admin-child-archived.png");
 
     row = page.locator("tr", { hasText: token });
-    await acceptNextDialog(page);
     await row.locator('[data-testid^="e02-restore-child-"]').click();
+    await confirmR08Dialog(page);
     await page.getByTestId("e02-toggle-archived-children").click();
     await expect(page.locator("tbody tr", { hasText: token })).toBeVisible();
     await capture(page, "03-admin-child-restored.png");
@@ -251,8 +251,8 @@ test.describe.serial("E02 CRUD archive and scope", () => {
     await capture(page, "04-admin-teacher-created-edited.png");
 
     row = page.locator("tr", { hasText: token });
-    await acceptNextDialog(page);
     await row.locator('[data-testid^="e02-archive-teacher-"]').click();
+    await confirmR08Dialog(page);
     await expect(page.locator("tbody tr", { hasText: token })).toHaveCount(0);
 
     await page.getByTestId("e02-toggle-archived-teachers").click();
@@ -260,8 +260,8 @@ test.describe.serial("E02 CRUD archive and scope", () => {
     await capture(page, "05-admin-teacher-archived.png");
 
     row = page.locator("tr", { hasText: token });
-    await acceptNextDialog(page);
     await row.locator('[data-testid^="e02-restore-teacher-"]').click();
+    await confirmR08Dialog(page);
     await page.getByTestId("e02-toggle-archived-teachers").click();
     await expect(page.locator("tbody tr", { hasText: token })).toBeVisible();
     await capture(page, "06-admin-teacher-restored.png");

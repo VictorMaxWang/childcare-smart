@@ -16,6 +16,16 @@ const STATUS_OPTIONS: Array<{ value: FeedbackStatus; label: string }> = [
   { value: "archived", label: "已归档" },
 ];
 
+function normalizeDetail(detail: ApiFeedbackDetail): ApiFeedbackDetail {
+  return {
+    ...detail,
+    messages: detail.messages ?? [],
+    replies: detail.replies ?? [],
+    attachments: detail.attachments ?? [],
+    statusHistory: detail.statusHistory ?? [],
+  };
+}
+
 function statusLabel(status: string) {
   return STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
 }
@@ -57,8 +67,9 @@ export default function FeedbackDetailDialog({
     getFeedbackDetail(feedbackId)
       .then((nextDetail) => {
         if (cancelled) return;
-        setDetail(nextDetail);
-        setStatusDraft(nextDetail.feedback.status);
+        const normalized = normalizeDetail(nextDetail);
+        setDetail(normalized);
+        setStatusDraft(normalized.feedback?.status ?? "open");
       })
       .catch((error) => {
         if (!cancelled) setMessage(error instanceof Error ? error.message : "反馈详情读取失败。");
@@ -71,14 +82,13 @@ export default function FeedbackDetailDialog({
     };
   }, [feedbackId, open]);
 
-  useEffect(() => {
-    if (!open) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onOpenChange(false);
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onOpenChange, open]);
+  const feedback = detail?.feedback ?? null;
+  const child = detail?.child ?? null;
+  const parent = detail?.parent ?? null;
+  const teacher = detail?.teacher ?? null;
+  const attachments = detail?.attachments ?? [];
+  const statusHistory = detail?.statusHistory ?? [];
+  const canRenderDetail = Boolean(feedback && child);
 
   const sortedMessages = useMemo(
     () => [...(detail?.messages ?? [])].sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
@@ -90,9 +100,9 @@ export default function FeedbackDetailDialog({
     setSaving(true);
     setMessage(null);
     try {
-      const nextDetail = await updateFeedbackStatus(feedbackId, statusDraft);
+      const nextDetail = normalizeDetail(await updateFeedbackStatus(feedbackId, statusDraft));
       setDetail(nextDetail);
-      setStatusDraft(nextDetail.feedback.status);
+      setStatusDraft(nextDetail.feedback?.status ?? "open");
       setMessage("状态已保存。");
       onUpdated?.(nextDetail);
     } catch (error) {
@@ -102,10 +112,23 @@ export default function FeedbackDetailDialog({
     }
   }
 
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onOpenChange(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onOpenChange, open]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-[70]">
       <button
         type="button"
         aria-label="关闭反馈详情"
@@ -115,22 +138,23 @@ export default function FeedbackDetailDialog({
       <section
         role="dialog"
         aria-modal="true"
+        aria-labelledby="feedback-detail-title"
         data-testid="feedback-detail-dialog"
-        className="fixed inset-x-0 bottom-0 z-50 grid max-h-[calc(100dvh-0.75rem)] w-full gap-5 overflow-y-auto overscroll-contain rounded-t-[28px] border border-indigo-100 bg-white p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] shadow-[0_-24px_72px_rgb(15_23_42_/_0.18)] sm:left-[50%] sm:top-[50%] sm:bottom-auto sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100%-2rem)] sm:max-w-3xl sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-[28px] sm:p-6 sm:shadow-[0_28px_80px_rgb(15_23_42_/_0.20)]"
+        className="fixed inset-x-0 bottom-0 z-[71] grid max-h-[calc(100dvh-0.75rem)] w-full gap-5 overflow-y-auto overscroll-contain rounded-t-[28px] border border-indigo-100 bg-white p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] shadow-[0_-24px_72px_rgb(15_23_42_/_0.18)] sm:left-[50%] sm:top-[50%] sm:bottom-auto sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100%-2rem)] sm:max-w-3xl sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-[28px] sm:p-6 sm:shadow-[0_28px_80px_rgb(15_23_42_/_0.20)]"
       >
-        <div className="flex flex-col space-y-2 pr-10 text-left">
-          <h2 className="text-xl font-semibold leading-tight text-slate-950">反馈详情</h2>
+        <header className="flex flex-col space-y-2 pr-10 text-left">
+          <h2 id="feedback-detail-title" className="text-xl font-semibold leading-tight text-slate-950">反馈详情</h2>
           <p className="text-sm leading-6 text-slate-500">
-            {detail ? `${detail.child.name} · ${detail.child.className}` : loading ? "正在读取反馈详情..." : "查看反馈、消息、附件和状态历史。"}
+            {canRenderDetail && child ? `${child.name} · ${child.className}` : loading ? "正在读取反馈详情..." : "查看反馈、消息、附件和状态历史。"}
           </p>
-        </div>
+        </header>
         <button
           type="button"
+          aria-label="关闭反馈详情"
           className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-100 bg-white/88 text-slate-500 opacity-90 shadow-sm ring-offset-background transition-colors hover:bg-indigo-50 hover:text-indigo-600 hover:opacity-100 focus:outline-none focus:ring-4 focus:ring-indigo-100 sm:right-5 sm:top-5 sm:h-9 sm:w-9"
           onClick={() => onOpenChange(false)}
         >
           <X className="h-4 w-4" />
-          <span className="sr-only">关闭</span>
         </button>
 
         {loading ? (
@@ -138,14 +162,14 @@ export default function FeedbackDetailDialog({
             <RefreshCw className="h-4 w-4 animate-spin" />
             加载中
           </div>
-        ) : detail ? (
+        ) : detail && canRenderDetail && feedback && child ? (
           <div className="space-y-5">
             <div className="grid gap-3 sm:grid-cols-4">
               {[
-                ["儿童", detail.child.name],
-                ["家长", detail.parent?.name ?? "未绑定"],
-                ["教师", detail.teacher?.name ?? "未分配"],
-                ["状态", statusLabel(detail.feedback.status)],
+                ["儿童", child.name],
+                ["家长", parent?.name ?? "未绑定"],
+                ["教师", teacher?.name ?? "未分配"],
+                ["状态", statusLabel(feedback.status)],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
                   <p className="text-xs text-slate-500">{label}</p>
@@ -158,16 +182,16 @@ export default function FeedbackDetailDialog({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-base font-semibold text-slate-950">结构化反馈</h3>
-                  <p className="mt-1 text-sm text-slate-500">{formatDateTime(detail.feedback.submittedAt ?? detail.feedback.date)}</p>
+                  <p className="mt-1 text-sm text-slate-500">{formatDateTime(feedback.submittedAt ?? feedback.date)}</p>
                 </div>
-                <Badge variant="secondary">{statusLabel(detail.feedback.status)}</Badge>
+                <Badge variant="secondary">{statusLabel(feedback.status)}</Badge>
               </div>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                {detail.feedback.content || detail.feedback.notes || "暂无反馈正文。"}
+                {feedback.content || feedback.notes || "暂无反馈正文。"}
               </p>
-              {detail.feedback.barriers?.length ? (
+              {feedback.barriers?.length ? (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {detail.feedback.barriers.map((barrier) => (
+                  {feedback.barriers.map((barrier) => (
                     <span key={barrier} className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
                       {barrier}
                     </span>
@@ -176,10 +200,10 @@ export default function FeedbackDetailDialog({
               ) : null}
             </section>
 
-            {detail.attachments.length > 0 ? (
+            {attachments.length > 0 ? (
               <section className="space-y-3">
                 <h3 className="text-base font-semibold text-slate-950">附件</h3>
-                <AttachmentPreviewList items={detail.attachments} />
+                <AttachmentPreviewList items={attachments} />
               </section>
             ) : null}
 
@@ -211,7 +235,7 @@ export default function FeedbackDetailDialog({
                 状态历史
               </div>
               <div className="space-y-2">
-                {detail.statusHistory.map((item, index) => (
+                {statusHistory.map((item, index) => (
                   <div key={`${item.action}-${item.createdAt}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
                     <span className="font-semibold text-slate-800">{statusLabel(item.status)}</span>
                     <span className="text-slate-500">{formatDateTime(item.createdAt)}</span>
@@ -244,9 +268,17 @@ export default function FeedbackDetailDialog({
               </section>
             ) : null}
           </div>
+        ) : detail ? (
+          <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-5 text-sm leading-6 text-amber-800" role="alert">
+            反馈详情数据不完整，请重试或返回列表后再打开。
+          </div>
         ) : null}
 
-        {message ? <p className="text-sm text-slate-600" role="status">{message}</p> : null}
+        {message ? (
+          <p className="text-sm text-slate-600" role="status">
+            {message}
+          </p>
+        ) : null}
       </section>
     </div>
   );

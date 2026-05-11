@@ -116,18 +116,14 @@ test("D07 removes fake success and preserves shared demo writes", async ({ page 
   await expect.poll(() => hasAttendanceForChild(page, childId as string)).toBe(true);
   await page.reload();
   await expect.poll(() => hasAttendanceForChild(page, childId as string)).toBe(true);
-  page.once("dialog", async (dialog) => {
-    await dialog.accept();
-  });
   await page.getByTestId(`e02-archive-child-${childId}`).click();
+  await page.getByTestId("r08-confirm-dialog-confirm").click();
   await expect(page.getByTestId(`e02-child-row-${childId}`)).toHaveCount(0);
   await page.getByTestId("e02-toggle-archived-children").click();
   await expect(page.getByTestId(`e02-restore-child-${childId}`)).toBeEnabled();
   await screenshot(page, "03-children-attendance-archive-real.png");
-  page.once("dialog", async (dialog) => {
-    await dialog.accept();
-  });
   await page.getByTestId(`e02-restore-child-${childId}`).click();
+  await page.getByTestId("r08-confirm-dialog-confirm").click();
 
   await loginAs(page, "u-teacher", "/health");
   await expect(page.locator("body")).not.toContainText("导出记录");
