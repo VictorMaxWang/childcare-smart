@@ -38,7 +38,13 @@ export function ReplicaLineChart({
   if (!hasChartData(data, series)) return replicaChartEmptyNode(emptyMessage);
 
   return (
-    <div data-testid={testId} className="min-w-0">
+    <div
+      data-testid={testId}
+      className="min-w-0 rounded-[18px] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-100"
+      role="img"
+      aria-label={`Line chart with ${data.length} data points`}
+      tabIndex={0}
+    >
       <ReplicaChartSurface height={height}>
         {(size) => (
           <LineChart width={size.width} height={size.height} data={data} margin={{ top: 10, right: 14, bottom: 2, left: -8 }}>

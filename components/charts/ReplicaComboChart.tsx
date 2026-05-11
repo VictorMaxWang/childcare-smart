@@ -41,7 +41,13 @@ export function ReplicaComboChart({
   if (!hasChartData(chartData, series)) return replicaChartEmptyNode(emptyMessage);
 
   return (
-    <div data-testid={testId} className="min-w-0">
+    <div
+      data-testid={testId}
+      className="min-w-0 rounded-[18px] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-100"
+      role="img"
+      aria-label={`Combo chart with ${chartData.length} data points`}
+      tabIndex={0}
+    >
       <ReplicaChartSurface height={height}>
         {(size) => (
           <ComboSvg
@@ -94,6 +100,7 @@ function ComboSvg({
   const xCenter = (index: number) => padding.left + categoryWidth * index + categoryWidth / 2;
   const yFor = (value: number) => padding.top + innerHeight - (value / maxValue) * innerHeight;
   const activeRow = hoverPoint ? data[hoverPoint.index] : null;
+  const xLabelStep = width < 420 ? Math.max(1, Math.ceil(data.length / 4)) : width < 560 ? Math.max(1, Math.ceil(data.length / 6)) : 1;
 
   return (
     <div className="relative h-full w-full min-w-0" onMouseLeave={() => onHover(null)}>
@@ -117,17 +124,21 @@ function ComboSvg({
             </g>
           );
         })}
-        {data.map((row, index) => (
-          <text
-            key={`x-${row.label}`}
-            x={xCenter(index)}
-            y={height - 10}
-            textAnchor="middle"
-            className="fill-[#94A3B8] text-[12px] font-semibold"
-          >
-            {row.label}
-          </text>
-        ))}
+        {data.map((row, index) => {
+          const shouldRenderLabel = index === 0 || index === data.length - 1 || index % xLabelStep === 0;
+          if (!shouldRenderLabel) return null;
+          return (
+            <text
+              key={`x-${row.label}`}
+              x={xCenter(index)}
+              y={height - 10}
+              textAnchor="middle"
+              className="fill-[#94A3B8] text-[12px] font-semibold"
+            >
+              {row.label}
+            </text>
+          );
+        })}
         {barSeries.map((item) => {
           const seriesIndex = series.findIndex((entry) => entry.key === item.key);
           const barIndex = barSeries.findIndex((entry) => entry.key === item.key);
@@ -148,8 +159,10 @@ function ComboSvg({
                 rx={radius}
                 fill={colorForSeries(seriesIndex, item.color)}
                 opacity={hoverPoint && hoverPoint.index !== index ? 0.48 : 1}
+                aria-label={`${row.label} ${item.label} ${formatChartNumber(value, item.unit ?? yUnit)}`}
                 onMouseEnter={() => onHover({ index, x: xCenter(index), y: barY })}
                 onFocus={() => onHover({ index, x: xCenter(index), y: barY })}
+                onBlur={() => onHover(null)}
                 tabIndex={0}
               />
             );
@@ -177,8 +190,10 @@ function ComboSvg({
                   fill="#FFFFFF"
                   stroke={colorForSeries(seriesIndex, item.color)}
                   strokeWidth={2.5}
+                  aria-label={`${data[point.index]?.label ?? ""} ${item.label} ${formatChartNumber(readNumericValue(data[point.index]?.[item.key]), item.unit ?? yUnit)}`}
                   onMouseEnter={() => onHover(point)}
                   onFocus={() => onHover(point)}
+                  onBlur={() => onHover(null)}
                   tabIndex={0}
                 />
               ))}
@@ -197,6 +212,8 @@ function ComboSvg({
             onMouseEnter={() => onHover({ index, x: xCenter(index), y: padding.top + innerHeight * 0.38 })}
             onMouseMove={() => onHover({ index, x: xCenter(index), y: padding.top + innerHeight * 0.38 })}
             onFocus={() => onHover({ index, x: xCenter(index), y: padding.top + innerHeight * 0.38 })}
+            onBlur={() => onHover(null)}
+            aria-label={`${row.label} chart data`}
             tabIndex={0}
           />
         ))}

@@ -199,6 +199,14 @@ export function VoiceOrb() {
     return "vivo provider ready";
   }, [providerStatus]);
 
+  const providerCapabilities = providerStatus
+    ? [providerStatus.chat, providerStatus.ocr, providerStatus.asr, providerStatus.tts]
+    : [];
+  const providerReady =
+    providerCapabilities.length > 0 &&
+    providerCapabilities.every((capability) => capability.configured && capability.status === "ready");
+  const isTeacherRoute = pathname.startsWith("/teacher");
+
   const speechHint = useMemo(() => {
     if (!speechSupport) return "正在检测语音能力";
     if (speechSupport.recognitionSupported) return "浏览器语音识别可用";
@@ -542,10 +550,16 @@ export function VoiceOrb() {
   const isListening = speechStatus === "listening";
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.9rem)] z-[60] flex flex-col items-end gap-3 px-3 sm:bottom-6 sm:right-6 sm:left-auto sm:block sm:px-0">
+    <div
+      className={cn(
+        "pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.9rem)] z-50 flex flex-col gap-3 px-3 sm:bottom-6 sm:left-auto sm:block sm:px-0",
+        isTeacherRoute ? "items-start sm:right-[8.5rem]" : "items-end sm:right-6"
+      )}
+    >
       {expanded && !minimized ? (
         <section
           className="pointer-events-auto mb-3 w-full max-w-[420px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_22px_70px_rgb(15_23_42_/_0.18)] sm:mb-4"
+          id="voice-orb-panel"
           data-testid="voice-orb-panel"
           aria-label="语音球助手"
         >
@@ -587,14 +601,7 @@ export function VoiceOrb() {
           <div className="max-h-[min(72vh,640px)] space-y-3 overflow-y-auto px-4 py-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge
-                variant={
-                  providerStatus &&
-                  [providerStatus.chat, providerStatus.ocr, providerStatus.asr, providerStatus.tts].every(
-                    (capability) => capability.configured
-                  )
-                    ? "success"
-                    : "warning"
-                }
+                variant={providerReady ? "success" : "warning"}
                 data-testid="voice-orb-provider-status"
               >
                 {providerText}
@@ -808,6 +815,8 @@ export function VoiceOrb() {
           expanded && !minimized ? "sm:ml-auto" : ""
         )}
         data-testid="voice-orb-button"
+        aria-controls="voice-orb-panel"
+        aria-expanded={expanded && !minimized}
         aria-label="打开语音球助手"
         title="语音球助手"
       >

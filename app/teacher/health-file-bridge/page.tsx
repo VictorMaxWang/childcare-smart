@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ResponsiveDetailSheet } from "@/components/ui/responsive-detail-sheet";
 import {
   Select,
   SelectContent,
@@ -250,6 +251,7 @@ export default function TeacherHealthFileBridgePage() {
   const [consultationMessage, setConsultationMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resultSheetOpen, setResultSheetOpen] = useState(false);
 
   const childMaterials = useMemo(
     () =>
@@ -420,6 +422,7 @@ export default function TeacherHealthFileBridgePage() {
       setResult(nextResult);
       setPendingParseResult(buildSavedParseResult(nextResult, requestFiles));
       setSaveMessage("解析已完成，请核对后保存到健康材料记录。");
+      setResultSheetOpen(true);
     } catch (submissionError) {
       failHealthMaterialParseResult({
         materialId,
@@ -1028,6 +1031,15 @@ export default function TeacherHealthFileBridgePage() {
                   ) : null}
                   <div className="flex flex-wrap gap-3">
                     <Button
+                      data-testid="d05-open-parse-result-sheet"
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => setResultSheetOpen(true)}
+                    >
+                      查看详情抽屉
+                    </Button>
+                    <Button
                       data-testid="d05-save-parse"
                       type="button"
                       variant="premium"
@@ -1076,6 +1088,7 @@ export default function TeacherHealthFileBridgePage() {
                             setActiveApiMaterialId(null);
                             setSaveMessage(`已打开 ${material.filename} 的保存结果。`);
                             setConsultationMessage(null);
+                            setResultSheetOpen(true);
                           }
                         }}
                       >
@@ -1125,6 +1138,83 @@ export default function TeacherHealthFileBridgePage() {
           </div>
         }
       />
+      <ResponsiveDetailSheet
+        open={resultSheetOpen && Boolean(result)}
+        onOpenChange={setResultSheetOpen}
+        testId="d05-parse-result-sheet"
+        title="健康材料解析结果"
+        description={selectedChild ? `${selectedChild.name} · ${selectedChild.className}` : "解析结果详情"}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setResultSheetOpen(false)}>
+              关闭
+            </Button>
+            <Button
+              data-testid="d05-save-parse-sheet"
+              type="button"
+              variant="premium"
+              onClick={handleSaveParseResult}
+              disabled={!pendingParseResult || !activeMaterialId}
+            >
+              保存解析结果
+            </Button>
+            <Button
+              data-testid="d05-create-consultation-sheet"
+              type="button"
+              variant="outline"
+              onClick={handleCreateConsultationFromResult}
+              disabled={!activeMaterialId || Boolean(pendingParseResult)}
+            >
+              创建会诊
+            </Button>
+          </>
+        }
+      >
+        {result ? (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="info">{`识别置信度 ${Math.round(result.confidence * 100)}%`}</Badge>
+              <Badge variant="secondary">{`材料类型 ${getFileKindLabel(result.fileType)}`}</Badge>
+              <Badge variant={result.provider === "vivo" && !result.fallback ? "success" : "warning"}>
+                {getProviderLabel(result)}
+              </Badge>
+              <Badge variant={result.provider === "vivo" && !result.fallback ? "success" : "warning"}>
+                {getOcrStatusLabel(result)}
+              </Badge>
+              {result.fallback || result.mock ? <Badge variant="warning">provider unavailable fallback</Badge> : null}
+            </div>
+            <div className="rounded-2xl border border-indigo-100 bg-white p-4">
+              <p className="text-sm font-semibold text-slate-900">摘要</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{result.summary}</p>
+              {result.extractedText ? (
+                <div className="mt-3 max-h-56 overflow-y-auto rounded-xl border border-indigo-100 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold text-slate-700">extracted text</p>
+                  <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">{result.extractedText}</p>
+                </div>
+              ) : null}
+              {result.warnings?.length ? (
+                <p className="mt-3 text-xs leading-5 text-amber-700">{result.warnings.join("；")}</p>
+              ) : null}
+              <p className="mt-3 text-xs leading-5 text-slate-500">{result.disclaimer}</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {result.extractedFacts.slice(0, 4).map((fact) => (
+                <FactCard key={`${fact.label}-${fact.detail}`} fact={fact} />
+              ))}
+            </div>
+            {result.riskItems.length > 0 ? (
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-900">风险提示</p>
+                {result.riskItems.map((risk) => (
+                  <RiskCard key={`${risk.title}-${risk.detail}`} risk={risk} />
+                ))}
+              </div>
+            ) : null}
+            {saveMessage ? <p className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-700">{saveMessage}</p> : null}
+            {consultationMessage ? <p className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-700">{consultationMessage}</p> : null}
+          </div>
+        ) : null}
+      </ResponsiveDetailSheet>
     </RolePageShell>
   );
 }

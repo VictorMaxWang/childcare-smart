@@ -38,9 +38,18 @@ export function ReplicaBarChart({
   if (!hasChartData(data, series)) return replicaChartEmptyNode(emptyMessage);
 
   return (
-    <div data-testid={testId} className="min-w-0">
+    <div
+      data-testid={testId}
+      className="min-w-0 rounded-[18px] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-100"
+      role="img"
+      aria-label={`Bar chart with ${data.length} data points`}
+      tabIndex={0}
+    >
       <ReplicaChartSurface height={height}>
-        {(size) => (
+        {(size) => {
+          const xAxisInterval = size.width < 420 ? "preserveStartEnd" : 0;
+
+          return (
           <BarChart width={size.width} height={size.height} data={data} margin={{ top: 10, right: 14, bottom: 2, left: -8 }}>
             <CartesianGrid stroke={replicaChartColors.grid} strokeDasharray="3 5" vertical={false} />
             <XAxis
@@ -48,7 +57,7 @@ export function ReplicaBarChart({
               axisLine={false}
               tickLine={false}
               tick={{ fill: replicaChartColors.axis, fontSize: 12, fontWeight: 600 }}
-              interval={0}
+              interval={xAxisInterval}
             />
             <YAxis
               axisLine={false}
@@ -69,7 +78,8 @@ export function ReplicaBarChart({
               />
             ))}
           </BarChart>
-        )}
+          );
+        }}
       </ReplicaChartSurface>
       {series.length > 1 ? (
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">

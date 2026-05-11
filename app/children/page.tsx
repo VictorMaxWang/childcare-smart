@@ -19,6 +19,7 @@ import { TeacherActionTile, TeacherMiniPanel } from "@/components/teacher/Teache
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DataTableShell } from "@/components/ui/data-table-shell";
 import {
   Dialog,
@@ -40,6 +41,7 @@ import {
 import { FilterBar } from "@/components/ui/filter-bar";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { ErrorState, LoadingState } from "@/components/ui/state-block";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiClientError } from "@/lib/api/errors";
@@ -161,6 +163,8 @@ export default function ChildrenPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: "archive" | "restore"; child: ApiChild } | null>(null);
+  const [confirmSaving, setConfirmSaving] = useState(false);
   const [form, setForm] = useState<ChildFormState>({
     ...DEFAULT_FORM,
     className: currentUser.className ?? DEFAULT_FORM.className,
@@ -290,11 +294,17 @@ export default function ChildrenPage() {
     }
   }
 
-  async function handleArchive(child: ApiChild) {
+  function requestArchive(child: ApiChild) {
     if (!canManageChildren) return;
-    const confirmed = window.confirm(`确认归档 ${child.name} 的儿童档案？归档后默认列表会隐藏该档案。`);
-    if (!confirmed) return;
+    setConfirmAction({ type: "archive", child });
+  }
 
+  function requestRestore(child: ApiChild) {
+    if (!canManageChildren) return;
+    setConfirmAction({ type: "restore", child });
+  }
+
+  async function performArchive(child: ApiChild) {
     try {
       await archiveChild(child.id, { action: "archive", archiveReason: "E02 页面归档" });
       toast.success("儿童档案已归档", { description: "删除动作已按产品规则转为软归档。" });
@@ -305,17 +315,28 @@ export default function ChildrenPage() {
     }
   }
 
-  async function handleRestore(child: ApiChild) {
-    if (!canManageChildren) return;
-    const confirmed = window.confirm(`确认恢复 ${child.name} 的儿童档案？恢复后会重新出现在默认列表。`);
-    if (!confirmed) return;
-
+  async function performRestore(child: ApiChild) {
     try {
       await archiveChild(child.id, { action: "restore" });
       toast.success("儿童档案已恢复", { description: "恢复动作已写入审计字段。" });
       await loadData();
     } catch (requestError) {
       toast.error("儿童档案恢复失败", { description: apiErrorMessage(requestError) });
+    }
+  }
+
+  async function handleConfirmAction() {
+    if (!confirmAction) return;
+    setConfirmSaving(true);
+    try {
+      if (confirmAction.type === "archive") {
+        await performArchive(confirmAction.child);
+      } else {
+        await performRestore(confirmAction.child);
+      }
+      setConfirmAction(null);
+    } finally {
+      setConfirmSaving(false);
     }
   }
 
@@ -488,16 +509,21 @@ export default function ChildrenPage() {
       />
 
       {error ? (
-        <div className="mb-5 rounded-lg border border-(--danger-border) bg-(--danger-soft) px-4 py-3 text-sm text-(--danger-foreground)" role="alert">
-          {error}
-          <Button variant="outline" size="sm" className="ml-3" onClick={() => void loadData()}>
-            重试
-          </Button>
+        <div className="mb-5">
+          <ErrorState
+            title="档案读取失败"
+            description={error}
+            action={
+              <Button type="button" variant="outline" onClick={() => void loadData()}>
+                重试
+              </Button>
+            }
+          />
         </div>
       ) : null}
 
       {loading ? (
-        <Card className="border-indigo-100 p-6 text-sm text-slate-600">正在读取儿童档案...</Card>
+        <LoadingState title="正在读取儿童档案" description="系统正在同步 children API 与今日出勤记录。" />
       ) : filteredChildren.length === 0 ? (
         <EmptyState
           icon={<Search className="h-6 w-6" />}
@@ -534,10 +560,10 @@ export default function ChildrenPage() {
                     attendance={attendanceMap.get(child.id)}
                     canManageAttendance={canManageAttendance}
                     canManageChildren={canManageChildren}
-                    onArchive={() => void handleArchive(child)}
+                    onArchive={() => requestArchive(child)}
                     onEdit={() => openEditForm(child)}
                     onOpenDetails={() => setSelectedDetailId(child.id)}
-                    onRestore={() => void handleRestore(child)}
+                    onRestore={() => requestRestore(child)}
                     onToggleAttendance={() => void handleToggleAttendance(child)}
                   />
                 ))}
@@ -553,10 +579,10 @@ export default function ChildrenPage() {
                 attendance={attendanceMap.get(child.id)}
                 canManageAttendance={canManageAttendance}
                 canManageChildren={canManageChildren}
-                onArchive={() => void handleArchive(child)}
+                onArchive={() => requestArchive(child)}
                 onEdit={() => openEditForm(child)}
                 onOpenDetails={() => setSelectedDetailId(child.id)}
-                onRestore={() => void handleRestore(child)}
+                onRestore={() => requestRestore(child)}
                 onToggleAttendance={() => void handleToggleAttendance(child)}
               />
             ))}
@@ -703,7 +729,7 @@ export default function ChildrenPage() {
                 </Button>
                 {canManageChildren ? (
                   selectedDetailChild.archivedAt ? (
-                    <Button onClick={() => void handleRestore(selectedDetailChild)} data-testid="e02-detail-restore-child">
+                    <Button onClick={() => requestRestore(selectedDetailChild)} data-testid="e02-detail-restore-child">
                       恢复档案
                     </Button>
                   ) : (
@@ -717,6 +743,25 @@ export default function ChildrenPage() {
           ) : null}
         </DrawerContent>
       </Drawer>
+      <ConfirmDialog
+        open={Boolean(confirmAction)}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAction(null);
+        }}
+        title={confirmAction?.type === "archive" ? "确认归档儿童档案" : "确认恢复儿童档案"}
+        description={
+          confirmAction
+            ? `${confirmAction.child.name} 的档案将在确认后${
+                confirmAction.type === "archive" ? "从默认列表隐藏" : "重新回到默认列表"
+              }。取消不会写入数据。`
+            : undefined
+        }
+        confirmLabel={confirmAction?.type === "archive" ? "确认归档" : "确认恢复"}
+        cancelLabel="取消"
+        variant={confirmAction?.type === "archive" ? "danger" : "default"}
+        loading={confirmSaving}
+        onConfirm={handleConfirmAction}
+      />
     </div>
   );
 }

@@ -110,7 +110,22 @@ test("E04 feedback details and scoped media attachments close the parent-teacher
   await page.getByTestId("communication-thread-card").first().getByRole("button").first().click();
   await page.getByTestId("teacher-reply-input").fill("E04 李老师回复：已查看图片，语音附件同步给家长。");
   await page.getByTestId("communication-thread-card").first().locator("input[type='file']").first().setInputFiles(audioPath);
-  await page.getByTestId("teacher-send-reply").click();
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/messages/") &&
+        response.request().method() === "POST" &&
+        response.status() === 201
+    ),
+    page.getByTestId("teacher-send-reply").click(),
+  ]);
+  await expect
+    .poll(async () => {
+      const response = await page.request.get("/api/messages?childId=c-1");
+      const body = await response.json();
+      return JSON.stringify(body).includes("E04 李老师回复");
+    })
+    .toBe(true);
   await screenshot(page, "teacher-reply-audio.png");
 
   await loginAs(page, "u-parent", "/parent/agent?child=c-1");

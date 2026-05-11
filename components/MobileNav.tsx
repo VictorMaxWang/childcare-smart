@@ -145,7 +145,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
 
       <div
         className={cn(
-          "fixed inset-0 z-40 bg-slate-950/48 backdrop-blur-md transition-opacity duration-200",
+          "fixed inset-0 z-[75] bg-slate-950/48 backdrop-blur-md transition-opacity duration-200",
           open ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={close}
@@ -157,7 +157,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
         id="mobile-nav-panel"
         aria-label="移动端主导航"
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-dvh w-[23rem] max-w-[calc(100vw-0.75rem)] flex-col overflow-hidden rounded-r-[30px] border-r border-indigo-100 bg-[#f7f9ff] shadow-[0_28px_80px_rgb(15_23_42_/_0.20)] transition-transform duration-300 ease-out",
+          "fixed left-0 top-0 z-[80] flex h-dvh w-[23rem] max-w-[calc(100vw-0.75rem)] flex-col overflow-hidden rounded-r-[30px] border-r border-indigo-100 bg-[#f7f9ff] shadow-[0_28px_80px_rgb(15_23_42_/_0.20)] transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >

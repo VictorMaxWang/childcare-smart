@@ -1301,11 +1301,6 @@ export default function ParentAgentPage() {
           </div>
         </div>
       </div>
-      <FeedbackDetailDialog
-        feedbackId={feedbackDetailId}
-        open={feedbackDetailOpen}
-        onOpenChange={setFeedbackDetailOpen}
-      />
       </>
     );
   };
@@ -1426,6 +1421,13 @@ export default function ParentAgentPage() {
       ).length,
     };
   });
+  const feedbackDetailDialog = (
+    <FeedbackDetailDialog
+      feedbackId={feedbackDetailId}
+      open={feedbackDetailOpen}
+      onOpenChange={setFeedbackDetailOpen}
+    />
+  );
   const parentAiParityHero = (
     <section className="overflow-hidden rounded-[2rem] border border-indigo-100 bg-[linear-gradient(135deg,#ffffff_0%,#f4f7ff_48%,#fff7ed_100%)] p-4 shadow-[0_24px_70px_rgb(99_102_241_/_0.14)] sm:p-5">
       <div className="relative overflow-hidden rounded-[1.6rem] bg-[linear-gradient(135deg,#f8fbff_0%,#f5f3ff_55%,#fff7ed_100%)] p-5">
@@ -1610,6 +1612,7 @@ export default function ParentAgentPage() {
 
   if (careMode) {
     return (
+      <>
       <RolePageShell
         badge={`家长 AI 助手 · 当前孩子 ${selectedFeed.child.name}`}
         title="今晚先做一件事，做完再给老师一个最短反馈。"
@@ -2157,10 +2160,13 @@ export default function ParentAgentPage() {
           }
         />
       </RolePageShell>
+      {feedbackDetailDialog}
+      </>
     );
   }
 
   return (
+    <>
     <RolePageShell
       badge={`家长 AI 助手 · 当前儿童 ${selectedFeed.child.name}`}
       title="把今晚怎么做、做完怎么反馈、明天老师继续看什么，放进同一条 AI 闭环里"
@@ -2641,5 +2647,7 @@ export default function ParentAgentPage() {
         }
       />
     </RolePageShell>
+    {feedbackDetailDialog}
+    </>
   );
 }

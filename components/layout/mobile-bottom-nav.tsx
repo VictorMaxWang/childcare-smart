@@ -25,6 +25,7 @@ export function MobileBottomNav({ items, pathname }: { items: MobileBottomNavIte
             <Link
               key={`${item.href}-${item.label}`}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className={cn(
                 "flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-bold transition",
                 active
