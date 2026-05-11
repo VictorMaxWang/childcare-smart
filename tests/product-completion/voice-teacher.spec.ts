@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { assistantCommand, CHILD_TEACHER, demoContext, expectFailure, expectOk } from "./e11-helpers";
+import { assistantCommand, CHILD_TEACHER, demoContext, expectFailure, expectOk, planExistingVoiceCommand } from "./e11-helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -28,9 +28,10 @@ test.describe("E11 teacher voice command regression", () => {
         "needs_confirmation"
       );
 
+      const plannedCommand = await planExistingVoiceCommand(teacher, command, { currentPath: "/teacher" });
       await expectOk(
         await teacher.post("/api/voice-assistant/commands", {
-          data: { action: "execute", command, confirmed: true, context: { currentPath: "/teacher" } },
+          data: { action: "execute", command: plannedCommand, confirmed: true, context: { currentPath: "/teacher" } },
         })
       );
       const parentHealth = await expectOk<Array<{ childId?: string; remark?: string }>>(

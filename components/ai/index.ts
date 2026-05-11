@@ -5,3 +5,4 @@ export {
   AssistantRightRail,
   AssistantWorkspaceFrame,
 } from "./assistant-shell";
+export { RoleAssistantWorkspace } from "./RoleAssistantWorkspace";

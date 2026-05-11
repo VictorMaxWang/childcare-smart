@@ -31,6 +31,7 @@ import AttachmentMediaPicker, {
 } from "@/components/communication/AttachmentMediaPicker";
 import FeedbackDetailDialog from "@/components/communication/FeedbackDetailDialog";
 import ParentTrendResponseCard from "@/components/parent/ParentTrendResponseCard";
+import { RoleAssistantWorkspace } from "@/components/ai";
 import {
   ReplicaComboChart,
   replicaChartColors,
@@ -66,7 +67,6 @@ import {
   isLikelyTrendQuestion,
   PARENT_TREND_QUICK_QUESTIONS,
 } from "@/lib/agent/parent-trend";
-import { buildFallbackFollowUp, buildFallbackSuggestion } from "@/lib/ai/fallback";
 import type {
   AiFollowUpResponse,
   AiSuggestionResponse,
@@ -895,7 +895,8 @@ export default function ParentAgentPage() {
       });
 
       if (!response.ok) {
-        throw new Error("follow-up failed");
+        const body = (await response.json().catch(() => null)) as { error?: string; message?: string } | null;
+        throw new Error(body?.message ?? body?.error ?? "follow-up failed");
       }
 
       const data = (await response.json()) as AiFollowUpResponse;
@@ -922,21 +923,10 @@ export default function ParentAgentPage() {
         historyId,
       });
       setQuestion("");
-    } catch {
-      const fallback = buildFallbackFollowUp(payload);
-      const nextResult = buildParentAgentFollowUpResult({
-        context: activeContext,
-        baseResult: currentResult,
-        response: fallback,
-      });
-
-      setCurrentResult(nextResult);
-      const historyId = `${Date.now()}-${history.length}`;
-      setHistory((prev) => [
-        ...prev,
-        { id: historyId, question: nextQuestion, result: nextResult },
-      ]);
-      setParentMessageStatus("追问服务暂时不可用，已先展示本地可用建议。");
+    } catch (error) {
+      setParentMessageStatus(
+        `AI 追问暂时不可用：${error instanceof Error ? error.message : "provider_unavailable"}`
+      );
       setQuestion("");
     } finally {
       setFollowUpLoading(false);
@@ -978,7 +968,8 @@ export default function ParentAgentPage() {
         });
 
         if (!response.ok) {
-          throw new Error("fetch suggestion failed");
+          const body = (await response.json().catch(() => null)) as { error?: string; message?: string } | null;
+          throw new Error(body?.message ?? body?.error ?? "fetch suggestion failed");
         }
 
         const data = (await response.json()) as AiSuggestionResponse;
@@ -994,19 +985,12 @@ export default function ParentAgentPage() {
             baseResult,
           });
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          const fallback = buildFallbackSuggestion(snapshotPayload);
-          const baseResult = buildParentAgentSuggestionResult({
-            context,
-            suggestion: fallback,
-          });
-          setCurrentResult(baseResult);
-          void enrichParentMessageResult({
-            context,
-            snapshotPayload,
-            baseResult,
-          });
+          setCurrentResult(null);
+          setParentMessageStatus(
+            `AI 建议暂时不可用：${error instanceof Error ? error.message : "provider_unavailable"}`
+          );
         }
       } finally {
         if (!cancelled) {
@@ -1640,6 +1624,46 @@ export default function ParentAgentPage() {
             <div className="space-y-6">
               {parentAiParityHero}
 
+              <RoleAssistantWorkspace
+                roleLabel="家长端"
+                title="家长 AI 助手"
+                description="今日状态、老师消息总结、绘本朗读解释、饮食建议、健康提醒解释和家园沟通草稿统一显示来源与 provider 状态。"
+                prompts={[...PARENT_AGENT_QUICK_QUESTIONS, ...PARENT_TREND_QUICK_QUESTIONS]}
+                value={question}
+                onValueChange={setQuestion}
+                onSubmit={() => void submitFollowUp()}
+                onPromptClick={(item) => {
+                  setQuestion(item);
+                  void submitFollowUp(item);
+                }}
+                loading={questionLoading}
+                error={trendError ?? parentMessageStatus}
+                source={currentResult?.source}
+                model={currentResult?.model}
+                response={
+                  currentResult ? (
+                    <ReactMarkdown>{sanitizeParentFacingText(currentResult.assistantAnswer)}</ReactMarkdown>
+                  ) : (
+                    <p>AI 建议生成后会显示在这里；provider missing-env 时不展示本地伪成功。</p>
+                  )
+                }
+                actionCards={
+                  <div className="space-y-3">
+                    <Link href={storybookHref} className="block rounded-2xl border border-indigo-100 bg-white/90 p-3 text-sm font-semibold text-indigo-700">
+                      成长绘本朗读/解释
+                    </Link>
+                    <button
+                      type="button"
+                      className="w-full rounded-2xl border border-emerald-100 bg-white/90 p-3 text-left text-sm font-semibold text-emerald-700"
+                      onClick={() => void submitFollowUp("请帮我生成一段今晚发给老师的沟通草稿")}
+                      disabled={questionLoading || !currentResult}
+                    >
+                      家园沟通草稿
+                    </button>
+                  </div>
+                }
+              />
+
               <ParentCareFocusCard
                 badge="关怀模式"
                 title={`今晚先陪 ${selectedFeed.child.name} 做这一件事`}
@@ -2146,6 +2170,46 @@ export default function ParentAgentPage() {
         main={
           <div className="space-y-6">
             {parentAiParityHero}
+
+            <RoleAssistantWorkspace
+              roleLabel="家长端"
+              title="家长 AI 助手"
+              description="今日状态、老师消息总结、绘本朗读解释、饮食建议、健康提醒解释和家园沟通草稿统一显示来源与 provider 状态。"
+              prompts={[...PARENT_AGENT_QUICK_QUESTIONS, ...PARENT_TREND_QUICK_QUESTIONS]}
+              value={question}
+              onValueChange={setQuestion}
+              onSubmit={() => void submitFollowUp()}
+              onPromptClick={(item) => {
+                setQuestion(item);
+                void submitFollowUp(item);
+              }}
+              loading={questionLoading}
+              error={trendError ?? parentMessageStatus}
+              source={currentResult?.source}
+              model={currentResult?.model}
+              response={
+                currentResult ? (
+                  <ReactMarkdown>{sanitizeParentFacingText(currentResult.assistantAnswer)}</ReactMarkdown>
+                ) : (
+                  <p>AI 建议生成后会显示在这里；provider missing-env 时不展示本地伪成功。</p>
+                )
+              }
+              actionCards={
+                <div className="space-y-3">
+                  <Link href={storybookHref} className="block rounded-2xl border border-indigo-100 bg-white/90 p-3 text-sm font-semibold text-indigo-700">
+                    成长绘本朗读/解释
+                  </Link>
+                  <button
+                    type="button"
+                    className="w-full rounded-2xl border border-emerald-100 bg-white/90 p-3 text-left text-sm font-semibold text-emerald-700"
+                    onClick={() => void submitFollowUp("请帮我生成一段今晚发给老师的沟通草稿")}
+                    disabled={questionLoading || !currentResult}
+                  >
+                    家园沟通草稿
+                  </button>
+                </div>
+              }
+            />
 
             <ParentHeroCard
               eyebrow="家长 AI 闭环"

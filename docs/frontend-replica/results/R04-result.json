@@ -1,0 +1,55 @@
+{
+  "taskId": "R04",
+  "generatedAt": "2026-05-11T11:18:06+08:00",
+  "summary": {
+    "directorAssistant": "replicated",
+    "teacherAssistant": "replicated",
+    "parentAssistant": "replicated",
+    "voiceOrb": "kept-and-adjusted",
+    "vivoChat": "server-provider",
+    "vivoOcr": "live-pass-preserved",
+    "vivoAsr": "live-pass-preserved",
+    "vivoTts": "static-first-runtime-server-fallback",
+    "permissions": "server-scope-enforced",
+    "fakeSuccess": "removed-from-ai-assistant-routes"
+  },
+  "provider": {
+    "chat": {
+      "status": "live-pass",
+      "notes": "product:ai verified vivo Chat live request"
+    },
+    "ocr": {
+      "status": "live-pass",
+      "notes": "product:ai verified OCR live request"
+    },
+    "asr": {
+      "status": "live-pass",
+      "notes": "product:ai verified ASR live request"
+    },
+    "tts": {
+      "status": "static-first",
+      "notes": "runtime endpoint is server-side; local STORYBOOK_TTS_* env is not fully configured"
+    }
+  },
+  "tests": {
+    "lint": "passed",
+    "build": "passed",
+    "productAi": "passed",
+    "productVoice": "passed",
+    "productJourney": "passed",
+    "featureSmoke": "passed",
+    "bugbashSmoke": "passed",
+    "tscNoEmit": "passed",
+    "aiAssistantUi": "passed",
+    "vivoAiAssistant": "passed-with-one-skipped-missing-env-branch"
+  },
+  "browser": {
+    "playwrightChromium": "passed",
+    "codexInAppBrowser": "attempted-timeout"
+  },
+  "git": {
+    "commitMessage": "replicate AI assistant UI with vivo provider",
+    "targetBranch": "main",
+    "remote": "origin"
+  }
+}

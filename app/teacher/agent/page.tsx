@@ -28,6 +28,7 @@ import EmptyState from "@/components/EmptyState";
 import TeacherDraftConfirmationPanel from "@/components/teacher/TeacherDraftConfirmationPanel";
 import TeacherAgentHistoryList, { type TeacherAgentHistoryListItem } from "@/components/teacher/TeacherAgentHistoryList";
 import TeacherAgentResultCard from "@/components/teacher/TeacherAgentResultCard";
+import { RoleAssistantWorkspace } from "@/components/ai";
 import { TeacherActionTile, TeacherContextStrip, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import WeeklyReportPreviewCard from "@/components/weekly-report/WeeklyReportPreviewCard";
 import AttachmentMediaPicker, {
@@ -99,6 +100,16 @@ const ACTION_LABELS: Record<TeacherAgentWorkflowType, string> = {
   "follow-up": "生成今日跟进行动",
   "weekly-summary": "总结本周观察",
 };
+
+const TEACHER_ASSISTANT_PROMPTS = [
+  "晨检建议",
+  "饮食建议",
+  "成长记录润色",
+  "回复家长建议",
+  "健康材料解析入口",
+  "高风险会诊建议",
+  "班级待办总结",
+];
 
 type HistoryItem = TeacherAgentHistoryListItem & {
   workflow: TeacherAgentWorkflowType;
@@ -177,6 +188,7 @@ export default function TeacherAgentPage() {
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [assistantQuestion, setAssistantQuestion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [, startTransition] = useTransition();
   const preloadHandledRef = useRef<string | null>(null);
@@ -828,6 +840,35 @@ export default function TeacherAgentPage() {
     upsertReminder,
   ]);
 
+  const workflowFromAssistantPrompt = useCallback((prompt: string): TeacherAgentWorkflowType => {
+    if (/班级|待办|周|总结/u.test(prompt)) return "weekly-summary";
+    if (/回复|家长|沟通/u.test(prompt)) return "communication";
+    return "follow-up";
+  }, []);
+
+  const handleAssistantPrompt = useCallback(
+    (prompt: string) => {
+      setAssistantQuestion(prompt);
+      if (prompt.includes("健康材料")) {
+        window.location.href = "/teacher/health-file-bridge";
+        return;
+      }
+      if (prompt.includes("会诊")) {
+        window.location.href = "/teacher/high-risk-consultation";
+        return;
+      }
+      void runWorkflow(workflowFromAssistantPrompt(prompt));
+    },
+    [runWorkflow, workflowFromAssistantPrompt]
+  );
+
+  const submitAssistantQuestion = useCallback(() => {
+    const prompt = assistantQuestion.trim();
+    if (!prompt || isLoading) return;
+    void runWorkflow(workflowFromAssistantPrompt(prompt));
+    setAssistantQuestion("");
+  }, [assistantQuestion, isLoading, runWorkflow, workflowFromAssistantPrompt]);
+
   useEffect(() => {
     if (!isWorkflow(effectivePreloadAction) || visibleChildren.length === 0) return;
     if (preloadHandledRef.current === effectivePreloadAction) return;
@@ -1148,6 +1189,50 @@ export default function TeacherAgentPage() {
         stacked
         main={
           <div className="space-y-6">
+            <RoleAssistantWorkspace
+              roleLabel="教师端"
+              title="教师 AI 助手"
+              description="晨检、饮食、成长润色、回复家长、健康材料解析、高风险会诊和班级待办总结统一走服务端 vivo provider。"
+              prompts={TEACHER_ASSISTANT_PROMPTS}
+              value={assistantQuestion}
+              onValueChange={setAssistantQuestion}
+              onSubmit={submitAssistantQuestion}
+              onPromptClick={handleAssistantPrompt}
+              loading={isLoading}
+              error={error}
+              source={currentResult?.source}
+              model={currentResult?.model}
+              response={
+                <div className="space-y-2">
+                  <p>{currentResult?.summary ?? "选择一个教师快捷问题，或输入班级/幼儿相关追问。"}</p>
+                  {currentResult?.actionItems?.length ? (
+                    <ul className="list-disc space-y-1 pl-5">
+                      {currentResult.actionItems.slice(0, 3).map((item) => (
+                        <li key={item.id}>{item.action}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              }
+              actionCards={
+                <div className="space-y-3">
+                  <a href="/teacher/health-file-bridge" className="block rounded-2xl border border-sky-100 bg-white/90 p-3 text-sm font-semibold text-sky-700">
+                    健康材料解析入口
+                  </a>
+                  <a href="/teacher/high-risk-consultation" className="block rounded-2xl border border-rose-100 bg-white/90 p-3 text-sm font-semibold text-rose-700">
+                    高风险会诊建议
+                  </a>
+                  <button
+                    type="button"
+                    className="w-full rounded-2xl border border-indigo-100 bg-white/90 p-3 text-left text-sm font-semibold text-indigo-700"
+                    onClick={() => void runWorkflow("weekly-summary")}
+                    disabled={isLoading}
+                  >
+                    班级待办总结
+                  </button>
+                </div>
+              }
+            />
             {isCommunicationMode ? (
               <>
               <section className="mx-auto max-w-[62rem] overflow-hidden rounded-[1.65rem] border border-[#e0e7f5] bg-white/96 p-5 shadow-[0_22px_60px_rgb(70_88_140_/_0.08)] sm:p-7">

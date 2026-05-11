@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
-import { executeFollowUp, getAiRuntimeOptions, isValidFollowUpPayload } from "@/lib/ai/server";
-import { buildFallbackFollowUp } from "@/lib/ai/fallback";
+import {
+  buildAiProviderUnavailableBody,
+  executeFollowUp,
+  getAiRuntimeOptions,
+  isAiProviderUnavailableError,
+  isValidFollowUpPayload,
+} from "@/lib/ai/server";
 import type { AiFollowUpPayload, AiFollowUpResponse, ChildSuggestionSnapshot } from "@/lib/ai/types";
 import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
 import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
@@ -206,11 +211,10 @@ export async function POST(request: Request) {
   try {
     result = await executeFollowUp(taskAwarePayload, getAiRuntimeOptions(request));
   } catch (error) {
-    if (!isChildScoped) {
-      throw error;
+    if (isAiProviderUnavailableError(error)) {
+      return NextResponse.json(buildAiProviderUnavailableBody(error), { status: error.status });
     }
-    console.warn("[AI] Parent follow-up fallback after route failure", error);
-    result = buildFallbackFollowUp(taskAwarePayload);
+    throw error;
   }
 
   let consultation: Awaited<ReturnType<typeof maybeRunHighRiskConsultation>> | null = null;

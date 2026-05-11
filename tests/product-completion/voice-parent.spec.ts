@@ -7,6 +7,7 @@ import {
   demoContext,
   expectFailure,
   expectOk,
+  planExistingVoiceCommand,
   seedStorybook,
 } from "./e11-helpers";
 
@@ -42,9 +43,10 @@ test.describe("E11 parent voice command regression", () => {
         422,
         "needs_confirmation"
       );
+      const plannedMessage = await planExistingVoiceCommand(parent, message, context);
       await expectOk(
         await parent.post("/api/voice-assistant/commands", {
-          data: { action: "execute", command: message, confirmed: true, context },
+          data: { action: "execute", command: plannedMessage, confirmed: true, context },
         })
       );
       const messages = await expectOk<Array<{ content?: string }>>(await teacher.get(`/api/messages?childId=${CHILD_PARENT}`));
@@ -52,22 +54,32 @@ test.describe("E11 parent voice command regression", () => {
 
       const storybookId = `storybook-e11-${Date.now()}`;
       await seedStorybook(parent, storybookId, CHILD_PARENT);
+      const exportCommand = await planExistingVoiceCommand(
+        parent,
+        assistantCommand("export_storybook", "parent", { childId: CHILD_PARENT, storybookId, format: "markdown" }),
+        context
+      );
       const exported = await expectOk<Record<string, unknown>>(
         await parent.post("/api/voice-assistant/commands", {
           data: {
             action: "execute",
-            command: assistantCommand("export_storybook", "parent", { childId: CHILD_PARENT, storybookId, format: "markdown" }),
+            command: exportCommand,
             confirmed: true,
             context,
           },
         })
       );
       expect(JSON.stringify(exported)).toMatch(/download|storybook|绘本|缁樻湰/i);
+      const shareCommand = await planExistingVoiceCommand(
+        parent,
+        assistantCommand("share_storybook", "parent", { childId: CHILD_PARENT, storybookId }),
+        context
+      );
       const shared = await expectOk<Record<string, unknown>>(
         await parent.post("/api/voice-assistant/commands", {
           data: {
             action: "execute",
-            command: assistantCommand("share_storybook", "parent", { childId: CHILD_PARENT, storybookId }),
+            command: shareCommand,
             confirmed: true,
             context,
           },

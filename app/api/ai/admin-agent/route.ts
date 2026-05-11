@@ -19,10 +19,12 @@ import type {
   AdminAgentWorkflowType,
 } from "@/lib/agent/admin-types";
 import {
+  buildAiProviderUnavailableBody,
   executeFollowUp,
   executeSuggestion,
   executeWeeklyReport,
   getAiRuntimeOptions,
+  isAiProviderUnavailableError,
 } from "@/lib/ai/server";
 import type { WeeklyReportResponse } from "@/lib/ai/types";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
@@ -149,6 +151,12 @@ function buildNormalizedProxyResponse(upstream: Response, data: AdminAgentResult
   });
 }
 
+function providerErrorResponse(error: unknown) {
+  return isAiProviderUnavailableError(error)
+    ? NextResponse.json(buildAiProviderUnavailableBody(error), { status: error.status })
+    : null;
+}
+
 export async function POST(request: Request) {
   const authError = await authorizeAiRoute(request, { requiredRole: "admin" });
   if (authError) return authError;
@@ -194,6 +202,7 @@ export async function POST(request: Request) {
   const context = buildAdminAgentContext(payload);
   const runtimeOptions = getAiRuntimeOptions(request);
 
+  try {
   if (payload.workflow === "daily-priority") {
     const suggestion = await executeSuggestion(
       {
@@ -258,4 +267,9 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json(sanitizeAdminWeeklyResult(result), { status: 200 });
+  } catch (error) {
+    const response = providerErrorResponse(error);
+    if (response) return response;
+    throw error;
+  }
 }

@@ -15,6 +15,7 @@ import {
   Sparkles,
   UsersRound,
 } from "lucide-react";
+import { RoleAssistantWorkspace } from "@/components/ai";
 import type { AdminAgentActionItem, AdminAgentResult, AdminDispatchEvent } from "@/lib/agent/admin-types";
 import type { AdminConsultationPriorityItem } from "@/lib/agent/admin-consultation";
 import {
@@ -130,6 +131,46 @@ export default function DirectorAgentReplica({
         </div>
       ) : null}
 
+      <RoleAssistantWorkspace
+        roleLabel="园长端"
+        title="AI 助手工作台"
+        description="快捷问题、周报生成、风险儿童分析、派单建议、数据问答和运营报表统一展示在这里。"
+        prompts={quickQuestions}
+        value={questionText}
+        onValueChange={setQuestionText}
+        onSubmit={handleSubmitQuestion}
+        onPromptClick={onQuestion}
+        loading={loading}
+        error={requestError}
+        source={result?.source}
+        model={result?.model}
+        response={
+          <p>
+            {result?.assistantAnswer ??
+              "园长可以直接追问全园风险、派单优先级、周报摘要和运营指标；provider 不可用时这里会显示明确状态。"}
+          </p>
+        }
+        actionCards={
+          <div className="space-y-3">
+            <button type="button" className="w-full rounded-2xl border border-indigo-100 bg-white/90 p-3 text-left text-sm font-semibold text-indigo-700" onClick={onOpenWeekly}>
+              周报生成
+            </button>
+            {actionItems.slice(0, 2).map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className="w-full rounded-2xl border border-slate-100 bg-white/90 p-3 text-left text-sm text-slate-700"
+                onClick={() => onCreateDispatch(item)}
+                disabled={!dispatchAvailable || isCreatingNotification(item.id) || Boolean(item.relatedEventId)}
+              >
+                <span className="block font-semibold text-slate-900">{item.title}</span>
+                <span className="mt-1 block text-xs text-slate-500">{item.ownerLabel} · {item.deadline}</span>
+              </button>
+            ))}
+          </div>
+        }
+      />
+
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
           <div className="grid gap-4 lg:grid-cols-4">
@@ -176,7 +217,7 @@ export default function DirectorAgentReplica({
               actions={
                 <>
                   <ReplicaPill tone="purple">{`待派单任务（${scope?.pendingDispatchCount ?? 0}）`}</ReplicaPill>
-                  <ReplicaPill tone="slate">真实 AI 结果</ReplicaPill>
+                  <ReplicaPill tone="slate">{result?.source === "ai" ? "vivo Chat" : result?.source ?? "待生成"}</ReplicaPill>
                 </>
               }
             >
@@ -247,6 +288,37 @@ export default function DirectorAgentReplica({
                   )}
                 </div>
               </ReplicaPanel>
+
+              <RoleAssistantWorkspace
+                roleLabel="园长端"
+                title="AI 解释与对话"
+                description="周报、风险儿童、派单建议、数据问答和运营报表都通过服务端 vivo Chat 生成。"
+                prompts={quickQuestions}
+                value={questionText}
+                onValueChange={setQuestionText}
+                onSubmit={handleSubmitQuestion}
+                onPromptClick={onQuestion}
+                loading={loading}
+                error={requestError}
+                source={result?.source}
+                model={result?.model}
+                response={
+                  <p>
+                    {result?.assistantAnswer ??
+                      "以上建议会基于近 7 天健康、照护、家园沟通和派单数据生成；provider 不可用时会显示明确错误，不伪造成 AI 成功。"}
+                  </p>
+                }
+                actionCards={
+                  <div className="space-y-3">
+                    {actionItems.slice(0, 3).map((item) => (
+                      <div key={item.id} className="rounded-2xl border border-indigo-100 bg-white/90 p-3 text-sm">
+                        <p className="font-semibold text-slate-900">{item.title}</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">{item.ownerLabel} · {item.deadline}</p>
+                      </div>
+                    ))}
+                  </div>
+                }
+              />
 
               <ReplicaPanel title="AI 解释与对话">
                 <div className="rounded-[15px] bg-[#F7F8FF] p-4">
