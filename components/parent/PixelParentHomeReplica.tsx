@@ -150,7 +150,7 @@ export default function PixelParentHomeReplica({
   }));
 
   return (
-    <div className="mx-auto max-w-[72rem] min-w-0 pb-24">
+    <div className="mx-auto max-w-[72rem] min-w-0 pb-24" data-testid="r07-parent-replica-page" data-child-name={childName}>
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-5">
           <section className="relative min-h-[150px] overflow-hidden rounded-[24px] border border-violet-100 bg-[linear-gradient(135deg,#f7f4ff_0%,#fffefe_58%,#eef8ff_100%)] p-4 shadow-[0_22px_70px_rgb(111_96_255_/_0.13)] sm:min-h-0 sm:rounded-[28px] sm:p-7">
@@ -226,7 +226,10 @@ export default function PixelParentHomeReplica({
             </div>
           </section>
 
-          <section className="rounded-[24px] border border-slate-100 bg-white p-4 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] sm:rounded-[28px] sm:p-6">
+          <section
+            className="rounded-[24px] border border-slate-100 bg-white p-4 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] sm:rounded-[28px] sm:p-6"
+            data-testid="r07-parent-status-panel"
+          >
             <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
               <div className="flex items-center gap-2 sm:gap-4">
                 <h2 className="text-xl font-black tracking-normal text-slate-950 sm:text-2xl">今日状态</h2>
@@ -242,6 +245,8 @@ export default function PixelParentHomeReplica({
               {statusItems.map((item) => (
                 <div
                   key={item.id}
+                  data-testid="r07-parent-status-card"
+                  data-status-id={item.id}
                   className="rounded-[18px] border border-slate-100 bg-white px-1.5 py-3 text-center shadow-[0_10px_28px_rgb(15_23_42_/_0.06)] sm:rounded-[22px] sm:px-3 sm:py-4"
                 >
                   <div
@@ -262,7 +267,10 @@ export default function PixelParentHomeReplica({
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] sm:p-6">
+          <section
+            className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] sm:p-6"
+            data-testid="r07-parent-reminders-summary"
+          >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <Bell className="h-6 w-6 text-violet-500" />
@@ -298,7 +306,10 @@ export default function PixelParentHomeReplica({
             </div>
           </section>
 
-          <section className="overflow-hidden rounded-[28px] border border-violet-100 bg-[linear-gradient(135deg,#ffffff_0%,#f7f4ff_52%,#f2fbff_100%)] p-5 shadow-[0_18px_56px_rgb(111_96_255_/_0.12)] sm:p-6">
+          <section
+            className="overflow-hidden rounded-[28px] border border-violet-100 bg-[linear-gradient(135deg,#ffffff_0%,#f7f4ff_52%,#f2fbff_100%)] p-5 shadow-[0_18px_56px_rgb(111_96_255_/_0.12)] sm:p-6"
+            data-testid="r07-parent-ai-tonight-card"
+          >
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_270px] lg:items-center">
               <div>
                 <div className="flex items-center gap-3">
@@ -341,7 +352,10 @@ export default function PixelParentHomeReplica({
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] sm:p-6">
+          <section
+            className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] sm:p-6"
+            data-testid="r07-parent-growth-moments"
+          >
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-3">
@@ -368,6 +382,7 @@ export default function PixelParentHomeReplica({
                       alt={item.title}
                       fill
                       unoptimized
+                      data-testid="r07-parent-growth-image"
                       className="object-cover"
                       sizes="220px"
                     />

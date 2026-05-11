@@ -249,7 +249,7 @@ export default function GrowthPage() {
 
     if (parentD01.invalidChildId) {
       return (
-        <div className="app-page flex min-h-[70vh] items-center justify-center page-enter">
+        <div className="app-page flex min-h-[70vh] items-center justify-center page-enter" data-testid="r07-parent-growth-forbidden">
           <EmptyState
             icon={<ShieldAlert className="h-6 w-6" />}
             title="无法查看该孩子的成长档案"
@@ -272,7 +272,7 @@ export default function GrowthPage() {
     }
 
     return (
-      <div className="app-page max-w-[76rem] page-enter">
+      <div className="app-page max-w-[76rem] page-enter" data-testid="r07-parent-growth-page">
         <section className="mb-5 overflow-hidden rounded-2xl border border-rose-100 bg-[linear-gradient(135deg,#fff7ed_0%,#ffffff_48%,#eef2ff_100%)] p-4 shadow-[0_20px_58px_rgb(244_63_94_/_0.10)] sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>

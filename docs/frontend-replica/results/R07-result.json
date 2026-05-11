@@ -1,0 +1,138 @@
+{
+  "id": "FRONTEND-REPLICA-R07",
+  "status": "pass",
+  "generatedAt": "2026-05-11T16:22:50.7985461+08:00",
+  "replicatedPages": [
+    "/parent?child=c-1",
+    "/parent/agent?child=c-1",
+    "/parent/agent?child=c-1#feedback",
+    "/parent/storybook?child=c-1",
+    "/parent/storybook?child=lin-xiaoyu",
+    "/parent/reminders?child=c-1",
+    "/growth?child=c-1"
+  ],
+  "implementation": {
+    "linMomStable": true,
+    "defaultChildId": "c-1",
+    "parentUserId": "u-parent",
+    "fixedStorybookPreserved": true,
+    "realGrowthMediaPreserved": true,
+    "homeSchoolCommunicationUsable": true,
+    "parentAiServerBoundaryPreserved": true,
+    "voiceOrbVisible": true,
+    "mobileResponsiveEvidence": [
+      "390x844",
+      "941x1672",
+      "1086x1448",
+      "1448x1086"
+    ]
+  },
+  "storybook": {
+    "title": "林小雨的一小步勇敢",
+    "canonicalChildId": "c-1",
+    "alias": "lin-xiaoyu",
+    "pages": 6,
+    "imageBasePath": "/demo-media/storybooks/lin-xiaoyu/images",
+    "audioBasePath": "/demo-media/storybooks/lin-xiaoyu/audio",
+    "staticAudioPresentLocally": false,
+    "ttsFallbackVerified": true,
+    "fakeAudioGenerated": false
+  },
+  "parentAiAssistant": {
+    "apiBoundary": "server-side /api/ai routes",
+    "providerStatusVisible": true,
+    "trendChartVisible": true,
+    "suggestionsVisible": true,
+    "inputAndSendVisible": true,
+    "voiceEntryVisible": true,
+    "degradedStateVisible": true,
+    "fakeSuccessGenerated": false
+  },
+  "homeSchoolCommunication": {
+    "feedbackHashRoute": "/parent/agent?child=c-1#feedback",
+    "structuredFeedback": true,
+    "attachments": true,
+    "voiceAttachment": true,
+    "messageList": true,
+    "detailDialog": true,
+    "postSubmitRefresh": true
+  },
+  "mediaAndTrends": {
+    "dietTrendVisible": true,
+    "healthTrendVisible": true,
+    "growthTrendVisible": true,
+    "remindersVisible": true,
+    "allowedGrowthImagePrefixes": [
+      "/demo-media/gpt-image2/growth/",
+      "/demo-media/growth/"
+    ],
+    "unauthorizedChildLeakChecked": true
+  },
+  "tests": [
+    {
+      "command": "npx playwright test tests/frontend-replica/parent-replica.spec.ts --config=playwright.feature.config.ts --project=chromium --reporter=line",
+      "status": "pass",
+      "summary": "6 passed"
+    },
+    {
+      "command": "npm run lint",
+      "status": "pass"
+    },
+    {
+      "command": "npm run build",
+      "status": "pass"
+    },
+    {
+      "command": "npm run product:api",
+      "status": "pass",
+      "summary": "8 passed"
+    },
+    {
+      "command": "npm run product:ai",
+      "status": "pass",
+      "summary": "live Chat/OCR/ASR passed; browser 6 passed"
+    },
+    {
+      "command": "npm run product:voice",
+      "status": "pass",
+      "summary": "13 parser tests and 20 browser tests passed"
+    },
+    {
+      "command": "npm run product:journey",
+      "status": "pass",
+      "summary": "1 passed"
+    },
+    {
+      "command": "npm run feature:smoke",
+      "status": "pass"
+    },
+    {
+      "command": "npm run bugbash:smoke",
+      "status": "pass"
+    },
+    {
+      "command": "npm run demo-media:test",
+      "status": "pass",
+      "summary": "3 passed"
+    },
+    {
+      "command": "npm run growth-media:test",
+      "status": "pass",
+      "summary": "3 passed"
+    },
+    {
+      "command": "npm run storybook:xiaoyu:test",
+      "status": "pass",
+      "summary": "5 passed"
+    },
+    {
+      "command": "npx tsc --noEmit",
+      "status": "pass"
+    }
+  ],
+  "knownDeviations": [
+    "Local brain proxy at 127.0.0.1:8010 was not running during Playwright, so fallback/ECONNREFUSED/connection reset logs appeared while provider/degraded UI stayed explicit.",
+    "Static mp3 files under public/demo-media/storybooks/lin-xiaoyu/audio are absent locally; narration validation covers controls plus TTS or classified unavailable fallback, with no fake audio generated.",
+    "Browser skill was read; project Playwright was used for repeatable rendered evidence because it owns the Next dev server, authentication, and artifacts."
+  ]
+}
