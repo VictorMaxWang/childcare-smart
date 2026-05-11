@@ -1033,6 +1033,7 @@ export default function ParentHomePage() {
         description="首页只保留今天最需要处理的信息：孩子状态、AI 提醒、今晚任务、反馈入口和移动端趋势。"
         headerVariant="hidden"
         className="max-w-[78rem]"
+        testId="r07-parent-page"
       >
         <PixelParentHomeReplica
           todayText={TODAY_TEXT}
@@ -1071,6 +1072,7 @@ export default function ParentHomePage() {
       description="首页只保留今天最需要处理的信息：孩子状态、AI 提醒、今晚任务、AI 干预卡预览、待反馈事项和 7 天趋势入口。"
       headerVariant="hidden"
       className="max-w-[84rem]"
+      testId="r07-parent-page"
       actions={headerActions}
     >
       <RoleSplitLayout

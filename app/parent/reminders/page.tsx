@@ -126,6 +126,7 @@ export default function ParentRemindersPage() {
       title="日常提醒"
       description="提醒来自 E01 服务，按 childId 隔离；标记已读会写入服务端持久化层。"
       className="max-w-[76rem]"
+      testId="r07-parent-reminders-page"
       actions={
         <>
           <InlineLinkButton href={`/parent?child=${selectedChild.id}`} label="返回家长首页" />

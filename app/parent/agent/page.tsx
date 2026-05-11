@@ -1615,6 +1615,7 @@ export default function ParentAgentPage() {
         title="今晚先做一件事，做完再给老师一个最短反馈。"
         description="关怀模式把首屏收敛成大字行动摘要，先让祖辈和低数字熟练度照护者看懂今晚做什么、明天看什么、为什么现在做。"
         headerVariant="hidden"
+        testId="r07-parent-agent-page"
         actions={carePageActions}
       >
         <RoleSplitLayout
@@ -1717,6 +1718,7 @@ export default function ParentAgentPage() {
                 id="feedback"
                 ref={feedbackSectionRef}
                 tabIndex={-1}
+                data-testid="r07-parent-agent-feedback-section"
                 className="scroll-mt-24 scroll-mb-[calc(env(safe-area-inset-bottom)+8rem)] pb-[calc(env(safe-area-inset-bottom)+7rem)] lg:scroll-mb-0 lg:pb-0"
               >
                 <SectionCard
@@ -2164,6 +2166,7 @@ export default function ParentAgentPage() {
       title="把今晚怎么做、做完怎么反馈、明天老师继续看什么，放进同一条 AI 闭环里"
       description="这一版家长助手会把今晚怎么做、做完怎么反馈、以及明天老师继续看什么，串成一条完整主路径。"
       headerVariant="hidden"
+      testId="r07-parent-agent-page"
       actions={normalPageActions}
     >
       <RoleSplitLayout
@@ -2525,6 +2528,7 @@ export default function ParentAgentPage() {
               id="feedback"
               ref={feedbackSectionRef}
               tabIndex={-1}
+              data-testid="r07-parent-agent-feedback-section"
               className="scroll-mt-24 scroll-mb-[calc(env(safe-area-inset-bottom)+8rem)] pb-[calc(env(safe-area-inset-bottom)+7rem)] lg:scroll-mb-0 lg:pb-0"
             >
               <SectionCard title="提交今晚反馈" description="把今晚做了没有、孩子反应和补充情况记下来，下一轮建议会继续参考。">
