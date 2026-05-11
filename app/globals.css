@@ -130,6 +130,42 @@
   --focus-ring: 0 0 0 3px rgb(99 102 241 / 0.18);
   --hover-surface: #f8fafc;
   --active-surface: #eef2ff;
+
+  --replica-bg: #f6f8fc;
+  --replica-bg-soft: #f7f9ff;
+  --replica-surface: #ffffff;
+  --replica-surface-glass: rgb(255 255 255 / 0.92);
+  --replica-surface-muted: #f8fbff;
+  --replica-border: #e5eaf5;
+  --replica-border-strong: #d7e0f0;
+  --replica-primary: #655bff;
+  --replica-primary-2: #7a5cff;
+  --replica-secondary: #21c6c1;
+  --replica-sky: #38bdf8;
+  --replica-green: #10b981;
+  --replica-amber: #f59e0b;
+  --replica-red: #ef4444;
+  --replica-text: #111b3f;
+  --replica-text-muted: #596681;
+  --replica-text-soft: #7a86a6;
+  --replica-radius-control: 0.9rem;
+  --replica-radius-card: 1.35rem;
+  --replica-radius-panel: 1.55rem;
+  --replica-radius-shell: 1.75rem;
+  --replica-space-page: clamp(1rem, 2.4vw, 2rem);
+  --replica-space-card: clamp(1rem, 2vw, 1.5rem);
+  --replica-topbar-height: 80px;
+  --replica-bottom-nav-height: 88px;
+  --replica-gradient-app: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 46%, #f8fbff 100%);
+  --replica-gradient-shell: linear-gradient(90deg, rgb(240 246 255 / 0.72) 0%, rgb(255 255 255 / 0.36) 28%, rgb(238 252 253 / 0.45) 100%), linear-gradient(180deg, #f8fbff 0%, #f3f7ff 100%);
+  --replica-gradient-brand: linear-gradient(135deg, #6656ff, #7c5cff 56%, #26c7bd);
+  --replica-gradient-primary: linear-gradient(135deg, #655bff, #7a5cff);
+  --replica-gradient-ai: linear-gradient(135deg, #f5f3ff 0%, #ffffff 52%, #ecfeff 100%);
+  --replica-shadow-card: 0 18px 52px rgb(79 70 229 / 0.07);
+  --replica-shadow-card-hover: 0 24px 70px rgb(79 70 229 / 0.10);
+  --replica-shadow-shell: 0 18px 52px rgb(15 23 42 / 0.12);
+  --replica-shadow-control: 0 10px 26px rgb(15 23 42 / 0.07);
+  --replica-shadow-focus: 0 0 0 4px rgb(99 102 241 / 0.16);
 }
 
 @theme inline {
@@ -150,14 +186,26 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-replica-bg: var(--replica-bg);
+  --color-replica-surface: var(--replica-surface);
+  --color-replica-border: var(--replica-border);
+  --color-replica-primary: var(--replica-primary);
+  --color-replica-secondary: var(--replica-secondary);
+  --color-replica-text: var(--replica-text);
+  --color-replica-muted: var(--replica-text-muted);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
+  --radius-replica-control: var(--replica-radius-control);
+  --radius-replica-card: var(--replica-radius-card);
+  --radius-replica-panel: var(--replica-radius-panel);
   --shadow-card: var(--shadow-card);
   --shadow-raised: var(--shadow-raised);
   --shadow-dialog: var(--shadow-dialog);
+  --shadow-replica-card: var(--replica-shadow-card);
+  --shadow-replica-shell: var(--replica-shadow-shell);
 }
 
 * {
@@ -267,6 +315,29 @@ body {
   border-radius: 1.15rem;
   background: var(--panel);
   box-shadow: 0 16px 44px rgb(79 70 229 / 0.07);
+}
+
+.replica-shell-bg {
+  background: var(--replica-gradient-app);
+}
+
+.replica-panel {
+  border: 1px solid var(--replica-border);
+  border-radius: var(--replica-radius-panel);
+  background: var(--replica-surface-glass);
+  box-shadow: var(--replica-shadow-card);
+}
+
+.replica-card {
+  border: 1px solid var(--replica-border);
+  border-radius: var(--replica-radius-card);
+  background: var(--replica-surface);
+  box-shadow: var(--replica-shadow-card);
+}
+
+.replica-control {
+  border-radius: var(--replica-radius-control);
+  box-shadow: var(--replica-shadow-control);
 }
 
 .pixel-app-shell {

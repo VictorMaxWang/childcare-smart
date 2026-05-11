@@ -1,0 +1,39 @@
+{
+  "taskId": "FRONTEND-REPLICA-R01",
+  "status": "done",
+  "designFilesAudited": 247,
+  "pageSpecsGenerated": 247,
+  "chartTargets": 174,
+  "aiAssistantTargets": 32,
+  "modalDrawerStateTargets": 13,
+  "highPriorityGaps": [
+    "P0 route/query/hash states must be audited independently",
+    "P0 visual shell/layout/card/chart/assistant gaps remain across admin, teacher, parent routes",
+    "AI assistant must use server-side vivo provider or explicit unavailable state",
+    "Charts must bind real demo/API/selector data, not static fake values",
+    "Mobile/tablet viewport specs need separate acceptance from desktop"
+  ],
+  "p0GapCount": 131,
+  "p1GapCount": 61,
+  "pathRiskNotes": [
+    {
+      "risk": "teacher_workspace_dashboard_for_daycare绠＄悊.png should resolve to teacher_workspace_dashboard_for_daycare管理.png",
+      "designId": "SCFR-244-teacher-dashboard-desktop",
+      "verifiedActualPath": "smartchildcare_images_part_08_of_08/images/teacher_workspace_dashboard_for_daycare管理.png",
+      "status": "verified"
+    },
+    {
+      "risk": "鏅烘収...png should resolve to 智慧托育平台运营报表分析界面.png",
+      "designId": "SCFR-247-director-charts-reports-tablet-portrait",
+      "verifiedActualPath": "smartchildcare_images_part_08_of_08/images/智慧托育平台运营报表分析界面.png",
+      "status": "verified"
+    }
+  ],
+  "nextRecommendedTasks": [
+    "R02 design system / route-state mapping",
+    "R03 chart contract and data binding audit",
+    "R04 AI assistant provider and UI contract audit",
+    "R05-R07 role page implementation slices",
+    "R90 visual QA after implementation"
+  ]
+}

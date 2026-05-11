@@ -1,0 +1,70 @@
+{
+  "task": "FRONTEND-REPLICA-R02",
+  "status": "done",
+  "generatedAt": "2026-05-11",
+  "scope": {
+    "globalDesignSystem": true,
+    "topbar": true,
+    "sidebar": true,
+    "mobileNavigation": true,
+    "breadcrumbs": true,
+    "accountCard": true,
+    "roleLabels": true,
+    "buttons": true,
+    "inputs": true,
+    "cards": true,
+    "metricCards": true,
+    "chips": true,
+    "tablesAndLists": "existing UI retained; shared shells/tokens applied where present",
+    "emptyLoadingError": true,
+    "modalDialogDrawerToast": true,
+    "aiAssistantShell": true,
+    "chartShell": true
+  },
+  "boundariesPreserved": {
+    "businessDataLogic": true,
+    "routePermissions": true,
+    "vivoProvider": true,
+    "voiceOrb": true,
+    "fixedStorybookAndImages": true
+  },
+  "tests": {
+    "lint": {
+      "command": "npm run lint",
+      "status": "pass"
+    },
+    "build": {
+      "command": "npm run build",
+      "status": "pass"
+    },
+    "productSmoke": {
+      "command": "npm run product:smoke",
+      "status": "pass",
+      "passed": 2
+    },
+    "productJourney": {
+      "command": "npm run product:journey",
+      "status": "pass",
+      "passed": 1
+    },
+    "featureSmoke": {
+      "command": "npm run feature:smoke",
+      "status": "pass",
+      "passed": 19
+    },
+    "tsc": {
+      "command": "npx tsc --noEmit",
+      "status": "pass"
+    },
+    "designSystem": {
+      "command": "npx playwright test tests/frontend-replica/design-system.spec.ts --config=playwright.product.config.ts",
+      "status": "pass",
+      "passed": 5
+    }
+  },
+  "notes": [
+    "R02 does not perform page-specific R20/R30/R40/R50 deep pixel replica.",
+    "Existing local brain proxy fallback logs appeared during Playwright runs, but all required tests passed.",
+    "Commit scope includes pre-existing R01 frontend replica docs and scripts/generate-r01-design-audit.mjs."
+  ]
+}
