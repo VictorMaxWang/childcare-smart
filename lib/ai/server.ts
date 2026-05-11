@@ -1,4 +1,3 @@
-import { requestDashscopeFollowUp, requestDashscopeSuggestion, requestDashscopeWeeklyReport } from "@/lib/ai/dashscope";
 import {
   buildFallbackFollowUp,
   buildFallbackInstitutionSuggestion,
@@ -12,18 +11,57 @@ import {
   buildMockWeeklyReport,
 } from "@/lib/ai/mock";
 import { toFollowUpFeedbackLite } from "@/lib/feedback/normalize";
-import { resolveWeeklyReportRole } from "@/lib/ai/weekly-report";
+import { buildActionizedWeeklyReportResponse, resolveWeeklyReportRole } from "@/lib/ai/weekly-report";
+import { getVivoProviderStatus, requestVivoChat, VivoProviderError } from "@/lib/providers/vivo";
+import type { VivoProviderStatus } from "@/lib/providers/vivo";
 import type {
+  AiActionPlan,
   AiFollowUpPayload,
   AiFollowUpResponse,
+  AiRiskLevel,
   AiSuggestionPayload,
   AiSuggestionResponse,
+  AiTrendPrediction,
   ChildSuggestionSnapshot,
   InstitutionSuggestionSnapshot,
+  WeeklyReportRole,
   WeeklyReportPayload,
   WeeklyReportResponse,
   WeeklyReportSnapshot,
 } from "@/lib/ai/types";
+
+const DEFAULT_DISCLAIMER =
+  "本建议仅用于托育观察与家园沟通参考，不构成医疗诊断；如出现持续发热或明显异常，请及时就医。";
+
+type ChatProviderStatus = VivoProviderStatus<"chat">;
+
+export class AiProviderUnavailableError extends Error {
+  code = "provider_unavailable" as const;
+  capability = "chat" as const;
+  providerStatus: ChatProviderStatus;
+  status = 503;
+
+  constructor(message: string, providerStatus: ChatProviderStatus) {
+    super(message);
+    this.name = "AiProviderUnavailableError";
+    this.providerStatus = providerStatus;
+  }
+}
+
+export function isAiProviderUnavailableError(error: unknown): error is AiProviderUnavailableError {
+  return error instanceof AiProviderUnavailableError;
+}
+
+export function buildAiProviderUnavailableBody(error: AiProviderUnavailableError) {
+  return {
+    ok: false,
+    code: error.code,
+    error: error.message,
+    message: error.message,
+    capability: error.capability,
+    providerStatus: error.providerStatus,
+  };
+}
 
 export interface AiRuntimeOptions {
   configuredModel: string;
@@ -33,10 +71,227 @@ export interface AiRuntimeOptions {
 
 export function getAiRuntimeOptions(request?: Request): AiRuntimeOptions {
   return {
-    configuredModel: process.env.AI_MODEL || "qwen-turbo",
+    configuredModel: process.env.VIVO_LLM_MODEL || process.env.AI_MODEL || "Volc-DeepSeek-V3.2",
     forceMock: process.env.NEXT_PUBLIC_FORCE_MOCK_MODE === "true",
     forceFallback:
       process.env.NODE_ENV !== "production" && request?.headers.get("x-ai-force-fallback") === "1",
+  };
+}
+
+function safeJsonParse(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(text.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeArray(input: unknown, limit = 5): string[] {
+  if (!Array.isArray(input)) return [];
+  return input.map((item) => String(item ?? "").trim()).filter(Boolean).slice(0, limit);
+}
+
+function normalizeRiskLevel(input: unknown): AiRiskLevel {
+  const value = String(input ?? "").trim().toLowerCase();
+  if (value === "high") return "high";
+  if (value === "medium") return "medium";
+  return "low";
+}
+
+function normalizeTrendPrediction(input: unknown): AiTrendPrediction {
+  const value = String(input ?? "").trim().toLowerCase();
+  if (value === "up") return "up";
+  if (value === "down") return "down";
+  return "stable";
+}
+
+function normalizeActionPlan(input: unknown): AiActionPlan | undefined {
+  if (!isRecord(input)) return undefined;
+  const schoolActions = normalizeArray(input.schoolActions, 4);
+  const familyActions = normalizeArray(input.familyActions, 4);
+  const reviewActions = normalizeArray(input.reviewActions, 4);
+  if (schoolActions.length === 0 && familyActions.length === 0 && reviewActions.length === 0) {
+    return undefined;
+  }
+  return { schoolActions, familyActions, reviewActions };
+}
+
+function normalizeSuggestionOutput(raw: unknown): Omit<AiSuggestionResponse, "source"> | null {
+  if (!isRecord(raw)) return null;
+  const summary = String(raw.summary ?? "").trim();
+  const highlights = normalizeArray(raw.highlights);
+  const concerns = normalizeArray(raw.concerns);
+  const actions = normalizeArray(raw.actions);
+  if (!summary || (highlights.length === 0 && concerns.length === 0 && actions.length === 0)) {
+    return null;
+  }
+
+  return {
+    riskLevel: normalizeRiskLevel(raw.riskLevel),
+    summary,
+    highlights,
+    concerns,
+    actions,
+    actionPlan: normalizeActionPlan(raw.actionPlan),
+    trendPrediction: normalizeTrendPrediction(raw.trendPrediction),
+    disclaimer: String(raw.disclaimer ?? "").trim() || DEFAULT_DISCLAIMER,
+  };
+}
+
+function normalizeFollowUpOutput(raw: unknown): Omit<AiFollowUpResponse, "source"> | null {
+  if (!isRecord(raw)) return null;
+  const answer = String(raw.answer ?? "").trim();
+  const keyPoints = normalizeArray(raw.keyPoints);
+  const nextSteps = normalizeArray(raw.nextSteps);
+  if (!answer || (keyPoints.length === 0 && nextSteps.length === 0)) return null;
+
+  return {
+    answer,
+    keyPoints,
+    nextSteps,
+    tonightTopAction: typeof raw.tonightTopAction === "string" ? raw.tonightTopAction : undefined,
+    whyNow: typeof raw.whyNow === "string" ? raw.whyNow : undefined,
+    homeSteps: normalizeArray(raw.homeSteps),
+    observationPoints: normalizeArray(raw.observationPoints),
+    teacherObservation: typeof raw.teacherObservation === "string" ? raw.teacherObservation : undefined,
+    reviewIn48h: typeof raw.reviewIn48h === "string" ? raw.reviewIn48h : undefined,
+    recommendedQuestions: normalizeArray(raw.recommendedQuestions),
+    disclaimer: String(raw.disclaimer ?? "").trim() || DEFAULT_DISCLAIMER,
+  };
+}
+
+function normalizeWeeklyReportOutput(
+  raw: unknown,
+  snapshot: WeeklyReportSnapshot,
+  role: WeeklyReportRole
+): Omit<WeeklyReportResponse, "source"> | null {
+  if (!isRecord(raw)) return null;
+  const summary = String(raw.summary ?? "").trim();
+  const highlights = normalizeArray(raw.highlights);
+  const risks = normalizeArray(raw.risks);
+  const nextWeekActions = normalizeArray(raw.nextWeekActions);
+  if (!summary || (highlights.length === 0 && risks.length === 0 && nextWeekActions.length === 0)) {
+    return null;
+  }
+
+  return buildActionizedWeeklyReportResponse({
+    role,
+    snapshot,
+    summary,
+    highlights,
+    risks,
+    nextWeekActions,
+    trendPrediction: normalizeTrendPrediction(raw.trendPrediction),
+    disclaimer: String(raw.disclaimer ?? "").trim() || DEFAULT_DISCLAIMER,
+    source: "ai",
+  });
+}
+
+function withoutRuntimeFields<T extends Record<string, unknown>>(value: T) {
+  const clone = { ...value };
+  delete clone.source;
+  delete clone.model;
+  delete clone.provider;
+  delete clone.providerStatus;
+  return clone;
+}
+
+function buildStructuredPrompt(params: {
+  task: string;
+  input: unknown;
+  example: unknown;
+}) {
+  return [
+    `Task: ${params.task}`,
+    "You are an AI assistant for a childcare institution.",
+    "Use only the supplied institution, class, child and care records. Do not invent IDs or private data.",
+    "Write natural Simplified Chinese suitable for childcare staff or parents.",
+    "Do not make medical diagnoses. Keep health advice as observation and communication guidance.",
+    "Return strict JSON only. Do not include markdown, comments, source, model or provider keys.",
+    "The JSON must follow this example shape while replacing the content with a provider-generated answer:",
+    JSON.stringify(params.example),
+    "Input:",
+    JSON.stringify(params.input),
+  ].join("\n");
+}
+
+async function requestStructuredVivoJson(params: {
+  prompt: string;
+  options: AiRuntimeOptions;
+  taskType: string;
+}) {
+  const status = getVivoProviderStatus("chat");
+  if (!status.configured || !status.supported) {
+    throw new AiProviderUnavailableError(
+      status.reason ?? "vivo chat provider is unavailable because required environment variables are missing.",
+      status
+    );
+  }
+
+  try {
+    const result = await requestVivoChat({
+      model: params.options.configuredModel,
+      temperature: 0.2,
+      maxTokens: 1400,
+      taskType: params.taskType,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a childcare assistant. Return strict JSON only, with Simplified Chinese values and no medical diagnosis.",
+        },
+        {
+          role: "user",
+          content: params.prompt,
+        },
+      ],
+    });
+    const parsed = safeJsonParse(result.text);
+    if (!parsed) {
+      throw new AiProviderUnavailableError("vivo chat response was not valid JSON.", {
+        ...result.status,
+        status: "error",
+        configured: result.status.configured,
+      });
+    }
+    return { parsed, model: result.model, providerStatus: result.status };
+  } catch (error) {
+    if (error instanceof AiProviderUnavailableError) throw error;
+    if (error instanceof VivoProviderError) {
+      throw new AiProviderUnavailableError(error.message, {
+        ...getVivoProviderStatus("chat"),
+        status: error.status,
+        reason: error.message,
+      });
+    }
+    throw new AiProviderUnavailableError(
+      error instanceof Error ? error.message : "vivo chat provider failed.",
+      {
+        ...getVivoProviderStatus("chat"),
+        status: "provider-unavailable",
+        reason: "vivo chat provider failed.",
+      }
+    );
+  }
+}
+
+function providerMeta(providerStatus: ChatProviderStatus) {
+  return {
+    provider: "vivo",
+    providerStatus: { chat: providerStatus },
   };
 }
 
@@ -139,27 +394,39 @@ export async function executeSuggestion(
       ? buildFallbackInstitutionSuggestion(payload.snapshot as InstitutionSuggestionSnapshot)
       : buildFallbackSuggestion(payload.snapshot as ChildSuggestionSnapshot)),
     model: isInstitutionScope ? "institution-rule-fallback" : "rule-fallback",
+    provider: "local-rule-fallback",
+    providerStatus: { chat: getVivoProviderStatus("chat") },
   } satisfies AiSuggestionResponse;
 
   if (options.forceFallback) {
     return fallback;
   }
 
-  const aiResult = await requestDashscopeSuggestion(payload.snapshot);
+  const { parsed, model, providerStatus } = await requestStructuredVivoJson({
+    options,
+    taskType: "childcare-ai-suggestion",
+    prompt: buildStructuredPrompt({
+      task: isInstitutionScope
+        ? "Generate an institution-level director assistant risk summary and action plan."
+        : "Generate a child-level childcare suggestion summary and action plan.",
+      input: payload,
+      example: withoutRuntimeFields(fallback),
+    }),
+  });
+  const aiResult = normalizeSuggestionOutput(parsed);
   if (!aiResult) {
-    const fallbackTarget = isInstitutionScope
-      ? (payload.snapshot as InstitutionSuggestionSnapshot).institutionName
-      : (payload.snapshot as ChildSuggestionSnapshot).child.id;
-    console.warn(
-      `[AI] Falling back to rules for ${isInstitutionScope ? "institution" : "child"} ${fallbackTarget} using model ${options.configuredModel}.`
-    );
-    return fallback;
+    throw new AiProviderUnavailableError("vivo chat response could not be normalized as an AI suggestion.", {
+      ...providerStatus,
+      status: "error",
+      reason: "Invalid suggestion JSON shape.",
+    });
   }
 
   return {
     ...aiResult,
     source: "ai",
-    model: options.configuredModel,
+    model,
+    ...providerMeta(providerStatus),
   } satisfies AiSuggestionResponse;
 }
 
@@ -180,24 +447,39 @@ export async function executeFollowUp(
   const fallback = {
     ...buildFallbackFollowUp(payload),
     model: isInstitutionScope ? "institution-follow-up-rule-fallback" : "follow-up-rule-fallback",
+    provider: "local-rule-fallback",
+    providerStatus: { chat: getVivoProviderStatus("chat") },
   } satisfies AiFollowUpResponse;
 
   if (options.forceFallback) {
     return fallback;
   }
 
-  const aiResult = await requestDashscopeFollowUp(payload);
+  const { parsed, model, providerStatus } = await requestStructuredVivoJson({
+    options,
+    taskType: "childcare-ai-follow-up",
+    prompt: buildStructuredPrompt({
+      task: isInstitutionScope
+        ? "Answer a director follow-up question about institution priorities and dispatch decisions."
+        : "Answer a parent or teacher follow-up question about the current childcare action card.",
+      input: payload,
+      example: withoutRuntimeFields(fallback),
+    }),
+  });
+  const aiResult = normalizeFollowUpOutput(parsed);
   if (!aiResult) {
-    console.warn(
-      `[AI] Falling back to ${isInstitutionScope ? "institution" : "child"} follow-up using model ${options.configuredModel}.`
-    );
-    return fallback;
+    throw new AiProviderUnavailableError("vivo chat response could not be normalized as a follow-up answer.", {
+      ...providerStatus,
+      status: "error",
+      reason: "Invalid follow-up JSON shape.",
+    });
   }
 
   return {
     ...aiResult,
     source: "ai",
-    model: options.configuredModel,
+    model,
+    ...providerMeta(providerStatus),
   } satisfies AiFollowUpResponse;
 }
 
@@ -220,21 +502,36 @@ export async function executeWeeklyReport(
   const fallback = {
     ...buildFallbackWeeklyReport(payload.snapshot, role),
     model: "weekly-rule-fallback",
+    provider: "local-rule-fallback",
+    providerStatus: { chat: getVivoProviderStatus("chat") },
   } satisfies WeeklyReportResponse;
 
   if (options.forceFallback) {
     return fallback;
   }
 
-  const aiResult = await requestDashscopeWeeklyReport(payload.snapshot, role);
+  const { parsed, model, providerStatus } = await requestStructuredVivoJson({
+    options,
+    taskType: "childcare-ai-weekly-report",
+    prompt: buildStructuredPrompt({
+      task: `Generate a role=${role} weekly report for childcare operations.`,
+      input: payload,
+      example: withoutRuntimeFields(fallback),
+    }),
+  });
+  const aiResult = normalizeWeeklyReportOutput(parsed, payload.snapshot, role);
   if (!aiResult) {
-    console.warn(`[AI] Falling back to weekly report rules using model ${options.configuredModel}.`);
-    return fallback;
+    throw new AiProviderUnavailableError("vivo chat response could not be normalized as a weekly report.", {
+      ...providerStatus,
+      status: "error",
+      reason: "Invalid weekly report JSON shape.",
+    });
   }
 
   return {
     ...aiResult,
     source: "ai",
-    model: options.configuredModel,
+    model,
+    ...providerMeta(providerStatus),
   } satisfies WeeklyReportResponse;
 }

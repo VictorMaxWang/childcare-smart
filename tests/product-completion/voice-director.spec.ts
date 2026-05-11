@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { assistantCommand, demoContext, expectFailure, expectOk } from "./e11-helpers";
+import { assistantCommand, demoContext, expectFailure, expectOk, planExistingVoiceCommand } from "./e11-helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -32,9 +32,10 @@ test.describe("E11 director voice command regression", () => {
         "needs_confirmation"
       );
 
+      const plannedWeekly = await planExistingVoiceCommand(director, weekly, { currentPath: "/admin" });
       const executed = await expectOk<Record<string, unknown>>(
         await director.post("/api/voice-assistant/commands", {
-          data: { action: "execute", command: weekly, confirmed: true, context: { currentPath: "/admin" } },
+          data: { action: "execute", command: plannedWeekly, confirmed: true, context: { currentPath: "/admin" } },
         })
       );
       expect(String(executed.message)).toMatch(/周报|鍛ㄦ姤|weekly/i);

@@ -192,7 +192,10 @@ export function VoiceOrb() {
 
   const providerText = useMemo(() => {
     if (!providerStatus) return "正在读取 provider 状态";
-    if (!providerStatus.chat.configured || !providerStatus.asr.configured) return providerStatus.fallbackText;
+    const unavailable = [providerStatus.chat, providerStatus.ocr, providerStatus.asr, providerStatus.tts].find(
+      (capability) => !capability.configured || capability.status !== "ready"
+    );
+    if (unavailable) return providerStatus.fallbackText;
     return "vivo provider ready";
   }, [providerStatus]);
 
@@ -216,6 +219,15 @@ export function VoiceOrb() {
     }, 0);
     return () => window.clearTimeout(timeout);
   }, [currentUser.id, role]);
+
+  useEffect(() => {
+    const openVoiceOrb = () => {
+      setExpanded(true);
+      setMinimized(false);
+    };
+    window.addEventListener("smartchildcare:open-voice-orb", openVoiceOrb);
+    return () => window.removeEventListener("smartchildcare:open-voice-orb", openVoiceOrb);
+  }, []);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -433,9 +445,15 @@ export function VoiceOrb() {
         setError("");
         try {
           const asr = await transcribeVoiceAssistantAudio(formData);
-          setRecognizedText(asr.transcript);
-          setText(asr.transcript);
-          await submitText(asr.transcript, "asr-provider");
+          const transcript = asr.transcript.trim();
+          if (!transcript) {
+            setError("ASR provider 没有返回可用转写，请使用文字 fallback。");
+            setPhase("error");
+            return;
+          }
+          setRecognizedText(transcript);
+          setText(transcript);
+          await submitText(transcript, "asr-provider");
         } catch (err) {
           setError(errorMessage(err));
           setPhase("error");
@@ -524,7 +542,7 @@ export function VoiceOrb() {
   const isListening = speechStatus === "listening";
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.65rem)] z-[60] flex justify-end px-4 sm:bottom-6 sm:right-6 sm:left-auto sm:block sm:px-0">
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.9rem)] z-[60] flex flex-col items-end gap-3 px-3 sm:bottom-6 sm:right-6 sm:left-auto sm:block sm:px-0">
       {expanded && !minimized ? (
         <section
           className="pointer-events-auto mb-3 w-full max-w-[420px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_22px_70px_rgb(15_23_42_/_0.18)] sm:mb-4"
@@ -568,7 +586,17 @@ export function VoiceOrb() {
 
           <div className="max-h-[min(72vh,640px)] space-y-3 overflow-y-auto px-4 py-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={providerStatus?.asr.configured ? "success" : "warning"} data-testid="voice-orb-provider-status">
+              <Badge
+                variant={
+                  providerStatus &&
+                  [providerStatus.chat, providerStatus.ocr, providerStatus.asr, providerStatus.tts].every(
+                    (capability) => capability.configured
+                  )
+                    ? "success"
+                    : "warning"
+                }
+                data-testid="voice-orb-provider-status"
+              >
                 {providerText}
               </Badge>
               {!speechSupport?.recognitionSupported ? <Badge variant="neutral">可输入文字指令</Badge> : null}

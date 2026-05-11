@@ -59,6 +59,23 @@ export async function planVoiceCommand(
   return data.command;
 }
 
+export async function planExistingVoiceCommand(
+  api: APIRequestContext,
+  command: Record<string, unknown>,
+  context: Record<string, unknown> = {}
+) {
+  const data = await expectOk<{ command: Record<string, unknown> }>(
+    await api.post("/api/voice-assistant/commands", {
+      data: {
+        action: "plan",
+        command,
+        context,
+      },
+    })
+  );
+  return data.command;
+}
+
 export async function executeVoiceCommand(
   api: APIRequestContext,
   text: string,

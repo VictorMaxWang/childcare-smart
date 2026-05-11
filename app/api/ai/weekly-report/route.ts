@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import {
+  buildAiProviderUnavailableBody,
   executeWeeklyReport,
   getAiRuntimeOptions,
+  isAiProviderUnavailableError,
   isValidWeeklyReportPayload,
   resolveWeeklyReportRoleFromPayload,
 } from "@/lib/ai/server";
@@ -40,6 +42,13 @@ export async function POST(request: Request) {
   const brainForward = await forwardBrainRequest(request, "/api/v1/agents/reports/weekly");
   if (brainForward.response) return brainForward.response;
 
-  const result = await executeWeeklyReport(payload, getAiRuntimeOptions(request));
-  return NextResponse.json(result, { status: 200 });
+  try {
+    const result = await executeWeeklyReport(payload, getAiRuntimeOptions(request));
+    return NextResponse.json(result, { status: 200 });
+  } catch (error) {
+    if (isAiProviderUnavailableError(error)) {
+      return NextResponse.json(buildAiProviderUnavailableBody(error), { status: error.status });
+    }
+    throw error;
+  }
 }

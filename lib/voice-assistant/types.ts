@@ -129,6 +129,7 @@ export interface AssistantCommand<TParams extends Record<string, unknown> = Reco
   examples?: string[];
   utterance?: AssistantUtterance;
   deeplink?: string;
+  confirmationToken?: string;
 }
 
 export interface AssistantPlanResult {
@@ -173,7 +174,7 @@ export interface AssistantCommandApiRequest {
 
 export interface VoiceProviderCapabilityStatus {
   providerName: string;
-  capability: "chat" | "asr" | "ocr";
+  capability: "chat" | "asr" | "ocr" | "tts";
   configured: boolean;
   supported: boolean;
   isRealProvider: boolean;
@@ -187,6 +188,7 @@ export interface AssistantProviderStatus {
   chat: VoiceProviderCapabilityStatus;
   ocr: VoiceProviderCapabilityStatus;
   asr: VoiceProviderCapabilityStatus;
+  tts: VoiceProviderCapabilityStatus;
   fallbackText: string;
 }
 

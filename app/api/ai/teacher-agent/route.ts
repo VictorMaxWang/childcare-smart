@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server.js";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import {
+  buildAiProviderUnavailableBody,
   executeFollowUp,
   executeSuggestion,
   executeWeeklyReport,
   getAiRuntimeOptions,
+  isAiProviderUnavailableError,
 } from "@/lib/ai/server";
 import {
   buildTeacherAgentChildContext,
@@ -48,6 +50,12 @@ function isValidPayload(payload: unknown): payload is TeacherAgentRequestPayload
     isRecordArray(obj.growthRecords) &&
     isRecordArray(obj.guardianFeedbacks)
   );
+}
+
+function providerErrorResponse(error: unknown) {
+  return isAiProviderUnavailableError(error)
+    ? NextResponse.json(buildAiProviderUnavailableBody(error), { status: error.status })
+    : null;
 }
 
 export async function POST(request: Request) {
@@ -96,9 +104,10 @@ export async function POST(request: Request) {
               request,
             })
           )
-        )
+      )
       : [];
 
+  try {
   if (payload.workflow === "communication") {
     if (!childContext) {
       return NextResponse.json({ error: "No visible child available for communication workflow" }, { status: 400 });
@@ -190,4 +199,9 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json(result, { status: 200 });
+  } catch (error) {
+    const response = providerErrorResponse(error);
+    if (response) return response;
+    throw error;
+  }
 }
