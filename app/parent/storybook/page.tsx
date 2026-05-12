@@ -117,10 +117,16 @@ export default function ParentStoryBookPage() {
   const [storybookActionStatus, setStorybookActionStatus] = useState<string | null>(null);
   const [isStorybookActionPending, setIsStorybookActionPending] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [fixedStorybookReloadToken, setFixedStorybookReloadToken] = useState(0);
+  const [hasManualStorybookOverride, setHasManualStorybookOverride] = useState(false);
+  const hasManualStorybookOverrideRef = useRef(false);
   const networkOnlyRef = useRef(false);
   const storyRef = useRef<ParentStoryBookResponse | null>(null);
+  const requestRef = useRef<ParentStoryBookRequest | null>(null);
   const pollAttemptRef = useRef(0);
   const pollingStoryIdRef = useRef<string | null>(null);
+  const previousSelectedChildIdRef = useRef<string | undefined>(undefined);
+  const manualStorybookGenerationInFlightRef = useRef(false);
 
   const feeds = getParentFeed();
   const selectedFeed = useMemo(() => {
@@ -145,6 +151,24 @@ export default function ParentStoryBookPage() {
   const latestSavedStorybook = savedStorybooks[0] ?? null;
   const isLockedLinXiaoyuStorybook =
     !parentD01.invalidChildId && selectedFeed?.child.id === LIN_XIAOYU_CHILD_ID;
+  const hasManualStorybookOverrideActive =
+    hasManualStorybookOverride || hasManualStorybookOverrideRef.current;
+  const isLinXiaoyuFixedStorybookVisible =
+    isLockedLinXiaoyuStorybook &&
+    (!story || story.storyId === "lin-xiaoyu-one-small-brave-step");
+
+  useEffect(() => {
+    const currentChildId = selectedFeed?.child.id;
+    if (typeof previousSelectedChildIdRef.current === "undefined") {
+      previousSelectedChildIdRef.current = currentChildId;
+      return;
+    }
+    if (previousSelectedChildIdRef.current !== currentChildId) {
+      previousSelectedChildIdRef.current = currentChildId;
+      hasManualStorybookOverrideRef.current = false;
+      setHasManualStorybookOverride(false);
+    }
+  }, [selectedFeed?.child.id]);
 
   const resolvedDemoSeedId = explicitDemoSeedId;
   const seededPreset = useMemo(
@@ -231,7 +255,8 @@ export default function ParentStoryBookPage() {
   }, [story]);
 
   useEffect(() => {
-    if (!isLockedLinXiaoyuStorybook) return;
+    if (!isLockedLinXiaoyuStorybook || hasManualStorybookOverrideActive) return;
+    if (storyRef.current && storyRef.current.storyId !== "lin-xiaoyu-one-small-brave-step") return;
     const fixedStory = buildLinXiaoyuFixedStorybookResponse({
       generatedAt: latestSavedStorybook?.generatedAt,
     });
@@ -248,7 +273,12 @@ export default function ParentStoryBookPage() {
           : Date.now(),
       });
     });
-  }, [isLockedLinXiaoyuStorybook, latestSavedStorybook]);
+  }, [
+    fixedStorybookReloadToken,
+    hasManualStorybookOverrideActive,
+    isLockedLinXiaoyuStorybook,
+    latestSavedStorybook,
+  ]);
 
   useEffect(() => {
     if (!story || !shouldPollParentStoryBookMedia(story)) {
@@ -289,16 +319,12 @@ export default function ParentStoryBookPage() {
           ? "请输入主题，或先点一个快捷主题。"
           : null;
   const canGenerate =
-    !isLockedLinXiaoyuStorybook &&
     !parentD01.invalidChildId &&
     ((draftControls.generationMode === "child-personalized" && hasChildContext) ||
       (draftControls.generationMode === "manual-theme" && Boolean(manualTheme)) ||
       (draftControls.generationMode === "hybrid" && hasChildContext && Boolean(manualTheme)));
 
   const request = useMemo<ParentStoryBookRequest | null>(() => {
-    if (isLockedLinXiaoyuStorybook) {
-      return null;
-    }
     if (parentD01.invalidChildId) {
       return null;
     }
@@ -349,7 +375,6 @@ export default function ParentStoryBookPage() {
     guardianFeedbacks,
     growthRecords,
     healthCheckRecords,
-    isLockedLinXiaoyuStorybook,
     mealRecords,
     parentD01.invalidChildId,
     resolvedDemoSeedId,
@@ -363,10 +388,15 @@ export default function ParentStoryBookPage() {
   }, [appliedControls.preset, request]);
 
   useEffect(() => {
-    if (isLockedLinXiaoyuStorybook) {
+    requestRef.current = request;
+  }, [request]);
+
+  useEffect(() => {
+    if (isLockedLinXiaoyuStorybook && !hasManualStorybookOverrideActive) {
       return;
     }
-    if (!request || !cacheKey) {
+    const activeRequest = requestRef.current;
+    if (!activeRequest || !cacheKey) {
       if (parentD01.invalidChildId || !storyRef.current) {
         setStatus("empty");
         setStory(null);
@@ -381,10 +411,17 @@ export default function ParentStoryBookPage() {
     let cancelled = false;
     const controller = new AbortController();
     const bypassCache = networkOnlyRef.current;
+    const forceNetworkForManualOverride =
+      isLockedLinXiaoyuStorybook && hasManualStorybookOverrideActive;
+    if (forceNetworkForManualOverride) {
+      if (manualStorybookGenerationInFlightRef.current) return;
+      if (storyRef.current && storyRef.current.storyId !== "lin-xiaoyu-one-small-brave-step") return;
+      manualStorybookGenerationInFlightRef.current = true;
+    }
     const resolvedCacheKey = cacheKey;
     networkOnlyRef.current = false;
 
-    if (!bypassCache) {
+    if (!bypassCache && !forceNetworkForManualOverride) {
       if (latestSavedStorybook && selectedFeed) {
         const restoredStory = restoreParentStorybookResponse(latestSavedStorybook, selectedFeed.child.name);
         void upsertApiStorybook({
@@ -447,14 +484,14 @@ export default function ParentStoryBookPage() {
         const requestHeaders = new Headers({
           "Content-Type": "application/json",
         });
-        if (networkOnlyRef.current || bypassCache) {
+        if (networkOnlyRef.current || bypassCache || forceNetworkForManualOverride) {
           requestHeaders.set("x-smartchildcare-cache-bypass", "1");
         }
 
         const response = await fetch("/api/ai/parent-storybook", {
           method: "POST",
           headers: requestHeaders,
-          body: JSON.stringify(request),
+          body: JSON.stringify(activeRequest),
           signal: controller.signal,
         });
 
@@ -475,8 +512,9 @@ export default function ParentStoryBookPage() {
               .filter((record) => record.childId === selectedFeed.child.id)
               .map((record) => record.id)
           : [];
+        const shouldPersistGeneratedStorybook = !forceNetworkForManualOverride;
         const storybookSaveResult =
-          selectedFeed && data.childId === selectedFeed.child.id
+          selectedFeed && data.childId === selectedFeed.child.id && shouldPersistGeneratedStorybook
             ? saveParentStorybook({
                 childId: selectedFeed.child.id,
                 response: data,
@@ -485,15 +523,20 @@ export default function ParentStoryBookPage() {
             : null;
         let apiStorybookSaveError = "";
         let apiStorybookSaved = false;
-        if (selectedFeed && data.childId === selectedFeed.child.id) {
+        if (
+          selectedFeed &&
+          data.childId === selectedFeed.child.id &&
+          shouldPersistGeneratedStorybook
+        ) {
+          const apiStorybookInput = {
+            childId: selectedFeed.child.id,
+            storybookId: data.storyId,
+            response: data as unknown as Record<string, unknown>,
+            sourceRecordIds,
+            generatedAt: data.generatedAt,
+          };
           try {
-            await upsertApiStorybook({
-              childId: selectedFeed.child.id,
-              storybookId: data.storyId,
-              response: data as unknown as Record<string, unknown>,
-              sourceRecordIds,
-              generatedAt: data.generatedAt,
-            });
+            await upsertApiStorybook(apiStorybookInput);
             apiStorybookSaved = true;
           } catch (saveError) {
             apiStorybookSaveError = saveError instanceof Error ? saveError.message : "E01 绘本服务保存失败。";
@@ -544,23 +587,29 @@ export default function ParentStoryBookPage() {
 
           setCacheState({ kind: "none" });
         });
+      } finally {
+        if (forceNetworkForManualOverride) {
+          manualStorybookGenerationInFlightRef.current = false;
+        }
       }
     }
 
     void loadStory();
 
     return () => {
-      cancelled = true;
-      controller.abort();
+      if (!forceNetworkForManualOverride) {
+        cancelled = true;
+        controller.abort();
+      }
     };
   }, [
     appliedControls.preset,
     cacheKey,
     growthRecords,
+    hasManualStorybookOverrideActive,
     isLockedLinXiaoyuStorybook,
     latestSavedStorybook,
     parentD01.invalidChildId,
-    request,
     reloadToken,
     saveParentStorybook,
     selectedFeed,
@@ -660,11 +709,11 @@ export default function ParentStoryBookPage() {
       generationHint={themeHint}
       canGenerate={canGenerate}
       lockedStorybook={
-        isLockedLinXiaoyuStorybook
+        isLinXiaoyuFixedStorybookVisible && !hasManualStorybookOverrideActive
           ? {
               subtitle: LIN_XIAOYU_FIXED_STORYBOOK_SUBTITLE,
               paged: true,
-              disableGeneration: true,
+              fixedDefault: true,
             }
           : undefined
       }
@@ -706,11 +755,17 @@ export default function ParentStoryBookPage() {
       }
       onGenerate={() => {
         if (!canGenerate) return;
+        hasManualStorybookOverrideRef.current = true;
+        setHasManualStorybookOverride(true);
         networkOnlyRef.current = true;
         setAppliedControls(draftControls);
         setReloadToken((previousToken) => previousToken + 1);
       }}
       onRetry={() => {
+        if (isLockedLinXiaoyuStorybook && !hasManualStorybookOverrideActive) {
+          setFixedStorybookReloadToken((previousToken) => previousToken + 1);
+          return;
+        }
         if (!request) return;
         networkOnlyRef.current = true;
         setReloadToken((previousToken) => previousToken + 1);

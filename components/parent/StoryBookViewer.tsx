@@ -1130,11 +1130,10 @@ export default function StoryBookViewer({
   lockedStorybook?: {
     subtitle: string;
     paged?: boolean;
-    disableGeneration?: boolean;
+    fixedDefault?: boolean;
   };
 }) {
   const theme = getTheme(story?.stylePreset ?? selectedPresetId);
-  const isLockedStorybook = Boolean(lockedStorybook?.disableGeneration);
   const runtimeStory = story ? getRuntimeStory(story) : null;
   const selectedThemeChip = themeChips.includes(manualTheme.trim()) ? manualTheme.trim() : null;
   const requiresTheme =
@@ -1483,8 +1482,11 @@ export default function StoryBookViewer({
               </CardDescription>
             </div>
 
-            {!isLockedStorybook ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
+            {(
+            <div
+              className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5"
+              data-testid="parent-storybook-generation-panel"
+            >
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">
                   {getGenerationModeCopy(generationMode).label}
@@ -1522,6 +1524,7 @@ export default function StoryBookViewer({
                           variant={selected ? "default" : "outline"}
                           className={cn("rounded-full", selected ? theme.accent : theme.quiet)}
                           disabled={disabled}
+                          data-testid={`parent-storybook-mode-${value}`}
                           onClick={() => onGenerationModeChange(value)}
                         >
                           {label}
@@ -1563,6 +1566,7 @@ export default function StoryBookViewer({
                       <Input
                         value={manualTheme}
                         onChange={(event) => onManualThemeChange(event.target.value)}
+                        data-testid="parent-storybook-manual-theme"
                         placeholder="例如：表达情绪、独立入睡、勇敢尝试"
                         className="h-11 rounded-xl border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
                       />
@@ -1581,6 +1585,7 @@ export default function StoryBookViewer({
                         type="button"
                         variant={pageCount === value ? "default" : "outline"}
                         className={cn("rounded-full", pageCount === value ? theme.accent : theme.quiet)}
+                        data-testid={`parent-storybook-page-count-${value}`}
                         onClick={() => onPageCountChange(value)}
                       >
                         {value} 页
@@ -1606,6 +1611,7 @@ export default function StoryBookViewer({
                           type="button"
                           variant={styleMode === value ? "default" : "outline"}
                           className={cn("rounded-full", styleMode === value ? theme.accent : theme.quiet)}
+                          data-testid={`parent-storybook-style-mode-${value}`}
                           onClick={() => onStyleModeChange(value)}
                         >
                           {label}
@@ -1623,6 +1629,7 @@ export default function StoryBookViewer({
                         <Input
                           value={customStylePrompt}
                           onChange={(event) => onCustomStylePromptChange(event.target.value)}
+                          data-testid="parent-storybook-custom-style-prompt"
                           placeholder="例如：梦幻3D儿童绘本、柔焦、低饱和、电影级光影、浅景深"
                           className="h-11 rounded-xl border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
                         />
@@ -1634,6 +1641,7 @@ export default function StoryBookViewer({
                         <Input
                           value={customStyleNegativePrompt}
                           onChange={(event) => onCustomStyleNegativePromptChange(event.target.value)}
+                          data-testid="parent-storybook-custom-style-negative-prompt"
                           placeholder="例如：不要照片感、不要复杂背景、不要写实人脸、不要过度文字"
                           className="h-11 rounded-xl border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
                         />
@@ -1656,6 +1664,7 @@ export default function StoryBookViewer({
                             key={item.id}
                             type="button"
                             onClick={() => onSelectPreset(item.id)}
+                            data-testid={`parent-storybook-style-preset-${item.id}`}
                             className={cn(
                               "rounded-xl border px-3 py-2 text-left text-sm transition-all",
                               selected
@@ -1688,6 +1697,7 @@ export default function StoryBookViewer({
                         type="button"
                         variant="outline"
                         className={cn("rounded-full", theme.quiet)}
+                        data-testid="parent-storybook-refresh-current"
                         onClick={onRetry}
                       >
                         <RotateCcw className="mr-2 h-4 w-4" />
@@ -1698,6 +1708,7 @@ export default function StoryBookViewer({
                       type="button"
                       className={cn("rounded-full shadow-sm", theme.accent)}
                       disabled={!canGenerate}
+                      data-testid="parent-storybook-regenerate"
                       onClick={onGenerate}
                     >
                       <Sparkles className="mr-2 h-4 w-4" />
@@ -1707,7 +1718,7 @@ export default function StoryBookViewer({
                 </div>
               </div>
             </div>
-            ) : null}
+            )}
 
             {refreshMessage ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-6 text-amber-900">
@@ -1835,6 +1846,7 @@ function StoryBookSceneStream({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isBookPlaying, setIsBookPlaying] = useState(false);
+  const [playbackErrorMessage, setPlaybackErrorMessage] = useState<string | null>(null);
   const [imageFallbackMap, setImageFallbackMap] = useState<Record<string, boolean>>({});
   const canUseLocalSpeech =
     typeof window !== "undefined" &&
@@ -1906,6 +1918,7 @@ function StoryBookSceneStream({
     setCurrentTime(0);
     setDuration(0);
     setIsBookPlaying(false);
+    setPlaybackErrorMessage(null);
   }
 
   function scrollToScene(index: number) {
@@ -2154,6 +2167,7 @@ function StoryBookSceneStream({
     clearSpeech();
     clearPreview();
     clearAudio();
+    setPlaybackErrorMessage(null);
 
     const audio = new Audio(scene.audioUrl);
     const timeline = buildCaptionTimeline(scene);
@@ -2231,6 +2245,11 @@ function StoryBookSceneStream({
       if (tryRuntimeTtsFallback()) {
         return;
       }
+      setPlaybackErrorMessage(
+        canUseLocalSpeech
+          ? "vivo 朗读暂不可用，已切换为本地朗读。"
+          : "朗读暂不可用，图片和文字可继续阅读。"
+      );
       if (canUseLocalSpeech) {
         startLocalSpeech(scene, index, options);
         return;
@@ -2242,6 +2261,11 @@ function StoryBookSceneStream({
       if (tryRuntimeTtsFallback()) {
         return;
       }
+      setPlaybackErrorMessage(
+        canUseLocalSpeech
+          ? "vivo 朗读暂不可用，已切换为本地朗读。"
+          : "朗读暂不可用，图片和文字可继续阅读。"
+      );
       if (canUseLocalSpeech) {
         startLocalSpeech(scene, index, options);
         return;
@@ -2515,13 +2539,18 @@ function StoryBookSceneStream({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-950">本页朗读</p>
-                <p className="mt-1 text-xs leading-6 text-slate-500">
-                  {getRuntimeCaptionStatusText(
-                    playbackSource,
-                    isPlaying,
-                    playbackState,
-                    canUseLocalSpeech
-                  )}
+                <p
+                  className="mt-1 text-xs leading-6 text-slate-500"
+                  data-testid="lin-xiaoyu-audio-status"
+                >
+                  {isSceneActive && playbackErrorMessage
+                    ? playbackErrorMessage
+                    : getRuntimeCaptionStatusText(
+                        playbackSource,
+                        isPlaying,
+                        playbackState,
+                        canUseLocalSpeech
+                      )}
                 </p>
               </div>
               <Button
@@ -2787,12 +2816,14 @@ function StoryBookSceneStream({
                     <div>
                       <p className="text-sm font-semibold text-slate-950">逐页朗读</p>
                       <p className="mt-1 text-xs leading-6 text-slate-500">
-                        {getRuntimeCaptionStatusText(
-                          playbackSource,
-                          isPlaying,
-                          playbackState,
-                          canUseLocalSpeech
-                        )}
+                        {isSceneActive && playbackErrorMessage
+                          ? playbackErrorMessage
+                          : getRuntimeCaptionStatusText(
+                              playbackSource,
+                              isPlaying,
+                              playbackState,
+                              canUseLocalSpeech
+                            )}
                       </p>
                     </div>
                     <Button

@@ -50,13 +50,6 @@ const requiredEnv = [
   "VIVO_APP_ID",
   "VIVO_APP_KEY",
   "VIVO_BASE_URL",
-  "STORYBOOK_TTS_MODEL",
-  "STORYBOOK_TTS_PRODUCT",
-  "STORYBOOK_TTS_PACKAGE",
-  "STORYBOOK_TTS_CLIENT_VERSION",
-  "STORYBOOK_TTS_SYSTEM_VERSION",
-  "STORYBOOK_TTS_SDK_VERSION",
-  "STORYBOOK_TTS_ANDROID_VERSION",
 ];
 const placeholderValues = new Set([
   "",
@@ -163,18 +156,18 @@ function synthesizePage(page) {
   const requestId = randomUUID();
   const timestamp = String(Math.floor(Date.now() / 1000));
   const engineId = readEnv("STORYBOOK_TTS_ENGINEID", "short_audio_synthesis_jovi");
-  const voice = readEnv("STORYBOOK_TTS_VOICE", "yige");
+  const voice = readEnv("STORYBOOK_TTS_VOICE", "yige_child");
   const query = {
     engineid: engineId,
     system_time: timestamp,
     user_id: userIdFor(page.page),
-    model: readEnv("STORYBOOK_TTS_MODEL"),
-    product: readEnv("STORYBOOK_TTS_PRODUCT"),
-    package: readEnv("STORYBOOK_TTS_PACKAGE"),
-    client_version: readEnv("STORYBOOK_TTS_CLIENT_VERSION"),
-    system_version: readEnv("STORYBOOK_TTS_SYSTEM_VERSION"),
-    sdk_version: readEnv("STORYBOOK_TTS_SDK_VERSION"),
-    android_version: readEnv("STORYBOOK_TTS_ANDROID_VERSION"),
+    model: readEnv("STORYBOOK_TTS_MODEL", "short_audio_synthesis_jovi"),
+    product: readEnv("STORYBOOK_TTS_PRODUCT", "smartchildcare-demo"),
+    package: readEnv("STORYBOOK_TTS_PACKAGE", "com.smartchildcare.demo"),
+    client_version: readEnv("STORYBOOK_TTS_CLIENT_VERSION", "1.0.0"),
+    system_version: readEnv("STORYBOOK_TTS_SYSTEM_VERSION", "1"),
+    sdk_version: readEnv("STORYBOOK_TTS_SDK_VERSION", "1"),
+    android_version: readEnv("STORYBOOK_TTS_ANDROID_VERSION", "13"),
     requestId,
   };
   const wsUrl = `${toWebSocketBaseUrl(baseUrl)}/tts?${canonicalQueryString(query)}`;

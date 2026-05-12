@@ -56,16 +56,16 @@ export function getVivoEnv() {
     asrUserId: readEnv("VIVO_ASR_USER_ID"),
     asrEngineId: readEnv("VIVO_ASR_ENGINE_ID") || "fileasrrecorder",
     storybookTtsEngineId: readEnv("STORYBOOK_TTS_ENGINEID") || "short_audio_synthesis_jovi",
-    storybookTtsVoice: readEnv("STORYBOOK_TTS_VOICE") || "yige",
+    storybookTtsVoice: readEnv("STORYBOOK_TTS_VOICE") || "yige_child",
     storybookTtsFallbackEngineId: readEnv("STORYBOOK_TTS_FALLBACK_ENGINEID") || "short_audio_synthesis_jovi",
     storybookTtsFallbackVoice: readEnv("STORYBOOK_TTS_FALLBACK_VOICE") || "vivoHelper",
-    storybookTtsModel: readEnv("STORYBOOK_TTS_MODEL"),
-    storybookTtsProduct: readEnv("STORYBOOK_TTS_PRODUCT"),
-    storybookTtsPackage: readEnv("STORYBOOK_TTS_PACKAGE"),
-    storybookTtsClientVersion: readEnv("STORYBOOK_TTS_CLIENT_VERSION"),
-    storybookTtsSystemVersion: readEnv("STORYBOOK_TTS_SYSTEM_VERSION"),
-    storybookTtsSdkVersion: readEnv("STORYBOOK_TTS_SDK_VERSION"),
-    storybookTtsAndroidVersion: readEnv("STORYBOOK_TTS_ANDROID_VERSION"),
+    storybookTtsModel: readEnv("STORYBOOK_TTS_MODEL") || "short_audio_synthesis_jovi",
+    storybookTtsProduct: readEnv("STORYBOOK_TTS_PRODUCT") || "smartchildcare-demo",
+    storybookTtsPackage: readEnv("STORYBOOK_TTS_PACKAGE") || "com.smartchildcare.demo",
+    storybookTtsClientVersion: readEnv("STORYBOOK_TTS_CLIENT_VERSION") || "1.0.0",
+    storybookTtsSystemVersion: readEnv("STORYBOOK_TTS_SYSTEM_VERSION") || "1",
+    storybookTtsSdkVersion: readEnv("STORYBOOK_TTS_SDK_VERSION") || "1",
+    storybookTtsAndroidVersion: readEnv("STORYBOOK_TTS_ANDROID_VERSION") || "13",
     storybookTtsSpeed: readNumberEnv("STORYBOOK_TTS_SPEED", 45),
     storybookTtsVolume: readNumberEnv("STORYBOOK_TTS_VOLUME", 50),
   };
@@ -83,18 +83,7 @@ function requiredEnvForCapability(capability: VivoCapability) {
     "VIVO_ASR_USER_ID",
     "VIVO_ASR_ENGINE_ID",
   ];
-  return [
-    "VIVO_APP_KEY",
-    "VIVO_APP_ID",
-    "VIVO_BASE_URL",
-    "STORYBOOK_TTS_MODEL",
-    "STORYBOOK_TTS_PRODUCT",
-    "STORYBOOK_TTS_PACKAGE",
-    "STORYBOOK_TTS_CLIENT_VERSION",
-    "STORYBOOK_TTS_SYSTEM_VERSION",
-    "STORYBOOK_TTS_SDK_VERSION",
-    "STORYBOOK_TTS_ANDROID_VERSION",
-  ];
+  return ["VIVO_APP_KEY", "VIVO_APP_ID", "VIVO_BASE_URL"];
 }
 
 function hasRequiredEnv(capability: VivoCapability) {
