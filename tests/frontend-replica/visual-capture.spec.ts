@@ -18,8 +18,12 @@ type PageSpec = {
   fileName: string;
   sourceRelativePath: string;
   accountId: string | null;
+  visualEffectiveRoute: string;
   captureState: string;
+  stateCorrectionReason: string | null;
 };
+
+type PageSpecBase = Omit<PageSpec, "visualEffectiveRoute" | "captureState" | "stateCorrectionReason">;
 
 type CaptureEntry = PageSpec & {
   id: string;
@@ -67,7 +71,7 @@ test("capture frontend replica visual pages", async ({ browser }) => {
     const page = await newPage(browser, first.viewportName);
     try {
       await prepareSession(page, first.accountId);
-      await gotoStable(page, first.route);
+      await gotoStable(page, first.visualEffectiveRoute);
       await prepareVisualState(page, first);
       await expect(page.locator("body")).not.toHaveText("");
       await page.screenshot({
@@ -125,6 +129,7 @@ test("capture frontend replica visual pages", async ({ browser }) => {
       byPriority: countBy(specs, "priority"),
       byViewport: countBy(specs, "viewportName"),
       byRole: countBy(specs, "role"),
+      byVisualEffectiveRoute: countBy(specs, "visualEffectiveRoute"),
       byCaptureState: countBy(specs, "captureState"),
     },
     entries,
@@ -224,9 +229,14 @@ async function readPageSpecs() {
       accountId: resolveAccountId(route),
     };
 
+    const captureState = resolveCaptureState(baseSpec);
+    const visualState = resolveVisualEffectiveRoute({ ...baseSpec, captureState });
+
     specs.push({
       ...baseSpec,
-      captureState: resolveCaptureState(baseSpec),
+      visualEffectiveRoute: visualState.visualEffectiveRoute,
+      captureState: visualState.captureState,
+      stateCorrectionReason: visualState.reason,
     });
   }
 
@@ -236,6 +246,7 @@ async function readPageSpecs() {
 async function prepareVisualState(page: Page, spec: PageSpec) {
   switch (spec.captureState) {
     case "login-register-dialog":
+    case "login-register-standard-dialog":
       await clickFirstVisible(page, [
         page.locator('button[class*="registerButton"]').first(),
         page.locator('button[class*="mobileRegisterButton"]').first(),
@@ -263,6 +274,7 @@ async function prepareVisualState(page: Page, spec: PageSpec) {
       await waitForDialogOrPanel(page, "dialog");
       break;
     case "mobile-menu-open":
+    case "mobile-menu-open-compact":
       {
         const menuButton = page.locator('button[aria-controls="mobile-nav-panel"]').first();
         await clickFirstVisible(page, [menuButton]);
@@ -277,6 +289,16 @@ async function prepareVisualState(page: Page, spec: PageSpec) {
 }
 
 async function prepareDietBatchDialog(page: Page) {
+  const bulkEntry = page.getByTestId("r05-diet-bulk-entry");
+  if (await bulkEntry.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await bulkEntry.scrollIntoViewIfNeeded();
+    await bulkEntry.locator('input[placeholder*="食物"], input[placeholder*="椋熺墿"]').first().fill("米饭");
+    await bulkEntry.locator('input[placeholder*="摄入"], input[placeholder*="鎽勫叆"]').first().fill("半碗");
+    await bulkEntry.getByRole("button", { name: /^添加食物$|^娣诲姞椋熺墿$/ }).first().click();
+    await bulkEntry.getByRole("button", { name: /执行批量录入|批量确认|鎵归噺|纭/i }).first().click();
+    return;
+  }
+
   const foodInput = page.locator('input[placeholder*="食物"], input[placeholder*="椋熺墿"]').first();
   const amountInput = page.locator('input[placeholder*="摄入"], input[placeholder*="鎽勫叆"]').first();
 
@@ -324,7 +346,7 @@ async function waitForDialogOrPanel(page: Page, selector: "dialog" | "#mobile-na
   await page.locator(selector).waitFor({ state: "visible", timeout: 8_000 });
 }
 
-function resolveCaptureState(spec: Omit<PageSpec, "captureState">) {
+function resolveCaptureState(spec: PageSpecBase) {
   const pageType = spec.pageType.toLowerCase();
   const fileName = spec.fileName.toLowerCase();
   const sourcePath = spec.sourceRelativePath.toLowerCase();
@@ -332,7 +354,7 @@ function resolveCaptureState(spec: Omit<PageSpec, "captureState">) {
   const isExplicitModal = /\bmodal\b/.test(pageType) || /modal|dialog|popup/.test(fileName);
 
   if (spec.route === "/login" && isExplicitModal && /registration|register|modal/.test(text)) {
-    return "login-register-dialog";
+    return "login-register-standard-dialog";
   }
 
   if (spec.route === "/children" && isExplicitModal && /child_archive|deletion|archive/.test(text)) {
@@ -355,10 +377,75 @@ function resolveCaptureState(spec: Omit<PageSpec, "captureState">) {
   ]);
 
   if (spec.viewportName === "mobile" && (/\bdrawer\b/.test(pageType) || mobileDrawerTargets.has(fileName))) {
-    return "mobile-menu-open";
+    return "mobile-menu-open-compact";
   }
 
   return "default";
+}
+
+function resolveVisualEffectiveRoute(spec: PageSpecBase & { captureState: string }) {
+  const fileName = spec.fileName.toLowerCase();
+  const sourcePath = spec.sourceRelativePath.toLowerCase();
+  const pageType = spec.pageType.toLowerCase();
+  const text = `${spec.designId} ${pageType} ${fileName} ${sourcePath}`.toLowerCase();
+  const childArchiveTarget =
+    /child_archive|archive_child|deletion_confirmation|confirmation_popup|confirmation_dialog|confirmation_di|child_care_platform_dashboard_with_modal/.test(text);
+  const dietTarget = /meal|diet|food_record|nutrition_record|餐食|饮食/.test(text);
+  const dietBatchTarget = /batch|confirmation|confirm|food_record_batch/.test(text);
+
+  if (spec.route === "/admin" && childArchiveTarget) {
+    return {
+      visualEffectiveRoute: "/children",
+      captureState: "children-archive-dialog",
+      reason: "R10 maps child archive confirmation targets from /admin to /children dialog state.",
+    };
+  }
+
+  if (spec.route === "/children" && dietTarget) {
+    return {
+      visualEffectiveRoute: "/diet",
+      captureState: dietBatchTarget ? "diet-batch-confirm-dialog" : "diet-dashboard",
+      reason: "R10 maps meal-management targets from /children to /diet.",
+    };
+  }
+
+  if (spec.route === "/diet" && dietBatchTarget && spec.captureState !== "diet-batch-confirm-dialog") {
+    return {
+      visualEffectiveRoute: "/diet",
+      captureState: "diet-batch-confirm-dialog",
+      reason: "R10 captures diet batch-confirmation targets with the matching dialog open.",
+    };
+  }
+
+  if (spec.captureState === "login-register-standard-dialog") {
+    return {
+      visualEffectiveRoute: spec.route,
+      captureState: spec.captureState,
+      reason: "R10 captures standard account registration state for login registration targets.",
+    };
+  }
+
+  if (spec.captureState === "mobile-menu-open-compact") {
+    if (spec.route.startsWith("/teacher/agent") && /teacher_platform_dashboard|teacher_app_interface/.test(text)) {
+      return {
+        visualEffectiveRoute: "/teacher",
+        captureState: spec.captureState,
+        reason: "R10 captures teacher mobile drawer targets against the teacher dashboard shell.",
+      };
+    }
+
+    return {
+      visualEffectiveRoute: spec.route,
+      captureState: spec.captureState,
+      reason: "R10 captures mobile navigation targets with compact drawer state.",
+    };
+  }
+
+  return {
+    visualEffectiveRoute: spec.route,
+    captureState: spec.captureState,
+    reason: null,
+  };
 }
 
 function readBacktickField(raw: string, field: string) {
@@ -385,7 +472,7 @@ function resolveAccountId(route: string) {
 function groupSpecs(specs: PageSpec[]) {
   const groups = new Map<string, PageSpec[]>();
   for (const spec of specs) {
-    const key = `${spec.accountId ?? "anonymous"}__${spec.viewportName}__${spec.route}__${spec.captureState}`;
+    const key = `${spec.accountId ?? "anonymous"}__${spec.viewportName}__${spec.visualEffectiveRoute}__${spec.captureState}`;
     const current = groups.get(key) ?? [];
     current.push(spec);
     groups.set(key, current);

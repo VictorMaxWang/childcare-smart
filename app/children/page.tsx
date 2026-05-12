@@ -748,15 +748,15 @@ export default function ChildrenPage() {
         onOpenChange={(open) => {
           if (!open) setConfirmAction(null);
         }}
-        title={confirmAction?.type === "archive" ? "确认归档儿童档案" : "确认恢复儿童档案"}
+        title={confirmAction?.type === "archive" ? "确认删除儿童档案" : "确认恢复儿童档案"}
         description={
           confirmAction
             ? `${confirmAction.child.name} 的档案将在确认后${
-                confirmAction.type === "archive" ? "从默认列表隐藏" : "重新回到默认列表"
+                confirmAction.type === "archive" ? "从默认列表隐藏，历史记录会保留可恢复" : "重新回到默认列表"
               }。取消不会写入数据。`
             : undefined
         }
-        confirmLabel={confirmAction?.type === "archive" ? "确认归档" : "确认恢复"}
+        confirmLabel={confirmAction?.type === "archive" ? "确认删除" : "确认恢复"}
         cancelLabel="取消"
         variant={confirmAction?.type === "archive" ? "danger" : "default"}
         loading={confirmSaving}

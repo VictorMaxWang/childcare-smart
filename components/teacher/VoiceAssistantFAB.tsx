@@ -176,10 +176,10 @@ export default function VoiceAssistantFAB({
   return (
     <>
       <div
-        className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+6.75rem)] right-4 z-50 flex max-w-[min(16rem,calc(100vw-2rem))] flex-col items-end gap-3 sm:right-6 lg:bottom-[calc(env(safe-area-inset-bottom)+1rem)]"
+        className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+5.35rem)] right-3 z-50 flex max-w-[min(13rem,calc(100vw-2rem))] flex-col items-end gap-2 sm:bottom-[calc(env(safe-area-inset-bottom)+6.75rem)] sm:right-6 sm:max-w-[min(16rem,calc(100vw-2rem))] sm:gap-3 lg:bottom-[calc(env(safe-area-inset-bottom)+1rem)]"
         data-testid="r06-teacher-voice-orb"
       >
-        <div className="pointer-events-auto max-w-full rounded-[26px] border border-white/70 bg-white/88 px-4 py-3 shadow-[0_16px_48px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+        <div className="pointer-events-auto hidden max-w-full rounded-[26px] border border-white/70 bg-white/88 px-4 py-3 shadow-[0_16px_48px_rgba(15,23,42,0.14)] backdrop-blur-xl sm:block">
           <div className="flex items-center gap-2">
             <Badge
               variant={
@@ -225,7 +225,7 @@ export default function VoiceAssistantFAB({
           aria-disabled={disabled}
           aria-pressed={status === "recording"}
           className={cn(
-            "voice-assistant-fab pointer-events-auto relative flex h-[5.5rem] w-[5.5rem] items-center justify-center overflow-hidden rounded-full border transition-all duration-300",
+            "voice-assistant-fab pointer-events-auto relative flex h-[4.35rem] w-[4.35rem] items-center justify-center overflow-hidden rounded-full border transition-all duration-300 sm:h-[5.5rem] sm:w-[5.5rem]",
             getButtonTone(status),
             cancelOnRelease ? "scale-[1.04] ring-4 ring-amber-200/75" : "",
             disabled ? "cursor-not-allowed opacity-90" : "cursor-pointer"

@@ -103,6 +103,7 @@ async function compareEntries(entries, captureFailures) {
       comparisons.push({
         id: entry.id,
         route: entry.route,
+        visualEffectiveRoute: entry.visualEffectiveRoute ?? entry.route,
         targetRoute: entry.targetRoute,
         role: entry.role,
         priority: entry.priority,
@@ -119,6 +120,9 @@ async function compareEntries(entries, captureFailures) {
         diffRatio: Number((diffPixels / totalPixels).toFixed(6)),
         visualClosenessScore: Number((similarity * 100).toFixed(2)),
         visualCategory: classifyVisualCategory(entry),
+        differenceType: classifyDifferenceType(entry),
+        captureState: entry.captureState ?? "default",
+        stateCorrectionReason: entry.stateCorrectionReason ?? null,
       });
     } catch (error) {
       skipped.push({
@@ -149,9 +153,11 @@ async function compareEntries(entries, captureFailures) {
       averageVisualClosenessScore: averageScore(comparisons),
       byPriority: summarizeGroup(comparisons, "priority"),
       byRoute: summarizeGroup(comparisons, "route"),
+      byVisualEffectiveRoute: summarizeGroup(comparisons, "visualEffectiveRoute"),
       byViewport: summarizeGroup(comparisons, "viewport"),
       byRole: summarizeGroup(comparisons, "role"),
       byVisualCategory: summarizeGroup(comparisons, "visualCategory"),
+      byDifferenceType: summarizeGroup(comparisons, "differenceType"),
     },
     worstComparisons: comparisons.slice(0, 30),
     comparisons,
@@ -188,6 +194,14 @@ function buildMarkdown(report) {
     "",
     table(["Route", "Count", "Average", "Worst"], summaryRows(report.summary.byRoute)),
     "",
+    "## Visual Effective Route Counts",
+    "",
+    table(["Effective Route", "Count", "Average", "Worst"], summaryRows(report.summary.byVisualEffectiveRoute)),
+    "",
+    "## State-Corrected vs UI-Difference",
+    "",
+    table(["Difference Type", "Count", "Average", "Worst"], summaryRows(report.summary.byDifferenceType)),
+    "",
     "## Visual Repair Priority",
     "",
     "- Layout structure: inspect the lowest-scoring P0 route groups first, especially pages where shell/sidebar/topbar geometry differs.",
@@ -202,11 +216,13 @@ function buildMarkdown(report) {
     "## Worst Comparisons",
     "",
     table(
-      ["ID", "Route", "Viewport", "Priority", "Score", "Diff"],
+      ["ID", "Route", "Effective Route", "Viewport", "Type", "Priority", "Score", "Diff"],
       report.worstComparisons.map((item) => [
         item.id,
         item.route,
+        item.visualEffectiveRoute,
         item.viewport,
+        item.differenceType,
         item.priority,
         item.visualClosenessScore,
         `\`${item.diff}\``,
@@ -239,6 +255,17 @@ function classifyVisualCategory(entry) {
   if (entry.viewportName === "mobile") return "mobile";
   if (entry.viewportName === "tablet") return "tablet";
   return "dashboard";
+}
+
+function classifyDifferenceType(entry) {
+  if (entry.stateCorrectionReason) return "state-corrected";
+
+  const source = `${entry.id ?? ""} ${entry.fileName ?? ""} ${entry.sourceRelativePath ?? ""} ${entry.pageType ?? ""}`.toLowerCase();
+  if (/permission|unauthorized|forbidden|auth_guard|empty_state/.test(source)) {
+    return "accepted-business-difference";
+  }
+
+  return "ui-difference";
 }
 
 function summarizeGroup(items, key) {

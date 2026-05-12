@@ -70,6 +70,8 @@ const DEMO_DESCRIPTION_BY_ID: Record<string, string> = {
   "u-parent": "查看孩子成长，接收通知与反馈互动",
 };
 
+const DEFAULT_REGISTER_ROLE: AccountRole = "机构管理员";
+
 function getDemoRoleLabel(role: AccountRole) {
   if (role === "教师") return "教师";
   if (role === "家长") return "家长";
@@ -137,9 +139,11 @@ export default function LoginPage() {
   const [registerMessage, setRegisterMessage] = useState("");
   const [registerLoading, setRegisterLoading] = useState(false);
   const [registerUsername, setRegisterUsername] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [registerRole, setRegisterRole] = useState<AccountRole>("家长");
+  const [registerRole, setRegisterRole] = useState<AccountRole>(DEFAULT_REGISTER_ROLE);
+  const [kindergartenName, setKindergartenName] = useState("阳光智慧托育园");
   const [teacherClassName, setTeacherClassName] = useState("新注册班");
   const [childName, setChildName] = useState("");
   const [childBirthDate, setChildBirthDate] = useState("2023-01-01");
@@ -199,9 +203,11 @@ export default function LoginPage() {
   function resetRegisterForm() {
     setRegisterMessage("");
     setRegisterUsername("");
+    setVerificationCode("");
     setRegisterPassword("");
     setConfirmPassword("");
-    setRegisterRole("家长");
+    setRegisterRole(DEFAULT_REGISTER_ROLE);
+    setKindergartenName("阳光智慧托育园");
     setTeacherClassName("新注册班");
     setChildName("");
     setChildBirthDate("2023-01-01");
@@ -562,40 +568,40 @@ export default function LoginPage() {
         <DialogContent className={styles.registerDialog}>
           <form onSubmit={handleRegisterSubmit} className={styles.registerForm}>
             <DialogHeader className={styles.registerHeader}>
-              <DialogTitle className={styles.registerTitle}>注册新机构</DialogTitle>
+              <DialogTitle className={styles.registerTitle}>注册普通账号</DialogTitle>
               <DialogDescription className={styles.registerDescription}>
-                创建机构管理员账号，开启智慧托育之旅。
+                使用手机号创建账号；验证码为本地演示控件，不会发送短信。
               </DialogDescription>
             </DialogHeader>
 
             <div className={styles.registerFields}>
-              <FormField label="账号" htmlFor="register-username" required>
+              <FormField label="手机号" htmlFor="register-username" required>
                 <Input
                   id="register-username"
                   value={registerUsername}
                   onChange={(event) => setRegisterUsername(event.target.value)}
-                  placeholder="请输入用户名 / 账号"
-                  autoComplete="username"
+                  placeholder="请输入手机号"
+                  autoComplete="tel"
                   className={styles.registerInput}
                   disabled={registerLoading}
                 />
               </FormField>
 
-              <FormField label="用户类型" htmlFor="register-role" required>
-                <Select
-                  value={registerRole}
-                  onValueChange={(value) => setRegisterRole(value as AccountRole)}
-                  disabled={registerLoading}
-                >
-                  <SelectTrigger id="register-role" className={styles.registerInput}>
-                    <SelectValue placeholder="请选择角色" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="家长">家长</SelectItem>
-                    <SelectItem value="教师">教师</SelectItem>
-                    <SelectItem value="机构管理员">园长 / 管理员</SelectItem>
-                  </SelectContent>
-                </Select>
+              <FormField label="验证码" htmlFor="register-verification-code" required>
+                <div className={styles.verificationRow}>
+                  <Input
+                    id="register-verification-code"
+                    value={verificationCode}
+                    onChange={(event) => setVerificationCode(event.target.value)}
+                    placeholder="请输入验证码"
+                    inputMode="numeric"
+                    className={styles.registerInput}
+                    disabled={registerLoading}
+                  />
+                  <button type="button" className={styles.verificationButton} disabled title="演示环境未接入短信服务">
+                    获取验证码
+                  </button>
+                </div>
               </FormField>
 
               <FormField label="密码" htmlFor="register-password" required>
@@ -636,6 +642,34 @@ export default function LoginPage() {
                     disabled={registerLoading}
                   />
                 </div>
+              </FormField>
+
+              <FormField label="身份选择" htmlFor="register-role" required>
+                <Select
+                  value={registerRole}
+                  onValueChange={(value) => setRegisterRole(value as AccountRole)}
+                  disabled={registerLoading}
+                >
+                  <SelectTrigger id="register-role" className={styles.registerInput}>
+                    <SelectValue placeholder="请选择身份" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="家长">家长</SelectItem>
+                    <SelectItem value="教师">教师</SelectItem>
+                    <SelectItem value="机构管理员">园长 / 管理员</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+
+              <FormField label="园所名称" htmlFor="kindergarten-name" className={styles.registerFieldWide}>
+                <Input
+                  id="kindergarten-name"
+                  value={kindergartenName}
+                  onChange={(event) => setKindergartenName(event.target.value)}
+                  placeholder="请输入园所名称"
+                  className={styles.registerInput}
+                  disabled={registerLoading}
+                />
               </FormField>
 
               {registerRole === "教师" ? (
