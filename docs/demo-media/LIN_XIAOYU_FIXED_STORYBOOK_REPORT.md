@@ -1,5 +1,21 @@
 # LIN_XIAOYU_FIXED_STORYBOOK_REPORT
 
+Latest update: STORYBOOK-LOCK-02
+
+Status: done
+
+## LOCK-02 Update
+
+The fixed Lin Xiaoyu storybook is now a default demo state, not a hard generation lock.
+
+- `/parent/storybook?child=c-1` and `/parent/storybook?child=lin-xiaoyu` still open on `林小雨的一小步勇敢`.
+- The generation control panel is visible again.
+- Default controls are `个性化`, `6 页`, `预设风格`, and `晨光`.
+- `刷新当前版本` reloads fixed assets while the fixed demo is active.
+- `重新生成` enables the normal vivo AI storybook generation flow for `c-1` in the current session.
+- Refreshing the page returns to the fixed demo storybook for stable presentations.
+- Other children keep the existing storybook behavior.
+
 Task: STORYBOOK-LOCK-01
 
 Status: partial
@@ -42,4 +58,3 @@ All six page texts are stored in `lib/storybooks/lin-xiaoyu-bravery.ts` and rend
 - Parent Lin Mama can access `c-1` and the `lin-xiaoyu` alias.
 - Parent access to another child is still denied by existing scope helpers.
 - Teacher/director access follows existing scope rules.
-

@@ -101,7 +101,9 @@ export function getLinXiaoyuFixedStorybookPage(page: number | string | null | un
 }
 
 export function linXiaoyuFixedStorybookScenes(): ParentStoryBookScene[] {
-  return LIN_XIAOYU_FIXED_STORYBOOK_PAGES.map((page) => ({
+  return LIN_XIAOYU_FIXED_STORYBOOK_PAGES.map((page) => {
+    const audioEndpoint = `/api/storybooks/lin-xiaoyu/tts?childId=${LIN_XIAOYU_CHILD_ID}&page=${page.page}`;
+    return {
     sceneIndex: page.page,
     sceneTitle: page.title,
     sceneText: page.text,
@@ -110,19 +112,20 @@ export function linXiaoyuFixedStorybookScenes(): ParentStoryBookScene[] {
     assetRef: LIN_XIAOYU_IMAGE_FALLBACK,
     imageSourceKind: "real",
     imageStatus: "ready",
-    audioUrl: page.audioSrc,
-    audioRef: `/api/storybooks/lin-xiaoyu/tts?childId=${LIN_XIAOYU_CHILD_ID}&page=${page.page}`,
+    audioUrl: audioEndpoint,
+    audioRef: audioEndpoint,
     audioScript: page.text,
     audioStatus: "ready",
     voiceStyle: "温柔女声 · 儿童绘本朗读 · 语速略慢",
     engineId: "short_audio_synthesis_jovi",
-    voiceName: "yige",
+    voiceName: "yige_child",
     highlightSource: page.pageId,
     captionTiming: {
       mode: "duration-derived",
       segmentTexts: page.text.split("\n").filter(Boolean),
     },
-  }));
+    };
+  });
 }
 
 export function buildLinXiaoyuFixedStorybookResponse(

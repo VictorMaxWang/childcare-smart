@@ -1,0 +1,81 @@
+{
+  "taskId": "STORYBOOK-LOCK-02",
+  "status": "done",
+  "fixedDefault": {
+    "enabled": true,
+    "storybookId": "lin-xiaoyu-one-small-brave-step",
+    "title": "林小雨的一小步勇敢",
+    "childId": "c-1",
+    "alias": "lin-xiaoyu",
+    "refreshReturnsToFixedDemo": true,
+    "requiresRuntimeImageGeneration": false
+  },
+  "generationPanel": {
+    "restored": true,
+    "defaultGenerationMode": "child-personalized",
+    "defaultPageCount": 6,
+    "defaultStyleMode": "preset",
+    "defaultStylePreset": "sunrise-watercolor",
+    "manualRegenerationEnabledForC1": true,
+    "regenerationEndpoint": "/api/ai/parent-storybook"
+  },
+  "tts": {
+    "provider": "vivo",
+    "runtimeEndpoint": "/api/storybooks/lin-xiaoyu/tts",
+    "audioUrlPattern": "/api/storybooks/lin-xiaoyu/tts?childId=c-1&page=N",
+    "staticAudioGenerated": true,
+    "staticAudioFirst": true,
+    "runtimeFallback": true,
+    "voiceDefault": "yige_child",
+    "requiredEnv": [
+      "VIVO_APP_ID",
+      "VIVO_APP_KEY",
+      "VIVO_BASE_URL"
+    ],
+    "audioFiles": [
+      "public/demo-media/storybooks/lin-xiaoyu/audio/page-01.mp3",
+      "public/demo-media/storybooks/lin-xiaoyu/audio/page-02.mp3",
+      "public/demo-media/storybooks/lin-xiaoyu/audio/page-03.mp3",
+      "public/demo-media/storybooks/lin-xiaoyu/audio/page-04.mp3",
+      "public/demo-media/storybooks/lin-xiaoyu/audio/page-05.mp3",
+      "public/demo-media/storybooks/lin-xiaoyu/audio/page-06.mp3",
+      "public/demo-media/storybooks/lin-xiaoyu/audio/audio-manifest.json"
+    ],
+    "fallbackBehavior": "Show a reading-unavailable message and keep images/text usable. Do not fake success."
+  },
+  "checks": {
+    "lint": "pass",
+    "build": "pass",
+    "storybookXiaoyuTest": "pass",
+    "vivoTtsTest": "pass",
+    "featureSmoke": "pass",
+    "productVoice": "pass",
+    "tsc": "pass",
+    "generateAudio": "pass"
+  },
+  "changedFiles": [
+    ".env.example",
+    ".env.release.example",
+    "app/parent/storybook/page.tsx",
+    "components/parent/StoryBookViewer.tsx",
+    "docs/demo-media/LIN_XIAOYU_AUDIO_TTS_REPORT.md",
+    "docs/demo-media/results/STORYBOOK-LOCK-02-result.md",
+    "docs/demo-media/results/STORYBOOK-LOCK-02-result.json",
+    "lib/providers/vivo/vivo-provider-status.ts",
+    "lib/storybooks/lin-xiaoyu-bravery.ts",
+    "public/demo-media/storybooks/lin-xiaoyu/audio/audio-manifest.json",
+    "public/demo-media/storybooks/lin-xiaoyu/audio/page-01.mp3",
+    "public/demo-media/storybooks/lin-xiaoyu/audio/page-02.mp3",
+    "public/demo-media/storybooks/lin-xiaoyu/audio/page-03.mp3",
+    "public/demo-media/storybooks/lin-xiaoyu/audio/page-04.mp3",
+    "public/demo-media/storybooks/lin-xiaoyu/audio/page-05.mp3",
+    "public/demo-media/storybooks/lin-xiaoyu/audio/page-06.mp3",
+    "scripts/generate-lin-xiaoyu-storybook-audio.mjs",
+    "tests/product-completion/lin-xiaoyu-fixed-storybook.spec.ts"
+  ],
+  "risks": [
+    "Runtime vivo TTS still depends on server-side vivo credentials and network availability if static audio is missing.",
+    "Manual regeneration for c-1 intentionally affects only the current session; refresh returns to the fixed demo."
+  ],
+  "notes": "Fixed default and manual vivo generation now coexist. Static mp3 narration is generated and served through the authenticated endpoint."
+}

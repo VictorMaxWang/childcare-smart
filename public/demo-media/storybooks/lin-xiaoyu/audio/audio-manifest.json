@@ -1,0 +1,73 @@
+{
+  "storybookId": "lin-xiaoyu-one-small-brave-step",
+  "provider": "vivo",
+  "generatedAt": "2026-05-12T14:23:59.557Z",
+  "files": [
+    {
+      "page": 1,
+      "path": "/demo-media/storybooks/lin-xiaoyu/audio/page-01.mp3",
+      "mimeType": "audio/mpeg",
+      "sizeBytes": 98829,
+      "sha256": "afa1f2fcaedbfdc73e2fe901c92797f82eb8c09d7423141b57789b52e8eec0a8",
+      "textHash": "7ca5a9a57e8ae8872e91c22386de9169cfacaea23a57536e24b34854e322a197",
+      "status": "generated",
+      "engineId": "short_audio_synthesis_jovi",
+      "voice": "yige_child"
+    },
+    {
+      "page": 2,
+      "path": "/demo-media/storybooks/lin-xiaoyu/audio/page-02.mp3",
+      "mimeType": "audio/mpeg",
+      "sizeBytes": 138861,
+      "sha256": "5eb579312494896c1b928a10b2ae8dc70757711f67b2fdb5440298b9f03346fe",
+      "textHash": "a72a81875fdc5f07708120613f30c3352db7652d1f3f12be897b28d6add16cf0",
+      "status": "generated",
+      "engineId": "short_audio_synthesis_jovi",
+      "voice": "yige_child"
+    },
+    {
+      "page": 3,
+      "path": "/demo-media/storybooks/lin-xiaoyu/audio/page-03.mp3",
+      "mimeType": "audio/mpeg",
+      "sizeBytes": 116109,
+      "sha256": "a163be8df7b887d3282e790ff806f1ee88a75ed1f7f08dba946615173c7c3ba0",
+      "textHash": "1dd8af6c9bfb2d713fe62af3593a0b43b2ce406c5c38d5e276adf65b6e41f907",
+      "status": "generated",
+      "engineId": "short_audio_synthesis_jovi",
+      "voice": "yige_child"
+    },
+    {
+      "page": 4,
+      "path": "/demo-media/storybooks/lin-xiaoyu/audio/page-04.mp3",
+      "mimeType": "audio/mpeg",
+      "sizeBytes": 89325,
+      "sha256": "77de2b8d591b51f182bafce8a38042502210347cf2016c0b4822e52287996b06",
+      "textHash": "0f716dddfe04310db6aa25faf0a45a955cc26743a033c1687cc7b3d2819395b1",
+      "status": "generated",
+      "engineId": "short_audio_synthesis_jovi",
+      "voice": "yige_child"
+    },
+    {
+      "page": 5,
+      "path": "/demo-media/storybooks/lin-xiaoyu/audio/page-05.mp3",
+      "mimeType": "audio/mpeg",
+      "sizeBytes": 117261,
+      "sha256": "868babb81c9934898e4b155c4580f2aeb5e3550b3a7333c2af786269735f22d6",
+      "textHash": "50ef18bf97ef072c6496f3d8538db7d5d7604b094624c714f4bfa3d19e1384c0",
+      "status": "generated",
+      "engineId": "short_audio_synthesis_jovi",
+      "voice": "yige_child"
+    },
+    {
+      "page": 6,
+      "path": "/demo-media/storybooks/lin-xiaoyu/audio/page-06.mp3",
+      "mimeType": "audio/mpeg",
+      "sizeBytes": 108621,
+      "sha256": "bae27b486c97573ac30511f623ac3c098c5d570305d57597bb80ed9ac597a8d9",
+      "textHash": "f361ddf16266aa98bb2c8b5b2bc3472b05b8a741a246ae8dddce16b49c27008c",
+      "status": "generated",
+      "engineId": "short_audio_synthesis_jovi",
+      "voice": "yige_child"
+    }
+  ]
+}
