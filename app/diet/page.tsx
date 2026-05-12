@@ -1189,15 +1189,18 @@ export default function DietPage() {
       </Card>
 
       <Dialog open={confirmBulkOpen} onOpenChange={setConfirmBulkOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>确认批量录入</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="max-w-[520px] gap-0 overflow-hidden rounded-[18px] border-slate-200 p-0 shadow-[0_26px_86px_rgb(15_23_42_/_0.22)]">
+          <DialogHeader className="px-6 pb-4 pt-6 pr-14">
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-8 ring-emerald-50/70">
+              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <DialogTitle className="text-lg font-bold text-slate-950">确认批量录入</DialogTitle>
+            <DialogDescription className="mt-2 text-sm leading-6 text-slate-500">
               将为 {bulkPreviewSummary.applicable.length} 位幼儿应用当前餐单，另有 {bulkPreviewSummary.blocked.length} 位因过敏被拦截，{bulkPreviewSummary.excluded.length} 位被手动排除。
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 text-sm">
+          <div className="space-y-4 px-6 pb-5 text-sm">
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
               <p className="font-medium text-slate-700">本次餐单</p>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -1230,9 +1233,9 @@ export default function DietPage() {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmBulkOpen(false)}>取消</Button>
-            <Button onClick={confirmApplyBulkTemplate} data-testid="r05-diet-confirm-bulk">确认录入</Button>
+          <DialogFooter className="grid grid-cols-2 gap-3 border-t border-slate-100 bg-slate-50/70 px-6 py-4 sm:grid-cols-2 sm:justify-stretch">
+            <Button variant="outline" className="min-h-11 rounded-xl" onClick={() => setConfirmBulkOpen(false)}>取消</Button>
+            <Button className="min-h-11 rounded-xl" onClick={confirmApplyBulkTemplate} data-testid="r05-diet-confirm-bulk">确认录入</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

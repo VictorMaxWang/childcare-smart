@@ -1,0 +1,64 @@
+{
+  "task": "FRONTEND-REPLICA-R10",
+  "status": "partial-pass",
+  "generatedAt": "2026-05-12T12:32:00.000Z",
+  "visual": {
+    "pageSpecComparisons": 247,
+    "currentCaptures": 247,
+    "skipped": 0,
+    "uniqueCaptureStates": 55,
+    "averageVisualClosenessScore": 77.5,
+    "goalAverageVisualClosenessScore": 82,
+    "goalAverageMet": false,
+    "p0AverageVisualClosenessScore": 79.9,
+    "p0WorstVisualClosenessScore": 28.58,
+    "goalP0WorstVisualClosenessScore": 50,
+    "goalP0WorstMet": false,
+    "worstRemainingIds": [
+      "SCFR-022-shared-dashboard-desktop",
+      "SCFR-089-director-modal-state-desktop",
+      "SCFR-136-shared-diet-meal-desktop",
+      "SCFR-093-shared-dashboard-desktop",
+      "SCFR-109-shared-dashboard-desktop",
+      "SCFR-035-director-diet-meal-desktop",
+      "SCFR-153-director-diet-meal-desktop",
+      "SCFR-129-login-auth-login-desktop",
+      "SCFR-193-login-auth-login-desktop",
+      "SCFR-100-shared-dashboard-desktop"
+    ]
+  },
+  "fixed": [
+    "visualEffectiveRoute and stateCorrectionReason capture metadata",
+    "state-corrected vs ui-difference report grouping",
+    "children archive/delete confirmation capture state",
+    "diet dashboard and batch-confirmation capture states",
+    "login standard registration dialog fields",
+    "compact mobile drawer styling",
+    "shared dialog overlay and confirmation card styling",
+    "teacher mobile voice FAB spacing"
+  ],
+  "remaining": [
+    "children delete targets still differ from product archive semantics and shell composition",
+    "diet targets still differ from product data-dense dashboard and batch workflow",
+    "login target variants are not fully replicated",
+    "mobile role drawers still lack target-specific profile and promo composition"
+  ],
+  "validation": {
+    "visualCapture": "pass",
+    "visualDiff": "pass",
+    "npm run lint": "pass",
+    "npm run build": "pass",
+    "npm run product:ai": "pass",
+    "npm run product:voice": "pass",
+    "npm run product:journey": "pass",
+    "npm run feature:smoke": "pass",
+    "npm run bugbash:smoke": "pass",
+    "npm run demo-media:test": "pass after dev-server restart/reset",
+    "npm run growth-media:test": "pass",
+    "npx tsc --noEmit": "pass"
+  },
+  "git": {
+    "commitHash": null,
+    "pushResult": "pending at report write time"
+  }
+}

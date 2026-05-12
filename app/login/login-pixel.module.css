@@ -690,27 +690,27 @@
 }
 
 .registerDialog {
-  max-width: 414px;
+  max-width: 620px;
   gap: 0;
   border: 1px solid rgba(223, 231, 244, 0.92);
-  border-radius: 18px;
+  border-radius: 20px;
   padding: 0;
-  box-shadow: 0 30px 120px rgba(14, 23, 48, 0.3);
+  box-shadow: 0 28px 100px rgba(14, 23, 48, 0.24);
 }
 
 .registerForm {
   overflow: hidden;
-  border-radius: 18px;
+  border-radius: 20px;
   background: white;
 }
 
 .registerHeader {
-  padding: 26px 26px 16px;
+  padding: 28px 36px 18px;
   border-bottom: 1px solid #edf1f7;
 }
 
 .registerTitle {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 900;
   color: #111b35;
 }
@@ -724,15 +724,16 @@
 
 .registerFields {
   display: grid;
-  max-height: min(68dvh, 548px);
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: min(74dvh, 690px);
+  gap: 18px 16px;
   overflow-y: auto;
-  padding: 18px 26px 20px;
+  padding: 22px 36px 24px;
 }
 
 .registerInput {
-  height: 40px;
-  border-radius: 8px;
+  height: 46px;
+  border-radius: 10px;
   font-size: 14px;
 }
 
@@ -744,13 +745,30 @@
   display: grid;
   grid-template-columns: 1fr 1.2fr;
   gap: 14px;
-  padding: 18px 26px 24px;
+  padding: 18px 36px 26px;
   border-top: 1px solid #edf1f7;
 }
 
 .registerFooter button {
-  min-height: 44px;
+  min-height: 46px;
+  border-radius: 12px;
+}
+
+.verificationRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 118px;
+  gap: 10px;
+}
+
+.verificationButton {
+  height: 46px;
+  border: 1px solid #cfd8ea;
   border-radius: 10px;
+  background: #f7f9fe;
+  color: #718096;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: not-allowed;
 }
 
 @media (max-width: 1180px) {
@@ -1089,6 +1107,16 @@
   }
 
   .registerFooter {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .registerFields {
+    grid-template-columns: 1fr;
+  }
+
+  .verificationRow {
     grid-template-columns: 1fr;
   }
 }
