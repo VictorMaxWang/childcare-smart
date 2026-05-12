@@ -441,6 +441,79 @@ body {
   }
 }
 
+@media (max-width: 640px) {
+  .pixel-topbar > div {
+    min-height: 76px;
+    padding-inline: 1rem;
+  }
+
+  .pixel-topbar [data-testid="r02-shell-brand-mark"] {
+    height: 2.75rem;
+    width: 2.75rem;
+    border-radius: 1rem;
+  }
+
+  [data-testid="r05-director-replica-page"] {
+    padding: 0.85rem 0.95rem 1.25rem;
+  }
+
+  [data-testid="r05-director-replica-page"] > div {
+    gap: 0.9rem;
+  }
+
+  [data-testid="r05-director-replica-page"] header {
+    gap: 0.75rem;
+    border-color: rgb(219 229 244 / 0.9);
+    border-radius: 1.25rem;
+    padding: 0.95rem;
+    box-shadow: 0 16px 36px rgb(79 70 229 / 0.07);
+  }
+
+  [data-testid="r05-director-replica-page"] header h1 {
+    margin-top: 0.55rem;
+    font-size: 1.55rem;
+    line-height: 1.18;
+  }
+
+  [data-testid="r05-director-replica-page"] header p {
+    margin-top: 0.45rem;
+    line-height: 1.55;
+  }
+
+  [data-testid="r05-director-replica-page"] header > div:last-child {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  [data-testid="r05-director-replica-page"] header a,
+  [data-testid="r05-director-replica-page"] header button {
+    min-height: 2.4rem;
+    height: 2.4rem;
+    border-radius: 0.95rem;
+    padding-inline: 0.7rem;
+    font-size: 0.75rem;
+  }
+
+  [data-testid="r05-director-replica-page"] header > div:last-child > :last-child {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  [data-testid="r05-director-replica-page"] section {
+    border-radius: 1.15rem;
+  }
+
+  [data-testid="r05-director-replica-page"] section > div:first-child:is(.p-5) {
+    padding: 1rem;
+  }
+
+  [data-testid="r05-director-replica-page"] .grid {
+    gap: 0.9rem;
+  }
+}
+
 .app-table-scroll {
   width: 100%;
   overflow-x: auto;

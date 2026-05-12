@@ -60,7 +60,7 @@ export default defineConfig({
   webServer: useExistingServer
     ? undefined
     : {
-        command: `npm run dev -- --hostname 127.0.0.1 --port ${productPort}`,
+        command: `node ./node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port ${productPort}`,
         url: baseURL,
         reuseExistingServer: true,
         timeout: 120 * 1000,
