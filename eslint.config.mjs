@@ -18,6 +18,7 @@ const eslintConfig = defineConfig([
     "patch_iot.js",
     "patch_iot_revert.js",
     "artifacts/**",
+    "public/vendor/**",
   ]),
 ]);
 
