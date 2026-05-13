@@ -79,6 +79,7 @@
     "lucide-react": "^0.577.0",
     "mysql2": "^3.15.3",
     "next": "16.1.6",
+    "pdfjs-dist": "^5.7.284",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",

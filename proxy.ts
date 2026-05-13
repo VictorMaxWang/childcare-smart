@@ -31,6 +31,7 @@ const API_ROUTE_HANDLED_AUTH_PREFIXES = [
   "/api/ai",
   "/api/voice-assistant",
 ];
+const PUBLIC_ASSET_PREFIXES = ["/demo", "/vendor"];
 
 function normalizeBase64Url(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -133,6 +134,7 @@ export async function proxy(request: NextRequest) {
 
   if (
     pathname.startsWith("/_next") ||
+    PUBLIC_ASSET_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) ||
     pathname.startsWith("/api/auth") ||
     API_ROUTE_HANDLED_AUTH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) ||
     pathname === "/favicon.ico" ||

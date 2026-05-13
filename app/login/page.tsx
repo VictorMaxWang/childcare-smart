@@ -13,6 +13,7 @@ import {
   EyeOff,
   FlaskConical,
   LockKeyhole,
+  Presentation,
   ShieldCheck,
   Sparkles,
   TriangleAlert,
@@ -39,6 +40,7 @@ import demoAvatarAdmin from "./assets/demo-avatar-admin.png";
 import demoAvatarParentLin from "./assets/demo-avatar-parent-lin.png";
 import demoAvatarTeacherLi from "./assets/demo-avatar-teacher-li.png";
 import demoAvatarTeacherZhou from "./assets/demo-avatar-teacher-zhou.png";
+import DemoPdfPresentation from "./DemoPdfPresentation";
 import heroIllustration from "./assets/hero-illustration.png";
 import loginLeftReplica from "./assets/login-left-replica.png";
 import styles from "./login-pixel.module.css";
@@ -132,6 +134,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [demoLoadingId, setDemoLoadingId] = useState<string | null>(null);
+  const [presentationOpen, setPresentationOpen] = useState(false);
   const [rememberLogin, setRememberLogin] = useState(true);
   const [agreementAccepted, setAgreementAccepted] = useState(true);
 
@@ -284,8 +287,14 @@ export default function LoginPage() {
               width={840}
               height={1086}
               className={styles.leftReplica}
+              priority
               sizes="(min-width: 901px) 840px, 0px"
             />
+          ) : null}
+          {showDesktopReplicaImage ? (
+            <div className={styles.leftReplicaFooterOverlay} aria-hidden="true">
+              推荐使用 Chrome / Edge 浏览器
+            </div>
           ) : null}
 
           <div className={styles.heroBlock}>
@@ -432,7 +441,7 @@ export default function LoginPage() {
               );
             })}
           </div>
-          <p className={styles.copyright}>智慧托育平台 v2.0.0　｜　客服支持：400-888-2020（工作日 9:00-18:00）　｜　推荐使用 Chrome / Edge 浏览器</p>
+          <p className={styles.copyright}>推荐使用 Chrome / Edge 浏览器</p>
         </section>
 
         <section className={styles.authWrap} aria-label="账号登录">
@@ -455,6 +464,16 @@ export default function LoginPage() {
             </div>
 
             <div className={styles.authDivider} />
+
+            <button
+              type="button"
+              className={styles.presentationButton}
+              onClick={() => setPresentationOpen(true)}
+              data-testid="demo-presentation-open"
+            >
+              <Presentation aria-hidden="true" size={22} />
+              演示模式
+            </button>
 
             <form onSubmit={handleSubmit}>
               <p className={styles.formSectionTitle}>普通账号登录</p>
@@ -557,6 +576,8 @@ export default function LoginPage() {
           </div>
         </section>
       </main>
+
+      <DemoPdfPresentation open={presentationOpen} onClose={() => setPresentationOpen(false)} />
 
       <Dialog
         open={registerOpen}
