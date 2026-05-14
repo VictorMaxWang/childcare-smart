@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, X } from "lucide-react";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import styles from "./login-pixel.module.css";
 
@@ -47,26 +47,11 @@ export default function DemoPdfPresentation({ open, onClose }: DemoPdfPresentati
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     overlayRef.current?.focus({ preventScroll: true });
-    overlayRef.current?.requestFullscreen?.().catch(() => undefined);
 
     return () => {
       document.body.style.overflow = previousOverflow;
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => undefined);
-      }
     };
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function handleFullscreenChange() {
-      if (!document.fullscreenElement) onClose();
-    }
-
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
-  }, [onClose, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -262,6 +247,29 @@ export default function DemoPdfPresentation({ open, onClose }: DemoPdfPresentati
             {loadError}
           </div>
         ) : null}
+      </div>
+
+      <div className={styles.presentationPageButtons} aria-label="演示翻页">
+        <button
+          type="button"
+          className={styles.presentationPageButton}
+          onClick={goPrevious}
+          disabled={!pageCount || currentPage <= 1}
+          aria-label="上一页"
+          data-testid="demo-presentation-prev"
+        >
+          <ChevronLeft aria-hidden="true" size={15} />
+        </button>
+        <button
+          type="button"
+          className={styles.presentationPageButton}
+          onClick={goNext}
+          disabled={!pageCount || currentPage >= pageCount}
+          aria-label="下一页"
+          data-testid="demo-presentation-next"
+        >
+          <ChevronRight aria-hidden="true" size={15} />
+        </button>
       </div>
     </div>
   );

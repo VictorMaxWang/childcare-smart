@@ -292,9 +292,7 @@ export default function LoginPage() {
             />
           ) : null}
           {showDesktopReplicaImage ? (
-            <div className={styles.leftReplicaFooterOverlay} aria-hidden="true">
-              推荐使用 Chrome / Edge 浏览器
-            </div>
+            <div className={styles.leftReplicaFooterOverlay} aria-hidden="true" />
           ) : null}
 
           <div className={styles.heroBlock}>
@@ -441,7 +439,6 @@ export default function LoginPage() {
               );
             })}
           </div>
-          <p className={styles.copyright}>推荐使用 Chrome / Edge 浏览器</p>
         </section>
 
         <section className={styles.authWrap} aria-label="账号登录">
