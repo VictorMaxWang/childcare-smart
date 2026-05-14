@@ -288,6 +288,7 @@
 .primaryButton:focus-visible,
 .presentationButton:focus-visible,
 .presentationCloseButton:focus-visible,
+.presentationPageButton:focus-visible,
 .registerButton:focus-visible,
 .passwordToggle:focus-visible,
 .checkboxLabel:focus-within,
@@ -723,9 +724,9 @@
 .presentationTopBar {
   position: absolute;
   z-index: 2;
-  top: 18px;
-  right: 22px;
-  left: 22px;
+  top: 12px;
+  right: 14px;
+  left: 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -740,7 +741,7 @@
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 999px;
   background: rgba(12, 18, 31, 0.72);
-  padding: 8px 14px;
+  padding: 6px 12px;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
   backdrop-filter: blur(14px);
   pointer-events: auto;
@@ -762,8 +763,8 @@
 
 .presentationCloseButton {
   display: inline-flex;
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -777,7 +778,7 @@
 
 .presentationCanvasFrame {
   position: absolute;
-  inset: 74px 32px 32px;
+  inset: 56px 14px 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -818,6 +819,34 @@
   color: #fecaca;
   line-height: 1.6;
   text-align: center;
+}
+
+.presentationPageButtons {
+  position: absolute;
+  z-index: 2;
+  right: 14px;
+  bottom: 14px;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.presentationPageButton {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(12, 18, 31, 0.58);
+  color: white;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(12px);
+}
+
+.presentationPageButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.34;
 }
 
 @keyframes presentationSpin {
@@ -1468,13 +1497,13 @@
   }
 
   .presentationCanvasFrame {
-    inset: 62px 12px 18px;
+    inset: 50px 8px 10px;
   }
 
   .presentationTopBar {
-    top: 12px;
-    right: 12px;
-    left: 12px;
+    top: 8px;
+    right: 8px;
+    left: 8px;
   }
 
   .presentationMeta {
@@ -1488,8 +1517,18 @@
   }
 
   .presentationCloseButton {
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
+  }
+
+  .presentationPageButtons {
+    right: 8px;
+    bottom: 8px;
+  }
+
+  .presentationPageButton {
+    width: 28px;
+    height: 28px;
   }
 
   .formField {
