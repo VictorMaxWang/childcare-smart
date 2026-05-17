@@ -175,8 +175,10 @@ test.describe("E06 voice assistant core framework", () => {
 
   test("teacher write command requires confirmation and persists through API", async ({ page }) => {
     await loginAs(page, "u-teacher", "/teacher");
-    await expect(page.getByTestId("voice-orb-button")).toBeVisible();
-    await page.getByTestId("voice-orb-button").click();
+    await expect(page.getByTestId("r06-teacher-voice-button")).toBeVisible();
+    await expect(page.getByTestId("voice-orb-button")).toHaveCount(0);
+    await page.getByTestId("r06-teacher-command-assistant").click();
+    await expect(page.getByTestId("voice-orb-panel")).toBeVisible();
     await page.getByTestId("voice-orb-input").fill("给林小雨记录晨检，体温三十六点八，状态正常");
     await page.getByTestId("voice-orb-submit").click();
     await expect(page.getByTestId("voice-orb-confirm")).toBeVisible();

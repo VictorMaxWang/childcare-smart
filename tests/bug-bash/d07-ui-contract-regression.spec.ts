@@ -37,29 +37,25 @@ async function bucketIncludes(page: Page, bucketKey: string, token: string) {
   );
 }
 
+async function apiData<T>(page: Page, path: string): Promise<T> {
+  const response = await page.request.get(path);
+  expect(response.ok()).toBeTruthy();
+  const body = (await response.json()) as { ok?: boolean; data?: T };
+  expect(body.ok).toBe(true);
+  return body.data as T;
+}
+
 async function getChildIdByName(page: Page, childName: string) {
-  return page.evaluate(
-    ({ bucketKey, childName }) => {
-      const children = JSON.parse(window.localStorage.getItem(bucketKey) ?? "[]") as Array<{
-        id?: string;
-        name?: string;
-      }>;
-      return children.find((child) => child.name === childName)?.id ?? null;
-    },
-    { bucketKey: BUCKETS.children, childName }
-  );
+  const children = await apiData<Array<{ id?: string; name?: string }>>(page, "/api/children?includeArchived=1");
+  return children.find((child) => child.name === childName)?.id ?? null;
 }
 
 async function hasAttendanceForChild(page: Page, childId: string) {
-  return page.evaluate(
-    ({ bucketKey, childId }) => {
-      const attendance = JSON.parse(window.localStorage.getItem(bucketKey) ?? "[]") as Array<{
-        childId?: string;
-      }>;
-      return attendance.some((record) => record.childId === childId);
-    },
-    { bucketKey: BUCKETS.attendance, childId }
+  const attendance = await apiData<Array<{ childId?: string }>>(
+    page,
+    `/api/records?type=attendance&childId=${encodeURIComponent(childId)}&includeArchived=1`
   );
+  return attendance.some((record) => record.childId === childId);
 }
 
 async function hasManualFollowUpReminder(page: Page, childId: string) {
@@ -100,11 +96,11 @@ test("D07 removes fake success and preserves shared demo writes", async ({ page 
   await screenshot(page, "01-login-forgot-disabled.png");
 
   await loginAs(page, "u-admin", "/children");
-  await page.getByTestId("d07-open-add-child").click();
-  await page.getByTestId("d07-child-name").fill(childName);
-  await page.getByTestId("d07-child-guardian").fill("D07监护人");
-  await page.getByTestId("d07-save-child").click();
-  await expect.poll(() => bucketIncludes(page, BUCKETS.children, childName)).toBe(true);
+  await page.getByTestId("e02-open-add-child").click();
+  await page.getByTestId("e02-child-name").fill(childName);
+  await page.getByTestId("e02-child-guardian").fill("D07监护人");
+  await page.getByTestId("e02-save-child").click();
+  await expect.poll(async () => Boolean(await getChildIdByName(page, childName))).toBe(true);
   const childId = await getChildIdByName(page, childName);
   expect(childId).toBeTruthy();
   await expect(page.locator("body")).toContainText(childName);
@@ -112,7 +108,7 @@ test("D07 removes fake success and preserves shared demo writes", async ({ page 
 
   await page.reload();
   await expect(page.locator("body")).toContainText(childName);
-  await page.getByTestId(`d07-attendance-toggle-${childId}`).click();
+  await page.getByTestId(`e02-attendance-toggle-${childId}`).click();
   await expect.poll(() => hasAttendanceForChild(page, childId as string)).toBe(true);
   await page.reload();
   await expect.poll(() => hasAttendanceForChild(page, childId as string)).toBe(true);
@@ -179,9 +175,8 @@ test("D07 removes fake success and preserves shared demo writes", async ({ page 
   await screenshot(page, "10-admin-summary-no-weekly-fake-disabled.png");
 
   await loginAs(page, "u-admin", "/admin/agent");
-  await expect(page.getByRole("button", { name: /使用说明.*暂未开放/ }).first()).toBeDisabled();
-  await expect(page.getByRole("button", { name: /批量派单.*暂未开放/ }).first()).toBeDisabled();
-  await expect(page.locator('[data-testid="d07-replica-unavailable"]').first()).toContainText("暂未开放");
+  await expect(page.getByTestId("r05-admin-agent-help")).toBeEnabled();
+  await expect(page.getByTestId("r05-admin-agent-batch-dispatch")).toBeDisabled();
   await screenshot(page, "11-admin-agent-disabled-actions.png");
 
   await loginAs(page, "u-admin", "/admin/agent?action=weekly-report");

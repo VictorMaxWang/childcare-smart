@@ -530,7 +530,9 @@ async function checkVoiceOrbUi(page: Page) {
 
   for (const [accountId, route, label, fileName] of roles) {
     await loginAs(page, accountId, route);
-    const orb = page.getByTestId("voice-orb-button");
+    const orb = accountId.startsWith("u-teacher")
+      ? page.getByTestId("r06-teacher-command-assistant")
+      : page.getByTestId("voice-orb-button");
     const visible = await orb.isVisible({ timeout: 30_000 }).catch(() => false);
     if (!visible) {
       evidence.voiceOrbRoles[label] = "missing";

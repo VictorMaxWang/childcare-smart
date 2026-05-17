@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -95,6 +95,7 @@ function ConsultationInputCard({
   onStart,
   draftPayload,
   isStreaming,
+  startButtonRef,
 }: {
   draftId: string;
   selectedChildName: string;
@@ -111,6 +112,7 @@ function ConsultationInputCard({
     imageInput?: { attachmentName?: string; content?: string };
     voiceInput?: { attachmentName?: string; content?: string };
   };
+  startButtonRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const [teacherNote, setTeacherNote] = useState(draftPayload?.teacherNote ?? "");
   const [imageAttachmentName, setImageAttachmentName] = useState(draftPayload?.imageInput?.attachmentName ?? "morning-check-photo.jpg");
@@ -160,8 +162,10 @@ function ConsultationInputCard({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-indigo-100 bg-indigo-50/60 p-4">
           <div className="text-sm text-slate-600">点击后会按“长期画像 → 最近会诊 → 当前建议”流式展示，并在结束后保留最终会诊卡。</div>
           <Button
+            ref={startButtonRef}
             className="gap-2 rounded-xl"
             variant="premium"
+            data-testid="r06-consultation-start-button"
             onClick={() =>
               onStart({
                 teacherNote,
@@ -236,11 +240,14 @@ export default function TeacherHighRiskConsultationPage() {
   const [discussionInput, setDiscussionInput] = useState("");
   const [discussionNotes, setDiscussionNotes] = useState<string[]>([]);
   const [sideActionMessage, setSideActionMessage] = useState<string | null>(null);
+  const [setupFocusMessage, setSetupFocusMessage] = useState<string | null>(null);
 
   const receivedAnyEventRef = useRef(false);
   const receivedDoneRef = useRef(false);
   const streamErroredRef = useRef(false);
   const consultationStartGuardRef = useRef(false);
+  const consultationSetupRef = useRef<HTMLDivElement | null>(null);
+  const consultationStartButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const classContext = useMemo(
     () =>
@@ -355,6 +362,15 @@ export default function TeacherHighRiskConsultationPage() {
 
   useEffect(() => () => stop(), [stop]);
 
+  function openConsultationSetup() {
+    setShowSetupSections(true);
+    setSetupFocusMessage("已定位到会诊输入区，请补充信息后点击一键生成会诊。");
+    window.requestAnimationFrame(() => {
+      consultationSetupRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.setTimeout(() => consultationStartButtonRef.current?.focus(), 250);
+    });
+  }
+
   async function runConsultation(form: {
     teacherNote: string;
     imageInput?: { attachmentName?: string; content?: string };
@@ -362,6 +378,7 @@ export default function TeacherHighRiskConsultationPage() {
   }) {
     if (!selectedChild || isStreaming || consultationStartGuardRef.current) return;
     consultationStartGuardRef.current = true;
+    setSetupFocusMessage(null);
     setStreamError(null);
     setStreamMessage("正在连接会诊流...");
     setResult(null);
@@ -732,7 +749,13 @@ export default function TeacherHighRiskConsultationPage() {
                       <Button asChild type="button" variant="outline" className="rounded-2xl">
                         <Link href="/teacher">返回教师工作台</Link>
                       </Button>
-                      <Button type="button" variant="premium" className="rounded-2xl" onClick={() => setShowSetupSections(true)}>
+                      <Button
+                        type="button"
+                        variant="premium"
+                        className="rounded-2xl"
+                        onClick={openConsultationSetup}
+                        aria-controls="consultation-setup"
+                      >
                         发起会诊 / 邀请专家
                       </Button>
                     </div>
@@ -845,7 +868,9 @@ export default function TeacherHighRiskConsultationPage() {
                           <Button asChild type="button" variant="outline" className="rounded-2xl">
                             <Link href="/children">查看完整档案</Link>
                           </Button>
-                          <Button type="button" variant="premium" className="rounded-2xl" onClick={() => setShowSetupSections(true)}>编辑风险信息</Button>
+                          <Button type="button" variant="premium" className="rounded-2xl" onClick={openConsultationSetup}>
+                            编辑风险信息
+                          </Button>
                         </div>
                       </div>
 
@@ -910,7 +935,7 @@ export default function TeacherHighRiskConsultationPage() {
                               size="sm"
                               className="rounded-full"
                               onClick={() => {
-                                setShowSetupSections(true);
+                                openConsultationSetup();
                                 setSideActionMessage(`${title}已定位到会诊输入区，请补充信息后生成方案。`);
                               }}
                             >
@@ -1002,7 +1027,7 @@ export default function TeacherHighRiskConsultationPage() {
                       type="button"
                       variant="outline"
                       className="rounded-full"
-                      onClick={() => setShowSetupSections(true)}
+                      onClick={openConsultationSetup}
                     >
                       重新展开输入
                     </Button>
@@ -1012,7 +1037,20 @@ export default function TeacherHighRiskConsultationPage() {
             ) : null}
 
             {showSetupSections ? (
-              <>
+              <div
+                ref={consultationSetupRef}
+                id="consultation-setup"
+                data-testid="r06-consultation-setup"
+                className="scroll-mt-24 space-y-6"
+              >
+                {setupFocusMessage ? (
+                  <div
+                    className="rounded-2xl border border-indigo-100 bg-indigo-50/80 px-4 py-3 text-sm font-medium text-indigo-800 shadow-sm"
+                    data-testid="r06-consultation-setup-focus-message"
+                  >
+                    {setupFocusMessage}
+                  </div>
+                ) : null}
                 <SectionCard
                   title="1. 锁定会诊对象"
                   description="先选需要升级关注的儿童，再启动会诊流。"
@@ -1075,8 +1113,9 @@ export default function TeacherHighRiskConsultationPage() {
                   saveMobileDraft={saveMobileDraft}
                   isStreaming={isStreaming}
                   onStart={(form) => void runConsultation(form)}
+                  startButtonRef={consultationStartButtonRef}
                 />
-              </>
+              </div>
             ) : null}
 
             {result && showSetupSections ? (
