@@ -3,7 +3,6 @@ import { loginAs } from "../feature-completion/helpers";
 import {
   expectChartTooltip,
   expectNoHorizontalOverflow,
-  expectNoIntersection,
 } from "./r08-helpers";
 
 const CHILD_ID = "c-1";
@@ -46,8 +45,8 @@ test.describe("FRONTEND-REPLICA-R08 responsive states", () => {
 
     await loginAs(page, "u-teacher", "/teacher");
     await expect(page.getByTestId("r06-teacher-voice-button")).toBeVisible();
-    await expect(page.getByTestId("voice-orb-button")).toBeVisible();
-    await expectNoIntersection(page.getByTestId("voice-orb-button"), page.getByTestId("r06-teacher-voice-button"));
+    await expect(page.getByTestId("r06-teacher-command-assistant")).toBeVisible();
+    await expect(page.getByTestId("voice-orb-button")).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
 
     await loginAs(page, "u-parent", `/parent?child=${CHILD_ID}`);

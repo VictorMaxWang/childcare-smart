@@ -6,6 +6,7 @@ import {
   AudioLines,
   CheckCircle2,
   LoaderCircle,
+  MessageSquareText,
   Mic,
   Sparkles,
 } from "lucide-react";
@@ -70,6 +71,7 @@ interface VoiceAssistantFABProps {
   onCloseResult: () => void;
   onSaveDraft: () => void;
   onSaveAndContinue?: (nextAction: "teacher-agent" | "high-risk-consultation") => void;
+  onOpenCommandAssistant?: () => void;
 }
 
 function formatDuration(durationMs: number) {
@@ -158,6 +160,7 @@ export default function VoiceAssistantFAB({
   onCloseResult,
   onSaveDraft,
   onSaveAndContinue,
+  onOpenCommandAssistant,
 }: VoiceAssistantFABProps) {
   const nextActionLabel = getNextActionLabel(result?.uiHintNextAction);
   const canContinue =
@@ -216,6 +219,21 @@ export default function VoiceAssistantFAB({
             onClick={onRetry}
           >
             重新尝试
+          </Button>
+        ) : null}
+
+        {onOpenCommandAssistant ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="pointer-events-auto gap-1.5 rounded-full bg-white/92 px-3 shadow-[0_12px_32px_rgba(15,23,42,0.12)] backdrop-blur-xl"
+            onClick={onOpenCommandAssistant}
+            data-testid="r06-teacher-command-assistant"
+            aria-label="打开文字指令助手"
+          >
+            <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" />
+            文字指令
           </Button>
         ) : null}
 

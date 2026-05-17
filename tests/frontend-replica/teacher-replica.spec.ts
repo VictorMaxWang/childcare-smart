@@ -72,6 +72,8 @@ test.describe("FRONTEND-REPLICA-R06 teacher replica", () => {
     await expect(page.getByTestId("r06-teacher-replica-page")).toContainText("李老师");
     await expect(page.getByTestId("r06-teacher-voice-orb")).toBeVisible();
     await expect(page.getByTestId("r06-teacher-voice-button")).toBeVisible();
+    await expect(page.getByTestId("r06-teacher-command-assistant")).toBeVisible();
+    await expect(page.getByTestId("voice-orb-button")).toHaveCount(0);
 
     const liWorkbench = await page.request.get("/api/analytics/teacher-workbench");
     expect(liWorkbench.ok()).toBe(true);
@@ -147,10 +149,10 @@ test.describe("FRONTEND-REPLICA-R06 teacher replica", () => {
       timeout: 30_000,
     });
 
-    await page.getByTestId("d05-save-parse").click();
+    await page.getByTestId("d05-save-parse-sheet").click();
     await expect(page.locator("body")).toContainText(/刷新后仍可查看|已保存/u);
-    await expect(page.getByTestId("d05-create-consultation")).toBeEnabled();
-    await page.getByTestId("d05-create-consultation").click();
+    await expect(page.getByTestId("d05-create-consultation-sheet")).toBeEnabled();
+    await page.getByTestId("d05-create-consultation-sheet").click();
     await page.waitForURL(/\/teacher\/high-risk-consultation/);
     await expect(page.getByTestId("r06-high-risk-consultation-page")).toBeVisible();
     await expect(page.locator("body")).toContainText(filename);
@@ -178,7 +180,9 @@ test.describe("FRONTEND-REPLICA-R06 teacher replica", () => {
     await expectTeacherShell(page);
     await expect(page.getByTestId("r06-high-risk-consultation-page")).toBeVisible();
     await expect(page.getByTestId("d05-consultation-discussion")).toBeVisible();
-    await expect(page.getByRole("button", { name: "发起会诊 / 邀请专家" })).toBeVisible();
+    await page.getByRole("button", { name: "发起会诊 / 邀请专家" }).click();
+    await expect(page.getByTestId("r06-consultation-setup-focus-message")).toContainText("已定位到会诊输入区");
+    await expect(page.getByTestId("r06-consultation-start-button")).toBeFocused();
     await expect(page.getByRole("button", { name: /一键生成会诊/ })).toBeVisible();
     await expect(page.getByRole("link", { name: "去沟通" })).toHaveAttribute(
       "href",

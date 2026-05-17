@@ -143,7 +143,11 @@ function triggerDownload(download: NonNullable<AssistantExecuteResult["download"
   window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
 }
 
-export function VoiceOrb() {
+interface VoiceOrbProps {
+  hideFloatingButton?: boolean;
+}
+
+export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -804,28 +808,30 @@ export function VoiceOrb() {
         </section>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => {
-          setExpanded(true);
-          setMinimized(false);
-        }}
-        className={cn(
-          "pointer-events-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-[0_18px_42px_rgb(15_23_42_/_0.28)] ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-200",
-          expanded && !minimized ? "sm:ml-auto" : ""
-        )}
-        data-testid="voice-orb-button"
-        aria-controls="voice-orb-panel"
-        aria-expanded={expanded && !minimized}
-        aria-label="打开语音球助手"
-        title="语音球助手"
-      >
-        {phase === "planning" || phase === "executing" ? (
-          <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-        ) : (
-          <Mic className="h-5 w-5" aria-hidden="true" />
-        )}
-      </button>
+      {hideFloatingButton ? null : (
+        <button
+          type="button"
+          onClick={() => {
+            setExpanded(true);
+            setMinimized(false);
+          }}
+          className={cn(
+            "pointer-events-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-[0_18px_42px_rgb(15_23_42_/_0.28)] ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-200",
+            expanded && !minimized ? "sm:ml-auto" : ""
+          )}
+          data-testid="voice-orb-button"
+          aria-controls="voice-orb-panel"
+          aria-expanded={expanded && !minimized}
+          aria-label="打开语音球助手"
+          title="语音球助手"
+        >
+          {phase === "planning" || phase === "executing" ? (
+            <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Mic className="h-5 w-5" aria-hidden="true" />
+          )}
+        </button>
+      )}
     </div>
   );
 }

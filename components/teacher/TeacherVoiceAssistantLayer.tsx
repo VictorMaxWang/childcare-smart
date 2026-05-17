@@ -750,6 +750,10 @@ export default function TeacherVoiceAssistantLayer() {
     resetToIdle();
   }, [resetToIdle]);
 
+  const openCommandAssistant = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("smartchildcare:open-voice-orb"));
+  }, []);
+
   const saveVoiceDraft = useCallback(
     (destination?: "teacher-agent" | "high-risk-consultation") => {
       if (!result) {
@@ -840,6 +844,7 @@ export default function TeacherVoiceAssistantLayer() {
           ? saveVoiceDraft
           : undefined
       }
+      onOpenCommandAssistant={openCommandAssistant}
     />
   );
 }

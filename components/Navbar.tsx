@@ -271,7 +271,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <main className="pixel-app-main min-h-[calc(100vh-86px)] overflow-x-hidden pb-[calc(env(safe-area-inset-bottom)+5.9rem)] sm:min-h-[calc(100vh-72px)] lg:min-h-[calc(100vh-80px)] lg:pb-0">
           {children}
         </main>
-        <VoiceOrb />
+        <VoiceOrb hideFloatingButton={currentUser.role === "教师"} />
         <MobileBottomNav items={bottomNavItems} pathname={currentLocation} />
       </div>
     </div>

@@ -303,7 +303,7 @@ async function checkVoiceOrb(page: Page) {
 
   for (const [accountId, route, label] of roles) {
     await loginAs(page, accountId, route);
-    const button = page.getByTestId("voice-orb-button");
+    const button = label === "teacher" ? page.getByTestId("r06-teacher-command-assistant") : page.getByTestId("voice-orb-button");
     await expect(button, `${label} voice orb should be visible`).toBeVisible({ timeout: 30_000 });
     await button.click();
     await expect(page.getByTestId("voice-orb-panel")).toBeVisible({ timeout: 20_000 });

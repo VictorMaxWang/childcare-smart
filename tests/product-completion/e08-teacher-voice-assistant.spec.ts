@@ -167,8 +167,10 @@ test.describe("E08 teacher voice assistant skills", () => {
     const token = `E08-ui-${Date.now()}`;
     await resetDemoStorage(page);
     await loginAs(page, "u-teacher", "/teacher");
-    await expect(page.getByTestId("voice-orb-button")).toBeVisible();
-    await page.getByTestId("voice-orb-button").click();
+    await expect(page.getByTestId("r06-teacher-voice-button")).toBeVisible();
+    await expect(page.getByTestId("voice-orb-button")).toHaveCount(0);
+    await page.getByTestId("r06-teacher-command-assistant").click();
+    await expect(page.getByTestId("voice-orb-panel")).toBeVisible();
     await page.getByTestId("voice-orb-input").fill(`给小明记录晨检，体温三十六点八，状态正常 ${token}`);
     await page.getByTestId("voice-orb-submit").click();
     await expect(page.getByTestId("voice-orb-confirm")).toBeVisible();
@@ -178,15 +180,15 @@ test.describe("E08 teacher voice assistant skills", () => {
     await captureE08(page, "teacher-voice-morning-check-executed.png");
 
     await page.reload();
-    await expect(page.getByTestId("voice-orb-button")).toBeVisible();
-    await page.getByTestId("voice-orb-button").click();
+    await expect(page.getByTestId("voice-orb-button")).toHaveCount(0);
+    await page.getByTestId("r06-teacher-command-assistant").click();
     await page.getByTestId("voice-orb-input").fill("打开家园沟通");
     await page.getByTestId("voice-orb-submit").click();
     await expect(page).toHaveURL(/\/teacher\/agent/);
     await captureE08(page, "teacher-voice-open-communication.png");
 
     await page.goto("/teacher");
-    await page.getByTestId("voice-orb-button").click();
+    await page.getByTestId("r06-teacher-command-assistant").click();
     await page.getByTestId("voice-orb-input").fill("打开健康材料解析");
     await page.getByTestId("voice-orb-submit").click();
     await expect(page).toHaveURL(/\/teacher\/health-file-bridge/);
@@ -196,12 +198,13 @@ test.describe("E08 teacher voice assistant skills", () => {
   test("mobile VoiceOrb stays above primary bottom actions", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await loginAs(page, "u-teacher", "/teacher");
-    const orb = page.getByTestId("voice-orb-button");
+    await expect(page.getByTestId("voice-orb-button")).toHaveCount(0);
+    const orb = page.getByTestId("r06-teacher-voice-button");
     await expect(orb).toBeVisible();
     const box = await orb.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.y + box!.height).toBeLessThan(844 - 48);
-    await orb.click();
+    await page.getByTestId("r06-teacher-command-assistant").click();
     await expect(page.getByTestId("voice-orb-panel")).toBeVisible();
     await captureE08(page, "teacher-mobile-voice-orb.png");
   });
