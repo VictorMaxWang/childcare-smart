@@ -41,6 +41,8 @@ test.describe("FRONTEND-REPLICA-R08 responsive states", () => {
     await loginAs(page, "u-admin", "/admin");
     await expect(page.getByTestId("r02-mobile-bottom-nav")).toBeVisible();
     await expect(page.getByTestId("voice-orb-button")).toBeVisible();
+    await expect(page.getByTestId("voice-orb-button")).toHaveClass(/rounded-full/);
+    await expect(page.getByTestId("voice-orb-button")).toHaveClass(/from-indigo-500/);
     await expectNoHorizontalOverflow(page);
 
     await loginAs(page, "u-teacher", "/teacher");
@@ -52,6 +54,8 @@ test.describe("FRONTEND-REPLICA-R08 responsive states", () => {
     await loginAs(page, "u-parent", `/parent?child=${CHILD_ID}`);
     await expect(page.getByTestId("r02-mobile-bottom-nav")).toBeVisible();
     await expect(page.getByTestId("voice-orb-button")).toBeVisible();
+    await expect(page.getByTestId("voice-orb-button")).toHaveClass(/rounded-full/);
+    await expect(page.getByTestId("voice-orb-button")).toHaveClass(/from-indigo-500/);
     await expectNoHorizontalOverflow(page);
   });
 });

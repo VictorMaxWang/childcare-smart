@@ -162,6 +162,8 @@ test.describe("E06 voice assistant core framework", () => {
   test("director sees VoiceOrb, text fallback, provider fallback, and navigation", async ({ page }) => {
     await loginAs(page, "u-admin", "/admin");
     await expect(page.getByTestId("voice-orb-button")).toBeVisible();
+    await expect(page.getByTestId("voice-orb-button")).toHaveClass(/rounded-full/);
+    await expect(page.getByTestId("voice-orb-button")).toHaveClass(/from-indigo-500/);
     await page.getByTestId("voice-orb-button").click();
     await expect(page.getByTestId("voice-orb-panel")).toBeVisible();
     await expect(page.getByTestId("voice-orb-provider-status")).toContainText(LIVE_OR_FALLBACK_PROVIDER_STATUS);
@@ -193,6 +195,8 @@ test.describe("E06 voice assistant core framework", () => {
   test("parent sees VoiceOrb and unknown command does not execute", async ({ page }) => {
     await loginAs(page, "u-parent", "/parent?child=c-1");
     await expect(page.getByTestId("voice-orb-button")).toBeVisible();
+    await expect(page.getByTestId("voice-orb-button")).toHaveClass(/rounded-full/);
+    await expect(page.getByTestId("voice-orb-button")).toHaveClass(/from-indigo-500/);
     await page.getByTestId("voice-orb-button").click();
     await expect(page.getByTestId("voice-orb-panel")).toBeVisible();
     await page.getByTestId("voice-orb-input").fill("帮我做一个不存在的动作");
@@ -206,6 +210,8 @@ test.describe("E06 voice assistant core framework", () => {
     await loginAs(page, "u-parent", "/parent?child=c-1");
     const orb = page.getByTestId("voice-orb-button");
     await expect(orb).toBeVisible();
+    await expect(orb).toHaveClass(/rounded-full/);
+    await expect(orb).toHaveClass(/from-indigo-500/);
     const box = await orb.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.y + box!.height).toBeLessThan(844 - 48);

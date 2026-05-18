@@ -816,7 +816,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
             setMinimized(false);
           }}
           className={cn(
-            "pointer-events-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-[0_18px_42px_rgb(15_23_42_/_0.28)] ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-200",
+            "voice-orb-purple-button pointer-events-auto relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-indigo-200 bg-linear-to-br from-indigo-500 via-violet-500 to-sky-400 text-white shadow-[0_22px_50px_rgba(99,102,241,0.3)] ring-1 ring-white/65 transition hover:-translate-y-0.5 hover:from-indigo-600 hover:via-fuchsia-500 hover:to-sky-400 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-200",
             expanded && !minimized ? "sm:ml-auto" : ""
           )}
           data-testid="voice-orb-button"
@@ -825,11 +825,17 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
           aria-label="打开语音球助手"
           title="语音球助手"
         >
-          {phase === "planning" || phase === "executing" ? (
-            <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-          ) : (
-            <Mic className="h-5 w-5" aria-hidden="true" />
-          )}
+          <span className="voice-assistant-glow" aria-hidden="true" />
+          <span className="voice-assistant-wave voice-assistant-wave-delay-0" aria-hidden="true" />
+          <span className="voice-assistant-wave voice-assistant-wave-delay-1" aria-hidden="true" />
+          <span className="voice-assistant-wave voice-assistant-wave-delay-2" aria-hidden="true" />
+          <span className="relative z-10 flex items-center justify-center">
+            {phase === "planning" || phase === "executing" ? (
+              <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Mic className="h-5 w-5" aria-hidden="true" />
+            )}
+          </span>
         </button>
       )}
     </div>
