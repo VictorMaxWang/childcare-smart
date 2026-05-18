@@ -1,3 +1,32 @@
+# 2026-05-18 Demo Repair Guardrails
+
+本节优先级高于旧阶段描述。后续 Codex 修复任务只围绕两类目标展开：
+
+- AI 助手稳定性
+- 答辩演示数据完整性
+
+## 修复范围约束
+
+- 不得删除现有教师端、管理端、家长端主路径页面。
+- 不得绕过现有鉴权和角色权限。
+- 不得把真实用户数据硬编码到生产逻辑中；演示数据必须通过 demo fixture、mock provider、seed script 或 app snapshot 注入。
+- 所有 AI fallback 输出必须结构化，不能只返回一段空文本。
+- 所有主要演示页必须具备“无外部 AI 服务也能展示”的兜底能力。
+- 不得新增“一键演示模式 / resetDemo / demo=1 自动重置页面”这类功能。
+- 不得单独重做 `/parent/storybook` 页面；绘本页只使用现有页面能力和示例数据支撑。
+
+## 重点保护演示路径
+
+- `/teacher`
+- `/teacher/agent?action=weekly-summary`
+- `/teacher/high-risk-consultation`
+- `/admin`
+- `/parent`
+- `/parent/storybook?child=c-1`
+- `/parent/agent?child=c-1`
+
+---
+
 # SmartChildcare Agent 并行线程总控手册
 
 更新基准：`2026-04-08`

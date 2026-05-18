@@ -26,7 +26,7 @@ test.describe("R04 AI assistant UI replica", () => {
     await loginAs(page, "u-teacher", "/teacher/agent");
     const workspace = page.getByTestId("r04-assistant-workspace").first();
     await expect(workspace).toBeVisible();
-    const chip = workspace.getByTestId("r04-prompt-chip").filter({ hasText: "晨检" }).first();
+    const chip = workspace.getByTestId("r04-prompt-chip").filter({ hasText: "本周观察总结" }).first();
     await chip.click();
     await expect(workspace.getByTestId("r04-assistant-conversation")).toBeVisible();
     await workspace.getByTestId("r04-assistant-input").fill("请总结今天班级待办");

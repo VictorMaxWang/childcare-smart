@@ -3,6 +3,7 @@ import "server-only";
 import type { SessionUser } from "@/lib/auth/accounts";
 import { DATABASE_URL_CONFIG_ERROR_MESSAGE, DatabaseConfigError, dbQuery, decodeDatabaseJson, encodeDatabaseJson } from "@/lib/db/server";
 import type { ApiExtendedSnapshot } from "@/lib/api/types";
+import { DEMO_DATASET_VERSION } from "@/lib/demo-data/persistence";
 import { createDemoSeedSnapshot } from "@/lib/demo-data/seed";
 import { ApiRouteError } from "@/lib/server/api-errors";
 import { normalizeExtendedSnapshot } from "@/lib/server/app-data-model";
@@ -27,7 +28,7 @@ function getDemoSnapshotMap() {
 export class DefaultAppDataRepository implements AppDataRepository {
   async load(session: SessionUser) {
     if (session.accountKind === "demo") {
-      const key = session.institutionId;
+      const key = `${DEMO_DATASET_VERSION}:${session.institutionId}`;
       const snapshots = getDemoSnapshotMap();
       const existing = snapshots.get(key);
       if (existing) return normalizeExtendedSnapshot(existing, session);
@@ -60,7 +61,7 @@ export class DefaultAppDataRepository implements AppDataRepository {
 
   async save(session: SessionUser, snapshot: ApiExtendedSnapshot) {
     if (session.accountKind === "demo") {
-      getDemoSnapshotMap().set(session.institutionId, normalizeExtendedSnapshot(snapshot, session));
+      getDemoSnapshotMap().set(`${DEMO_DATASET_VERSION}:${session.institutionId}`, normalizeExtendedSnapshot(snapshot, session));
       return;
     }
 

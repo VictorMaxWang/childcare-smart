@@ -8,17 +8,17 @@ export interface RequestSession {
 }
 
 export async function resolveRequestSession(request: Request): Promise<RequestSession | null> {
-  const cookieUser = await getCurrentSessionUser();
-  if (cookieUser) {
-    return { user: cookieUser, source: "cookie" };
-  }
-
   const headerAccountId = request.headers.get("x-demo-account-id")?.trim();
   if (headerAccountId) {
     const demoUser = getDemoAccountById(headerAccountId);
     if (demoUser) {
       return { user: demoUser, source: "demo-header" };
     }
+  }
+
+  const cookieUser = await getCurrentSessionUser();
+  if (cookieUser) {
+    return { user: cookieUser, source: "cookie" };
   }
 
   return null;

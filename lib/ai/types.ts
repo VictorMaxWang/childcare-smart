@@ -459,6 +459,7 @@ export interface AiSuggestionResponse {
   model?: string;
   provider?: string;
   providerStatus?: Record<string, unknown>;
+  fallbackReason?: string | null;
 }
 
 export interface AiFollowUpPayload {
@@ -525,6 +526,7 @@ export interface AiFollowUpResponse {
   model?: string;
   provider?: string;
   providerStatus?: Record<string, unknown>;
+  fallbackReason?: string | null;
 }
 
 export type ParentMessageStopReason =
@@ -966,6 +968,7 @@ export interface WeeklyReportResponse {
   model?: string;
   provider?: string;
   providerStatus?: Record<string, unknown>;
+  fallbackReason?: string | null;
 }
 
 export type HealthFileBridgeSourceRole = "parent" | "teacher";

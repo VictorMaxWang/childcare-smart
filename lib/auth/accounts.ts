@@ -73,14 +73,14 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
   },
   {
     id: "u-parent",
-    name: "林妈妈",
+    name: "林小雨妈妈",
     username: "demo-parent-lin",
     role: "家长",
     avatar: "👩",
     institutionId: DEMO_INSTITUTION_ID,
     childIds: ["c-1", "c-4"],
     accountKind: "demo",
-    description: "家长端 · 查看孩子近 7 天饮食、晨检与反馈",
+    description: "家长端 · 林小雨妈妈查看成长故事、今晚行动与反馈入口",
   },
 ];
 

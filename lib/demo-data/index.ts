@@ -1,4 +1,6 @@
 export * from "./actions";
+export * from "./defense-fixture";
+export * from "./defense-scenario";
 export * from "./ids";
 export * from "./migration";
 export * from "./persistence";

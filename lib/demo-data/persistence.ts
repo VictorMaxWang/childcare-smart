@@ -2,8 +2,9 @@ import { DEMO_ACCOUNTS, type SessionUser } from "@/lib/auth/accounts";
 import { normalizeAppStateSnapshot, type AppStateSnapshot } from "@/lib/persistence/snapshot";
 import type { DemoDataContext, DemoRoleAlias, DemoStorage, MutationResult } from "./types";
 import { createDemoSeedSnapshot } from "./seed";
+import { DEFENSE_DEMO_DATASET_VERSION } from "./defense-scenario";
 
-export const DEMO_DATASET_VERSION = "v5-d01-shared-demo";
+export const DEMO_DATASET_VERSION = DEFENSE_DEMO_DATASET_VERSION;
 export const DEMO_PERSISTENCE_SCHEMA_VERSION = "d01-v1";
 
 export const SNAPSHOT_BUCKET_VERSIONS = {

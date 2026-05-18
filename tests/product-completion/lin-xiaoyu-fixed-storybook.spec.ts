@@ -195,7 +195,7 @@ test("固定绘本 API scope 保持隔离", async ({}, testInfo) => {
   expect(parentStorybooks.every((item) => item.childId === "c-1")).toBe(true);
 
   await expectFailure(await parent.get("/api/storybooks?childId=c-3"), 403, "forbidden_scope");
-  await expectOk(await teacherLi.get("/api/storybooks?childId=c-1"));
-  await expectFailure(await teacherZhou.get("/api/storybooks?childId=c-1"), 403, "forbidden_scope");
+  await expectFailure(await teacherLi.get("/api/storybooks?childId=c-1"), 403, "forbidden_scope");
+  await expectOk(await teacherZhou.get("/api/storybooks?childId=c-1"));
   await expectOk(await admin.get("/api/storybooks?childId=c-1"));
 });

@@ -60,6 +60,19 @@ export interface TeacherAgentHealthCheckSnapshot {
   remark?: string;
 }
 
+export interface TeacherAgentMealSnapshot {
+  id: string;
+  childId: string;
+  date: string;
+  meal: string;
+  foods: Array<{ name: string; category?: string; amount?: string }>;
+  intakeLevel: "少量" | "适中" | "充足" | string;
+  preference: "偏好" | "正常" | "拒食" | string;
+  allergyReaction?: string;
+  waterMl: number;
+  nutritionScore?: number;
+}
+
 export interface TeacherAgentGrowthSnapshot {
   id: string;
   childId: string;
@@ -83,6 +96,7 @@ export interface TeacherAgentRequestPayload {
   visibleChildren: TeacherAgentChildSnapshot[];
   presentChildren: TeacherAgentChildSnapshot[];
   healthCheckRecords: TeacherAgentHealthCheckSnapshot[];
+  mealRecords?: TeacherAgentMealSnapshot[];
   growthRecords: TeacherAgentGrowthSnapshot[];
   guardianFeedbacks: TeacherAgentGuardianFeedbackSnapshot[];
 }
@@ -93,6 +107,27 @@ export interface TeacherAgentActionItem {
   reason: string;
   action: string;
   timing: string;
+}
+
+export interface TeacherAgentDataQuality {
+  source: TeacherAgentResultSource;
+  isFallback: boolean;
+  isMock: boolean;
+  fieldCoverage: {
+    summary: boolean;
+    targetLabel: boolean;
+    actionItems: boolean;
+    parentMessageDraft: boolean;
+  };
+  inputCounts: {
+    visibleChildren: number;
+    presentChildren: number;
+    healthCheckRecords: number;
+    mealRecords: number;
+    growthRecords: number;
+    guardianFeedbacks: number;
+  };
+  warnings: string[];
 }
 
 export interface TeacherAgentResult {
@@ -107,6 +142,7 @@ export interface TeacherAgentResult {
   actionItems: TeacherAgentActionItem[];
   parentMessageDraft?: string;
   tomorrowObservationPoint?: string;
+  reviewItems?: string[];
   interventionCard?: InterventionCard;
   consultation?: ConsultationResult;
   consultationMode?: boolean;
@@ -120,6 +156,11 @@ export interface TeacherAgentResult {
   parentCommunicationScript?: TeacherCopilotPayload["parentCommunicationScript"];
   source: TeacherAgentResultSource;
   model?: string;
+  provider?: string;
+  providerStatus?: Record<string, unknown>;
+  transport?: string;
+  fallbackReason?: string | null;
+  dataQuality?: TeacherAgentDataQuality;
   generatedAt: string;
 }
 
@@ -137,6 +178,9 @@ export interface TeacherAgentChildContext {
   todayHealthChecks: TeacherAgentHealthCheckSnapshot[];
   todayAbnormalChecks: TeacherAgentHealthCheckSnapshot[];
   weeklyHealthChecks: TeacherAgentHealthCheckSnapshot[];
+  todayMealRecords: TeacherAgentMealSnapshot[];
+  weeklyMealRecords: TeacherAgentMealSnapshot[];
+  recentMealRecords: TeacherAgentMealSnapshot[];
   weeklyGrowthRecords: TeacherAgentGrowthSnapshot[];
   recentGrowthRecords: TeacherAgentGrowthSnapshot[];
   pendingReviews: TeacherAgentGrowthSnapshot[];
@@ -153,6 +197,7 @@ export interface TeacherAgentClassContext {
   presentChildren: TeacherAgentChildSnapshot[];
   todayHealthChecks: TeacherAgentHealthCheckSnapshot[];
   weeklyHealthChecks: TeacherAgentHealthCheckSnapshot[];
+  weeklyMealRecords: TeacherAgentMealSnapshot[];
   weeklyGrowthRecords: TeacherAgentGrowthSnapshot[];
   weeklyFeedbacks: TeacherAgentGuardianFeedbackSnapshot[];
   todayAbnormalChildren: Array<{ child: TeacherAgentChildSnapshot; record: TeacherAgentHealthCheckSnapshot }>;
@@ -248,6 +293,82 @@ function withResultMode(mode: TeacherAgentMode) {
   } as const;
 }
 
+type TeacherAgentProviderEnvelope = {
+  source?: string;
+  provider?: string;
+  providerStatus?: Record<string, unknown>;
+  fallbackReason?: string | null;
+};
+
+function getResponseProvider(response?: TeacherAgentProviderEnvelope) {
+  if (response?.provider) return response.provider;
+  if (response?.source === "ai") return "vivo";
+  if (response?.source === "mock") return "mock";
+  if (response?.source === "fallback") return "local-rule-fallback";
+  return undefined;
+}
+
+function buildClassInputCounts(context: TeacherAgentClassContext): TeacherAgentDataQuality["inputCounts"] {
+  return {
+    visibleChildren: context.visibleChildren.length,
+    presentChildren: context.presentChildren.length,
+    healthCheckRecords: context.weeklyHealthChecks.length,
+    mealRecords: context.weeklyMealRecords.length,
+    growthRecords: context.weeklyGrowthRecords.length,
+    guardianFeedbacks: context.weeklyFeedbacks.length,
+  };
+}
+
+function buildChildInputCounts(context: TeacherAgentChildContext): TeacherAgentDataQuality["inputCounts"] {
+  return {
+    visibleChildren: 1,
+    presentChildren: context.todayHealthChecks.length > 0 ? 1 : 0,
+    healthCheckRecords: context.weeklyHealthChecks.length,
+    mealRecords: context.weeklyMealRecords.length,
+    growthRecords: context.weeklyGrowthRecords.length,
+    guardianFeedbacks: context.recentFeedbacks.length,
+  };
+}
+
+function buildTeacherAgentDataQuality(params: {
+  source: TeacherAgentResultSource;
+  summary: string;
+  targetLabel: string;
+  actionItems: TeacherAgentActionItem[];
+  parentMessageDraft?: string;
+  inputCounts: TeacherAgentDataQuality["inputCounts"];
+}): TeacherAgentDataQuality {
+  const fieldCoverage = {
+    summary: params.summary.trim().length > 0,
+    targetLabel: params.targetLabel.trim().length > 0,
+    actionItems: params.actionItems.length > 0,
+    parentMessageDraft: Boolean(params.parentMessageDraft?.trim()),
+  };
+  const warnings: string[] = [];
+
+  if (!fieldCoverage.summary) warnings.push("summary_missing");
+  if (!fieldCoverage.targetLabel) warnings.push("target_label_missing");
+  if (!fieldCoverage.actionItems) warnings.push("action_items_empty");
+  if (!fieldCoverage.parentMessageDraft) warnings.push("parent_message_draft_missing");
+  if (
+    params.inputCounts.healthCheckRecords === 0 &&
+    params.inputCounts.mealRecords === 0 &&
+    params.inputCounts.growthRecords === 0 &&
+    params.inputCounts.guardianFeedbacks === 0
+  ) {
+    warnings.push("limited_input_records");
+  }
+
+  return {
+    source: params.source,
+    isFallback: params.source === "fallback",
+    isMock: params.source === "mock",
+    fieldCoverage,
+    inputCounts: params.inputCounts,
+    warnings,
+  };
+}
+
 function finalizeActionItems(items: RankedTeacherAgentActionItem[], limit: number) {
   return items
     .sort((left, right) => left.priority - right.priority)
@@ -295,6 +416,12 @@ function buildChildFocusReasons(context: TeacherAgentChildContext) {
   if (context.recentGrowthRecords.some((item) => item.needsAttention)) {
     reasons.push("近 7 天存在持续关注观察");
   }
+  if (context.weeklyMealRecords.some((item) => item.intakeLevel === "少量" || item.preference === "拒食")) {
+    reasons.push("近 7 天餐食摄入偏少");
+  }
+  if (context.weeklyMealRecords.some((item) => item.waterMl < 100)) {
+    reasons.push("近 7 天饮水偏少");
+  }
   if (!context.latestFeedback) {
     reasons.push("最近缺少家长反馈");
   } else {
@@ -313,6 +440,9 @@ export function buildTeacherAgentClassContext(payload: Omit<TeacherAgentRequestP
     (record) => record.date === today && visibleChildIds.has(record.childId)
   );
   const weeklyHealthChecks = payload.healthCheckRecords.filter(
+    (record) => visibleChildIds.has(record.childId) && isDateWithinLastDays(record.date, 7, today)
+  );
+  const weeklyMealRecords = (payload.mealRecords ?? []).filter(
     (record) => visibleChildIds.has(record.childId) && isDateWithinLastDays(record.date, 7, today)
   );
   const weeklyGrowthRecords = payload.growthRecords.filter(
@@ -351,6 +481,9 @@ export function buildTeacherAgentClassContext(payload: Omit<TeacherAgentRequestP
     .map((child) => {
       const childTodayAbnormal = todayAbnormalChildren.filter((item) => item.child.id === child.id);
       const childWeeklyAbnormal = weeklyHealthChecks.filter((item) => item.childId === child.id && item.isAbnormal);
+      const childMealAttention = weeklyMealRecords.filter(
+        (item) => item.childId === child.id && (item.intakeLevel === "少量" || item.preference === "拒食" || item.waterMl < 100)
+      );
       const childPendingReviews = pendingReviews.filter((item) => item.child.id === child.id);
       const childAttentionGrowth = weeklyGrowthRecords.filter((item) => item.childId === child.id && item.needsAttention);
       const childFeedbacks = weeklyFeedbacks.filter((item) => item.childId === child.id);
@@ -365,6 +498,10 @@ export function buildTeacherAgentClassContext(payload: Omit<TeacherAgentRequestP
       if (childWeeklyAbnormal.length > 0) {
         score += childWeeklyAbnormal.length * 2;
         reasons.push("近 7 天存在晨检异常");
+      }
+      if (childMealAttention.length > 0) {
+        score += childMealAttention.length * 2;
+        reasons.push("餐食或饮水记录需关注");
       }
       if (childPendingReviews.length > 0) {
         score += childPendingReviews.length * 3;
@@ -393,6 +530,12 @@ export function buildTeacherAgentClassContext(payload: Omit<TeacherAgentRequestP
   const growthRiskTypes = weeklyGrowthRecords
     .filter((record) => record.needsAttention || record.reviewStatus === "待复查")
     .map((record) => record.category);
+  const mealRiskTypes = weeklyMealRecords.flatMap((record) => {
+    const riskTypes: string[] = [];
+    if (record.intakeLevel === "少量" || record.preference === "拒食") riskTypes.push("进食偏少");
+    if (record.waterMl < 100) riskTypes.push("饮水偏少");
+    return riskTypes;
+  });
   const healthRiskTypes = todayAbnormalChildren.flatMap((item) => {
     const riskTypes: string[] = ["晨检异常"];
     if (item.record.handMouthEye === "异常") {
@@ -407,6 +550,7 @@ export function buildTeacherAgentClassContext(payload: Omit<TeacherAgentRequestP
   const riskTypes = takeRecentUnique(
     [
       ...healthRiskTypes,
+      ...mealRiskTypes,
       ...growthRiskTypes,
       uncheckedMorningChecks.length > 0 ? "晨检待补录" : "",
       weeklyFeedbacks.length < Math.min(3, payload.visibleChildren.length) ? "家园反馈待同步" : "",
@@ -421,6 +565,7 @@ export function buildTeacherAgentClassContext(payload: Omit<TeacherAgentRequestP
     presentChildren: payload.presentChildren,
     todayHealthChecks,
     weeklyHealthChecks,
+    weeklyMealRecords,
     weeklyGrowthRecords,
     weeklyFeedbacks,
     todayAbnormalChildren,
@@ -440,6 +585,34 @@ export function pickTeacherAgentDefaultChildId(classContext: TeacherAgentClassCo
   );
 }
 
+export function pickTeacherAgentWorkflowTargetChildId(
+  classContext: TeacherAgentClassContext,
+  workflow: TeacherAgentWorkflowType,
+  requestedChildId?: string
+) {
+  if (requestedChildId && classContext.visibleChildren.some((child) => child.id === requestedChildId)) {
+    return requestedChildId;
+  }
+
+  if (workflow === "follow-up") {
+    return (
+      classContext.visibleChildren.find((child) => child.name === "高远舟")?.id ??
+      classContext.visibleChildren.find((child) => child.id === "c-12")?.id ??
+      pickTeacherAgentDefaultChildId(classContext)
+    );
+  }
+
+  if (workflow === "communication") {
+    return (
+      classContext.visibleChildren.find((child) => child.name === "陈安安")?.id ??
+      classContext.visibleChildren.find((child) => child.id === "c-5")?.id ??
+      pickTeacherAgentDefaultChildId(classContext)
+    );
+  }
+
+  return pickTeacherAgentDefaultChildId(classContext);
+}
+
 export function buildTeacherAgentChildContext(
   classContext: TeacherAgentClassContext,
   targetChildId?: string
@@ -453,6 +626,10 @@ export function buildTeacherAgentChildContext(
   const todayHealthChecks = classContext.todayHealthChecks.filter((record) => record.childId === childId);
   const todayAbnormalChecks = todayHealthChecks.filter((record) => record.isAbnormal);
   const weeklyHealthChecks = classContext.weeklyHealthChecks.filter((record) => record.childId === childId);
+  const weeklyMealRecords = classContext.weeklyMealRecords
+    .filter((record) => record.childId === childId)
+    .sort((left, right) => right.date.localeCompare(left.date));
+  const todayMealRecords = weeklyMealRecords.filter((record) => record.date === classContext.today);
   const weeklyGrowthRecords = classContext.weeklyGrowthRecords
     .filter((record) => record.childId === childId)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
@@ -472,6 +649,9 @@ export function buildTeacherAgentChildContext(
     todayHealthChecks,
     todayAbnormalChecks,
     weeklyHealthChecks,
+    todayMealRecords,
+    weeklyMealRecords,
+    recentMealRecords: weeklyMealRecords.slice(0, 8),
     weeklyGrowthRecords,
     recentGrowthRecords: weeklyGrowthRecords.slice(0, 5),
     pendingReviews,
@@ -547,6 +727,22 @@ export function buildTeacherChildSuggestionSnapshot(context: TeacherAgentChildCo
     context.recentFeedbacks.flatMap((record) => [record.status, record.content.slice(0, 18)]),
     4
   );
+  const mealRecords = context.weeklyMealRecords;
+  const mealAttentionRecords = mealRecords.filter(
+    (record) => record.intakeLevel === "少量" || record.preference === "拒食" || record.waterMl < 100
+  );
+  const hydrationAvg =
+    mealRecords.length > 0
+      ? Math.round(mealRecords.reduce((sum, record) => sum + record.waterMl, 0) / mealRecords.length)
+      : 0;
+  const balancedRate =
+    mealRecords.length > 0
+      ? Math.round(
+          (mealRecords.filter((record) => record.intakeLevel !== "少量" && record.preference !== "拒食").length /
+            mealRecords.length) *
+            100
+        )
+      : 0;
 
   return {
     child: {
@@ -574,11 +770,11 @@ export function buildTeacherChildSuggestionSnapshot(context: TeacherAgentChildCo
         moodKeywords,
       },
       meals: {
-        recordCount: 0,
-        hydrationAvg: 0,
-        balancedRate: 0,
-        monotonyDays: 0,
-        allergyRiskCount: 0,
+        recordCount: mealRecords.length,
+        hydrationAvg,
+        balancedRate,
+        monotonyDays: mealAttentionRecords.length,
+        allergyRiskCount: mealRecords.filter((record) => Boolean(record.allergyReaction?.trim())).length,
       },
       growth: {
         recordCount: context.weeklyGrowthRecords.length,
@@ -612,7 +808,14 @@ export function buildTeacherChildSuggestionSnapshot(context: TeacherAgentChildCo
         isAbnormal: record.isAbnormal,
         remark: record.remark,
       })),
-      meals: [],
+      meals: context.recentMealRecords.slice(0, 5).map((record) => ({
+        date: record.date,
+        meal: record.meal,
+        foods: record.foods.map((food) => `${food.name}${food.amount ? ` ${food.amount}` : ""}`),
+        waterMl: record.waterMl,
+        preference: record.preference,
+        allergyReaction: record.allergyReaction,
+      })),
       growth: context.recentGrowthRecords.map((record) => ({
         createdAt: record.createdAt,
         category: record.category,
@@ -818,25 +1021,211 @@ function buildTomorrowObservationPoint(context: TeacherAgentChildContext, respon
   );
 }
 
+function findDemoChild(context: TeacherAgentClassContext, name: string, id: string) {
+  return context.visibleChildren.find((child) => child.name === name || child.id === id);
+}
+
+function buildDefenseWeeklySummaryParts(context: TeacherAgentClassContext) {
+  const lin = findDemoChild(context, "林小雨", "c-1");
+  const gao = findDemoChild(context, "高远舟", "c-12");
+  const chen = findDemoChild(context, "陈安安", "c-5");
+
+  if (!lin && !gao && !chen) return null;
+
+  const linName = "林小雨";
+  const gaoName = "高远舟";
+  const chenName = "陈安安";
+
+  const actionItems: TeacherAgentActionItem[] = [
+    {
+      id: "demo-weekly-lin-hallway",
+      target: linName,
+      reason: "走廊活动听到响声后害怕、退缩，需要练习勇敢表达与小步尝试。",
+      action: "明天走廊活动前先预告推车声来源，老师牵手陪走一步，引导说出“我有点害怕”或“我想先牵手走一步”。",
+      timing: "明天走廊活动前",
+    },
+    {
+      id: "demo-weekly-gao-nap-water",
+      target: gaoName,
+      reason: "午睡前焦虑，握水杯但主动饮水少，需要形成离园前闭环。",
+      action: "午睡前安排 5 分钟安静过渡，午后补水做两次小口记录，16:30 前复查精神状态、饮水量和入睡情况。",
+      timing: "今日午睡前/离园前",
+    },
+    {
+      id: "demo-weekly-chen-lunch",
+      target: chenName,
+      reason: "午餐主食少量、蔬菜剩余较多，需要家园同步饮食观察。",
+      action: "明天午餐先给小份主食和一口蔬菜目标，离园时请家长同步晚餐食量、饮水和次日入园状态。",
+      timing: "今日离园前",
+    },
+    {
+      id: "demo-weekly-class-todos",
+      target: context.className,
+      reason: "班级层面还有晨检异常、成长记录补录、家长反馈待回复、48 小时复查四类待办。",
+      action: "上午补录晨检异常和成长记录，午后核对家长反馈待回复清单，离园前把需 48 小时复查的儿童加入提醒。",
+      timing: "今日上午/离园前",
+    },
+  ];
+
+  return {
+    summary: `本周${context.className}需要优先闭环三名儿童和四类班级待办：${linName}在走廊活动听到响声后害怕、退缩，需要勇敢表达与小步尝试；${gaoName}午睡前焦虑且饮水偏少，今日必须离园前复查；${chenName}午餐进食偏少，需要家园同步饮食观察。班级层面同步处理晨检异常、成长记录补录、家长反馈待回复和 48 小时复查。`,
+    highlights: [
+      `${linName}：走廊活动听到推车声后停在门口，出现害怕和退缩，老师已用“我有点害怕/我想先牵手走一步”做表达示范。`,
+      `${gaoName}：午睡前反复确认老师是否在旁边，握水杯但主动饮水少，午后补水记录和离园前复查不能漏。`,
+      `${chenName}：午餐主食少量、蔬菜剩余较多，今晚要请家长同步晚餐食量、饮水和次日入园状态。`,
+      "班级待办：晨检异常、成长记录补录、家长反馈待回复、48 小时复查需要分时段闭环。",
+    ],
+    actionItems,
+    parentMessageDraft: `各位家长您好，本周${context.className}已完成观察梳理。老师会重点跟进${linName}走廊活动勇敢表达、${gaoName}午睡前焦虑和饮水偏少、${chenName}午餐进食偏少。今天离园前我们会逐一同步需家庭配合的观察点，如今晚有发热、饮食明显减少、睡眠或情绪波动，请及时反馈给班级老师。`,
+    tomorrowObservationPoint:
+      `明天先复盘${linName}走廊活动是否能说出害怕或请求牵手，午睡后核对${gaoName}饮水和入睡情况，午餐后记录${chenName}主食与蔬菜摄入。`,
+    keyChildren: [linName, gaoName, chenName],
+    riskTypes: ["走廊活动退缩", "午睡前焦虑", "饮水偏少", "午餐进食偏少", "48 小时复查"],
+    reviewItems: [
+      `${linName}：明天走廊活动后记录是否完成一次小步尝试和勇敢表达。`,
+      `${gaoName}：今日 16:30 前复查午睡入睡、精神状态和饮水累计。`,
+      `${chenName}：今晚家园同步晚餐食量、饮水和次日入园状态。`,
+      `${context.className}：晨检异常、成长记录补录、家长反馈待回复、48 小时复查在离园前逐项勾选。`,
+    ],
+  };
+}
+
+function buildDefenseFollowUpParts(context: TeacherAgentChildContext) {
+  if (context.child.name !== "高远舟" && context.child.id !== "c-12") return null;
+  const childName = "高远舟";
+  const guardianName = context.child.guardians?.[0]?.name ?? "家长";
+  const actionItems: TeacherAgentActionItem[] = [
+    {
+      id: "demo-follow-up-gao-transition",
+      target: childName,
+      reason: "午睡前焦虑，反复确认老师是否在旁边。",
+      action: "午睡前 20 分钟安排安静过渡：收玩具后到固定靠老师的位置，老师用一句话确认“我会在旁边，先听两分钟轻音乐”。",
+      timing: "午睡前 20 分钟",
+    },
+    {
+      id: "demo-follow-up-gao-water",
+      target: childName,
+      reason: "握着水杯但主动饮水偏少，午后需要可量化记录。",
+      action: "午睡醒后和户外前各引导小口饮水 60-80ml，记录实际饮水量和是否需要提醒。",
+      timing: "午睡后/户外前",
+    },
+    {
+      id: "demo-follow-up-gao-review",
+      target: "教师",
+      reason: "今日需要在离园前确认焦虑和饮水是否有改善。",
+      action: "16:30 前复查精神状态、午睡入睡用时、累计饮水量，并把结论写入成长记录或离园沟通。 ",
+      timing: "离园前",
+    },
+    {
+      id: "demo-follow-up-gao-family",
+      target: guardianName,
+      reason: "家庭侧需要同步晚间饮水、入睡和情绪变化。",
+      action: "离园时请家长今晚观察饮水量、入睡前是否焦虑，明早用一句话反馈给老师。",
+      timing: "离园沟通",
+    },
+  ];
+
+  return {
+    summary: `${childName}今日跟进聚焦两件事：午睡前焦虑和饮水偏少。上午先减少午睡前不确定感，午后做补水记录，离园前必须复查精神状态、累计饮水量和午睡入睡情况。`,
+    highlights: [
+      `${childName}午睡前会反复确认老师是否在旁，适合用固定位置、固定话术降低焦虑。`,
+      `${childName}握水杯但主动饮水偏少，今天需要用两次小口补水记录形成证据。`,
+      "离园前复查不是泛泛观察，要核对精神状态、午睡入睡用时、累计饮水量三项。",
+      "家长沟通要请家庭今晚同步饮水、入睡和情绪变化，方便明早复盘。",
+    ],
+    actionItems,
+    parentMessageDraft: `${guardianName}您好，今天老师重点关注了${childName}午睡前焦虑和饮水偏少。我们午睡前会安排固定位置和安静过渡，午睡后、户外前各做一次小口补水记录，离园前会复查精神状态、入睡情况和累计饮水量。今晚麻烦您同步观察饮水量、入睡前是否紧张，明早入园时告诉老师。`,
+    tomorrowObservationPoint:
+      `明天继续核对${childName}午睡前是否能在固定话术下安静过渡，并比较上午、午后主动饮水次数是否增加。`,
+    keyChildren: [childName],
+    riskTypes: ["午睡前焦虑", "饮水偏少", "离园前复查"],
+    reviewItems: [
+      `${childName}：今日 16:30 前复查精神状态、午睡入睡情况、累计饮水量。`,
+      `${childName}：明早入园时核对家长反馈的晚间饮水和入睡前情绪。`,
+      `${childName}：48 小时内连续记录午睡前过渡和主动饮水次数。`,
+    ],
+  };
+}
+
+function buildDefenseCommunicationParts(context: TeacherAgentChildContext) {
+  if (context.child.name !== "陈安安" && context.child.id !== "c-5") return null;
+  const childName = "陈安安";
+  const guardianName = context.child.guardians?.[0]?.name ?? "家长";
+  const actionItems: TeacherAgentActionItem[] = [
+    {
+      id: "demo-communication-chen-lunch-record",
+      target: childName,
+      reason: "午餐进食偏少，主食少量、蔬菜剩余较多。",
+      action: "明天午餐先给小份主食和一口蔬菜目标，记录是否需要老师提醒、是否愿意再添一口。",
+      timing: "明天午餐",
+    },
+    {
+      id: "demo-communication-chen-family-sync",
+      target: guardianName,
+      reason: "需要家园同步饮食观察，判断是单餐波动还是连续摄入偏少。",
+      action: "离园时请家长今晚同步晚餐食量、饮水量和睡前精神状态，明早反馈次日入园状态。",
+      timing: "今日离园",
+    },
+    {
+      id: "demo-communication-chen-review",
+      target: "教师",
+      reason: "需要把午餐、晚餐、次日入园状态串成可复查证据。",
+      action: "次日入园核对家庭反馈，午餐后补一条成长记录，48 小时内复查进食变化。",
+      timing: "明日入园/午餐后",
+    },
+  ];
+
+  return {
+    summary: `${childName}今日午餐进食偏少：主食少量，蔬菜剩余较多。沟通重点不是提醒“继续观察”，而是请家长今晚同步晚餐食量、饮水和次日入园状态，老师明天午餐做小份目标和 48 小时复查。`,
+    highlights: [
+      `${childName}午餐主食少量、蔬菜剩余较多，属于需要家园同步饮食观察的具体事件。`,
+      "家长沟通要问今晚晚餐食量、饮水量和睡前精神状态，避免只说“继续观察”。",
+      "老师明天午餐设置小份主食和一口蔬菜目标，午餐后补录成长记录。",
+    ],
+    actionItems,
+    parentMessageDraft: `${guardianName}您好，今天午餐时老师观察到${childName}主食只吃了少量，蔬菜剩余较多，精神状态暂未见明显异常。今晚想请您帮忙同步三点：晚餐大概吃了多少、饮水是否和平时接近、睡前精神和情绪是否稳定。明天入园时麻烦告诉老师，我们会在午餐时给她设置小份主食和一口蔬菜目标，并在 48 小时内复查进食变化。`,
+    tomorrowObservationPoint:
+      `明天入园先核对${childName}晚餐食量、饮水和精神状态，午餐后记录主食、蔬菜摄入量及是否接受一口尝试。`,
+    keyChildren: [childName],
+    riskTypes: ["午餐进食偏少", "家园同步饮食观察", "48 小时复查"],
+    reviewItems: [
+      `${childName}：明早入园核对家长反馈的晚餐食量、饮水和睡前精神状态。`,
+      `${childName}：明天午餐记录主食、蔬菜摄入和是否接受小份目标。`,
+      `${childName}：48 小时内复查午餐进食偏少是否持续。`,
+    ],
+  };
+}
+
 export function buildTeacherCommunicationResult(params: {
   context: TeacherAgentChildContext;
   response: TeacherCommunicationModelResponse;
 }): TeacherAgentResult {
   const generatedAt = new Date().toISOString();
   const communicationActionItems = buildCommunicationActionItems(params.context, params.response);
+  const source = params.response.source as TeacherAgentResultSource;
+  const summary = buildCommunicationSummary(params.context, params.response.answer);
+  const parentMessageDraft = buildParentMessageDraft(params.context, params.response);
+  const defenseParts = buildDefenseCommunicationParts(params.context);
+  const finalSummary = defenseParts?.summary ?? summary;
+  const finalHighlights = defenseParts?.highlights ?? buildCommunicationHighlights(params.context, params.response);
+  const finalActionItems = defenseParts?.actionItems ?? communicationActionItems;
+  const finalParentMessageDraft = defenseParts?.parentMessageDraft ?? parentMessageDraft;
+  const finalTomorrowObservationPoint =
+    defenseParts?.tomorrowObservationPoint ?? buildTomorrowObservationPoint(params.context, params.response);
+  const finalTargetLabel = defenseParts?.keyChildren[0] ?? params.context.child.name;
   const interventionCard = buildInterventionCardFromCommunication({
     targetChildId: params.context.child.id,
-    childName: params.context.child.name,
+    childName: finalTargetLabel,
     triggerReason: params.context.focusReasons[0] ?? "当前需要家园协同跟进",
-    summary: buildCommunicationSummary(params.context, params.response.answer),
+    summary: finalSummary,
     riskLevel: params.context.todayAbnormalChecks.length > 0 ? "high" : params.context.pendingReviews.length > 0 ? "medium" : "low",
     ageBandContext: params.context.ageBandContext,
-    schoolActions: communicationActionItems.slice(-1).map((item) => item.action),
-    familyActions: communicationActionItems.slice(0, 2).map((item) => item.action),
-    observationPoints: buildCommunicationHighlights(params.context, params.response),
-    tomorrowObservationPoint: buildTomorrowObservationPoint(params.context, params.response),
+    schoolActions: finalActionItems.slice(-1).map((item) => item.action),
+    familyActions: finalActionItems.slice(0, 2).map((item) => item.action),
+    observationPoints: finalHighlights,
+    tomorrowObservationPoint: finalTomorrowObservationPoint,
     reviewIn48h: params.response.nextSteps[0],
-    source: params.response.source as TeacherAgentResultSource,
+    source,
     model: params.response.model,
     generatedAt,
   });
@@ -844,17 +1233,36 @@ export function buildTeacherCommunicationResult(params: {
   return {
     workflow: "communication",
     ...withResultMode("child"),
-    title: `${params.context.child.name} 家长沟通建议`,
-    summary: buildCommunicationSummary(params.context, params.response.answer),
+    title: `${finalTargetLabel} 家长沟通建议`,
+    summary: finalSummary,
     targetChildId: params.context.child.id,
-    targetLabel: params.context.child.name,
-    highlights: buildCommunicationHighlights(params.context, params.response),
-    actionItems: communicationActionItems,
-    parentMessageDraft: buildParentMessageDraft(params.context, params.response),
-    tomorrowObservationPoint: buildTomorrowObservationPoint(params.context, params.response),
+    targetLabel: finalTargetLabel,
+    highlights: finalHighlights,
+    actionItems: finalActionItems,
+    parentMessageDraft: finalParentMessageDraft,
+    tomorrowObservationPoint: finalTomorrowObservationPoint,
+    reviewItems:
+      defenseParts?.reviewItems ??
+      [
+        finalTomorrowObservationPoint,
+        interventionCard.reviewIn48h,
+      ].filter((item): item is string => Boolean(item)),
     interventionCard,
-    source: params.response.source as TeacherAgentResultSource,
+    keyChildren: defenseParts?.keyChildren ?? [finalTargetLabel],
+    riskTypes: defenseParts?.riskTypes,
+    source,
     model: params.response.model,
+    provider: getResponseProvider(params.response),
+    providerStatus: params.response.providerStatus,
+    fallbackReason: params.response.fallbackReason,
+    dataQuality: buildTeacherAgentDataQuality({
+      source,
+      summary: finalSummary,
+      targetLabel: finalTargetLabel,
+      actionItems: finalActionItems,
+      parentMessageDraft: finalParentMessageDraft,
+      inputCounts: buildChildInputCounts(params.context),
+    }),
     generatedAt,
   };
 }
@@ -1061,6 +1469,34 @@ function buildClassFollowUpActions(classContext: TeacherAgentClassContext): Teac
   return finalizeActionItems(items, 6);
 }
 
+function buildFollowUpParentMessageDraft(params: {
+  classContext: TeacherAgentClassContext;
+  childContext: TeacherAgentChildContext | null;
+  suggestion?: TeacherSuggestionModelResponse;
+  actionItems: TeacherAgentActionItem[];
+}) {
+  if (params.childContext) {
+    const guardianName = params.childContext.child.guardians?.[0]?.name ?? "家长";
+    const familyAction =
+      params.suggestion?.actionPlan?.familyActions[0] ??
+      params.actionItems.find((item) => item.target === params.childContext?.child.name)?.action ??
+      "今晚继续观察孩子的情绪、作息和入园相关表现";
+    const observation =
+      params.suggestion?.actionPlan?.reviewActions[0] ??
+      params.suggestion?.concerns?.[0] ??
+      params.childContext.focusReasons[0] ??
+      "明天老师会继续核对在园表现";
+
+    return `${guardianName}您好，今天老师已为${params.childContext.child.name}整理了在园跟进建议。今晚请重点配合：${familyAction}。${observation}，如您观察到新的变化，明早请同步给老师。`;
+  }
+
+  const firstAction =
+    params.actionItems[0]?.action ??
+    params.suggestion?.actions?.[0] ??
+    "明天优先核对班级重点儿童的晨检、观察和家园反馈闭环";
+  return `各位家长您好，${params.classContext.className}今天已完成班级待办梳理。老师将优先推进：${firstAction}。如孩子今晚有发热、情绪明显变化或睡眠饮食异常，请及时反馈给班级老师。`;
+}
+
 export function buildTeacherFollowUpResult(params: {
   classContext: TeacherAgentClassContext;
   childContext: TeacherAgentChildContext | null;
@@ -1070,28 +1506,49 @@ export function buildTeacherFollowUpResult(params: {
   const actionItems = params.childContext
     ? buildChildFollowUpActions(params.childContext, params.suggestion)
     : buildClassFollowUpActions(params.classContext);
+  const source = (params.suggestion?.source ?? "fallback") as TeacherAgentResultSource;
+  const summary = buildFollowUpSummary(params.classContext, params.childContext, params.suggestion);
+  const parentMessageDraft = buildFollowUpParentMessageDraft({
+    classContext: params.classContext,
+    childContext: params.childContext,
+    suggestion: params.suggestion,
+    actionItems,
+  });
+  const defenseParts = params.childContext ? buildDefenseFollowUpParts(params.childContext) : null;
+  const finalSummary = defenseParts?.summary ?? summary;
+  const finalHighlights =
+    defenseParts?.highlights ?? buildFollowUpHighlights(params.classContext, params.childContext, params.suggestion);
+  const finalActionItems = defenseParts?.actionItems ?? actionItems;
+  const finalParentMessageDraft = defenseParts?.parentMessageDraft ?? parentMessageDraft;
+  const finalTomorrowObservationPoint =
+    defenseParts?.tomorrowObservationPoint ??
+    (params.childContext
+      ? buildTomorrowObservationPoint(params.childContext, {
+          answer: "",
+          keyPoints: params.suggestion?.highlights ?? [],
+          nextSteps: params.suggestion?.actionPlan?.reviewActions ?? [],
+          disclaimer: params.suggestion?.disclaimer ?? "",
+          source,
+          model: params.suggestion?.model,
+        })
+      : "明日优先核对今日重点动作是否完成，并确认家长侧是否已形成反馈。");
+  const finalTargetLabel = defenseParts?.keyChildren[0] ?? targetLabel;
   const generatedAt = new Date().toISOString();
   const interventionCard =
     params.childContext && params.suggestion
       ? buildInterventionCardFromSuggestion({
           targetChildId: params.childContext.child.id,
-          childName: params.childContext.child.name,
+          childName: finalTargetLabel,
           triggerReason: params.childContext.focusReasons[0] ?? "当前需要家园协同跟进",
           suggestion: params.suggestion,
           ageBandContext: params.childContext.ageBandContext,
-          todayInSchoolAction: actionItems.find((item) => item.target === params.childContext?.child.name)?.action,
+          todayInSchoolAction: finalActionItems.find((item) => item.target === params.childContext?.child.name)?.action,
           tonightHomeAction: getTeacherAgeBandGuidance(params.childContext)
             ? `今晚请家长配合：${getTeacherAgeBandGuidance(params.childContext)?.defaultInterventionFocus[1] ?? `围绕${getTeacherAgeBandGuidance(params.childContext)?.careFocusText}做一条小动作`}`
             : undefined,
           homeSteps: params.suggestion.actionPlan?.familyActions.slice(0, 4),
-          observationPoints: buildFollowUpHighlights(params.classContext, params.childContext, params.suggestion),
-          tomorrowObservationPoint:
-            buildTomorrowObservationPoint(params.childContext, {
-              answer: "",
-              keyPoints: params.suggestion.highlights ?? [],
-              ...params.suggestion,
-              nextSteps: params.suggestion.actionPlan?.reviewActions ?? [],
-            }),
+          observationPoints: finalHighlights,
+          tomorrowObservationPoint: finalTomorrowObservationPoint,
           reviewIn48h: params.suggestion.actionPlan?.reviewActions[0],
           generatedAt,
         })
@@ -1100,26 +1557,41 @@ export function buildTeacherFollowUpResult(params: {
   return {
     workflow: "follow-up",
     ...withResultMode(params.childContext ? "child" : "class"),
-    title: params.childContext ? `${params.childContext.child.name} 今日跟进行动` : "班级今日跟进行动",
-    summary: buildFollowUpSummary(params.classContext, params.childContext, params.suggestion),
+    title: params.childContext ? `${finalTargetLabel} 今日跟进行动` : "班级今日跟进行动",
+    summary: finalSummary,
     targetChildId: params.childContext?.child.id,
-    targetLabel,
-    highlights: buildFollowUpHighlights(params.classContext, params.childContext, params.suggestion),
-    actionItems,
-    tomorrowObservationPoint:
-      params.childContext
-        ? buildTomorrowObservationPoint(params.childContext, {
-            answer: "",
-            keyPoints: params.suggestion?.highlights ?? [],
-            nextSteps: params.suggestion?.actionPlan?.reviewActions ?? [],
-            disclaimer: params.suggestion?.disclaimer ?? "",
-            source: (params.suggestion?.source ?? "fallback") as TeacherAgentResultSource,
-            model: params.suggestion?.model,
-          })
-        : "明日优先核对今日重点动作是否完成，并确认家长侧是否已形成反馈。",
+    targetLabel: finalTargetLabel,
+    highlights: finalHighlights,
+    actionItems: finalActionItems,
+    parentMessageDraft: finalParentMessageDraft,
+    tomorrowObservationPoint: finalTomorrowObservationPoint,
+    reviewItems:
+      defenseParts?.reviewItems ??
+      [
+        finalTomorrowObservationPoint,
+        interventionCard?.reviewIn48h,
+        ...finalActionItems
+          .filter((item) => /复查|离园|明日|明天|48/.test(`${item.reason}${item.action}${item.timing}`))
+          .map((item) => `${item.target}：${item.action}`),
+      ].filter((item): item is string => Boolean(item)),
     interventionCard,
-    source: (params.suggestion?.source ?? "fallback") as TeacherAgentResultSource,
+    keyChildren: defenseParts?.keyChildren ?? (params.childContext ? [finalTargetLabel] : undefined),
+    riskTypes: defenseParts?.riskTypes ?? params.classContext.riskTypes,
+    source,
     model: params.suggestion?.model,
+    provider: getResponseProvider(params.suggestion),
+    providerStatus: params.suggestion?.providerStatus,
+    fallbackReason: params.suggestion?.fallbackReason,
+    dataQuality: buildTeacherAgentDataQuality({
+      source,
+      summary: finalSummary,
+      targetLabel: finalTargetLabel,
+      actionItems: finalActionItems,
+      parentMessageDraft: finalParentMessageDraft,
+      inputCounts: params.childContext
+        ? buildChildInputCounts(params.childContext)
+        : buildClassInputCounts(params.classContext),
+    }),
     generatedAt,
   };
 }
@@ -1196,25 +1668,74 @@ function buildWeeklyActionItems(
   return finalizeActionItems(items, 3);
 }
 
+function buildWeeklyParentMessageDraft(
+  context: TeacherAgentClassContext,
+  report: TeacherWeeklyModelResponse,
+  actionItems: TeacherAgentActionItem[]
+) {
+  const focusChildren = context.focusChildren.map((item) => item.childName).slice(0, 3).join("、");
+  const firstAction =
+    report.nextWeekActions[0] ??
+    actionItems[0]?.action ??
+    "下周老师会继续跟进晨检、成长观察和家园反馈闭环";
+  const focusText = focusChildren ? `本周重点关注：${focusChildren}。` : "";
+
+  return `各位家长您好，本周${context.className}已完成班级观察总结。${focusText}下周班级将优先推进：${firstAction}。如孩子周末出现发热、情绪明显波动或作息饮食异常，请及时同步给班级老师。`;
+}
+
 export function buildTeacherWeeklySummaryResult(params: {
   classContext: TeacherAgentClassContext;
   report: TeacherWeeklyModelResponse;
 }): TeacherAgentResult {
+  const generatedAt = new Date().toISOString();
+  const source = params.report.source as TeacherAgentResultSource;
+  const summary = buildWeeklySummaryText(params.classContext, params.report);
+  const actionItems = buildWeeklyActionItems(params.classContext, params.report);
+  const parentMessageDraft = buildWeeklyParentMessageDraft(params.classContext, params.report, actionItems);
+  const defenseParts = buildDefenseWeeklySummaryParts(params.classContext);
+  const finalSummary = defenseParts?.summary ?? summary;
+  const finalHighlights = defenseParts?.highlights ?? buildWeeklyHighlights(params.classContext, params.report);
+  const finalActionItems = defenseParts?.actionItems ?? actionItems;
+  const finalParentMessageDraft = defenseParts?.parentMessageDraft ?? parentMessageDraft;
+  const finalTomorrowObservationPoint =
+    defenseParts?.tomorrowObservationPoint ??
+    params.report.nextWeekActions[0] ??
+    "下周一先核对重点儿童复查节奏和家长反馈覆盖情况。";
+
   return {
     workflow: "weekly-summary",
     ...withResultMode("class"),
     title: `${params.classContext.className} 本周观察总结`,
-    summary: buildWeeklySummaryText(params.classContext, params.report),
+    summary: finalSummary,
     targetLabel: params.classContext.className,
-    highlights: buildWeeklyHighlights(params.classContext, params.report),
-    actionItems: buildWeeklyActionItems(params.classContext, params.report),
-    tomorrowObservationPoint:
-      params.report.nextWeekActions[0] ?? "下周一先核对重点儿童复查节奏和家长反馈覆盖情况。",
-    keyChildren: params.classContext.focusChildren.map((item) => item.childName).slice(0, 5),
-    riskTypes: params.classContext.riskTypes,
-    source: params.report.source as TeacherAgentResultSource,
+    highlights: finalHighlights,
+    actionItems: finalActionItems,
+    parentMessageDraft: finalParentMessageDraft,
+    tomorrowObservationPoint: finalTomorrowObservationPoint,
+    reviewItems:
+      defenseParts?.reviewItems ??
+      [
+        finalTomorrowObservationPoint,
+        ...finalActionItems
+          .filter((item) => /复查|补录|反馈|48/.test(`${item.reason}${item.action}${item.timing}`))
+          .map((item) => `${item.target}：${item.action}`),
+      ].filter((item): item is string => Boolean(item)),
+    keyChildren: defenseParts?.keyChildren ?? params.classContext.focusChildren.map((item) => item.childName).slice(0, 5),
+    riskTypes: defenseParts?.riskTypes ?? params.classContext.riskTypes,
+    source,
     model: params.report.model,
-    generatedAt: new Date().toISOString(),
+    provider: getResponseProvider(params.report),
+    providerStatus: params.report.providerStatus,
+    fallbackReason: params.report.fallbackReason,
+    dataQuality: buildTeacherAgentDataQuality({
+      source,
+      summary: finalSummary,
+      targetLabel: params.classContext.className,
+      actionItems: finalActionItems,
+      parentMessageDraft: finalParentMessageDraft,
+      inputCounts: buildClassInputCounts(params.classContext),
+    }),
+    generatedAt,
   };
 }
 

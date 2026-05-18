@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server.js";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import {
-  buildAiProviderUnavailableBody,
   executeFollowUp,
   executeSuggestion,
   executeWeeklyReport,
   getAiRuntimeOptions,
   isAiProviderUnavailableError,
+  type AiRuntimeOptions,
 } from "@/lib/ai/server";
 import {
   buildTeacherAgentChildContext,
@@ -17,15 +16,32 @@ import {
   buildTeacherFollowUpResultWithMemory,
   buildTeacherWeeklyReportSnapshotWithMemory,
   buildTeacherWeeklySummaryResultWithMemory,
+  pickTeacherAgentWorkflowTargetChildId,
   type TeacherAgentRequestPayload,
+  type TeacherAgentResult,
+  type TeacherAgentResultSource,
   type TeacherAgentWorkflowType,
 } from "@/lib/agent/teacher-agent";
 import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
 import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
 import { attachConsultationToInterventionCard } from "@/lib/agent/intervention-card";
 import { toFollowUpFeedbackLite } from "@/lib/feedback/normalize";
-import { forwardBrainRequest } from "@/lib/server/brain-client";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import {
+  createBrainTransportHeaders,
+  forwardBrainRequest,
+  readBrainTransportHeaders,
+  type BrainForwardResult,
+  type BrainTransport,
+} from "@/lib/server/brain-client";
 import { buildMemoryContextForPrompt } from "@/lib/server/memory-context";
+
+const TEACHER_AGENT_TARGET_PATH = "/api/v1/agents/teacher/run";
+const TEACHER_AGENT_BRAIN_TIMEOUT_MS = 3_000;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
 function isRecordArray(value: unknown) {
   return Array.isArray(value);
@@ -35,38 +51,319 @@ function isValidWorkflow(value: unknown): value is TeacherAgentWorkflowType {
   return value === "communication" || value === "follow-up" || value === "weekly-summary";
 }
 
-function isValidPayload(payload: unknown): payload is TeacherAgentRequestPayload {
-  if (!payload || typeof payload !== "object") return false;
-  const obj = payload as Record<string, unknown>;
-
+function isBrainTransport(value: unknown): value is BrainTransport {
   return (
-    isValidWorkflow(obj.workflow) &&
-    (obj.scope === "class" || obj.scope === "child") &&
-    obj.currentUser !== null &&
-    typeof obj.currentUser === "object" &&
-    isRecordArray(obj.visibleChildren) &&
-    isRecordArray(obj.presentChildren) &&
-    isRecordArray(obj.healthCheckRecords) &&
-    isRecordArray(obj.growthRecords) &&
-    isRecordArray(obj.guardianFeedbacks)
+    value === "brain-proxy-error" ||
+    value === "remote-brain-proxy" ||
+    value === "next-json-fallback" ||
+    value === "next-stream-fallback"
   );
 }
 
-function providerErrorResponse(error: unknown) {
-  return isAiProviderUnavailableError(error)
-    ? NextResponse.json(buildAiProviderUnavailableBody(error), { status: error.status })
-    : null;
+function isValidPayload(payload: unknown): payload is TeacherAgentRequestPayload {
+  if (!isRecord(payload)) return false;
+
+  return (
+    isValidWorkflow(payload.workflow) &&
+    (payload.scope === "class" || payload.scope === "child") &&
+    isRecord(payload.currentUser) &&
+    isRecordArray(payload.visibleChildren) &&
+    isRecordArray(payload.presentChildren) &&
+    isRecordArray(payload.healthCheckRecords) &&
+    (payload.mealRecords === undefined || isRecordArray(payload.mealRecords)) &&
+    isRecordArray(payload.growthRecords) &&
+    isRecordArray(payload.guardianFeedbacks)
+  );
+}
+
+function isCompleteTeacherAgentResult(value: unknown): value is TeacherAgentResult {
+  if (!isRecord(value)) return false;
+  return (
+    isValidWorkflow(value.workflow) &&
+    (value.mode === "class" || value.mode === "child") &&
+    typeof value.summary === "string" &&
+    value.summary.trim().length > 0 &&
+    typeof value.targetLabel === "string" &&
+    value.targetLabel.trim().length > 0 &&
+    Array.isArray(value.actionItems)
+  );
+}
+
+async function readJsonBody(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeResultSource(value: unknown): TeacherAgentResultSource {
+  if (value === "ai" || value === "fallback" || value === "mock") return value;
+  return "fallback";
+}
+
+function providerFromResult(result: TeacherAgentResult) {
+  if (result.provider) return result.provider;
+  if (result.source === "ai") return "vivo";
+  if (result.source === "mock") return "mock";
+  return "local-rule-fallback";
+}
+
+function buildInputCounts(payload: TeacherAgentRequestPayload) {
+  return {
+    visibleChildren: payload.visibleChildren.length,
+    presentChildren: payload.presentChildren.length,
+    healthCheckRecords: payload.healthCheckRecords.length,
+    mealRecords: payload.mealRecords?.length ?? 0,
+    growthRecords: payload.growthRecords.length,
+    guardianFeedbacks: payload.guardianFeedbacks.length,
+  };
+}
+
+function fallbackReasonFromProviderError(error: unknown) {
+  if (!isAiProviderUnavailableError(error)) return null;
+  return error.providerStatus.reason ?? error.message ?? "provider-unavailable";
+}
+
+function buildFallbackReason(reason: string | null | undefined, defaultReason: string) {
+  return reason?.trim() || defaultReason;
+}
+
+function buildTransportHeaders(params: {
+  transport: BrainTransport;
+  fallbackReason?: string | null;
+  upstreamHost?: string | null;
+}) {
+  return createBrainTransportHeaders({
+    transport: params.transport,
+    targetPath: TEACHER_AGENT_TARGET_PATH,
+    upstreamHost: params.upstreamHost,
+    fallbackReason: params.fallbackReason,
+  });
+}
+
+function enrichTeacherAgentResult(params: {
+  result: TeacherAgentResult;
+  payload: TeacherAgentRequestPayload;
+  transport: BrainTransport;
+  fallbackReason?: string | null;
+}) {
+  const source = normalizeResultSource(params.result.source);
+  const fieldCoverage = {
+    summary: params.result.summary.trim().length > 0,
+    targetLabel: params.result.targetLabel.trim().length > 0,
+    actionItems: params.result.actionItems.length > 0,
+    parentMessageDraft: Boolean(params.result.parentMessageDraft?.trim()),
+  };
+  const warnings = [
+    ...(
+      params.result.dataQuality?.warnings ??
+      Object.entries(fieldCoverage)
+        .filter(([, present]) => !present)
+        .map(([field]) => `${field}_missing`)
+    ),
+  ];
+
+  return {
+    ...params.result,
+    source,
+    provider: providerFromResult({ ...params.result, source }),
+    transport: params.result.transport ?? params.transport,
+    fallbackReason: params.result.fallbackReason ?? params.fallbackReason ?? null,
+    dataQuality: params.result.dataQuality ?? {
+      source,
+      isFallback: source === "fallback",
+      isMock: source === "mock",
+      fieldCoverage,
+      inputCounts: buildInputCounts(params.payload),
+      warnings,
+    },
+  } satisfies TeacherAgentResult;
+}
+
+async function maybeReadBrainResult(brainForward: BrainForwardResult, payload: TeacherAgentRequestPayload) {
+  if (!brainForward.response) return null;
+  if (!brainForward.response.ok) return { response: brainForward.response, fallbackReason: null };
+
+  const headers = readBrainTransportHeaders(brainForward.response.headers);
+  const transport = isBrainTransport(headers.transport) ? headers.transport : "remote-brain-proxy";
+  const raw = await readJsonBody(brainForward.response);
+
+  if (!raw) {
+    return { response: null, fallbackReason: "brain-invalid-json" };
+  }
+  if (!isCompleteTeacherAgentResult(raw)) {
+    return { response: null, fallbackReason: "brain-incomplete-teacher-agent-result" };
+  }
+
+  const result = enrichTeacherAgentResult({
+    result: raw,
+    payload,
+    transport,
+    fallbackReason: headers.fallbackReason,
+  });
+
+  return {
+    response: NextResponse.json(result, {
+      status: 200,
+      headers: buildTransportHeaders({
+        transport,
+        upstreamHost: headers.upstreamHost ?? brainForward.upstreamHost,
+        fallbackReason: headers.fallbackReason,
+      }),
+    }),
+    fallbackReason: null,
+  };
+}
+
+async function runLocalTeacherAgent(params: {
+  payload: TeacherAgentRequestPayload;
+  runtimeOptions: AiRuntimeOptions;
+  allowConsultation: boolean;
+  request: Request;
+}) {
+  const classContext = buildTeacherAgentClassContext(params.payload);
+  const workflowTargetChildId = pickTeacherAgentWorkflowTargetChildId(
+    classContext,
+    params.payload.workflow,
+    params.payload.targetChildId
+  );
+  const childContext = buildTeacherAgentChildContext(classContext, workflowTargetChildId);
+  const memoryContext =
+    params.payload.workflow !== "weekly-summary" && childContext
+      ? await buildMemoryContextForPrompt({
+          childId: childContext.child.id,
+          workflowType: "teacher-agent",
+          query: childContext.focusReasons.join(" "),
+          request: params.request,
+        })
+      : null;
+  const weeklyMemoryContexts =
+    params.payload.workflow === "weekly-summary"
+      ? await Promise.all(
+          (classContext.focusChildren.map((item) => item.childId).slice(0, 3).length > 0
+            ? classContext.focusChildren.map((item) => item.childId).slice(0, 3)
+            : params.payload.visibleChildren.map((item) => item.id).slice(0, 3)
+          ).map((childId) =>
+            buildMemoryContextForPrompt({
+              childId,
+              workflowType: "teacher-weekly-summary",
+              query: "weekly report focus child continuity",
+              request: params.request,
+            })
+          )
+        )
+      : [];
+
+  if (params.payload.workflow === "communication") {
+    if (!childContext) {
+      return NextResponse.json(
+        { error: "No visible child available for communication workflow" },
+        { status: 400 }
+      );
+    }
+
+    const aiResponse = await executeFollowUp(
+      buildTeacherCommunicationFollowUpPayloadWithMemory(childContext, memoryContext),
+      params.runtimeOptions
+    );
+    const baseResult = buildTeacherCommunicationResultWithMemory({
+      context: childContext,
+      response: aiResponse,
+      memoryContext,
+    });
+    const consultation = params.allowConsultation
+      ? await maybeRunHighRiskConsultation(
+          buildConsultationInputFromSnapshot({
+            snapshot: buildTeacherChildSuggestionSnapshotWithMemory(childContext, memoryContext),
+            latestFeedback: childContext.latestFeedback
+              ? (toFollowUpFeedbackLite(childContext.latestFeedback) ?? undefined)
+              : undefined,
+            focusReasons: childContext.focusReasons,
+            followUp: aiResponse,
+            source: "teacher",
+            memoryContext,
+          })
+        )
+      : null;
+
+    return consultation
+      ? {
+          ...baseResult,
+          consultation,
+          consultationMode: true,
+          interventionCard: attachConsultationToInterventionCard(baseResult.interventionCard, consultation),
+        }
+      : baseResult;
+  }
+
+  if (params.payload.workflow === "follow-up") {
+    if (!childContext) {
+      return NextResponse.json(
+        { error: "No visible child available for follow-up workflow" },
+        { status: 400 }
+      );
+    }
+
+    const aiSuggestion = await executeSuggestion(
+      { snapshot: buildTeacherChildSuggestionSnapshotWithMemory(childContext, memoryContext) },
+      params.runtimeOptions
+    );
+    const baseResult = buildTeacherFollowUpResultWithMemory({
+      classContext,
+      childContext,
+      suggestion: aiSuggestion,
+      memoryContext,
+    });
+    const consultation = params.allowConsultation
+      ? await maybeRunHighRiskConsultation(
+          buildConsultationInputFromSnapshot({
+            snapshot: buildTeacherChildSuggestionSnapshotWithMemory(childContext, memoryContext),
+            latestFeedback: childContext.latestFeedback
+              ? (toFollowUpFeedbackLite(childContext.latestFeedback) ?? undefined)
+              : undefined,
+            focusReasons: childContext.focusReasons,
+            suggestion: aiSuggestion,
+            source: "teacher",
+            memoryContext,
+          })
+        )
+      : null;
+
+    return consultation
+      ? {
+          ...baseResult,
+          consultation,
+          consultationMode: true,
+          interventionCard: attachConsultationToInterventionCard(baseResult.interventionCard, consultation),
+        }
+      : baseResult;
+  }
+
+  const aiReport = await executeWeeklyReport(
+    {
+      role: "teacher",
+      snapshot: buildTeacherWeeklyReportSnapshotWithMemory(classContext, weeklyMemoryContexts),
+    },
+    params.runtimeOptions
+  );
+
+  return buildTeacherWeeklySummaryResultWithMemory({
+    classContext,
+    report: aiReport,
+    memoryContexts: weeklyMemoryContexts,
+  });
+}
+
+function isNextResponse(value: unknown): value is NextResponse {
+  return value instanceof NextResponse;
 }
 
 export async function POST(request: Request) {
   const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
   if (authError) return authError;
 
-  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/teacher/run");
-  if (brainForward.response) return brainForward.response;
-
-  let payload: TeacherAgentRequestPayload | null = null;
-
+  let payload: TeacherAgentRequestPayload;
   try {
     payload = (await request.json()) as TeacherAgentRequestPayload;
   } catch (error) {
@@ -78,130 +375,86 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid teacher-agent payload" }, { status: 400 });
   }
 
-  const classContext = buildTeacherAgentClassContext(payload);
-  const childContext = buildTeacherAgentChildContext(classContext, payload.targetChildId);
-  const runtimeOptions = getAiRuntimeOptions(request);
-  const memoryContext =
-    payload.workflow !== "weekly-summary" && childContext
-      ? await buildMemoryContextForPrompt({
-        childId: childContext.child.id,
-        workflowType: "teacher-agent",
-        query: childContext.focusReasons.join(" "),
-        request,
-      })
-      : null;
-  const weeklyMemoryContexts =
-    payload.workflow === "weekly-summary"
-      ? await Promise.all(
-          (classContext.focusChildren.map((item) => item.childId).slice(0, 3).length > 0
-            ? classContext.focusChildren.map((item) => item.childId).slice(0, 3)
-            : payload.visibleChildren.map((item) => item.id).slice(0, 3)
-          ).map((childId) =>
-            buildMemoryContextForPrompt({
-              childId,
-              workflowType: "teacher-weekly-summary",
-              query: "weekly report focus child continuity",
-              request,
-            })
-          )
-      )
-      : [];
+  const brainRequest = new Request(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify(payload),
+  });
+  const brainForward = await forwardBrainRequest(brainRequest, TEACHER_AGENT_TARGET_PATH, {
+    timeoutMs: TEACHER_AGENT_BRAIN_TIMEOUT_MS,
+  });
+  const brainResult = await maybeReadBrainResult(brainForward, payload);
+
+  if (brainResult?.response) return brainResult.response;
+
+  const fallbackReason = buildFallbackReason(
+    brainResult?.fallbackReason ?? brainForward.fallbackReason,
+    "brain-proxy-unavailable"
+  );
+  const baseRuntimeOptions = getAiRuntimeOptions(request);
+  const localRuntimeOptions: AiRuntimeOptions = {
+    ...baseRuntimeOptions,
+    forceFallback: baseRuntimeOptions.forceFallback || Boolean(fallbackReason),
+    fallbackReason,
+  };
 
   try {
-  if (payload.workflow === "communication") {
-    if (!childContext) {
-      return NextResponse.json({ error: "No visible child available for communication workflow" }, { status: 400 });
-    }
-
-    const aiResponse = await executeFollowUp(
-      buildTeacherCommunicationFollowUpPayloadWithMemory(childContext, memoryContext),
-      runtimeOptions
-    );
-    const baseResult = buildTeacherCommunicationResultWithMemory({
-      context: childContext,
-      response: aiResponse,
-      memoryContext,
+    const result = await runLocalTeacherAgent({
+      payload,
+      runtimeOptions: localRuntimeOptions,
+      allowConsultation: !localRuntimeOptions.forceFallback && !localRuntimeOptions.forceMock,
+      request,
     });
-    const consultation = await maybeRunHighRiskConsultation(
-      buildConsultationInputFromSnapshot({
-        snapshot: buildTeacherChildSuggestionSnapshotWithMemory(childContext, memoryContext),
-        latestFeedback: childContext.latestFeedback
-          ? (toFollowUpFeedbackLite(childContext.latestFeedback) ?? undefined)
-          : undefined,
-        focusReasons: childContext.focusReasons,
-        followUp: aiResponse,
-        source: "teacher",
-        memoryContext,
-      })
+    if (isNextResponse(result)) return result;
+
+    return NextResponse.json(
+      enrichTeacherAgentResult({
+        result,
+        payload,
+        transport: "next-json-fallback",
+        fallbackReason,
+      }),
+      {
+        status: 200,
+        headers: buildTransportHeaders({
+          transport: "next-json-fallback",
+          upstreamHost: brainForward.upstreamHost,
+          fallbackReason,
+        }),
+      }
     );
-    const result = consultation
-      ? {
-          ...baseResult,
-          consultation,
-          consultationMode: true,
-          interventionCard: attachConsultationToInterventionCard(baseResult.interventionCard, consultation),
-        }
-      : baseResult;
-
-    return NextResponse.json(result, { status: 200 });
-  }
-
-  if (payload.workflow === "follow-up") {
-    if (!childContext) {
-      return NextResponse.json({ error: "No visible child available for follow-up workflow" }, { status: 400 });
-    }
-
-    const aiSuggestion = await executeSuggestion(
-      { snapshot: buildTeacherChildSuggestionSnapshotWithMemory(childContext, memoryContext) },
-      runtimeOptions
-    );
-    const baseResult = buildTeacherFollowUpResultWithMemory({
-      classContext,
-      childContext,
-      suggestion: aiSuggestion,
-      memoryContext,
-    });
-    const consultation = await maybeRunHighRiskConsultation(
-      buildConsultationInputFromSnapshot({
-        snapshot: buildTeacherChildSuggestionSnapshotWithMemory(childContext, memoryContext),
-        latestFeedback: childContext.latestFeedback
-          ? (toFollowUpFeedbackLite(childContext.latestFeedback) ?? undefined)
-          : undefined,
-        focusReasons: childContext.focusReasons,
-        suggestion: aiSuggestion,
-        source: "teacher",
-        memoryContext,
-      })
-    );
-    const result = consultation
-      ? {
-          ...baseResult,
-          consultation,
-          consultationMode: true,
-          interventionCard: attachConsultationToInterventionCard(baseResult.interventionCard, consultation),
-        }
-      : baseResult;
-
-    return NextResponse.json(result, { status: 200 });
-  }
-
-  const aiReport = await executeWeeklyReport(
-    {
-      role: "teacher",
-      snapshot: buildTeacherWeeklyReportSnapshotWithMemory(classContext, weeklyMemoryContexts),
-    },
-    runtimeOptions
-  );
-  const result = buildTeacherWeeklySummaryResultWithMemory({
-    classContext,
-    report: aiReport,
-    memoryContexts: weeklyMemoryContexts,
-  });
-
-  return NextResponse.json(result, { status: 200 });
   } catch (error) {
-    const response = providerErrorResponse(error);
-    if (response) return response;
-    throw error;
+    const providerFallbackReason = fallbackReasonFromProviderError(error);
+    if (!providerFallbackReason) throw error;
+
+    const providerRuntimeOptions: AiRuntimeOptions = {
+      ...baseRuntimeOptions,
+      forceFallback: true,
+      fallbackReason: providerFallbackReason,
+    };
+    const result = await runLocalTeacherAgent({
+      payload,
+      runtimeOptions: providerRuntimeOptions,
+      allowConsultation: false,
+      request,
+    });
+    if (isNextResponse(result)) return result;
+
+    return NextResponse.json(
+      enrichTeacherAgentResult({
+        result,
+        payload,
+        transport: "next-json-fallback",
+        fallbackReason: providerFallbackReason,
+      }),
+      {
+        status: 200,
+        headers: buildTransportHeaders({
+          transport: "next-json-fallback",
+          upstreamHost: brainForward.upstreamHost,
+          fallbackReason: providerFallbackReason,
+        }),
+      }
+    );
   }
 }

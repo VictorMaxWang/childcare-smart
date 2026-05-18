@@ -1,13 +1,16 @@
 import { expect, test } from "@playwright/test";
 
+import { DEFENSE_CHILD_PROFILES, DEFENSE_CLASS } from "@/lib/demo-data/defense-scenario";
 import { demoContext, expectFailure, expectOk } from "./e11-helpers";
 
 type DemoChild = {
   id: string;
+  name?: string;
   classId?: string;
   className?: string;
   teacherId?: string;
   parentId?: string;
+  parentUserId?: string;
 };
 
 test("D-SEED login page starts empty and demo account buttons still work", async ({ page, context }) => {
@@ -41,6 +44,13 @@ test("D-SEED child ownership counts are consistent across director and teachers"
   expect(liChildren.every((child) => child.classId === "class-sunrise" && child.teacherId === "u-teacher")).toBe(true);
   expect(zhouChildren.every((child) => child.classId === "class-morning" && child.teacherId === "u-teacher2")).toBe(true);
   expect(directorChildren.every((child) => child.classId && child.className && child.teacherId && child.parentId)).toBe(true);
+
+  for (const [childId, profile] of Object.entries(DEFENSE_CHILD_PROFILES)) {
+    const child = directorChildren.find((item) => item.id === childId);
+    expect(child?.name).toBe(profile.name);
+    expect(child?.classId).toBe(DEFENSE_CLASS.classId);
+    expect(child?.teacherId).toBe(DEFENSE_CLASS.teacherId);
+  }
 });
 
 test("D-SEED records, materials, assignments and weekly reports are not empty", async ({}, testInfo) => {
@@ -85,6 +95,40 @@ test("D-SEED records, materials, assignments and weekly reports are not empty", 
   expect(materials.every((material) => material.parseResult?.mediaRefs?.[0])).toBe(true);
 });
 
+test("D-SEED defense fixture exposes risk, weekly summary, parent action and feedback data", async ({ page, context }, testInfo) => {
+  await context.clearCookies();
+  const director = await demoContext(testInfo, "u-admin");
+  const parent = await demoContext(testInfo, "u-parent");
+
+  const consultations = await expectOk<Array<{ childId: string; shouldEscalateToAdmin: boolean; riskLevel: string }>>(
+    await director.get("/api/consultations")
+  );
+  const priorityItems = consultations.filter((item) => item.shouldEscalateToAdmin);
+  expect(priorityItems.length).toBeGreaterThanOrEqual(3);
+  expect(priorityItems.some((item) => item.childId === "c-1")).toBe(true);
+  expect(priorityItems.some((item) => item.childId === "c-2")).toBe(true);
+  expect(priorityItems.some((item) => item.childId === "c-3")).toBe(true);
+
+  const feedback = await expectOk<Array<{ childId: string; content: string }>>(
+    await parent.get("/api/feedback?childId=c-1")
+  );
+  expect(feedback.some((item) => item.content.includes("孩子能复述故事"))).toBe(true);
+
+  const loginResponse = await page.request.post("/api/auth/demo-login", { data: { accountId: "u-parent" } });
+  expect(loginResponse.ok()).toBeTruthy();
+
+  await page.goto("/parent?child=c-1");
+  await expect(page.locator("body")).toContainText("林小雨");
+  await expect(page.locator("body")).toContainText(/今晚|小步尝试|成长故事/);
+
+  await page.goto("/parent/storybook?child=c-1");
+  await expect(page.getByText("林小雨的一小步勇敢").first()).toBeVisible();
+
+  await page.goto("/parent/agent?child=c-1");
+  await expect(page.locator("body")).toContainText("林小雨");
+  await expect(page.locator("body")).toContainText(/反馈|小步尝试|我害怕/);
+});
+
 test("D-SEED parent storybooks are scoped and refreshable", async ({ page, context }, testInfo) => {
   await context.clearCookies();
   const parent = await demoContext(testInfo, "u-parent");
@@ -114,11 +158,12 @@ test("D-SEED parent storybooks are scoped and refreshable", async ({ page, conte
   const loginResponse = await page.request.post("/api/auth/demo-login", { data: { accountId: "u-parent" } });
   expect(loginResponse.ok()).toBeTruthy();
   await page.goto("/parent/storybook?child=c-1");
-  await expect(page.locator('img[src*="gpt-image2"], img[src*="demo-storybook-placeholder"]').first()).toBeVisible();
-  expect(await page.locator('img[src*="gpt-image2"]').count()).toBeGreaterThan(0);
+  await expect(page.getByText("成长绘本 / 成长故事").first()).toBeVisible();
+  await expect(page.locator('img[src*="demo-media"]').first()).toBeVisible();
+  expect(await page.locator('img[src*="demo-media"]').count()).toBeGreaterThan(0);
   await page.reload();
-  await expect(page.locator('img[src*="gpt-image2"], img[src*="demo-storybook-placeholder"]').first()).toBeVisible();
-  expect(await page.locator('img[src*="gpt-image2"]').count()).toBeGreaterThan(0);
+  await expect(page.locator('img[src*="demo-media"]').first()).toBeVisible();
+  expect(await page.locator('img[src*="demo-media"]').count()).toBeGreaterThan(0);
   await page.goto("/parent/storybook?child=c-3");
   await expect(page.locator("body")).not.toHaveText("");
   await page.waitForTimeout(300);

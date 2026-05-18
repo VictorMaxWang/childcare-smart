@@ -8,6 +8,7 @@ import type {
 import type { GuardianFeedback } from "@/lib/feedback/types";
 import type { InterventionCard } from "@/lib/agent/intervention-card";
 import type { AppStateSnapshot, DemoHealthMaterial } from "@/lib/persistence/snapshot";
+import type { BehaviorCategory, FoodCategory } from "@/lib/store";
 import type { CanonicalTask } from "@/lib/tasks/types";
 import {
   DEMO_MEDIA_FALLBACKS,
@@ -19,6 +20,7 @@ import {
   LIN_XIAOYU_FIXED_STORYBOOK_PAGES,
   buildLinXiaoyuFixedStorybookResponse,
 } from "@/lib/storybooks/lin-xiaoyu-bravery";
+import { applyDefenseFixture } from "./defense-fixture";
 
 export type DemoSeedSnapshot = AppStateSnapshot & {
   teachers: ApiTeacher[];
@@ -48,6 +50,16 @@ type DemoTask = CanonicalTask & {
   feedbackId?: string;
   riskItemId?: string;
   createdBy: string;
+};
+
+type DemoGrowthOverride = {
+  category: BehaviorCategory;
+  tags: string[];
+  selectedIndicators: string[];
+  description: string;
+  needsAttention: boolean;
+  followUpAction: string;
+  reviewStatus: "待复查" | "已完成";
 };
 
 const INSTITUTION_ID = "inst-1";
@@ -105,14 +117,14 @@ const CHILD_NAMES = [
   ["张晨曦", "晨晨", "男"],
   ["陈乐然", "乐乐", "女"],
   ["林小明", "小明", "男"],
-  ["赵安安", "安安", "女"],
+  ["陈安安", "安安", "女"],
   ["吴一诺", "一诺", "男"],
   ["沈星禾", "星星", "女"],
   ["何知远", "远远", "男"],
   ["许沐晴", "沐沐", "女"],
   ["周言蹊", "言言", "男"],
   ["梁若溪", "溪溪", "女"],
-  ["高予辰", "辰辰", "男"],
+  ["高远舟", "舟舟", "男"],
   ["宋语棠", "棠棠", "女"],
   ["唐嘉树", "嘉嘉", "男"],
   ["韩可心", "可可", "女"],
@@ -290,7 +302,13 @@ function buildChildren(today: string): DemoChild[] {
       enrollmentDate: shiftDate(today, -120 - index),
       status: "active",
       specialNotes:
-        index % 9 === 0
+        childId === "c-1"
+          ? "演示关注：走廊活动听到响声后容易害怕、退缩，适合用勇敢表达和牵手走一步的小步尝试。"
+          : childId === "c-12"
+            ? "演示关注：午睡前焦虑，握水杯但主动饮水偏少，离园前需要复查精神状态和饮水量。"
+            : childId === "c-5"
+              ? "演示关注：午餐进食偏少，主食少量、蔬菜剩余较多，需要家园同步饮食观察。"
+              : index % 9 === 0
           ? "演示关注：午睡前需要更稳定的过渡陪伴。"
           : index % 7 === 0
             ? "演示关注：进餐时留意蔬菜接受度。"
@@ -324,20 +342,30 @@ function buildHealth(children: DemoChild[], today: string): AppStateSnapshot["he
   return children.flatMap((child, childIndex) =>
     Array.from({ length: 7 }, (_, dayIndex) => {
       const date = shiftDate(today, -dayIndex);
-      const isAbnormal = (childIndex + dayIndex) % 17 === 0 || (childIndex % 13 === 0 && dayIndex === 1);
+      const isLinToday = child.id === "c-1" && dayIndex === 0;
+      const isGaoToday = child.id === "c-12" && dayIndex === 0;
+      const isAbnormal =
+        isLinToday ||
+        isGaoToday ||
+        (childIndex + dayIndex) % 17 === 0 ||
+        (childIndex % 13 === 0 && dayIndex === 1);
       return {
         id: `health-${child.id}-${date}`,
         childId: child.id,
         date,
         temperature: Number((36.3 + ((childIndex + dayIndex) % 8) * 0.1 + (isAbnormal ? 0.8 : 0)).toFixed(1)),
-        mood: isAbnormal ? "稍显疲惫" : dayIndex % 2 === 0 ? "愉快" : "平稳",
-        handMouthEye: isAbnormal ? "异常" : "正常",
+        mood: isGaoToday ? "午睡前焦虑" : isLinToday ? "走廊活动退缩" : isAbnormal ? "稍显疲惫" : dayIndex % 2 === 0 ? "愉快" : "平稳",
+        handMouthEye: isAbnormal && !isLinToday && !isGaoToday ? "异常" : "正常",
         isAbnormal,
         classId: child.classId,
         teacherId: child.teacherId,
         parentId: child.parentId,
         remark: isAbnormal
-          ? "演示轻微异常：已提醒补水并持续观察。"
+          ? isGaoToday
+            ? "午睡前焦虑，握水杯但主动饮水偏少，离园前需复查精神状态、午睡入睡和累计饮水量。"
+            : isLinToday
+              ? "走廊活动听到推车响声后害怕、退缩，老师用勇敢表达和牵手走一步进行支持。"
+              : "演示轻微异常：已提醒补水并持续观察。"
           : "晨检状态正常，精神和入园情绪稳定。",
         checkedBy: child.teacherId === "u-teacher" ? "李老师" : "周老师",
         checkedByRole: "教师",
@@ -351,15 +379,24 @@ function buildMeals(children: DemoChild[], today: string): AppStateSnapshot["mea
     Array.from({ length: 7 }, (_, dayIndex) => {
       const date = shiftDate(today, -dayIndex);
       return MEALS.map((mealTemplate, mealIndex) => {
-        const lowIntake = (childIndex + dayIndex + mealIndex) % 19 === 0;
+        const isChenLunchToday = child.id === "c-5" && dayIndex === 0 && mealTemplate.meal === "午餐";
+        const isGaoHydrationFocus = child.id === "c-12" && dayIndex === 0;
+        const lowIntake = isChenLunchToday || (childIndex + dayIndex + mealIndex) % 19 === 0;
         const allergyRisk = child.allergies.length > 0 && mealIndex === 2 && dayIndex === 0;
         const mealMediaRef = demoMealMediaRef(child.id, date, mealTemplate.meal);
+        const foodRows: ReadonlyArray<readonly [string, FoodCategory, string]> = isChenLunchToday
+          ? [
+              ["软米饭", "主食", "少量"],
+              ["番茄牛肉末", "蛋白", "2 勺"],
+              ["清炒时蔬", "蔬果", "剩余较多"],
+            ]
+          : mealTemplate.foods;
         return {
           id: `meal-${child.id}-${date}-${mealIndex + 1}`,
           childId: child.id,
           date,
           meal: mealTemplate.meal,
-          foods: mealTemplate.foods.map(([name, category, amount], foodIndex) => ({
+          foods: foodRows.map(([name, category, amount], foodIndex) => ({
             id: `food-${child.id}-${date}-${mealIndex + 1}-${foodIndex + 1}`,
             name,
             category,
@@ -373,7 +410,7 @@ function buildMeals(children: DemoChild[], today: string): AppStateSnapshot["mea
           intakeLevel: lowIntake ? "少量" : (mealIndex + childIndex) % 5 === 0 ? "适中" : "充足",
           preference: lowIntake ? "拒食" : (childIndex + mealIndex) % 7 === 0 ? "偏好" : "正常",
           allergyReaction: allergyRisk ? "已避开过敏风险食材，未见异常反应。" : undefined,
-          waterMl: 90 + mealIndex * 30 + (childIndex % 4) * 10,
+          waterMl: isGaoHydrationFocus ? 70 + mealIndex * 12 : isChenLunchToday ? 95 : 90 + mealIndex * 30 + (childIndex % 4) * 10,
           nutritionScore: lowIntake ? 78 : 86 + ((childIndex + mealIndex) % 10),
           recordedBy: child.teacherId === "u-teacher" ? "李老师" : "周老师",
           recordedByRole: "教师",
@@ -389,23 +426,59 @@ function buildGrowth(children: DemoChild[], today: string): AppStateSnapshot["gr
       const date = shiftDate(today, -(themeIndex + (childIndex % 3)));
       const recordId = `growth-${child.id}-${themeIndex + 1}`;
       const growthMediaRef = demoGrowthMediaRef(child.id, recordId);
+      const demoOverride: DemoGrowthOverride | null =
+        child.id === "c-1" && themeIndex === 4
+          ? {
+              category: "情绪表现",
+              tags: ["走廊活动", "勇敢表达", "小步尝试"],
+              selectedIndicators: ["走廊活动勇敢表达"],
+              description:
+                "林小雨在走廊活动听到推车声后停在门口退缩，老师引导她说“我有点害怕”，再牵手向前走一小步。",
+              needsAttention: true,
+              followUpAction: "明天在走廊活动前先预告声音来源，引导说出“我想先牵手走一步”。",
+              reviewStatus: "待复查" as const,
+            }
+          : child.id === "c-12" && themeIndex === 4
+            ? {
+                category: "睡眠情况",
+                tags: ["午睡前焦虑", "饮水偏少", "离园前复查"],
+                selectedIndicators: ["午睡前安静过渡"],
+                description:
+                  "高远舟午睡前反复确认老师是否在旁边，握水杯但主动饮水少，需午后补水记录并离园前复查。",
+                needsAttention: true,
+                followUpAction: "午睡前安排安静过渡，午后记录补水，16:30 前复查精神状态、入睡情况和累计饮水量。",
+                reviewStatus: "待复查" as const,
+              }
+            : child.id === "c-5" && themeIndex === 2
+              ? {
+                  category: "独立进食",
+                  tags: ["午餐进食偏少", "家园同步", "饮食观察"],
+                  selectedIndicators: ["小份主食和一口蔬菜目标"],
+                  description:
+                    "陈安安午餐主食少量、蔬菜剩余较多，需要离园时请家长同步晚餐食量、饮水和次日入园状态。",
+                  needsAttention: true,
+                  followUpAction: "明天午餐设置小份主食和一口蔬菜目标，48 小时内复查进食变化。",
+                  reviewStatus: "待复查" as const,
+                }
+              : null;
       return {
         id: recordId,
         childId: child.id,
         createdAt: at(date, 10 + (themeIndex % 5), 12 + (childIndex % 12)),
         recorder: child.teacherId === "u-teacher" ? "李老师" : "周老师",
         recorderRole: "教师",
-        category: theme.category,
-        tags: [...theme.tags],
-        selectedIndicators: [theme.title],
-        description: `${child.nickname ?? child.name}${theme.description}`,
-        needsAttention: (childIndex + themeIndex) % 11 === 0,
+        category: demoOverride?.category ?? theme.category,
+        tags: demoOverride?.tags ?? [...theme.tags],
+        selectedIndicators: demoOverride?.selectedIndicators ?? [theme.title],
+        description: demoOverride?.description ?? `${child.nickname ?? child.name}${theme.description}`,
+        needsAttention: demoOverride?.needsAttention ?? (childIndex + themeIndex) % 11 === 0,
         followUpAction:
-          (childIndex + themeIndex) % 11 === 0
+          demoOverride?.followUpAction ??
+          ((childIndex + themeIndex) % 11 === 0
             ? "后续 48 小时继续观察同类场景，并与家长同步轻量配合动作。"
-            : undefined,
+            : undefined),
         reviewDate: shiftDate(date, 2),
-        reviewStatus: (childIndex + themeIndex) % 11 === 0 ? "待复查" : "已完成",
+        reviewStatus: demoOverride?.reviewStatus ?? ((childIndex + themeIndex) % 11 === 0 ? "待复查" : "已完成"),
         mediaUrls: [growthMediaRef],
         mediaRefs: [growthMediaRef],
         classId: child.classId,
@@ -742,7 +815,7 @@ function buildMessages(children: DemoChild[], today: string): {
       const conversationId = `conv-${child.id}-home-school`;
       const messageDate = shiftDate(today, -(30 + index));
       const createdAt = at(messageDate, 8 + index, 5);
-      const hasTeacherReply = index !== 1;
+      const hasTeacherReply = index !== 1 && child.id !== "c-5";
       conversations.push({
         conversationId,
         childId: child.id,
@@ -763,7 +836,12 @@ function buildMessages(children: DemoChild[], today: string): {
         senderName: child.parentId === PARENT_ID ? "林妈妈" : `演示家长${child.id.replace("c-", "").padStart(2, "0")}`,
         receiverRole: "teacher",
         targetRole: "teacher",
-        content: `${child.name} 今晚在家状态平稳，请老师明天继续留意午睡前情绪。`,
+        content:
+          child.id === "c-5"
+            ? "安安今天午餐吃得少吗？我们今晚会同步晚餐食量和饮水，请老师明天继续留意。"
+            : child.id === "c-12"
+              ? "远舟最近午睡前有点紧张，今晚我们会看饮水和入睡情况，请老师离园前帮忙复查。"
+              : `${child.name} 今晚在家状态平稳，请老师明天继续留意午睡前情绪。`,
         createdAt,
         readBy: [klass.teacherId],
         status: "sent",
@@ -1093,7 +1171,7 @@ export function createDemoSeedSnapshot(now = new Date().toISOString()): DemoSeed
   const attachments = buildAttachments(children, today);
   const updatedAt = at(today, 8, 0);
 
-  return {
+  const snapshot: DemoSeedSnapshot = {
     demoPersistenceSchemaVersion: "d01-v1",
     children,
     attendance,
@@ -1138,4 +1216,6 @@ export function createDemoSeedSnapshot(now = new Date().toISOString()): DemoSeed
       } satisfies ApiAuditLog,
     ],
   };
+
+  return applyDefenseFixture(snapshot, now);
 }

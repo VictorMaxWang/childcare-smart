@@ -47,6 +47,7 @@ function createTeacherContexts(birthDate: string) {
       },
     ],
     healthCheckRecords: [],
+    mealRecords: [],
     growthRecords: [],
     guardianFeedbacks: [],
   });
