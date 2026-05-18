@@ -723,6 +723,12 @@ body {
   animation: voice-assistant-pulse 2.2s ease-out infinite;
 }
 
+.voice-orb-purple-button:hover .voice-assistant-wave,
+.voice-orb-purple-button:focus-visible .voice-assistant-wave,
+.voice-orb-purple-button[aria-expanded="true"] .voice-assistant-wave {
+  animation: voice-assistant-pulse 2.2s ease-out infinite;
+}
+
 .voice-assistant-wave-delay-0 {
   animation-delay: 0s;
 }
