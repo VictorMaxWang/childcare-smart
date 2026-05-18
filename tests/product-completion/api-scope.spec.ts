@@ -24,7 +24,7 @@ test.describe("E11 API scope regression", () => {
     try {
       await expectFailure(await request.get("/api/children"), 401, "unauthorized");
       await expectFailure(await parent.get(`/api/children/${CHILD_FORBIDDEN}`), 403, "forbidden_scope");
-      await expectFailure(await teacher2.get(`/api/records?type=health&childId=${CHILD_TEACHER}`), 403, "forbidden_scope");
+      await expectFailure(await teacher.get(`/api/records?type=health&childId=${CHILD_TEACHER}`), 403, "forbidden_scope");
 
       const report = await createWeeklyReport(director, `${token} weekly`);
       await expectFailure(await parent.get(`/api/weekly-reports/${report.reportId}`), 403, "forbidden_scope");
@@ -57,14 +57,14 @@ test.describe("E11 API scope regression", () => {
         201
       );
       expect(attachment.childId).toBe(CHILD_PARENT);
-      await expectFailure(await teacher2.get(`/api/attachments/${attachment.attachmentId}`), 403, "forbidden_scope");
-      await expectFailure(await teacher2.get(`/api/attachments/${attachment.attachmentId}/content`), 403, "forbidden_scope");
+      await expectFailure(await teacher.get(`/api/attachments/${attachment.attachmentId}`), 403, "forbidden_scope");
+      await expectFailure(await teacher.get(`/api/attachments/${attachment.attachmentId}/content`), 403, "forbidden_scope");
 
       const assignment = await expectOk<{ assignmentId: string; status: string }>(
         await director.post("/api/assignments", {
           data: {
             childId: CHILD_TEACHER,
-            teacherId: "u-teacher",
+            teacherId: "u-teacher2",
             title: `${token} assignment`,
             description: `${token} assignment description`,
           },
@@ -74,7 +74,7 @@ test.describe("E11 API scope regression", () => {
       expect(assignment.status).toBe("pending");
       await expectFailure(await parent.get("/api/assignments"), 403, "forbidden_scope");
       await expectFailure(
-        await teacher2.patch(`/api/assignments/${assignment.assignmentId}`, {
+        await teacher.patch(`/api/assignments/${assignment.assignmentId}`, {
           data: { status: "resolved", completionSummary: `${token} forbidden` },
         }),
         403,
@@ -82,7 +82,7 @@ test.describe("E11 API scope regression", () => {
       );
 
       const updated = await expectOk<{ status: string }>(
-        await teacher.patch(`/api/assignments/${assignment.assignmentId}`, {
+        await teacher2.patch(`/api/assignments/${assignment.assignmentId}`, {
           data: { status: "resolved", completionSummary: `${token} completed` },
         })
       );

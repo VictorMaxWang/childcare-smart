@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { useSearchParams } from "next/navigation";
 import {
   ArrowRight,
+  AlertCircle,
   BellRing,
   Bot,
   BrainCircuit,
@@ -16,6 +17,7 @@ import {
   FileText,
   Filter,
   Lightbulb,
+  Loader2,
   MessageSquareText,
   Mic,
   ScanSearch,
@@ -52,6 +54,7 @@ import {
   buildTeacherAgentResultSummary,
   buildTeacherWeeklyReportSnapshot,
   pickTeacherAgentDefaultChildId,
+  pickTeacherAgentWorkflowTargetChildId,
   type TeacherAgentMode,
   type TeacherAgentRequestPayload,
   type TeacherAgentResult,
@@ -102,18 +105,61 @@ const ACTION_LABELS: Record<TeacherAgentWorkflowType, string> = {
 };
 
 const TEACHER_ASSISTANT_PROMPTS = [
-  "晨检建议",
-  "饮食建议",
-  "成长记录润色",
-  "回复家长建议",
-  "健康材料解析入口",
-  "高风险会诊建议",
-  "班级待办总结",
+  "班级待办总结 / 本周观察总结",
+  "生成今日跟进行动",
+  "生成家长沟通建议",
 ];
+
+const TEACHER_PROMPT_WORKFLOWS: Record<string, TeacherAgentWorkflowType> = {
+  "班级待办总结 / 本周观察总结": "weekly-summary",
+  "生成今日跟进行动": "follow-up",
+  "生成家长沟通建议": "communication",
+};
 
 type HistoryItem = TeacherAgentHistoryListItem & {
   workflow: TeacherAgentWorkflowType;
 };
+
+type TeacherAgentRequestStatus = "idle" | "pending" | "success" | "error";
+
+type TeacherAgentRunDiagnostics = {
+  provider: string;
+  workflow: TeacherAgentWorkflowType | null;
+  transport: string;
+  fallbackReason: string | null;
+  lastRequestStatus: TeacherAgentRequestStatus;
+  lastError: string | null;
+};
+
+const INITIAL_AI_RUN_STATUS: TeacherAgentRunDiagnostics = {
+  provider: "unknown",
+  workflow: null,
+  transport: "none",
+  fallbackReason: null,
+  lastRequestStatus: "idle",
+  lastError: null,
+};
+
+const TEACHER_AGENT_TRANSPORT_HEADER = "x-smartchildcare-transport";
+const TEACHER_AGENT_FALLBACK_REASON_HEADER = "x-smartchildcare-fallback-reason";
+
+function resolveTeacherAgentProvider(result?: TeacherAgentResult | null) {
+  if (!result) return "unknown";
+  if (result.provider) return result.provider;
+  if (result.source === "ai") return "vivo";
+  if (result.source === "mock") return "mock";
+  return "local-rule-fallback";
+}
+
+function hasRenderableTeacherAgentResult(value: TeacherAgentResult) {
+  return (
+    typeof value.summary === "string" &&
+    value.summary.trim().length > 0 &&
+    typeof value.targetLabel === "string" &&
+    value.targetLabel.trim().length > 0 &&
+    Array.isArray(value.actionItems)
+  );
+}
 
 type TeacherVoiceSourceDraftItem = {
   draft: MobileDraft;
@@ -170,6 +216,7 @@ export default function TeacherAgentPage() {
     visibleChildren,
     presentChildren,
     healthCheckRecords,
+    mealRecords,
     growthRecords,
     guardianFeedbacks,
     messages,
@@ -189,12 +236,17 @@ export default function TeacherAgentPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [assistantQuestion, setAssistantQuestion] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [pendingWorkflow, setPendingWorkflow] = useState<TeacherAgentWorkflowType | null>(null);
+  const [aiRunStatus, setAiRunStatus] = useState<TeacherAgentRunDiagnostics>(INITIAL_AI_RUN_STATUS);
   const [, startTransition] = useTransition();
+  const isLoading = pendingWorkflow !== null;
+  const showAiDiagnosticStatus =
+    process.env.NODE_ENV === "development" || currentUser.accountKind === "demo";
   const preloadHandledRef = useRef<string | null>(null);
   const queryChildHandledRef = useRef<string | null>(null);
   const queryDraftHandledRef = useRef<string | null>(null);
   const sourceDraftChildHandledRef = useRef<string | null>(null);
+  const manualSelectedChildRef = useRef(false);
   const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
   const [selectedSourceDraftId, setSelectedSourceDraftId] = useState<string | null>(
     null
@@ -247,10 +299,11 @@ export default function TeacherAgentPage() {
         visibleChildren,
         presentChildren,
         healthCheckRecords,
+        mealRecords,
         growthRecords,
         guardianFeedbacks,
       }),
-    [currentUser.className, currentUser.institutionId, currentUser.name, currentUser.role, guardianFeedbacks, growthRecords, healthCheckRecords, presentChildren, visibleChildren]
+    [currentUser.className, currentUser.institutionId, currentUser.name, currentUser.role, guardianFeedbacks, growthRecords, healthCheckRecords, mealRecords, presentChildren, visibleChildren]
   );
   const defaultChildId = useMemo(() => pickTeacherAgentDefaultChildId(classContext) ?? "", [classContext]);
   const availableChildIds = useMemo(
@@ -710,6 +763,7 @@ export default function TeacherAgentPage() {
 
   const handleSelectChild = useCallback(
     (nextChildId: string) => {
+      manualSelectedChildRef.current = true;
       setSelectedChildId(nextChildId);
       setSelectedSourceDraftId((current) => {
         if (!current) return null;
@@ -726,27 +780,53 @@ export default function TeacherAgentPage() {
     (draft: MobileDraft) => {
       setSelectedSourceDraftId(draft.draftId);
       if (draft.childId && availableChildIds.has(draft.childId)) {
+        manualSelectedChildRef.current = true;
         setSelectedChildId(draft.childId);
       }
     },
     [availableChildIds]
   );
 
-  const runWorkflow = useCallback(async (workflow: TeacherAgentWorkflowType) => {
+  const runWorkflow = useCallback(async (workflow: TeacherAgentWorkflowType, explicitTargetChildId?: string) => {
     const nextScope: TeacherAgentMode = workflow === "weekly-summary" ? "class" : "child";
+    const requestedChildId =
+      explicitTargetChildId && availableChildIds.has(explicitTargetChildId)
+        ? explicitTargetChildId
+        : manualSelectedChildRef.current && selectedChildId && availableChildIds.has(selectedChildId)
+        ? selectedChildId
+        : seededQueryChildId && availableChildIds.has(seededQueryChildId)
+          ? seededQueryChildId
+          : undefined;
     const targetChildId =
       nextScope === "child"
-        ? activeChildId
+        ? pickTeacherAgentWorkflowTargetChildId(classContext, workflow, requestedChildId)
         : undefined;
 
     if (nextScope === "child" && !targetChildId) {
-      setError("当前没有可用于教师 AI 助手的幼儿数据。");
+      const message = "当前没有可用于教师 AI 助手的幼儿数据。";
+      setError(message);
+      setAiRunStatus({
+        provider: resolveTeacherAgentProvider(currentResult),
+        workflow,
+        transport: "not-started",
+        fallbackReason: null,
+        lastRequestStatus: "error",
+        lastError: message,
+      });
       return;
     }
 
     setError(null);
     setScope(nextScope);
-    setIsLoading(true);
+    setPendingWorkflow(workflow);
+    setAiRunStatus({
+      provider: resolveTeacherAgentProvider(currentResult),
+      workflow,
+      transport: "fetch",
+      fallbackReason: null,
+      lastRequestStatus: "pending",
+      lastError: null,
+    });
 
     const payload: TeacherAgentRequestPayload = {
       workflow,
@@ -761,6 +841,7 @@ export default function TeacherAgentPage() {
       visibleChildren,
       presentChildren,
       healthCheckRecords,
+      mealRecords,
       growthRecords,
       guardianFeedbacks,
     };
@@ -770,9 +851,24 @@ export default function TeacherAgentPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(currentUser.accountKind === "demo" ? { "x-ai-force-fallback": "1" } : {}),
         },
         body: JSON.stringify(payload),
       });
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string; message?: string } | null;
+        const message = body?.error ?? body?.message ?? "教师 AI 助手生成结果失败。";
+        setAiRunStatus({
+          provider: resolveTeacherAgentProvider(currentResult),
+          workflow,
+          transport: response.headers.get(TEACHER_AGENT_TRANSPORT_HEADER) ?? "http-error",
+          fallbackReason: response.headers.get(TEACHER_AGENT_FALLBACK_REASON_HEADER),
+          lastRequestStatus: "error",
+          lastError: message,
+        });
+        throw new Error(message);
+      }
 
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -780,6 +876,17 @@ export default function TeacherAgentPage() {
       }
 
       const result = (await response.json()) as TeacherAgentResult;
+      if (!hasRenderableTeacherAgentResult(result)) {
+        throw new Error("教师 AI 助手返回结果缺少 summary、targetLabel 或 actionItems。");
+      }
+      setAiRunStatus({
+        provider: resolveTeacherAgentProvider(result),
+        workflow,
+        transport: response.headers.get(TEACHER_AGENT_TRANSPORT_HEADER) ?? result.transport ?? "next-json-fallback",
+        fallbackReason: response.headers.get(TEACHER_AGENT_FALLBACK_REASON_HEADER) ?? result.fallbackReason ?? null,
+        lastRequestStatus: "success",
+        lastError: null,
+      });
       const resultChildId = result.targetChildId ?? targetChildId;
 
       if (resultChildId && availableChildIds.has(resultChildId)) {
@@ -819,30 +926,62 @@ export default function TeacherAgentPage() {
         ]);
       });
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "教师 AI 助手生成结果失败。");
+      const message = requestError instanceof Error ? requestError.message : "教师 AI 助手生成结果失败。";
+      setError(message);
+      setAiRunStatus((current) => ({
+        ...current,
+        workflow,
+        lastRequestStatus: "error",
+        lastError: message,
+      }));
     } finally {
-      setIsLoading(false);
+      setPendingWorkflow(null);
     }
   }, [
+    currentResult,
+    currentUser.accountKind,
     currentUser.className,
     currentUser.institutionId,
     currentUser.name,
     currentUser.role,
-    activeChildId,
     availableChildIds,
+    classContext,
     guardianFeedbacks,
     growthRecords,
     healthCheckRecords,
+    mealRecords,
     presentChildren,
+    seededQueryChildId,
+    selectedChildId,
     teacherRoleDrafts,
     visibleChildren,
     markMobileDraftSyncStatus,
     upsertReminder,
   ]);
 
+  const childIdFromAssistantPrompt = useCallback(
+    (prompt: string) => {
+      const normalized = prompt.trim();
+      if (!normalized) return undefined;
+
+      return visibleChildren.find((child) => {
+        const names = [
+          child.name,
+          (child as { nickname?: string }).nickname,
+          (child as { displayName?: string }).displayName,
+        ].filter((name): name is string => Boolean(name));
+        return names.some((name) => normalized.includes(name));
+      })?.id;
+    },
+    [visibleChildren]
+  );
+
   const workflowFromAssistantPrompt = useCallback((prompt: string): TeacherAgentWorkflowType => {
-    if (/班级|待办|周|总结/u.test(prompt)) return "weekly-summary";
-    if (/回复|家长|沟通/u.test(prompt)) return "communication";
+    const mappedWorkflow = TEACHER_PROMPT_WORKFLOWS[prompt];
+    if (mappedWorkflow) return mappedWorkflow;
+    if (/班级|本周|待办|总结|weekly-summary/u.test(prompt)) return "weekly-summary";
+    if (/家长|沟通|回复|话术|同步|陈安安|午餐|communication/u.test(prompt)) return "communication";
+    if (/今日跟进|跟进行动|午睡|饮水|高远舟|离园复查|follow-up/u.test(prompt)) return "follow-up";
     return "follow-up";
   }, []);
 
@@ -857,17 +996,17 @@ export default function TeacherAgentPage() {
         window.location.href = "/teacher/high-risk-consultation";
         return;
       }
-      void runWorkflow(workflowFromAssistantPrompt(prompt));
+      void runWorkflow(workflowFromAssistantPrompt(prompt), childIdFromAssistantPrompt(prompt));
     },
-    [runWorkflow, workflowFromAssistantPrompt]
+    [childIdFromAssistantPrompt, runWorkflow, workflowFromAssistantPrompt]
   );
 
   const submitAssistantQuestion = useCallback(() => {
     const prompt = assistantQuestion.trim();
     if (!prompt || isLoading) return;
-    void runWorkflow(workflowFromAssistantPrompt(prompt));
+    void runWorkflow(workflowFromAssistantPrompt(prompt), childIdFromAssistantPrompt(prompt));
     setAssistantQuestion("");
-  }, [assistantQuestion, isLoading, runWorkflow, workflowFromAssistantPrompt]);
+  }, [assistantQuestion, childIdFromAssistantPrompt, isLoading, runWorkflow, workflowFromAssistantPrompt]);
 
   useEffect(() => {
     if (!isWorkflow(effectivePreloadAction) || visibleChildren.length === 0) return;
@@ -1170,6 +1309,9 @@ export default function TeacherAgentPage() {
     },
   ];
 
+  const retryWorkflow = aiRunStatus.workflow ?? effectivePreloadAction ?? "weekly-summary";
+  const pendingWorkflowLabel = pendingWorkflow ? ACTION_LABELS[pendingWorkflow] : null;
+
   return (
     <>
     <RolePageShell
@@ -1193,7 +1335,7 @@ export default function TeacherAgentPage() {
             <RoleAssistantWorkspace
               roleLabel="教师端"
               title="教师 AI 助手"
-              description="晨检、饮食、成长润色、回复家长、健康材料解析、高风险会诊和班级待办总结统一走服务端 vivo provider。"
+              description="班级待办总结、今日跟进行动和家长沟通建议统一走服务端教师 agent，demo 环境会稳定返回可展示结果。"
               prompts={TEACHER_ASSISTANT_PROMPTS}
               value={assistantQuestion}
               onValueChange={setAssistantQuestion}
@@ -1202,7 +1344,11 @@ export default function TeacherAgentPage() {
               loading={isLoading}
               error={error}
               source={currentResult?.source}
-              model={currentResult?.model}
+              model={
+                currentResult?.provider
+                  ? `${currentResult.provider}${currentResult.model ? ` / ${currentResult.model}` : ""}`
+                  : currentResult?.model
+              }
               response={
                 <div className="space-y-2">
                   <p>{currentResult?.summary ?? "选择一个教师快捷问题，或输入班级/幼儿相关追问。"}</p>
@@ -1234,6 +1380,21 @@ export default function TeacherAgentPage() {
                 </div>
               }
             />
+            {showAiDiagnosticStatus ? (
+              <div
+                data-testid="teacher-agent-ai-status-bar"
+                className="grid gap-2 rounded-lg border border-slate-200 bg-white/95 p-4 text-xs text-slate-600 shadow-sm md:grid-cols-3"
+              >
+                <span><strong className="text-slate-900">provider</strong>: {aiRunStatus.provider}</span>
+                <span><strong className="text-slate-900">workflow</strong>: {aiRunStatus.workflow ?? "none"}</span>
+                <span><strong className="text-slate-900">transport</strong>: {aiRunStatus.transport}</span>
+                <span><strong className="text-slate-900">fallbackReason</strong>: {aiRunStatus.fallbackReason ?? "none"}</span>
+                <span><strong className="text-slate-900">lastRequestStatus</strong>: {aiRunStatus.lastRequestStatus}</span>
+                <span className={aiRunStatus.lastError ? "text-rose-600" : ""}>
+                  <strong className="text-slate-900">lastError</strong>: {aiRunStatus.lastError ?? "none"}
+                </span>
+              </div>
+            ) : null}
             {isCommunicationMode ? (
               <>
               <section className="mx-auto max-w-[62rem] overflow-hidden rounded-[1.65rem] border border-[#e0e7f5] bg-white/96 p-5 shadow-[0_22px_60px_rgb(70_88_140_/_0.08)] sm:p-7">
@@ -2145,7 +2306,7 @@ export default function TeacherAgentPage() {
                       onClick={() => void runWorkflow(action)}
                       disabled={isLoading}
                     >
-                      {ACTION_LABELS[action]}
+                      {pendingWorkflow === action ? "生成中..." : ACTION_LABELS[action]}
                     </Button>
                   ))}
                 </>
@@ -2159,10 +2320,56 @@ export default function TeacherAgentPage() {
                   </div>
                 ) : null}
 
-                {currentResult ? (
-                  <TeacherAgentResultCard result={currentResult} />
+                {isLoading ? (
+                  <div className="mb-4 rounded-lg border border-indigo-100 bg-white/90 p-5">
+                    <div className="flex items-center gap-3 text-sm font-semibold text-indigo-700">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>{pendingWorkflowLabel ?? "教师 AI 助手"}正在生成结果</span>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                      请求已发起，状态条会同步显示 provider、transport 和 fallback 信息。
+                    </p>
+                  </div>
+                ) : error ? (
+                  <div className="mb-4 rounded-lg border border-rose-100 bg-white p-5">
+                    <div className="flex items-center gap-3 text-sm font-semibold text-rose-700">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>教师 AI 助手请求失败</span>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-slate-700">{error}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-4 rounded-full"
+                      onClick={() => void runWorkflow(retryWorkflow)}
+                      disabled={isLoading}
+                    >
+                      重试生成
+                    </Button>
+                  </div>
+                ) : !currentResult ? (
+                  <div className="mb-4 rounded-lg border border-dashed border-indigo-200 bg-white/80 p-5">
+                    <p className="text-sm leading-6 text-slate-600">
+                      尚未生成结果。可直接生成班级总结，或选择上方任一工作流。
+                    </p>
+                    <Button
+                      type="button"
+                      variant="premium"
+                      className="mt-4 rounded-full"
+                      onClick={() => void runWorkflow("weekly-summary")}
+                      disabled={isLoading}
+                    >
+                      生成班级总结
+                    </Button>
+                  </div>
+                ) : null}
+
+                {!isLoading && !error && currentResult ? (
+                  <div data-testid="teacher-agent-latest-result">
+                    <TeacherAgentResultCard result={currentResult} />
+                  </div>
                 ) : (
-                  <p className="text-sm text-slate-500">
+                  <p className="hidden text-sm text-slate-500">
                     点击上方任一快捷操作，教师 AI 助手会基于当前班级或儿童上下文生成结构化结果。
                   </p>
                 )}

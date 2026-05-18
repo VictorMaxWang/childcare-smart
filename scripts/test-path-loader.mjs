@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -20,7 +20,7 @@ function resolveFileTarget(targetPath) {
     path.join(targetPath, "index.mjs"),
   ];
 
-  return candidates.find((candidate) => existsSync(candidate));
+  return candidates.find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
 }
 
 function resolveAliasTarget(specifier) {
@@ -28,6 +28,13 @@ function resolveAliasTarget(specifier) {
 }
 
 export async function resolve(specifier, context, nextResolve) {
+  if (specifier === "server-only") {
+    return {
+      shortCircuit: true,
+      url: pathToFileURL(path.resolve(projectRoot, "scripts", "server-only-stub.mjs")).href,
+    };
+  }
+
   if (specifier.startsWith("@/")) {
     const resolvedPath = resolveAliasTarget(specifier);
     if (resolvedPath) {

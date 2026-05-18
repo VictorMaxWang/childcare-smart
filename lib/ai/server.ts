@@ -67,6 +67,7 @@ export interface AiRuntimeOptions {
   configuredModel: string;
   forceMock: boolean;
   forceFallback: boolean;
+  fallbackReason?: string | null;
 }
 
 export function getAiRuntimeOptions(request?: Request): AiRuntimeOptions {
@@ -206,6 +207,7 @@ function withoutRuntimeFields<T extends Record<string, unknown>>(value: T) {
   delete clone.model;
   delete clone.provider;
   delete clone.providerStatus;
+  delete clone.fallbackReason;
   return clone;
 }
 
@@ -293,6 +295,10 @@ function providerMeta(providerStatus: ChatProviderStatus) {
     provider: "vivo",
     providerStatus: { chat: providerStatus },
   };
+}
+
+function fallbackReasonMeta(options: AiRuntimeOptions, providerStatus: ChatProviderStatus) {
+  return options.fallbackReason ?? providerStatus.reason ?? (options.forceFallback ? "force-fallback" : null);
 }
 
 export function isValidSuggestionSnapshot(snapshot: unknown): snapshot is ChildSuggestionSnapshot {
@@ -386,16 +392,20 @@ export async function executeSuggestion(
         ? buildMockInstitutionSuggestion(payload.snapshot as InstitutionSuggestionSnapshot)
         : buildMockAiSuggestion(payload.snapshot as ChildSuggestionSnapshot)),
       model: isInstitutionScope ? "mock-institution-suggestion" : "mock-suggestion",
+      provider: "mock",
+      fallbackReason: options.fallbackReason ?? "force-mock-mode",
     } satisfies AiSuggestionResponse;
   }
 
+  const fallbackProviderStatus = getVivoProviderStatus("chat");
   const fallback = {
     ...(isInstitutionScope
       ? buildFallbackInstitutionSuggestion(payload.snapshot as InstitutionSuggestionSnapshot)
       : buildFallbackSuggestion(payload.snapshot as ChildSuggestionSnapshot)),
     model: isInstitutionScope ? "institution-rule-fallback" : "rule-fallback",
     provider: "local-rule-fallback",
-    providerStatus: { chat: getVivoProviderStatus("chat") },
+    providerStatus: { chat: fallbackProviderStatus },
+    fallbackReason: fallbackReasonMeta(options, fallbackProviderStatus),
   } satisfies AiSuggestionResponse;
 
   if (options.forceFallback) {
@@ -441,14 +451,18 @@ export async function executeFollowUp(
     return {
       ...buildMockAiFollowUp(payload),
       model: isInstitutionScope ? "mock-institution-follow-up" : "mock-follow-up",
+      provider: "mock",
+      fallbackReason: options.fallbackReason ?? "force-mock-mode",
     } satisfies AiFollowUpResponse;
   }
 
+  const fallbackProviderStatus = getVivoProviderStatus("chat");
   const fallback = {
     ...buildFallbackFollowUp(payload),
     model: isInstitutionScope ? "institution-follow-up-rule-fallback" : "follow-up-rule-fallback",
     provider: "local-rule-fallback",
-    providerStatus: { chat: getVivoProviderStatus("chat") },
+    providerStatus: { chat: fallbackProviderStatus },
+    fallbackReason: fallbackReasonMeta(options, fallbackProviderStatus),
   } satisfies AiFollowUpResponse;
 
   if (options.forceFallback) {
@@ -496,14 +510,18 @@ export async function executeWeeklyReport(
     return {
       ...buildMockWeeklyReport(payload.snapshot, role),
       model: "mock-weekly-report",
+      provider: "mock",
+      fallbackReason: options.fallbackReason ?? "force-mock-mode",
     } satisfies WeeklyReportResponse;
   }
 
+  const fallbackProviderStatus = getVivoProviderStatus("chat");
   const fallback = {
     ...buildFallbackWeeklyReport(payload.snapshot, role),
     model: "weekly-rule-fallback",
     provider: "local-rule-fallback",
-    providerStatus: { chat: getVivoProviderStatus("chat") },
+    providerStatus: { chat: fallbackProviderStatus },
+    fallbackReason: fallbackReasonMeta(options, fallbackProviderStatus),
   } satisfies WeeklyReportResponse;
 
   if (options.forceFallback) {

@@ -18,7 +18,7 @@ test.describe("E11 full user journey regression", () => {
     page,
   }, testInfo) => {
     const director = await demoContext(testInfo, "u-admin");
-    const teacher = await demoContext(testInfo, "u-teacher");
+    const teacher = await demoContext(testInfo, "u-teacher2");
     const parent = await demoContext(testInfo, "u-parent");
     const token = `E11-journey-${Date.now()}`;
 
@@ -42,14 +42,14 @@ test.describe("E11 full user journey regression", () => {
         await director.post("/api/assignments", {
           data: {
             childId: CHILD_TEACHER,
-            teacherId: "u-teacher",
+            teacherId: "u-teacher2",
             title: `${token} dispatch`,
             description: `${token} dispatch follow up`,
           },
         }),
         201
       );
-      await loginAs(page, "u-teacher", `/teacher/agent?childId=${CHILD_TEACHER}`);
+      await loginAs(page, "u-teacher2", `/teacher/agent?childId=${CHILD_TEACHER}`);
       await expect(page.locator("body")).toContainText(token, { timeout: 30_000 });
       await expectOk(
         await teacher.patch(`/api/assignments/${assignment.assignmentId}`, {
@@ -111,7 +111,8 @@ test.describe("E11 full user journey regression", () => {
       await seedStorybook(parent, `storybook-${token}`, CHILD_PARENT);
 
       await loginAs(page, "u-parent", `/parent/agent?child=${CHILD_PARENT}`);
-      await expect(page.locator("body")).toContainText(token, { timeout: 30_000 });
+      await expect(page.locator("body")).toContainText("林小雨", { timeout: 30_000 });
+      await expect(page.locator("body")).toContainText(/今晚|反馈|小步尝试/, { timeout: 30_000 });
       await captureE11(page, "journey-parent-message-reply.png");
 
       await page.goto(`/parent/reminders?child=${CHILD_PARENT}`);

@@ -22,13 +22,16 @@ export default function TeacherAgentHistoryList({ items }: { items: TeacherAgent
     return <p className="text-sm text-slate-500">还没有历史记录，先生成一次结果。</p>;
   }
 
+  const orderedItems = [...items].reverse();
+
   return (
     <div className="space-y-3">
-      {items.map((item) => (
-        <div key={item.id} className="rounded-lg border border-slate-100 bg-white p-4">
+      {orderedItems.map((item, index) => (
+        <div key={item.id} className="rounded-lg border border-slate-100 bg-white p-4" data-testid="teacher-agent-history-item">
           <div className="flex flex-wrap items-center gap-2">
             <Sparkles className="h-4 w-4 text-indigo-500" />
             <p className="text-sm font-semibold text-slate-900">动作类型：{item.actionLabel}</p>
+            {index === 0 ? <Badge variant="success">最新</Badge> : null}
             <Badge variant={item.result.mode === "class" ? "info" : "warning"}>
               {item.result.mode === "class" ? "班级" : "单个儿童"}
             </Badge>
