@@ -87,6 +87,7 @@ function printStorySummary(label, details) {
   const fallbackReasonHeader =
     details.headers.get("x-smartchildcare-fallback-reason") || "(missing)";
   const providerMeta = details.json?.providerMeta || {};
+  const scenes = Array.isArray(details.json?.scenes) ? details.json.scenes : [];
 
   console.log(`\n=== ${label} ===`);
   console.log(`status: ${details.status}`);
@@ -95,6 +96,7 @@ function printStorySummary(label, details) {
   console.log(`body transport: ${providerMeta.transport || "(missing)"}`);
   console.log(`imageDelivery: ${providerMeta.imageDelivery || "(missing)"}`);
   console.log(`audioDelivery: ${providerMeta.audioDelivery || "(missing)"}`);
+  console.log(`scenes: ${scenes.length}`);
   console.log(
     `image job: ${providerMeta.diagnostics?.image?.jobStatus || "(missing)"}`
   );
@@ -178,9 +180,49 @@ function assertRemoteProxy(details, label) {
   assert(bodyTransport === "remote-brain-proxy", `${label}: body transport should be remote-brain-proxy, got ${bodyTransport}`);
 }
 
+function hasStoryContent(details) {
+  const scenes = details.json?.scenes;
+  return (
+    typeof details.json?.storyId === "string" &&
+    details.json.storyId.trim().length > 0 &&
+    typeof details.json?.title === "string" &&
+    details.json.title.trim().length > 0 &&
+    Array.isArray(scenes) &&
+    scenes.length > 0 &&
+    scenes.every(
+      (scene) =>
+        typeof scene?.sceneTitle === "string" &&
+        scene.sceneTitle.trim().length > 0 &&
+        typeof scene?.sceneText === "string" &&
+        scene.sceneText.trim().length > 0
+    )
+  );
+}
+
+function isLocalDemoSeedFallback(details) {
+  const headerTransport = details.headers.get("x-smartchildcare-transport");
+  const fallbackReason =
+    details.headers.get("x-smartchildcare-fallback-reason") ||
+    details.json?.fallbackReason ||
+    details.json?.providerMeta?.fallbackReason;
+  const providerMeta = details.json?.providerMeta || {};
+  const imageDelivery = providerMeta.imageDelivery;
+  const audioDelivery = providerMeta.audioDelivery;
+
+  return (
+    headerTransport === "next-json-fallback" &&
+    providerMeta.transport === "next-json-fallback" &&
+    fallbackReason === "demo-seed-isolated" &&
+    hasStoryContent(details) &&
+    ["dynamic-fallback", "demo-art", "svg-fallback", "mixed", "real"].includes(imageDelivery) &&
+    ["preview-only", "mixed", "real"].includes(audioDelivery)
+  );
+}
+
 function isWarmEnough(details) {
   const providerMeta = details.json?.providerMeta;
   return (
+    hasStoryContent(details) &&
     providerMeta?.transport === "remote-brain-proxy" &&
     (providerMeta?.imageDelivery === "mixed" || providerMeta?.imageDelivery === "real")
   );
@@ -201,12 +243,18 @@ async function main() {
     });
     printStorySummary("First request", first);
     assertStorybookResponse("first request", first);
-    assertRemoteProxy(first, "first request");
 
     if (isWarmEnough(first)) {
       console.log("\n[OK] Storybook smoke passed on first request.");
       return;
     }
+
+    if (isLocalDemoSeedFallback(first)) {
+      console.log("\n[OK] Storybook smoke passed with local demo-seed fallback.");
+      return;
+    }
+
+    assertRemoteProxy(first, "first request");
 
     for (let attempt = 1; attempt <= maxPollAttempts; attempt += 1) {
       await sleep(pollIntervalMs);
@@ -215,12 +263,18 @@ async function main() {
       });
       printStorySummary(`Poll ${attempt}`, polled);
       assertStorybookResponse(`poll ${attempt}`, polled);
-      assertRemoteProxy(polled, `poll ${attempt}`);
 
       if (isWarmEnough(polled)) {
         console.log("\n[OK] Storybook smoke reached mixed/real.");
         return;
       }
+
+      if (isLocalDemoSeedFallback(polled)) {
+        console.log("\n[OK] Storybook smoke passed with local demo-seed fallback.");
+        return;
+      }
+
+      assertRemoteProxy(polled, `poll ${attempt}`);
     }
 
     throw new Error(

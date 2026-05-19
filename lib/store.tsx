@@ -8,10 +8,7 @@ import {
   scopeSnapshotForSessionUser,
 } from "@/lib/persistence/state-scope";
 import type { ConsultationResult, MobileDraft, MobileDraftSyncStatus, ReminderItem } from "@/lib/ai/types";
-import {
-  normalizeGuardianFeedbackCollection,
-  normalizeParentStructuredFeedback,
-} from "@/lib/feedback/normalize";
+import { normalizeGuardianFeedbackCollection } from "@/lib/feedback/normalize";
 import { upsertGuardianFeedbackWriteback } from "@/lib/feedback/writeback";
 import type {
   GuardianFeedback as SharedGuardianFeedback,
