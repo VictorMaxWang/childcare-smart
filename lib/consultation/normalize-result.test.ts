@@ -106,3 +106,44 @@ test("normalizeHighRiskConsultationResult emits evidenceItems and keeps legacy f
     )
   );
 });
+
+test("normalizeHighRiskConsultationResult merges raw evidenceItems with generated evidence", () => {
+  const normalized = normalizeHighRiskConsultationResult({
+    ...buildRawConsultationResult(),
+    evidenceItems: [
+      {
+        id: "raw-parent-feedback",
+        sourceType: "guardian_feedback",
+        sourceLabel: "家长反馈",
+        sourceId: "feedback-1",
+        summary: "家长反馈今晚愿意完成一次小步尝试。",
+        confidence: "medium",
+        requiresHumanReview: false,
+        evidenceCategory: "family_communication",
+        supports: [
+          {
+            type: "action",
+            targetId: "action:home:0",
+            targetLabel: "晚间记录入睡前情绪变化",
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.ok(normalized.evidenceItems.length >= 5);
+  assert.ok(
+    normalized.evidenceItems.some((item) => item.id === "raw-parent-feedback")
+  );
+  assert.ok(
+    normalized.evidenceItems.some((item) => item.sourceType === "teacher_note")
+  );
+  assert.ok(
+    normalized.evidenceItems.some((item) => item.sourceType === "memory_snapshot")
+  );
+  assert.equal(normalized.traceMeta?.evidenceCount, normalized.evidenceItems.length);
+  assert.equal(
+    (normalized.traceMeta?.dataQuality as { evidenceCount?: number } | undefined)?.evidenceCount,
+    normalized.evidenceItems.length
+  );
+});

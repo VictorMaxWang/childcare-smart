@@ -6,6 +6,15 @@ import {
 } from "@/lib/server/brain-client";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import { normalizeHighRiskConsultationResult } from "@/lib/consultation/normalize-result";
+import {
+  buildHighRiskConsultationAutoContext,
+  resolveHighRiskConsultationContexts,
+  type HighRiskConsultationRequestPayload,
+} from "@/lib/agent/high-risk-consultation";
+import { buildLocalHighRiskConsultationFallback } from "@/lib/agent/high-risk-consultation-fallback";
+import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
+import { buildTeacherChildSuggestionSnapshotWithMemory } from "@/lib/agent/teacher-agent";
+import { buildInterventionCardFromConsultation } from "@/lib/agent/intervention-card";
 
 type ProviderTrace = {
   provider?: string;
@@ -91,6 +100,25 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
 }
 
+function isRecordArray(value: unknown) {
+  return Array.isArray(value);
+}
+
+function isValidFallbackPayload(payload: unknown): payload is HighRiskConsultationRequestPayload {
+  const obj = asRecord(payload);
+
+  return (
+    typeof obj.targetChildId === "string" &&
+    obj.currentUser !== null &&
+    typeof obj.currentUser === "object" &&
+    isRecordArray(obj.visibleChildren) &&
+    isRecordArray(obj.presentChildren) &&
+    isRecordArray(obj.healthCheckRecords) &&
+    isRecordArray(obj.growthRecords) &&
+    isRecordArray(obj.guardianFeedbacks)
+  );
+}
+
 function getTraceId(value: unknown) {
   const traceId = typeof value === "string" && value.trim() ? value.trim() : "";
   return traceId || `trace-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -162,13 +190,141 @@ function buildLocalStreamHeaders(brainForward: BrainForwardResult) {
   });
 }
 
-function buildTerminalFallback(traceId: string, fallbackReason: string, message: string): StreamEvent[] {
+function buildTerminalResult(payload: Record<string, unknown>, fallbackReason: string) {
+  if (!isValidFallbackPayload(payload)) return null;
+
+  const { classContext, childContext } = resolveHighRiskConsultationContexts(payload);
+  if (!childContext) return null;
+
+  const autoContext = buildHighRiskConsultationAutoContext({
+    classContext,
+    childContext,
+  });
+  const teacherSignals = [
+    payload.teacherNote,
+    asRecord(payload.imageInput).content,
+    asRecord(payload.voiceInput).content,
+  ]
+    .map((item) => asString(item))
+    .filter(Boolean);
+  const suggestionSnapshot = buildTeacherChildSuggestionSnapshotWithMemory(childContext, null);
+  const consultationInput = buildConsultationInputFromSnapshot({
+    snapshot: suggestionSnapshot,
+    focusReasons: [...autoContext.focusReasons, ...teacherSignals],
+    source: "teacher",
+    priorityHint: {
+      level: "P1",
+      score: 92,
+      reason: "流式会诊已切换本地完整兜底，需要进入管理端承接。",
+    },
+    memoryContext: null,
+  });
+  const consultation = buildLocalHighRiskConsultationFallback({
+    input: consultationInput,
+    autoContext,
+    fallbackReason,
+  });
+  const providerTrace: ProviderTrace = {
+    source: "local-rules-fallback",
+    provider: "local-rules-llm",
+    model: "local-social-emotional-rules",
+    requestId: "",
+    transport: "next-stream-fallback",
+    transportSource: "next-server",
+    consultationSource: "stream-terminal-fallback",
+    fallbackReason,
+    brainProvider: "next-fallback",
+    fallback: true,
+    realProvider: false,
+  };
+  const interventionCard = buildInterventionCardFromConsultation({
+    targetChildId: childContext.child.id,
+    childName: childContext.child.name,
+    consultation,
+    generatedAt: consultation.generatedAt,
+  });
+
+  return normalizeHighRiskConsultationResult(
+    {
+      ...consultation,
+      interventionCard,
+      autoContext,
+      provider: providerTrace.provider,
+      model: providerTrace.model,
+      realProvider: false,
+      fallback: true,
+      providerTrace,
+      multimodalNotes: {
+        teacherNote: asString(payload.teacherNote),
+        imageText: asString(asRecord(payload.imageInput).content),
+        voiceText: asString(asRecord(payload.voiceInput).content),
+      },
+    },
+    {
+      brainProvider: "next-fallback",
+      defaultTransport: "next-stream-fallback",
+      defaultTransportSource: "next-server",
+      defaultConsultationSource: "stream-terminal-fallback",
+      defaultFallbackReason: fallbackReason,
+    }
+  );
+}
+
+function buildTerminalFallback(
+  traceId: string,
+  fallbackReason: string,
+  message: string,
+  result?: Record<string, unknown> | null
+): StreamEvent[] {
+  const fallbackProviderTrace = {
+    source: "local-rules-fallback",
+    provider: "local-rules-llm",
+    model: "local-social-emotional-rules",
+    requestId: "",
+    transport: "next-stream-fallback",
+    transportSource: "next-server",
+    consultationSource: "stream-terminal-fallback",
+    fallbackReason,
+    brainProvider: "next-fallback",
+    fallback: true,
+    realProvider: false,
+  };
+  const providerTrace = (asRecord(result?.providerTrace) as ProviderTrace | null) ?? fallbackProviderTrace;
+  const memoryMeta = asRecord(result?.memoryMeta);
+
+  if (result) {
+    return [
+      {
+        event: "status",
+        data: {
+          stage: "current_recommendation",
+          title: "本地完整会诊方案",
+          message,
+          traceId,
+          providerTrace,
+          memory: memoryMeta,
+        },
+      },
+      {
+        event: "done",
+        data: {
+          traceId,
+          result,
+          providerTrace,
+          memoryMeta,
+          realProvider: false,
+          fallback: true,
+        },
+      },
+    ];
+  }
+
   return [
     {
       event: "error",
       data: {
         stage: "current_recommendation",
-        title: "\u4f1a\u8bca\u5931\u8d25",
+        title: "会诊兜底未完成",
         message,
         traceId,
       },
@@ -178,19 +334,7 @@ function buildTerminalFallback(traceId: string, fallbackReason: string, message:
       data: {
         traceId,
         result: {},
-        providerTrace: {
-          source: "unknown",
-          provider: "unknown",
-          model: "",
-          requestId: "",
-          transport: "next-stream-fallback",
-          transportSource: "next-server",
-          consultationSource: "next-stream-fallback",
-          fallbackReason,
-          brainProvider: "next-fallback",
-          fallback: true,
-          realProvider: false,
-        },
+        providerTrace: fallbackProviderTrace,
         memoryMeta: {},
         realProvider: false,
         fallback: true,
@@ -222,18 +366,23 @@ async function buildFallbackEvents(
   } catch (error) {
     const fallbackReason =
       error instanceof Error ? `local-json-fetch-${error.name.toLowerCase()}` : "local-json-fetch-error";
+    const terminalResult = buildTerminalResult(payload, fallbackReason);
     return buildTerminalFallback(
       traceId,
       fallbackReason,
-      "fallback request failed before a response was returned"
+      "本地 JSON 会诊不可达，已切换流式本地完整方案。",
+      terminalResult
     );
   }
 
   if (!response.ok) {
+    const fallbackReason = `local-json-status-${response.status}`;
+    const terminalResult = buildTerminalResult(payload, fallbackReason);
     return buildTerminalFallback(
       traceId,
-      `local-json-status-${response.status}`,
-      `fallback request failed with status ${response.status}`
+      fallbackReason,
+      `本地 JSON 会诊返回 ${response.status}，已切换流式本地完整方案。`,
+      terminalResult
     );
   }
 

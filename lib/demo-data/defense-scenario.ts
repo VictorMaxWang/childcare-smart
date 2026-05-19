@@ -53,7 +53,7 @@ export const DEFENSE_CHILD_PROFILES: Record<DefenseChildId, DefenseChildProfile>
     homeAction: "今晚共读绘本，说出“我害怕”，完成一次小步尝试",
     expectedFeedback: "孩子能复述故事，并愿意尝试走到门口",
     specialNotes: "答辩重点：走廊活动听到推车声后害怕退缩，需要用勇敢表达和小步尝试支持。",
-    riskLevel: "medium",
+    riskLevel: "high",
   },
   "c-2": {
     childId: "c-2",

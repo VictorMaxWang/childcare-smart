@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { ConsultationResult } from "@/lib/ai/types";
 import type { AdminDispatchEvent } from "@/lib/agent/admin-types";
+import { createDemoSeedSnapshot } from "@/lib/demo-data/seed";
 import {
   buildAdminConsultationPriorityItems,
   normalizeAdminConsultationFeedItem,
@@ -679,6 +680,33 @@ test("buildAdminConsultationPriorityItems lets admin trace consume structured ev
     items[0]?.trace.evidenceHighlights[0],
     "教师补充: 老师补充孩子午休前情绪更黏老师。"
   );
+});
+
+test("buildAdminConsultationPriorityItems includes Lin Xiaoyu defense handoff with readable evidence chain", () => {
+  const snapshot = createDemoSeedSnapshot("2026-05-07T08:00:00.000Z");
+  const items = buildAdminConsultationPriorityItems({
+    institutionName: "SmartChildcare",
+    localConsultations: snapshot.consultations,
+    children: snapshot.children.map((child) => ({
+      id: child.id,
+      name: child.name,
+      className: child.className,
+    })),
+    notificationEvents: [],
+    useLocalFallback: true,
+    limit: 6,
+  });
+  const xiaoyu = items.find((item) => item.childId === "c-1");
+  const sourceLabels = xiaoyu?.trace.evidenceItems.map((item) => item.sourceLabel) ?? [];
+
+  assert.ok(xiaoyu);
+  assert.equal(xiaoyu?.riskLevel, "high");
+  assert.equal(xiaoyu?.decision.recommendedOwnerName, "陈园长");
+  assert.equal(xiaoyu?.notificationPayload?.priorityLevel, "P1");
+  assert.ok(sourceLabels.includes("教师观察"));
+  assert.ok(sourceLabels.includes("成长记录"));
+  assert.ok(sourceLabels.includes("家长反馈"));
+  assert.ok(sourceLabels.includes("记忆快照 / 历史跟进"));
 });
 
 test("buildAdminConsultationPriorityItems falls back to legacy evidence highlights when structured evidence is unavailable", () => {

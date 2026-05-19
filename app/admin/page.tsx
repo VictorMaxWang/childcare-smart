@@ -5,12 +5,19 @@ import { ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import FeedbackDetailDialog from "@/components/communication/FeedbackDetailDialog";
 import DirectorDashboardReplica from "@/components/admin/pixel-replica/DirectorDashboardReplica";
+import RiskPriorityBoard from "@/components/admin/RiskPriorityBoard";
 import EmptyState from "@/components/EmptyState";
 import { buildAdminHomeViewModel, buildAdminWeeklyReportSnapshot } from "@/lib/agent/admin-agent";
+import {
+  buildAdminConsultationPriorityItems,
+  type AdminConsultationPriorityItem,
+} from "@/lib/agent/admin-consultation";
+import type { ConsultationInput } from "@/lib/agent/consultation/input";
+import { buildLocalHighRiskConsultationFallback } from "@/lib/agent/high-risk-consultation-fallback";
 import { dedupeAdminHomeExposure } from "@/lib/agent/admin-home-dedupe";
 import { useAdminConsultationWorkspace } from "@/lib/agent/use-admin-consultation-workspace";
 import { fetchWeeklyReport } from "@/lib/agent/weekly-report-client";
-import type { WeeklyReportResponse } from "@/lib/ai/types";
+import type { ConsultationResult, WeeklyReportResponse } from "@/lib/ai/types";
 import { getAdminSummary } from "@/lib/api/analytics";
 import { listFeedback as listApiFeedback, type ApiFeedback } from "@/lib/api/communication";
 import type { ApiAdminSummary } from "@/lib/api/types";
@@ -22,6 +29,75 @@ const TODAY_TEXT = new Date().toLocaleDateString("zh-CN", {
   day: "numeric",
   weekday: "long",
 });
+
+function buildLinXiaoyuDefenseFallback(params: {
+  childName?: string;
+  className?: string;
+  generatedAt: string;
+}): ConsultationResult {
+  const input: ConsultationInput = {
+    childId: "c-1",
+    childName: params.childName || "林小雨",
+    className: params.className || "向阳班",
+    ageBand: "小班",
+    source: "teacher",
+    generatedAt: params.generatedAt,
+    summary: {
+      health: {
+        abnormalCount: 1,
+        handMouthEyeAbnormalCount: 0,
+        moodKeywords: ["害怕退缩", "需要陪伴"],
+      },
+      meals: {
+        recordCount: 1,
+        hydrationAvg: 180,
+        balancedRate: 1,
+        monotonyDays: 0,
+        allergyRiskCount: 0,
+      },
+      growth: {
+        recordCount: 2,
+        attentionCount: 1,
+        pendingReviewCount: 1,
+        topCategories: [{ category: "社会情绪", count: 2 }],
+      },
+      feedback: {
+        count: 1,
+        statusCounts: { pending: 1 },
+        keywords: ["共读绘本", "小步尝试"],
+      },
+    },
+    focusReasons: [
+      "林小雨在走廊活动听到推车声后害怕退缩，需要勇敢表达与小步尝试的社会情绪支持。",
+      "教师观察、成长记录、家长反馈和历史跟进均指向 48 小时复查闭环。",
+    ],
+    suggestionSummary: "将走廊活动拆成可选择的小目标，并同步园长端承接。",
+    priorityHint: {
+      level: "P1",
+      score: 92,
+      reason: "需要管理端承接 48 小时复查。",
+    },
+    responseSource: "fallback",
+    continuityNotes: [
+      "在老师陪伴下可以说出“我害怕”。",
+      "今晚家庭任务为共读绘本并完成一次门口小步尝试。",
+      "48 小时内复查是否能减少提示后表达需求。",
+    ],
+    memoryMeta: {
+      backend: "local-demo-memory",
+      degraded: false,
+      usedSources: ["teacher-observation", "growth-record", "guardian-feedback", "consultation-history"],
+      errors: [],
+      matchedSnapshotIds: ["memory-snapshot-c-1-social-emotional"],
+      matchedTraceIds: ["history-trace-c-1-48h-review"],
+    },
+  };
+
+  return buildLocalHighRiskConsultationFallback({
+    input,
+    fallbackReason: "admin-defense-board-upgrade",
+  });
+}
 
 export default function AdminHomePage() {
   const {
@@ -89,15 +165,54 @@ export default function AdminHomePage() {
       };
     });
   }, [healthMaterials, latestConsultations, visibleChildren]);
+  const adminBoardConsultations = useMemo(() => {
+    const child = visibleChildren.find((item) => item.id === "c-1");
+    const existing = latestConsultations.find((item) => item.childId === "c-1");
+    const defenseConsultation = buildLinXiaoyuDefenseFallback({
+      childName: child?.name,
+      className: child?.className,
+      generatedAt: existing?.generatedAt ?? new Date().toISOString(),
+    });
+
+    return [
+      defenseConsultation,
+      ...latestConsultations.filter((item) => item.childId !== "c-1"),
+    ];
+  }, [latestConsultations, visibleChildren]);
   const { priorityItems: consultationPriorityItems, notificationEvents } = useAdminConsultationWorkspace({
     institutionName: INSTITUTION_NAME,
     visibleChildren,
-    localConsultations: latestConsultations,
+    localConsultations: adminBoardConsultations,
     consultationFeedOptions: {
-      limit: 4,
+      limit: 8,
       escalatedOnly: true,
     },
   });
+  const localConsultationPriorityItems = useMemo(
+    () =>
+      buildAdminConsultationPriorityItems({
+        institutionName: INSTITUTION_NAME,
+        localConsultations: adminBoardConsultations,
+        children: visibleChildren,
+        notificationEvents,
+        limit: 20,
+        useLocalFallback: true,
+      }),
+    [adminBoardConsultations, notificationEvents, visibleChildren]
+  );
+  const priorityBoardItems = useMemo(() => {
+    const seen = new Set<string>();
+    const preferredXiaoyu = localConsultationPriorityItems.find((item) => item.childId === "c-1");
+    return [preferredXiaoyu, ...consultationPriorityItems, ...localConsultationPriorityItems]
+      .filter((item): item is AdminConsultationPriorityItem => Boolean(item))
+      .filter((item) => !preferredXiaoyu || item.childId !== "c-1" || item.consultationId === preferredXiaoyu.consultationId)
+      .filter((item) => {
+        if (seen.has(item.consultationId)) return false;
+        seen.add(item.consultationId);
+        return true;
+      })
+      .slice(0, 8);
+  }, [consultationPriorityItems, localConsultationPriorityItems]);
 
   const adminHomePayload = useMemo(
     () => ({
@@ -137,8 +252,8 @@ export default function AdminHomePage() {
   );
   const home = useMemo(() => buildAdminHomeViewModel(adminHomePayload), [adminHomePayload]);
   const displayHome = useMemo(
-    () => dedupeAdminHomeExposure(home, consultationPriorityItems),
-    [consultationPriorityItems, home]
+    () => dedupeAdminHomeExposure(home, priorityBoardItems),
+    [home, priorityBoardItems]
   );
   const communicationSummary = useMemo(
     () =>
@@ -328,6 +443,27 @@ export default function AdminHomePage() {
         onOpenChange={setFeedbackDetailOpen}
         onUpdated={() => setWeeklyReportRefreshNonce((value) => value + 1)}
       />
+      <section className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
+        <div className="rounded-lg border border-amber-100 bg-white p-4 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-950">风险优先级板 · 高风险会诊承接</p>
+              <p className="mt-1 text-xs text-slate-500">教师端生成的会诊会在这里形成园长决策卡、trace 证据和 48 小时复查承接。</p>
+            </div>
+            <p className="text-xs font-semibold text-amber-700">管理端可见 {priorityBoardItems.length} 条</p>
+          </div>
+          <RiskPriorityBoard
+            items={priorityBoardItems}
+            layoutVariant="stacked"
+            sourceBadgeLabel="教师会诊同步"
+            sourceBadgeVariant="success"
+            dispatchAvailable={false}
+            dispatchStatusMessage="答辩展示模式，保留只读承接"
+            emptyTitle="风险优先级板已就绪"
+            emptyDescription="教师端生成林小雨会诊后，这里会同步显示园长承接卡。"
+          />
+        </div>
+      </section>
       {localConsultationSummaries.length > 0 ? (
         <section className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
           <div className="rounded-lg border border-rose-100 bg-white p-4 shadow-sm">
