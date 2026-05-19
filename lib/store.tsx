@@ -2791,6 +2791,29 @@ function validateDemoSnapshotCoverage(snapshot: AppStateSnapshot, targetToday: s
   return snapshot;
 }
 
+function alignGrowthRecordsForDemoCoverage(snapshot: AppStateSnapshot, targetToday: string) {
+  const hasTargetGrowth = snapshot.growth.some((record) => normalizeLocalDate(record.createdAt) === targetToday);
+  if (hasTargetGrowth) return snapshot;
+
+  const growthDates = snapshot.growth
+    .map((record) => normalizeLocalDate(record.createdAt))
+    .filter((value): value is string => Boolean(value));
+  if (growthDates.length === 0) return snapshot;
+
+  const latestGrowthDate = growthDates.reduce((latest, current) => (current > latest ? current : latest));
+  const diffDays = Math.round((startOfDay(targetToday) - startOfDay(latestGrowthDate)) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return snapshot;
+
+  return {
+    ...snapshot,
+    growth: snapshot.growth.map((record) => ({
+      ...record,
+      createdAt: shiftDemoDateTime(record.createdAt, diffDays),
+      reviewDate: shiftDemoTemporalValue(record.reviewDate, diffDays),
+    })),
+  };
+}
+
 function isExplicitEmptyRecordsSnapshot(snapshot: AppStateSnapshot) {
   return (
     snapshot.children.length > 0 &&
@@ -2817,7 +2840,10 @@ function buildFreshDemoSnapshot(targetToday = getLocalToday()): AppStateSnapshot
     health: keepRecordsOnPresentDays(template.health, attendanceLookup),
   });
 
-  return validateDemoSnapshotCoverage(shiftDemoSnapshotDates(normalizedTemplate, targetToday), targetToday);
+  return validateDemoSnapshotCoverage(
+    alignGrowthRecordsForDemoCoverage(shiftDemoSnapshotDates(normalizedTemplate, targetToday), targetToday),
+    targetToday
+  );
 }
 
 function hydrateDemoSnapshotForToday(snapshot: AppStateSnapshot, targetToday = getLocalToday()) {
@@ -2836,7 +2862,10 @@ function hydrateDemoSnapshotForToday(snapshot: AppStateSnapshot, targetToday = g
     health: keepRecordsOnPresentDays(snapshot.health, attendanceLookup),
   });
 
-  return validateDemoSnapshotCoverage(shiftDemoSnapshotDates(normalizedSnapshot, targetToday), targetToday);
+  return validateDemoSnapshotCoverage(
+    alignGrowthRecordsForDemoCoverage(shiftDemoSnapshotDates(normalizedSnapshot, targetToday), targetToday),
+    targetToday
+  );
 }
 
 function filterChildrenByUser(children: Child[], user: User) {

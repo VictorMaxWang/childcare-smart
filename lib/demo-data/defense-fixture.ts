@@ -405,6 +405,97 @@ function agentView(
   };
 }
 
+function buildConsultationEvidenceItems(params: {
+  profile: DefenseChildProfile;
+  today: string;
+  generatedAt: string;
+  evidenceSourceId: string;
+  keyFindings: string[];
+  schoolAction: string;
+  homeAction: string;
+  followUp48h: string[];
+}): ConsultationResult["evidenceItems"] {
+  if (params.profile.childId !== "c-1") {
+    return [
+      {
+        id: `evidence-${params.profile.childId}-primary`,
+        sourceType: params.profile.childId === "c-3" ? "teacher_note" : "health_check",
+        sourceLabel: params.profile.childId === "c-3" ? "成长记录" : "晨检/健康记录",
+        sourceId: params.evidenceSourceId,
+        summary: params.keyFindings.join("；"),
+        confidence: "high",
+        requiresHumanReview: false,
+        evidenceCategory: "risk_control",
+        supports: [{ type: "finding", targetId: "primary", targetLabel: "主要风险" }],
+        timestamp: params.generatedAt,
+      },
+    ];
+  }
+
+  return [
+    {
+      id: "evidence-c-1-teacher-observation",
+      sourceType: "teacher_note",
+      sourceLabel: "教师观察",
+      sourceId: `health-c-1-${params.today}`,
+      summary: "走廊活动听到推车声后害怕退缩，周老师引导林小雨说出“我害怕”，再牵手完成一小步尝试。",
+      confidence: "high",
+      requiresHumanReview: false,
+      evidenceCategory: "risk_control",
+      supports: [
+        { type: "finding", targetId: "finding:key:0", targetLabel: params.keyFindings[0] },
+        { type: "action", targetId: "action:school:0", targetLabel: params.schoolAction },
+      ],
+      timestamp: params.generatedAt,
+    },
+    {
+      id: "evidence-c-1-growth-record",
+      sourceType: "trend",
+      sourceLabel: "成长记录",
+      sourceId: "growth-defense-c-1-bravery",
+      summary: "成长记录标记“走廊活动、勇敢表达、小步尝试”，说明她已在陪伴下完成牵手向前走一步。",
+      confidence: "high",
+      requiresHumanReview: false,
+      evidenceCategory: "development_support",
+      supports: [
+        { type: "finding", targetId: "finding:key:1", targetLabel: params.keyFindings[1] },
+        { type: "action", targetId: "action:followup:0", targetLabel: params.followUp48h[0] },
+      ],
+      timestamp: params.generatedAt,
+    },
+    {
+      id: "evidence-c-1-parent-feedback",
+      sourceType: "guardian_feedback",
+      sourceLabel: "家长反馈",
+      sourceId: "feedback-defense-c-1",
+      summary: "家长反馈目标是今晚共读绘本，说出“我害怕”，并完成一次走到门口的小步尝试。",
+      confidence: "medium",
+      requiresHumanReview: false,
+      evidenceCategory: "family_communication",
+      supports: [
+        { type: "action", targetId: "action:home:0", targetLabel: params.homeAction },
+        { type: "finding", targetId: "finding:key:2", targetLabel: params.keyFindings[2] },
+      ],
+      timestamp: params.generatedAt,
+    },
+    {
+      id: "evidence-c-1-memory-history",
+      sourceType: "memory_snapshot",
+      sourceLabel: "记忆快照 / 历史跟进",
+      sourceId: "memory-snapshot-c-1-social-emotional",
+      summary: "历史跟进主题持续围绕“勇敢表达与小步尝试”，48 小时复查需要确认她是否能独立表达需求。",
+      confidence: "medium",
+      requiresHumanReview: false,
+      evidenceCategory: "daily_care",
+      supports: [
+        { type: "action", targetId: "action:followup:1", targetLabel: params.followUp48h[1] },
+        { type: "explainability", targetId: "explainability:0", targetLabel: "连续性依据" },
+      ],
+      timestamp: params.generatedAt,
+    },
+  ];
+}
+
 function buildConsultation(params: {
   profile: DefenseChildProfile;
   today: string;
@@ -421,6 +512,8 @@ function buildConsultation(params: {
   const generatedAt = at(params.today, 16, params.generatedMinute);
   const consultationId = `consultation-defense-${params.profile.childId}`;
   const shouldEscalateToAdmin = true;
+  const recommendedOwnerRole = shouldEscalateToAdmin ? "admin" : "teacher";
+  const recommendedOwnerName = shouldEscalateToAdmin ? "陈园长" : DEFENSE_CLASS.teacherName;
 
   return {
     consultationId,
@@ -497,29 +590,25 @@ function buildConsultation(params: {
     directorDecisionCard: {
       title: `${params.profile.name} 48 小时答辩跟进`,
       reason: params.triggerReason,
-      recommendedOwnerRole: params.riskLevel === "high" ? "teacher" : "parent",
-      recommendedOwnerName: params.riskLevel === "high" ? DEFENSE_CLASS.teacherName : params.profile.guardianName,
+      recommendedOwnerRole,
+      recommendedOwnerName,
       recommendedAt: generatedAt,
-      status: params.riskLevel === "high" ? "pending" : "in_progress",
+      status: "pending",
     },
     explainability: [
       { label: "答辩 fixture", detail: "由固定健康、饮食、成长、消息和反馈记录聚合生成。" },
       { label: "儿童", detail: `${params.profile.childId} ${params.profile.name}` },
     ],
-    evidenceItems: [
-      {
-        id: `evidence-${params.profile.childId}-primary`,
-        sourceType: params.profile.childId === "c-3" ? "teacher_note" : "health_check",
-        sourceLabel: params.profile.childId === "c-3" ? "成长记录" : "晨检/健康记录",
-        sourceId: params.evidenceSourceId,
-        summary: params.keyFindings.join("；"),
-        confidence: "high",
-        requiresHumanReview: false,
-        evidenceCategory: "risk_control",
-        supports: [{ type: "finding", targetId: "primary", targetLabel: "主要风险" }],
-        timestamp: generatedAt,
-      },
-    ],
+    evidenceItems: buildConsultationEvidenceItems({
+      profile: params.profile,
+      today: params.today,
+      generatedAt,
+      evidenceSourceId: params.evidenceSourceId,
+      keyFindings: params.keyFindings,
+      schoolAction: params.schoolAction,
+      homeAction: params.homeAction,
+      followUp48h: params.followUp48h,
+    }),
     nextCheckpoints: params.followUp48h,
     coordinatorSummary: {
       finalConclusion: `${params.profile.name} 需要进入答辩固定跟进队列。`,
@@ -555,7 +644,7 @@ function buildConsultations(today: string): ConsultationResult[] {
     buildConsultation({
       profile: DEFENSE_CHILD_PROFILES["c-1"],
       today,
-      riskLevel: "medium",
+      riskLevel: "high",
       triggerReason: "走廊活动害怕退缩，需要勇敢表达与小步尝试的家园协同支持。",
       keyFindings: ["走廊活动听到推车声后退缩", "能在老师陪伴下说出“我害怕”", "家庭今晚需要共读绘本并完成小步尝试"],
       schoolAction: "走廊活动前先预告声音来源，提供牵手一步的可选小目标。",

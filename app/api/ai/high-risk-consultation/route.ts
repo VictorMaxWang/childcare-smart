@@ -7,6 +7,10 @@ import {
 import { buildInterventionCardFromConsultation } from "@/lib/agent/intervention-card";
 import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
 import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
+import {
+  buildLocalHighRiskConsultationFallback,
+  isLinXiaoyuHighRiskConsultationCase,
+} from "@/lib/agent/high-risk-consultation-fallback";
 import { buildTeacherChildSuggestionSnapshotWithMemory } from "@/lib/agent/teacher-agent";
 import {
   resolveAsrProvider,
@@ -152,13 +156,18 @@ export async function POST(request: Request) {
     memoryContext,
   });
 
-  const consultation = await maybeRunHighRiskConsultation(consultationInput);
-  if (!consultation) {
-    return NextResponse.json(
-      { error: "Failed to generate consultation result" },
-      { status: 500, headers: localFallbackHeaders }
-    );
-  }
+  const localFallbackConsultation = buildLocalHighRiskConsultationFallback({
+    input: consultationInput,
+    autoContext,
+    fallbackReason: brainForward.fallbackReason ?? "brain-proxy-unavailable",
+  });
+  const useDefensePrimaryCase = isLinXiaoyuHighRiskConsultationCase({
+    input: consultationInput,
+    autoContext,
+  });
+  const consultation = useDefensePrimaryCase
+    ? localFallbackConsultation
+    : ((await maybeRunHighRiskConsultation(consultationInput)) ?? localFallbackConsultation);
 
   const llmResult = await llmProvider.generateHighRiskConsultationNarrative({
     childName: childContext.child.name,

@@ -1,4 +1,4 @@
-import type { HighRiskConsultationResult } from "@/lib/ai/types";
+import type { ConsultationEvidenceItem, HighRiskConsultationResult } from "@/lib/ai/types";
 import { buildConsultationEvidenceItems } from "@/lib/consultation/evidence";
 
 type NormalizationOptions = {
@@ -356,6 +356,52 @@ function validateNormalizedResult(result: Record<string, unknown>) {
   }
 }
 
+function buildDataQuality(params: {
+  evidenceItems: ConsultationEvidenceItem[];
+  todayInSchoolActions: string[];
+  tonightAtHomeActions: string[];
+  followUp48h: string[];
+  shouldEscalateToAdmin: boolean;
+  providerFallback: boolean;
+}) {
+  const requiredSources = [
+    { key: "teacherObservation", label: "教师观察", pattern: /(教师观察|教师补充|teacher_note)/iu },
+    { key: "growthRecord", label: "成长记录", pattern: /(成长记录|发展支持|growth|trend)/iu },
+    { key: "parentFeedback", label: "家长反馈", pattern: /(家长反馈|guardian_feedback|家庭沟通)/iu },
+    { key: "memorySnapshot", label: "记忆快照 / 历史跟进", pattern: /(记忆快照|历史跟进|历史会诊|memory|consultation_history)/iu },
+  ];
+  const evidenceText = params.evidenceItems
+    .map((item) => `${item.sourceType} ${item.sourceLabel} ${item.sourceId ?? ""} ${item.summary}`)
+    .join("\n");
+  const coveredSources = requiredSources
+    .filter((source) => source.pattern.test(evidenceText))
+    .map((source) => source.label);
+  const warnings = [
+    params.evidenceItems.length < 4 ? "证据链少于 4 条" : "",
+    coveredSources.length < requiredSources.length ? "证据来源覆盖不足" : "",
+    params.todayInSchoolActions.length === 0 ? "今日园内动作缺失" : "",
+    params.tonightAtHomeActions.length === 0 ? "今晚家庭任务缺失" : "",
+    params.followUp48h.length === 0 ? "48 小时复查缺失" : "",
+    !params.shouldEscalateToAdmin ? "管理端承接未开启" : "",
+  ].filter(Boolean);
+
+  return {
+    status: warnings.length === 0 ? "complete" : "review",
+    evidenceCount: params.evidenceItems.length,
+    requiredSourceCoverage: `${coveredSources.length}/${requiredSources.length}`,
+    coveredSources,
+    requiredSources: requiredSources.map((source) => source.label),
+    actionCoverage: {
+      todayInSchool: params.todayInSchoolActions.length > 0,
+      tonightAtHome: params.tonightAtHomeActions.length > 0,
+      followUp48h: params.followUp48h.length > 0,
+      adminHandoff: params.shouldEscalateToAdmin,
+    },
+    providerFallback: params.providerFallback,
+    warnings,
+  };
+}
+
 export function normalizeHighRiskConsultationResult(
   rawResult: Record<string, unknown>,
   options: NormalizationOptions = {}
@@ -398,6 +444,15 @@ export function normalizeHighRiskConsultationResult(
     multimodalNotes: asRecord(result.multimodalNotes),
     rawEvidenceItems: result.evidenceItems,
   });
+  const shouldEscalateToAdmin = coordinatorSummary.shouldEscalateToAdmin;
+  const dataQuality = buildDataQuality({
+    evidenceItems,
+    todayInSchoolActions,
+    tonightAtHomeActions,
+    followUp48h,
+    shouldEscalateToAdmin,
+    providerFallback: Boolean(providerTrace.fallback),
+  });
 
   const normalized: Record<string, unknown> = {
     ...result,
@@ -420,7 +475,7 @@ export function normalizeHighRiskConsultationResult(
     continuityNotes,
     evidenceItems,
     participants,
-    shouldEscalateToAdmin: coordinatorSummary.shouldEscalateToAdmin,
+    shouldEscalateToAdmin,
     coordinatorSummary,
     directorDecisionCard,
     providerTrace,
@@ -443,6 +498,7 @@ export function normalizeHighRiskConsultationResult(
       coordinationConclusion: coordinatorSummary.finalConclusion,
       keyFindings,
       evidenceCount: evidenceItems.length,
+      dataQuality,
     },
     explainability,
     reviewIn48h:

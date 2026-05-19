@@ -93,6 +93,18 @@ test("D-SEED includes the defense scenario fixture matrix", () => {
   assert.ok(priorityConsultations.some((consultation) => consultation.childId === "c-1"));
   assert.ok(priorityConsultations.some((consultation) => consultation.childId === "c-2"));
   assert.ok(priorityConsultations.some((consultation) => consultation.childId === "c-3"));
+  const xiaoyuConsultation = priorityConsultations.find((consultation) => consultation.childId === "c-1");
+  assert.equal(xiaoyuConsultation?.riskLevel, "high");
+  assert.equal(xiaoyuConsultation?.directorDecisionCard.recommendedOwnerRole, "admin");
+  assert.equal(xiaoyuConsultation?.directorDecisionCard.recommendedOwnerName, "陈园长");
+  assert.ok((xiaoyuConsultation?.evidenceItems.length ?? 0) >= 4);
+  assert.ok(xiaoyuConsultation?.evidenceItems.some((item) => item.sourceLabel === "教师观察"));
+  assert.ok(xiaoyuConsultation?.evidenceItems.some((item) => item.sourceLabel === "成长记录"));
+  assert.ok(xiaoyuConsultation?.evidenceItems.some((item) => item.sourceLabel === "家长反馈"));
+  assert.ok(xiaoyuConsultation?.evidenceItems.some((item) => item.sourceLabel === "记忆快照 / 历史跟进"));
+  assert.ok((xiaoyuConsultation?.todayInSchoolActions.length ?? 0) > 0);
+  assert.ok((xiaoyuConsultation?.tonightAtHomeActions.length ?? 0) > 0);
+  assert.ok((xiaoyuConsultation?.followUp48h.length ?? 0) > 0);
 });
 
 test("D-SEED storybooks and media refs have safe local fallbacks", () => {

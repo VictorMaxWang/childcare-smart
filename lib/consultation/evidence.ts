@@ -357,33 +357,50 @@ export function normalizeConsultationEvidenceItems(
   return items;
 }
 
+function withEvidenceProvenance(
+  item: ConsultationEvidenceItem,
+  providerTrace: Record<string, unknown> | null | undefined
+) {
+  const provenance = buildProvenance(providerTrace);
+  if (!provenance) return item;
+
+  const metadata = asRecord(item.metadata);
+  if (metadata.provenance) return item;
+
+  return {
+    ...item,
+    metadata: {
+      ...metadata,
+      provenance,
+    },
+  };
+}
+
+function dedupeEvidenceItems(items: ConsultationEvidenceItem[]) {
+  const seen = new Set<string>();
+  const deduped: ConsultationEvidenceItem[] = [];
+
+  items.forEach((item) => {
+    const key = [
+      item.sourceType,
+      item.sourceId ?? "",
+      item.sourceLabel,
+      item.summary,
+    ].join("::");
+    if (seen.has(key)) return;
+    seen.add(key);
+    deduped.push(item);
+  });
+
+  return deduped;
+}
+
 export function buildConsultationEvidenceItems(
   params: ConsultationEvidenceBuildParams
 ): ConsultationEvidenceItem[] {
-  const normalizedExisting = normalizeConsultationEvidenceItems(params.rawEvidenceItems);
-  if (normalizedExisting.length > 0) {
-    const provenance = buildProvenance(params.providerTrace);
-    if (!provenance) {
-      return normalizedExisting;
-    }
-
-    return normalizedExisting.map((item) => {
-      const metadata = asRecord(item.metadata);
-      if (metadata.provenance) {
-        return item;
-      }
-
-      return {
-        ...item,
-        metadata: {
-          ...metadata,
-          provenance,
-        },
-      };
-    });
-  }
-
-  const evidenceItems: ConsultationEvidenceItem[] = [];
+  const evidenceItems: ConsultationEvidenceItem[] = normalizeConsultationEvidenceItems(
+    params.rawEvidenceItems
+  ).map((item) => withEvidenceProvenance(item, params.providerTrace));
   const consultationId = params.consultationId || "unknown";
   const multimodalNotes = asRecord(params.multimodalNotes);
   const generatedAt = asString(params.generatedAt) || undefined;
@@ -636,7 +653,7 @@ export function buildConsultationEvidenceItems(
     if (item) evidenceItems.push(item);
   });
 
-  return evidenceItems;
+  return dedupeEvidenceItems(evidenceItems);
 }
 
 export function filterConsultationEvidenceItemsByStage(

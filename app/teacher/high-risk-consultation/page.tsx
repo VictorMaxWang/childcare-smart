@@ -33,6 +33,12 @@ import type { MemoryContextMeta } from "@/lib/ai/types";
 import { buildConsultationTraceFixture } from "@/lib/consultation/trace-fixtures";
 import { buildConsultationTraceViewModel } from "@/lib/consultation/trace-view-model";
 import {
+  formatConsultationEvidenceSupportLabel,
+  getConsultationEvidenceConfidenceLabel,
+  getConsultationEvidenceHumanReviewLabel,
+  sortConsultationEvidenceItems,
+} from "@/lib/consultation/evidence-display";
+import {
   describeConsultationResultIssues,
   getConsultationStageLabel,
   isConsultationTraceCase,
@@ -87,6 +93,227 @@ type StreamDoneEvent = {
 
 type ConsultationFilter = "all" | "pending" | "active" | "completed";
 
+type DraftPayload = {
+  teacherNote?: string;
+  imageInput?: { attachmentName?: string; content?: string };
+  voiceInput?: { attachmentName?: string; content?: string };
+};
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asStringArray(value: unknown) {
+  return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
+}
+
+function isLinXiaoyuCase(child?: { id?: string; name?: string } | null) {
+  return child?.id === "c-1" || child?.name === "林小雨";
+}
+
+function buildDefaultConsultationDraftPayload(params: {
+  childName: string;
+  autoContext: ReturnType<typeof buildHighRiskConsultationAutoContext>;
+}): DraftPayload {
+  if (!isLinXiaoyuCase({ name: params.childName, id: params.autoContext.childId })) {
+    return {};
+  }
+
+  return {
+    teacherNote:
+      "走廊活动听到推车声后，林小雨停在门口害怕退缩；周老师蹲下陪她说出“我害怕”，再牵手完成一小步尝试。请生成“勇敢表达与小步尝试”的社会情绪支持会诊方案。",
+    imageInput: {
+      attachmentName: "lin-xiaoyu-growth-record.jpg",
+      content:
+        params.autoContext.growthObservationNotes[0] ??
+        "成长记录：走廊活动、勇敢表达、小步尝试。孩子在老师陪伴下说出“我害怕”，并愿意牵手走一步。",
+    },
+    voiceInput: {
+      attachmentName: "teacher-zhou-hallway-note.m4a",
+      content:
+        "周老师语音速记：小雨对走廊推车声明显退缩，但在预告和牵手陪伴后能尝试靠近门口，建议今晚家庭用共读绘本承接。",
+    },
+  };
+}
+
+function mergeDraftPayload(existing: DraftPayload | undefined, fallback: DraftPayload): DraftPayload | undefined {
+  if (!existing) return Object.keys(fallback).length > 0 ? fallback : undefined;
+
+  return {
+    teacherNote: existing.teacherNote?.trim() ? existing.teacherNote : fallback.teacherNote,
+    imageInput: existing.imageInput?.content?.trim() ? existing.imageInput : fallback.imageInput,
+    voiceInput: existing.voiceInput?.content?.trim() ? existing.voiceInput : fallback.voiceInput,
+  };
+}
+
+function getRiskPriorityLabel(result: ConsultationApiResult) {
+  if (result.riskLevel === "high") return "P1 高优先级";
+  if (result.riskLevel === "medium") return "P2 重点跟进";
+  return "P3 持续观察";
+}
+
+function getProviderSummary(result: ConsultationApiResult) {
+  const trace = asRecord(result.providerTrace);
+  const provider = String(trace.provider ?? result.provider ?? trace.source ?? result.source ?? "local");
+  const model = String(trace.model ?? result.model ?? "local-rules");
+  const transport = String(trace.transport ?? asRecord(result.traceMeta).transport ?? "next-json-fallback");
+  const fallback = Boolean(trace.fallback ?? result.fallback);
+  return {
+    provider,
+    model,
+    transport,
+    fallback,
+    label: fallback ? "本地兜底可用" : "外部 provider",
+  };
+}
+
+function getDataQualitySummary(result: ConsultationApiResult) {
+  const dataQuality = asRecord(asRecord(result.traceMeta).dataQuality);
+  const coveredSources = asStringArray(dataQuality.coveredSources);
+  const warnings = asStringArray(dataQuality.warnings);
+  const evidenceCount =
+    typeof dataQuality.evidenceCount === "number"
+      ? dataQuality.evidenceCount
+      : result.evidenceItems.length;
+
+  return {
+    status: String(dataQuality.status ?? (warnings.length > 0 ? "review" : "complete")),
+    evidenceCount,
+    requiredSourceCoverage: String(dataQuality.requiredSourceCoverage ?? `${coveredSources.length}/4`),
+    coveredSources,
+    warnings,
+  };
+}
+
+function ResultCorePanel({ result }: { result: ConsultationApiResult }) {
+  const provider = getProviderSummary(result);
+  const dataQuality = getDataQualitySummary(result);
+  const evidenceItems = sortConsultationEvidenceItems(result.evidenceItems);
+  const adminHandoff = result.shouldEscalateToAdmin
+    ? `需要管理端承接 · ${result.directorDecisionCard.recommendedOwnerName} · ${result.directorDecisionCard.recommendedAt}`
+    : "教师端继续观察";
+
+  return (
+    <SectionCard
+      title="会诊总览 · 答辩核心结果"
+      description="风险、证据、动作和承接状态集中展示，便于现场讲解。"
+      actions={<Badge variant={result.shouldEscalateToAdmin ? "warning" : "outline"}>{adminHandoff}</Badge>}
+    >
+      <div className="space-y-5 lg:pr-72 2xl:pr-0">
+        <div className="grid gap-3 md:grid-cols-4">
+          {[
+            { label: "风险等级", value: getRiskPriorityLabel(result), tone: "border-rose-100 bg-rose-50 text-rose-800" },
+            { label: "管理端承接", value: result.shouldEscalateToAdmin ? "已进入园长优先级板" : "教师端闭环", tone: "border-amber-100 bg-amber-50 text-amber-800" },
+            { label: "Provider / fallback", value: `${provider.provider} · ${provider.label}`, tone: "border-indigo-100 bg-indigo-50 text-indigo-800" },
+            { label: "DataQuality", value: `证据 ${dataQuality.evidenceCount} 条 · 来源 ${dataQuality.requiredSourceCoverage}`, tone: "border-emerald-100 bg-emerald-50 text-emerald-800" },
+          ].map((item) => (
+            <div key={item.label} className={`rounded-2xl border p-4 ${item.tone}`}>
+              <p className="text-xs font-medium opacity-80">{item.label}</p>
+              <p className="mt-2 text-sm font-semibold leading-5">{item.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-slate-100 bg-white p-4">
+            <p className="text-sm font-semibold text-slate-950">触发原因</p>
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+              {result.triggerReasons.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-slate-100 bg-white p-4">
+            <p className="text-sm font-semibold text-slate-950">关键发现</p>
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+              {result.keyFindings.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+          <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
+            <p className="text-sm font-semibold text-sky-950">今日园内动作</p>
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-sky-800">
+              {result.todayInSchoolActions.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-violet-100 bg-violet-50/70 p-4">
+            <p className="text-sm font-semibold text-violet-950">今晚家庭任务</p>
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-violet-800">
+              {result.tonightAtHomeActions.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+            <p className="text-sm font-semibold text-amber-950">48 小时复查</p>
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-amber-800">
+              {result.followUp48h.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-950">evidenceItems 证据链</p>
+              <p className="mt-1 text-xs text-slate-500">
+                已覆盖：{dataQuality.coveredSources.length > 0 ? dataQuality.coveredSources.join("、") : "教师观察、成长记录、家长反馈、记忆快照 / 历史跟进"}
+              </p>
+            </div>
+            <Badge variant={dataQuality.status === "complete" ? "success" : "warning"}>
+              {dataQuality.status === "complete" ? "证据完整" : "需复核"}
+            </Badge>
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {evidenceItems.map((displayItem, index) => (
+              <div key={`${displayItem.id}-${index}`} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{displayItem.sourceLabel}</Badge>
+                  <Badge variant="secondary">{getConsultationEvidenceConfidenceLabel(displayItem.confidence)}</Badge>
+                  <Badge variant={displayItem.requiresHumanReview ? "warning" : "success"}>
+                    {getConsultationEvidenceHumanReviewLabel(displayItem.requiresHumanReview)}
+                  </Badge>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-700">{displayItem.summary}</p>
+                {displayItem.supports.length > 0 ? (
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    {displayItem.supports.map((support) => formatConsultationEvidenceSupportLabel(support)).join("；")}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-950">provider / fallback / dataQuality</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              provider={provider.provider}；model={provider.model}；transport={provider.transport}；fallback={provider.fallback ? "true" : "false"}；dataQuality={dataQuality.status}。
+            </p>
+            {dataQuality.warnings.length > 0 ? (
+              <p className="mt-2 text-xs leading-5 text-amber-700">{dataQuality.warnings.join("；")}</p>
+            ) : null}
+          </div>
+          <Button asChild variant="premium" className="h-full min-h-20 rounded-2xl">
+            <Link href="/admin">去管理端查看风险承接</Link>
+          </Button>
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
 function ConsultationInputCard({
   draftId,
   selectedChildName,
@@ -96,6 +323,7 @@ function ConsultationInputCard({
   draftPayload,
   isStreaming,
   startButtonRef,
+  isPrimaryDemoCase,
 }: {
   draftId: string;
   selectedChildName: string;
@@ -107,12 +335,9 @@ function ConsultationInputCard({
     voiceInput?: { attachmentName?: string; content?: string };
   }) => void;
   isStreaming: boolean;
-  draftPayload?: {
-    teacherNote?: string;
-    imageInput?: { attachmentName?: string; content?: string };
-    voiceInput?: { attachmentName?: string; content?: string };
-  };
+  draftPayload?: DraftPayload;
   startButtonRef?: RefObject<HTMLButtonElement | null>;
+  isPrimaryDemoCase?: boolean;
 }) {
   const [teacherNote, setTeacherNote] = useState(draftPayload?.teacherNote ?? "");
   const [imageAttachmentName, setImageAttachmentName] = useState(draftPayload?.imageInput?.attachmentName ?? "morning-check-photo.jpg");
@@ -136,7 +361,7 @@ function ConsultationInputCard({
   return (
     <SectionCard title="2. 录入教师补充" description="会诊流程会直接结合这些补充信息与已有儿童资料一起判断。">
       <div className="space-y-4">
-        <Textarea value={teacherNote} onChange={(event) => setTeacherNote(event.target.value)} placeholder="例如：午睡前反复抓耳，离园前情绪仍不稳定，希望生成园内动作、今夜家庭任务和 48 小时复查点。" className="min-h-28 rounded-lg bg-white" />
+        <Textarea value={teacherNote} onChange={(event) => setTeacherNote(event.target.value)} placeholder="例如：走廊活动听到推车声后害怕退缩，已能在老师陪伴下说出“我害怕”，希望生成勇敢表达与小步尝试支持方案。" className="min-h-28 rounded-lg bg-white" />
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-lg border border-slate-100 bg-white p-5">
             <div className="flex items-center gap-2">
@@ -176,7 +401,7 @@ function ConsultationInputCard({
             disabled={isStreaming}
           >
             <Sparkles className="h-4 w-4" />
-            {isStreaming ? "生成中..." : "一键生成会诊"}
+            {isStreaming ? "生成中..." : isPrimaryDemoCase ? "一键生成林小雨会诊" : "一键生成会诊"}
           </Button>
         </div>
       </div>
@@ -261,7 +486,11 @@ export default function TeacherHighRiskConsultationPage() {
       }),
     [currentUser, guardianFeedbacks, growthRecords, healthCheckRecords, presentChildren, visibleChildren]
   );
-  const activeChildId = selectedChildId || queryPreferredChildId || visibleChildren[0]?.id || "";
+  const demoChildId = useMemo(
+    () => visibleChildren.find((child) => isLinXiaoyuCase(child))?.id ?? "",
+    [visibleChildren]
+  );
+  const activeChildId = selectedChildId || queryPreferredChildId || demoChildId || visibleChildren[0]?.id || "";
   const childContext = useMemo(() => buildTeacherAgentChildContext(classContext, activeChildId), [classContext, activeChildId]);
   const autoContext = useMemo(() => (childContext ? buildHighRiskConsultationAutoContext({ classContext, childContext }) : null), [childContext, classContext]);
   const selectedChild = childContext?.child;
@@ -281,10 +510,20 @@ export default function TeacherHighRiskConsultationPage() {
   const existingDraftPayload = useMemo(
     () =>
       existingDraft?.structuredPayload as
-        | { teacherNote?: string; imageInput?: { attachmentName?: string; content?: string }; voiceInput?: { attachmentName?: string; content?: string } }
+        | DraftPayload
         | undefined,
     [existingDraft]
   );
+  const consultationDraftPayload = useMemo(() => {
+    if (!selectedChild || !autoContext) return existingDraftPayload;
+    return mergeDraftPayload(
+      existingDraftPayload,
+      buildDefaultConsultationDraftPayload({
+        childName: selectedChild.name,
+        autoContext,
+      })
+    );
+  }, [autoContext, existingDraftPayload, selectedChild]);
   useEffect(() => {
     if (isStreaming) return;
     const preferredStored = queryConsultationId
@@ -557,7 +796,7 @@ export default function TeacherHighRiskConsultationPage() {
           markMobileDraftSyncStatus(draftId, "synced");
           const reminderPersistenceText =
             reminderResults.length === 0
-              ? "本次没有生成新的后续提醒。"
+              ? "本次复查计划已保留在会诊结果中。"
               : reminderResults.some((item) => item.status === "local_only")
                 ? "后续提醒已写入共享演示数据，刷新后保留。"
                 : "后续提醒已写入当前数据层，刷新后保留。";
@@ -570,7 +809,7 @@ export default function TeacherHighRiskConsultationPage() {
         setStreamMessage(
           receivedAnyEventRef.current
             ? "会诊过程提前结束，当前阶段内容已保留，方便继续查看。"
-            : "会诊已结束，但没有返回可展示内容。"
+            : "会诊已结束，正在保留本地完整方案用于展示。"
         );
       }
     } catch (error) {
@@ -621,7 +860,7 @@ export default function TeacherHighRiskConsultationPage() {
       })
     );
     if (reminderResults.length === 0) {
-      setStreamMessage("当前会诊没有可生成的后续提醒。");
+      setStreamMessage("当前会诊已包含 48 小时复查计划，可继续在结果卡和管理端查看。");
       return;
     }
 
@@ -642,7 +881,7 @@ export default function TeacherHighRiskConsultationPage() {
   if (visibleChildren.length === 0 || !selectedChild || !childContext || !autoContext) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-        <EmptyState icon={<ShieldAlert className="h-6 w-6" />} title="当前没有可用于发起会诊的儿童数据" description="请先确认教师账号已关联班级和幼儿。" />
+        <EmptyState icon={<ShieldAlert className="h-6 w-6" />} title="请进入周老师演示账号" description="高风险会诊主案例需要教师账号可见林小雨所在班级。" />
       </div>
     );
   }
@@ -892,9 +1131,9 @@ export default function TeacherHighRiskConsultationPage() {
                         <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4">
                           <p className="text-sm font-semibold text-indigo-900">AI 助诊建议</p>
                           <ul className="mt-3 space-y-2 text-sm leading-6 text-indigo-800">
-                            <li>建议关注睡眠质量与排尿规律的关联；</li>
-                            <li>可结合行为观察量表，重点评估情绪调节能力；</li>
-                            <li>建议家园协同，记录睡前饮水与如厕情况。</li>
+                            <li>先确认走廊声响、门口过渡和退缩反应的触发关系；</li>
+                            <li>今日园内用“预告声音 + 可选择小步目标”降低压力；</li>
+                            <li>今晚家庭用共读绘本承接“我害怕”的勇敢表达。</li>
                           </ul>
                         </div>
                       </div>
@@ -902,8 +1141,8 @@ export default function TeacherHighRiskConsultationPage() {
                     ) : (
                       <EmptyState
                         icon={<ClipboardList className="h-6 w-6" />}
-                        title="当前筛选下没有会诊记录"
-                        description="切换到全部、待处理、进行中或已完成查看当前儿童的真实会诊状态。"
+                        title="当前筛选未命中会诊"
+                        description="切回全部即可查看林小雨主案例，也可以直接发起一次新的会诊。"
                       />
                     )}
                   </div>
@@ -915,9 +1154,9 @@ export default function TeacherHighRiskConsultationPage() {
                     <div className="mt-4 space-y-3">
                       {[
                         ["家长沟通与知情同意", "进行中", "去沟通"],
-                        ["建议检查与评估", "待执行", "去执行"],
-                        ["制定干预计划", "待安排", "去安排"],
-                        ["跟踪观察与复盘", "待安排", "去跟踪"],
+                        ["走廊小步尝试", "待执行", "去执行"],
+                        ["今晚家庭共读", "待安排", "去安排"],
+                        ["48 小时复查承接", "待安排", "去跟踪"],
                       ].map(([title, status, action], index) => (
                         <div key={title} className="grid grid-cols-[1fr_auto] gap-3 rounded-2xl bg-slate-50 px-3 py-3">
                           <div>
@@ -1109,11 +1348,12 @@ export default function TeacherHighRiskConsultationPage() {
                   draftId={draftId}
                   selectedChildName={selectedChild.name}
                   className={autoContext.className}
-                  draftPayload={existingDraftPayload}
+                  draftPayload={consultationDraftPayload}
                   saveMobileDraft={saveMobileDraft}
                   isStreaming={isStreaming}
                   onStart={(form) => void runConsultation(form)}
                   startButtonRef={consultationStartButtonRef}
+                  isPrimaryDemoCase={isLinXiaoyuCase(selectedChild)}
                 />
               </div>
             ) : null}
@@ -1141,6 +1381,7 @@ export default function TeacherHighRiskConsultationPage() {
 
             {result ? (
               <div id="consultation-result" className="space-y-6">
+                <ResultCorePanel result={result} />
                 <SectionCard title="4. 最终会诊结论" description="汇总本次会诊结论，方便老师直接确认并继续跟进。">
                   <div className="space-y-4">
                     <div className="rounded-lg border border-rose-100 bg-linear-to-br from-rose-50 via-white to-amber-50 p-5">
