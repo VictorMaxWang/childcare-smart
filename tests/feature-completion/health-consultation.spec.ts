@@ -24,7 +24,7 @@ test("D08 health material parse and consultation persist across teacher director
   const materialToken = `R02-MATERIAL-${stamp}`;
   const noteToken = `R02-NOTE-${stamp}`;
 
-  const teacher = await demoContext(testInfo, "u-teacher");
+  const teacher = await demoContext(testInfo, "u-teacher2");
   const director = await demoContext(testInfo, "u-admin");
   const parent = await demoContext(testInfo, "u-parent");
 
@@ -156,7 +156,7 @@ test("D08 health material parse and consultation persist across teacher director
     );
     expect(parentMaterials.some((item) => item.materialId === material.materialId && item.filename === filename)).toBe(true);
 
-    await loginAs(page, "u-teacher", "/teacher/health-file-bridge");
+    await loginAs(page, "u-teacher2", "/teacher/health-file-bridge");
     await expect(page.getByTestId("d05-health-history")).toContainText(filename, { timeout: 20_000 });
     await capture(page, "health-01-api-parse-save-consultation.png");
 

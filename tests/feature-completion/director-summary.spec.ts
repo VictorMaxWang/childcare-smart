@@ -120,7 +120,7 @@ test("D08 director dashboard summarizes current API records instead of fixed moc
 
     await page.goto("/admin/agent?action=weekly-report");
     await expect(page.getByTestId("weekly-history-list")).toBeVisible({ timeout: 20_000 });
-    await page.getByText(/归档|褰掓。/).click();
+    await page.getByRole("button", { name: /查看归档|查看褰掓。/ }).click();
     await expect(page.getByTestId("weekly-history-list")).toContainText(reportTitle, { timeout: 20_000 });
     await capture(page, "director-02-weekly-report-archive-share-export.png");
   } finally {
