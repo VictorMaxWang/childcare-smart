@@ -14,6 +14,7 @@ import {
   buildAdminConsultationPriorityItems,
   type AdminConsultationPriorityItem,
 } from "@/lib/agent/admin-consultation";
+import { buildAdminGovernanceDemoViewModel } from "@/lib/agent/admin-governance-demo";
 import type { ConsultationInput } from "@/lib/agent/consultation/input";
 import { buildLocalHighRiskConsultationFallback } from "@/lib/agent/high-risk-consultation-fallback";
 import { dedupeAdminHomeExposure } from "@/lib/agent/admin-home-dedupe";
@@ -153,6 +154,7 @@ export default function AdminHomePage() {
     conversations,
     healthMaterials,
     mealRecords,
+    tasks,
     getAdminBoardData,
     getWeeklyDietTrend,
     getSmartInsights,
@@ -255,6 +257,14 @@ export default function AdminHomePage() {
       })
       .slice(0, 8);
   }, [consultationPriorityItems, localConsultationPriorityItems]);
+  const governancePriorityItems = useMemo(() => {
+    const seen = new Set<string>();
+    return [...priorityBoardItems, ...localConsultationPriorityItems, ...consultationPriorityItems].filter((item) => {
+      if (seen.has(item.consultationId)) return false;
+      seen.add(item.consultationId);
+      return true;
+    });
+  }, [consultationPriorityItems, localConsultationPriorityItems, priorityBoardItems]);
 
   const adminHomePayload = useMemo(
     () => ({
@@ -297,7 +307,7 @@ export default function AdminHomePage() {
     () => dedupeAdminHomeExposure(home, priorityBoardItems),
     [home, priorityBoardItems]
   );
-  const latestFamilyFeedback = useMemo(() => {
+  const mergedFamilyFeedbacks = useMemo(() => {
     const byId = new Map<string, GuardianFeedback>();
     [...guardianFeedbacks, ...apiFeedbacks].forEach((feedback) => {
       const feedbackId = feedback.feedbackId || feedback.id;
@@ -308,12 +318,26 @@ export default function AdminHomePage() {
       }
     });
 
-    const latest = Array.from(byId.values()).sort((left, right) =>
+    return Array.from(byId.values()).sort((left, right) =>
       feedbackTimestampOf(right).localeCompare(feedbackTimestampOf(left))
-    )[0];
+    );
+  }, [apiFeedbacks, guardianFeedbacks]);
 
-    return latest ? buildFamilyFeedbackWriteback(latest, visibleChildren) : null;
-  }, [apiFeedbacks, guardianFeedbacks, visibleChildren]);
+  const familyFeedbackWritebacks = useMemo(() => {
+    const preferredFeedbacks = ["c-1", "c-3"]
+      .map((childId) => mergedFamilyFeedbacks.find((feedback) => feedback.childId === childId))
+      .filter((feedback): feedback is GuardianFeedback => Boolean(feedback));
+    const preferredIds = new Set(preferredFeedbacks.map((feedback) => feedback.feedbackId || feedback.id));
+
+    return [
+      ...preferredFeedbacks,
+      ...mergedFamilyFeedbacks.filter((feedback) => !preferredIds.has(feedback.feedbackId || feedback.id)),
+    ]
+      .slice(0, 5)
+      .map((feedback) => buildFamilyFeedbackWriteback(feedback, visibleChildren));
+  }, [mergedFamilyFeedbacks, visibleChildren]);
+
+  const latestFamilyFeedback = familyFeedbackWritebacks[0] ?? null;
   const communicationSummary = useMemo(
     () =>
       buildAdminCommunicationSummary({
@@ -322,6 +346,33 @@ export default function AdminHomePage() {
         children: visibleChildren,
       }),
     [conversations, messages, visibleChildren]
+  );
+  const governanceDemo = useMemo(
+    () =>
+      buildAdminGovernanceDemoViewModel({
+        priorityItems: governancePriorityItems,
+        home: displayHome,
+        adminSummary,
+        weeklyReport,
+        familyFeedbacks: mergedFamilyFeedbacks,
+        tasks,
+        healthMaterials,
+        growthRecords,
+        mealRecords,
+        children: visibleChildren,
+      }),
+    [
+      adminSummary,
+      displayHome,
+      growthRecords,
+      healthMaterials,
+      mealRecords,
+      mergedFamilyFeedbacks,
+      governancePriorityItems,
+      tasks,
+      visibleChildren,
+      weeklyReport,
+    ]
   );
   const weeklyReportPayload = useMemo(
     () => ({
@@ -491,6 +542,8 @@ export default function AdminHomePage() {
         adminSummaryLoading={adminSummaryLoading}
         adminSummaryError={adminSummaryError}
         communicationSummary={communicationSummary}
+        governanceDemo={governanceDemo}
+        familyFeedbackWritebacks={familyFeedbackWritebacks}
         latestFamilyFeedback={latestFamilyFeedback}
         onMarkCommunicationHandled={handleMarkCommunicationHandled}
         onOpenFeedbackDetail={handleOpenFeedbackDetail}
@@ -503,7 +556,7 @@ export default function AdminHomePage() {
         onOpenChange={setFeedbackDetailOpen}
         onUpdated={() => setWeeklyReportRefreshNonce((value) => value + 1)}
       />
-      <section className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
+      <section id="admin-risk-priority-detail" className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
         <div className="rounded-lg border border-amber-100 bg-white p-4 shadow-sm">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>

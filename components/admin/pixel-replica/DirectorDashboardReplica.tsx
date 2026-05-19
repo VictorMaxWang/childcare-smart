@@ -1,23 +1,35 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
   CalendarCheck2,
   ClipboardCheck,
+  Clock3,
   Download,
   HeartPulse,
+  Link2,
+  ListChecks,
   RefreshCw,
   Share2,
+  ShieldCheck,
   Utensils,
   UsersRound,
 } from "lucide-react";
 import type { AdminHomeViewModel, InstitutionPriorityLevel } from "@/lib/agent/admin-types";
+import type {
+  AdminGovernanceActionItem,
+  AdminGovernanceDemoViewModel,
+  AdminGovernanceRiskItem,
+} from "@/lib/agent/admin-governance-demo";
 import type { WeeklyReportResponse } from "@/lib/ai/types";
 import type { ApiAdminSummary } from "@/lib/api/types";
 import type { AdminCommunicationSummary } from "@/lib/communication/home-school";
 import { formatHomeSchoolTime } from "@/lib/communication/home-school";
+import { cn } from "@/lib/utils";
 import {
   ReplicaBarChart,
   ReplicaComboChart,
@@ -54,9 +66,21 @@ export interface AdminFamilyFeedbackWriteback {
   sourceLabel: string;
 }
 
+type ReplicaTone = "blue" | "purple" | "green" | "orange" | "red" | "slate";
+
 function priorityTone(level: InstitutionPriorityLevel) {
   if (level === "P1") return "red";
   if (level === "P2") return "orange";
+  return "blue";
+}
+
+function governanceActionTone(action: AdminGovernanceActionItem): ReplicaTone {
+  return action.tone;
+}
+
+function governanceRiskTone(item: AdminGovernanceRiskItem): ReplicaTone {
+  if (item.priorityLabel === "P1") return "red";
+  if (item.priorityLabel === "P2") return "orange";
   return "blue";
 }
 
@@ -73,6 +97,8 @@ export default function DirectorDashboardReplica({
   adminSummaryLoading,
   adminSummaryError,
   communicationSummary,
+  governanceDemo,
+  familyFeedbackWritebacks,
   latestFamilyFeedback,
   onMarkCommunicationHandled,
   onOpenFeedbackDetail,
@@ -90,6 +116,8 @@ export default function DirectorDashboardReplica({
   adminSummaryLoading: boolean;
   adminSummaryError: string | null;
   communicationSummary: AdminCommunicationSummary;
+  governanceDemo: AdminGovernanceDemoViewModel;
+  familyFeedbackWritebacks?: AdminFamilyFeedbackWriteback[];
   latestFamilyFeedback?: AdminFamilyFeedbackWriteback | null;
   onMarkCommunicationHandled: (conversationId: string) => void;
   onOpenFeedbackDetail: () => void;
@@ -179,6 +207,21 @@ export default function DirectorDashboardReplica({
       rate: assignmentCompletionRate,
     },
   ];
+  const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null);
+  const selectedRisk = useMemo(
+    () =>
+      governanceDemo.riskItems.find((item) => item.id === selectedRiskId) ??
+      governanceDemo.riskItems[0] ??
+      null,
+    [governanceDemo.riskItems, selectedRiskId]
+  );
+  const feedbackWritebackRows =
+    familyFeedbackWritebacks && familyFeedbackWritebacks.length > 0
+      ? familyFeedbackWritebacks
+      : latestFamilyFeedback
+        ? [latestFamilyFeedback]
+        : [];
+  const highRiskPendingCount = governanceDemo.riskItems.filter((item) => item.priorityLabel === "P1").length;
 
   const metrics = [
     {
@@ -239,6 +282,331 @@ export default function DirectorDashboardReplica({
         </>
       }
     >
+      <div data-testid="admin-governance-hero" className="grid gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+        <ReplicaPanel
+          title="风险优先级板"
+          description="按 P1/P2、会诊风险、状态和生成时间排序，点击可在同屏查看承接详情。"
+          actions={<ReplicaPill tone="red">待处理高风险个案 {highRiskPendingCount}</ReplicaPill>}
+        >
+          <div data-testid="admin-risk-priority-compact" className="space-y-3">
+            {governanceDemo.riskItems.map((item, index) => {
+              const selected = selectedRisk?.id === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  data-testid={`admin-risk-item-${item.targetId}`}
+                  onClick={() => setSelectedRiskId(item.id)}
+                  className={cn(
+                    "w-full rounded-[16px] border px-4 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-[#635BFF]/30",
+                    selected
+                      ? "border-[#635BFF] bg-[#F4F3FF] shadow-[0_12px_28px_rgba(99,91,255,0.12)]"
+                      : "border-[#E8ECF7] bg-[#FBFCFF] hover:border-[#C8CEF4] hover:bg-white"
+                  )}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ReplicaPill tone={governanceRiskTone(item)}>{item.priorityLabel}</ReplicaPill>
+                        <span className="text-[11px] font-semibold text-[#7A86A6]">#{index + 1}</span>
+                        <span className="text-[11px] font-semibold text-[#7A86A6]">{item.statusLabel}</span>
+                      </div>
+                      <p className="mt-2 break-words text-sm font-bold text-[#172554]">
+                        {item.childName} · {item.riskLabel}
+                      </p>
+                      <p className="mt-1 text-xs text-[#7A86A6]">{item.className} · {item.generatedAtLabel}</p>
+                    </div>
+                    <ArrowRight className={cn("mt-1 h-4 w-4 shrink-0", selected ? "text-[#635BFF]" : "text-[#A7B0CA]")} />
+                  </div>
+                  <p className="mt-3 line-clamp-2 text-xs leading-5 text-[#596681]">{item.signal}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {item.tags.slice(0, 4).map((tag) => (
+                      <span key={tag} className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-[#596681] ring-1 ring-[#E8ECF7]">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </ReplicaPanel>
+
+        <div className="space-y-5">
+          <ReplicaPanel title="个案信号转机构动作" actions={<ReplicaPill tone="purple">链路摘要</ReplicaPill>}>
+            <div data-testid="admin-governance-chain-summary" className="space-y-3">
+              <p className="text-sm font-bold text-[#172554]">
+                {selectedRisk ? `${selectedRisk.childName} · ${selectedRisk.priorityLabel}` : "暂无选中风险"}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {[
+                  {
+                    label: "信号",
+                    value: selectedRisk?.signal ?? "等待风险信号",
+                    tone: "red" as const,
+                  },
+                  {
+                    label: "机构动作",
+                    value:
+                      selectedRisk?.schoolActions[0] ??
+                      selectedRisk?.governanceActions[0] ??
+                      "等待园内动作",
+                    tone: "purple" as const,
+                  },
+                  {
+                    label: "复查/回流",
+                    value:
+                      selectedRisk?.followUpActions[0] ??
+                      selectedRisk?.feedbackNotes[0] ??
+                      "等待 48 小时复查",
+                    tone: "green" as const,
+                  },
+                ].map((step) => (
+                  <div key={step.label} className="rounded-[14px] bg-[#FBFCFF] p-3 ring-1 ring-[#E8ECF7]">
+                    <ReplicaPill tone={step.tone}>{step.label}</ReplicaPill>
+                    <p className="mt-2 line-clamp-3 text-xs leading-5 text-[#596681]">{step.value}</p>
+                  </div>
+                ))}
+              </div>
+              <a href="#admin-risk-priority-detail" className="inline-flex items-center gap-2 text-xs font-semibold text-[#5B58DE]">
+                查看完整 trace 与承接卡
+                <ArrowRight className="h-3.5 w-3.5" />
+              </a>
+            </div>
+          </ReplicaPanel>
+
+          <ReplicaPanel
+            title="质量驾驶舱"
+            description="关键治理指标直接来自会诊、任务、反馈和材料解析数据。"
+            actions={<ReplicaPill tone="green">趋势变化</ReplicaPill>}
+          >
+            <div data-testid="admin-quality-cockpit" className="grid gap-3 sm:grid-cols-2">
+              {governanceDemo.qualityMetrics.map((metric) => (
+                <div key={metric.key} className="rounded-[15px] border border-[#E8ECF7] bg-[#FBFCFF] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold text-[#7A86A6]">{metric.label}</p>
+                    <ReplicaPill tone={metric.tone}>{metric.trend}</ReplicaPill>
+                  </div>
+                  <p className="mt-3 text-2xl font-bold leading-none text-[#172554]">{metric.value}</p>
+                  <p className="mt-2 text-xs leading-5 text-[#596681]">{metric.detail}</p>
+                </div>
+              ))}
+            </div>
+            <div data-testid="admin-governance-trend" className="mt-4 space-y-2">
+              {governanceDemo.trendRows.map((row) => (
+                <div key={row.label} className="grid grid-cols-[42px_1fr] items-center gap-3 text-xs">
+                  <span className="font-semibold text-[#7A86A6]">{row.label}</span>
+                  <div className="grid gap-1">
+                    <div className="h-1.5 rounded-full bg-red-100">
+                      <div className="h-1.5 rounded-full bg-red-500" style={{ width: `${Math.min(100, row.risk * 8)}%` }} />
+                    </div>
+                    <div className="h-1.5 rounded-full bg-emerald-100">
+                      <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${Math.min(100, row.feedback * 8)}%` }} />
+                    </div>
+                    <div className="h-1.5 rounded-full bg-violet-100">
+                      <div className="h-1.5 rounded-full bg-violet-500" style={{ width: `${Math.min(100, row.action * 8)}%` }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ReplicaPanel>
+
+          <ReplicaPanel title="个案信号转机构动作详情" actions={<ReplicaPill tone="purple">链路摘要</ReplicaPill>}>
+            <div data-testid="admin-governance-chain-detail-summary" className="space-y-3">
+              <p className="text-sm font-bold text-[#172554]">
+                {selectedRisk ? `${selectedRisk.childName} · ${selectedRisk.priorityLabel}` : "暂无选中风险"}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {[
+                  {
+                    label: "信号",
+                    value: selectedRisk?.signal ?? "等待风险信号",
+                    tone: "red" as const,
+                  },
+                  {
+                    label: "机构动作",
+                    value:
+                      selectedRisk?.schoolActions[0] ??
+                      selectedRisk?.governanceActions[0] ??
+                      "等待园内动作",
+                    tone: "purple" as const,
+                  },
+                  {
+                    label: "复查/回流",
+                    value:
+                      selectedRisk?.followUpActions[0] ??
+                      selectedRisk?.feedbackNotes[0] ??
+                      "等待 48 小时复查",
+                    tone: "green" as const,
+                  },
+                ].map((step) => (
+                  <div key={step.label} className="rounded-[14px] bg-[#FBFCFF] p-3 ring-1 ring-[#E8ECF7]">
+                    <ReplicaPill tone={step.tone}>{step.label}</ReplicaPill>
+                    <p className="mt-2 line-clamp-3 text-xs leading-5 text-[#596681]">{step.value}</p>
+                  </div>
+                ))}
+              </div>
+              <a href="#admin-risk-priority-detail" className="inline-flex items-center gap-2 text-xs font-semibold text-[#5B58DE]">
+                查看完整 trace 与承接卡
+                <ArrowRight className="h-3.5 w-3.5" />
+              </a>
+            </div>
+          </ReplicaPanel>
+
+          <ReplicaPanel title="周度摘要" actions={<ReplicaPill tone="blue">非空周报</ReplicaPill>}>
+            <div data-testid="admin-weekly-governance-summary" className="space-y-4">
+              <p className="text-sm leading-7 text-[#596681]">{governanceDemo.weeklySummary.summary}</p>
+              <div className="grid gap-3 md:grid-cols-3">
+                {[
+                  { title: "本周亮点", items: governanceDemo.weeklySummary.highlights, tone: "green" as const },
+                  { title: "风险提醒", items: governanceDemo.weeklySummary.risks, tone: "red" as const },
+                  { title: "下周动作", items: governanceDemo.weeklySummary.nextWeekActions, tone: "blue" as const },
+                ].map((section) => (
+                  <div key={section.title} className="rounded-[15px] bg-[#FBFCFF] p-3 ring-1 ring-[#E8ECF7]">
+                    <ReplicaPill tone={section.tone}>{section.title}</ReplicaPill>
+                    <ul className="mt-3 space-y-2 text-xs leading-5 text-[#596681]">
+                      {section.items.slice(0, 3).map((item) => (
+                        <li key={item} className="break-words">{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </ReplicaPanel>
+        </div>
+      </div>
+
+      <ReplicaPanel
+        title="个案信号转机构动作"
+        description={governanceDemo.bridgeSummary}
+        actions={
+          <a
+            href="#admin-risk-priority-detail"
+            className="inline-flex h-8 items-center gap-2 rounded-full bg-[#EEF4FF] px-3 text-xs font-semibold text-[#5B58DE] ring-1 ring-[#DDE5FF]"
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            完整 trace 风险板
+          </a>
+        }
+      >
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)]">
+          <div data-testid="admin-risk-detail" className="rounded-[16px] border border-[#E8ECF7] bg-[#FBFCFF] p-4">
+            {selectedRisk ? (
+              <>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ReplicaPill tone={governanceRiskTone(selectedRisk)}>{selectedRisk.priorityLabel}</ReplicaPill>
+                      <ReplicaPill tone="slate">{selectedRisk.statusLabel}</ReplicaPill>
+                    </div>
+                    <h3 className="mt-3 break-words text-lg font-bold text-[#172554]">
+                      {selectedRisk.childName} · {selectedRisk.riskLabel}
+                    </h3>
+                    <p className="mt-1 text-xs text-[#7A86A6]">{selectedRisk.className} · {selectedRisk.generatedAtLabel}</p>
+                  </div>
+                  <ShieldCheck className="h-6 w-6 text-[#635BFF]" />
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-[14px] bg-white p-3 ring-1 ring-[#E8ECF7]">
+                    <p className="text-xs font-bold text-[#172554]">触发信号</p>
+                    <p className="mt-2 text-xs leading-5 text-[#596681]">{selectedRisk.signal}</p>
+                  </div>
+                  <div className="rounded-[14px] bg-white p-3 ring-1 ring-[#E8ECF7]">
+                    <p className="text-xs font-bold text-[#172554]">证据来源</p>
+                    <ul className="mt-2 space-y-1.5 text-xs leading-5 text-[#596681]">
+                      {(selectedRisk.evidenceSources.length > 0 ? selectedRisk.evidenceSources : ["教师观察、成长记录、家庭反馈已纳入 trace。"]).slice(0, 4).map((item) => (
+                        <li key={item} className="break-words">{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="rounded-[14px] bg-white p-3 ring-1 ring-[#E8ECF7]">
+                    <p className="text-xs font-bold text-[#172554]">园内动作</p>
+                    <ul className="mt-2 space-y-1.5 text-xs leading-5 text-[#596681]">
+                      {(selectedRisk.schoolActions.length > 0 ? selectedRisk.schoolActions : selectedRisk.governanceActions).slice(0, 3).map((item) => (
+                        <li key={item} className="break-words">{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="rounded-[14px] bg-white p-3 ring-1 ring-[#E8ECF7]">
+                    <p className="text-xs font-bold text-[#172554]">家庭反馈</p>
+                    <ul className="mt-2 space-y-1.5 text-xs leading-5 text-[#596681]">
+                      {(selectedRisk.feedbackNotes.length > 0 ? selectedRisk.feedbackNotes : selectedRisk.familyActions).slice(0, 3).map((item) => (
+                        <li key={item} className="break-words">{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-[14px] border border-orange-100 bg-orange-50 p-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-orange-700">
+                    <Clock3 className="h-4 w-4" />
+                    48 小时复查
+                  </div>
+                  <ul className="mt-2 space-y-1.5 text-xs leading-5 text-orange-800">
+                    {(selectedRisk.followUpActions.length > 0 ? selectedRisk.followUpActions : ["48 小时内复查并回填园内承接结果。"]).slice(0, 3).map((item) => (
+                      <li key={item} className="break-words">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-[#7A86A6]">暂无可展示的风险详情。</p>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <section id="admin-review-48h-tasks" data-testid="admin-review-48h-tasks" className="rounded-[16px] border border-[#E8ECF7] bg-white p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-bold text-[#172554]">48 小时复查任务</h3>
+                <ReplicaPill tone="orange">{governanceDemo.reviewTasks48h.length} 项</ReplicaPill>
+              </div>
+              <div className="mt-3 space-y-3">
+                {governanceDemo.reviewTasks48h.slice(0, 4).map((task) => (
+                  <article key={task.id} className="rounded-[14px] bg-[#FBFCFF] p-3 ring-1 ring-[#E8ECF7]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words text-xs font-bold text-[#172554]">{task.title}</p>
+                        <p className="mt-1 text-[11px] text-[#7A86A6]">{task.childName} · {task.ownerLabel} · {task.dueLabel}</p>
+                      </div>
+                      <ReplicaPill tone={task.statusLabel === "已闭环" ? "green" : "orange"}>{task.statusLabel}</ReplicaPill>
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#596681]">{task.description}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section data-testid="admin-governance-actions" className="rounded-[16px] border border-[#E8ECF7] bg-white p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-bold text-[#172554]">园内治理动作</h3>
+                <ListChecks className="h-4 w-4 text-[#635BFF]" />
+              </div>
+              <div className="mt-3 space-y-3">
+                {governanceDemo.governanceActions.map((action) => (
+                  <a
+                    key={action.id}
+                    href={action.href}
+                    className="block rounded-[14px] bg-[#FBFCFF] p-3 ring-1 ring-[#E8ECF7] transition hover:bg-white hover:ring-[#C8CEF4]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words text-xs font-bold text-[#172554]">{action.title}</p>
+                        <p className="mt-1 text-[11px] text-[#7A86A6]">{action.targetName} · {action.ownerLabel}</p>
+                      </div>
+                      <ReplicaPill tone={governanceActionTone(action)}>{action.statusLabel}</ReplicaPill>
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#596681]">{action.detail}</p>
+                  </a>
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
+      </ReplicaPanel>
+
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
         <div className="space-y-5">
           <ReplicaPanel className="overflow-hidden" bodyClassName="p-0">
@@ -503,7 +871,7 @@ export default function DirectorDashboardReplica({
               <p className="mt-3 text-xs text-[#7A86A6]">
                 {feedbackExpectedCount > 0 ? `已完成 ${feedbackCompletedCount} / 应完成 ${feedbackExpectedCount}` : "暂无绑定家长反馈对象"}
               </p>
-              {latestFamilyFeedback ? (
+              {latestFamilyFeedback && feedbackWritebackRows.length === 0 ? (
                 <article
                   data-testid="admin-family-feedback-writeback"
                   className="mt-5 rounded-[15px] border border-[#DCE5FF] bg-white p-4 text-left shadow-sm"
@@ -539,6 +907,46 @@ export default function DirectorDashboardReplica({
                   <p className="mt-2 text-[11px] font-semibold text-[#23B26D]">{latestFamilyFeedback.sourceLabel}</p>
                 </article>
               ) : null}
+              <div id="admin-family-feedback-flow" data-testid="admin-family-feedback-flow" className="mt-5 space-y-3 text-left">
+                <p className="text-sm font-bold text-[#172554]">家庭反馈回流情况</p>
+                {feedbackWritebackRows.slice(0, 4).map((feedback) => (
+                  <article
+                    key={feedback.feedbackId}
+                    data-testid="admin-family-feedback-writeback"
+                    className="rounded-[15px] border border-[#DCE5FF] bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-bold text-[#172554]">
+                          {feedback.childName} · 家庭执行结果
+                        </p>
+                        <p className="mt-1 text-xs text-[#7A86A6]">
+                          {feedback.className} · {feedback.submittedAtLabel}
+                        </p>
+                      </div>
+                      <ReplicaPill tone="green">已回流</ReplicaPill>
+                    </div>
+                    <dl className="mt-3 grid gap-2 text-xs text-[#596681]">
+                      <div className="flex items-center justify-between gap-3">
+                        <dt>执行</dt>
+                        <dd className="text-right font-semibold text-[#172554]">{feedback.executionStatusLabel}</dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <dt>孩子反应</dt>
+                        <dd className="text-right font-semibold text-[#172554]">{feedback.childReactionLabel}</dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <dt>效果</dt>
+                        <dd className="text-right font-semibold text-[#172554]">{feedback.improvementStatusLabel}</dd>
+                      </div>
+                    </dl>
+                    <p className="mt-3 line-clamp-3 text-xs leading-5 text-[#596681]">
+                      {feedback.notes}
+                    </p>
+                    <p className="mt-2 text-[11px] font-semibold text-[#23B26D]">{feedback.sourceLabel}</p>
+                  </article>
+                ))}
+              </div>
               <ReplicaButton data-testid="admin-open-feedback-detail" onClick={onOpenFeedbackDetail} variant="soft" className="mt-5 w-full">
                 查看反馈详情
               </ReplicaButton>
