@@ -88,6 +88,24 @@ export function formatParentFeedbackStatusLabel(status: string | undefined) {
   return STATUS_LABELS[normalized] ?? normalized;
 }
 
+export function formatParentFeedbackExecutionLabel(
+  status: ParentStructuredFeedbackLite["executionStatus"] | undefined
+) {
+  return status ? EXECUTION_LABELS[status] ?? status : "执行情况未填写";
+}
+
+export function formatParentFeedbackReactionLabel(
+  reaction: ParentStructuredFeedbackLite["childReaction"] | undefined
+) {
+  return reaction ? REACTION_LABELS[reaction] ?? reaction : "孩子反应未填写";
+}
+
+export function formatParentFeedbackImprovementLabel(
+  status: ParentStructuredFeedbackLite["improvementStatus"] | undefined
+) {
+  return status ? IMPROVEMENT_LABELS[status] ?? status : "效果暂未判断";
+}
+
 export function collectStructuredFeedbackCandidates(
   values: Array<unknown>,
   scope?: Pick<StructuredFeedbackConsumptionScope, "childId">

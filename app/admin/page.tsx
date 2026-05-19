@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import FeedbackDetailDialog from "@/components/communication/FeedbackDetailDialog";
-import DirectorDashboardReplica from "@/components/admin/pixel-replica/DirectorDashboardReplica";
+import DirectorDashboardReplica, {
+  type AdminFamilyFeedbackWriteback,
+} from "@/components/admin/pixel-replica/DirectorDashboardReplica";
 import RiskPriorityBoard from "@/components/admin/RiskPriorityBoard";
 import EmptyState from "@/components/EmptyState";
 import { buildAdminHomeViewModel, buildAdminWeeklyReportSnapshot } from "@/lib/agent/admin-agent";
@@ -22,6 +24,12 @@ import { getAdminSummary } from "@/lib/api/analytics";
 import { listFeedback as listApiFeedback, type ApiFeedback } from "@/lib/api/communication";
 import type { ApiAdminSummary } from "@/lib/api/types";
 import { buildAdminCommunicationSummary } from "@/lib/communication/home-school";
+import {
+  formatParentFeedbackExecutionLabel,
+  formatParentFeedbackImprovementLabel,
+  formatParentFeedbackReactionLabel,
+} from "@/lib/feedback/consumption";
+import type { GuardianFeedback } from "@/lib/feedback/types";
 import { INSTITUTION_NAME, useApp } from "@/lib/store";
 
 const TODAY_TEXT = new Date().toLocaleDateString("zh-CN", {
@@ -29,6 +37,40 @@ const TODAY_TEXT = new Date().toLocaleDateString("zh-CN", {
   day: "numeric",
   weekday: "long",
 });
+
+function feedbackTimestampOf(feedback: Pick<GuardianFeedback, "submittedAt" | "date">) {
+  return feedback.submittedAt ?? feedback.date ?? "";
+}
+
+function formatFeedbackTime(value: string | undefined) {
+  if (!value) return "刚刚回流";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value.slice(0, 16);
+  return parsed.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function buildFamilyFeedbackWriteback(
+  feedback: GuardianFeedback,
+  children: Array<{ id: string; name: string; className: string }>
+): AdminFamilyFeedbackWriteback {
+  const child = children.find((item) => item.id === feedback.childId);
+  return {
+    feedbackId: feedback.feedbackId,
+    childName: child?.name ?? feedback.childId,
+    className: child?.className ?? "未分班",
+    executionStatusLabel: formatParentFeedbackExecutionLabel(feedback.executionStatus),
+    childReactionLabel: formatParentFeedbackReactionLabel(feedback.childReaction),
+    improvementStatusLabel: formatParentFeedbackImprovementLabel(feedback.improvementStatus),
+    notes: feedback.notes || feedback.freeNote || feedback.content || "家长已提交家庭执行结果。",
+    submittedAtLabel: formatFeedbackTime(feedbackTimestampOf(feedback)),
+    sourceLabel: feedback.sourceChannel === "parent-agent" ? "来自家长行动页 feedback writeback" : `来源：${feedback.sourceChannel}`,
+  };
+}
 
 function buildLinXiaoyuDefenseFallback(params: {
   childName?: string;
@@ -255,6 +297,23 @@ export default function AdminHomePage() {
     () => dedupeAdminHomeExposure(home, priorityBoardItems),
     [home, priorityBoardItems]
   );
+  const latestFamilyFeedback = useMemo(() => {
+    const byId = new Map<string, GuardianFeedback>();
+    [...guardianFeedbacks, ...apiFeedbacks].forEach((feedback) => {
+      const feedbackId = feedback.feedbackId || feedback.id;
+      if (!feedbackId) return;
+      const existing = byId.get(feedbackId);
+      if (!existing || feedbackTimestampOf(feedback).localeCompare(feedbackTimestampOf(existing)) >= 0) {
+        byId.set(feedbackId, feedback as GuardianFeedback);
+      }
+    });
+
+    const latest = Array.from(byId.values()).sort((left, right) =>
+      feedbackTimestampOf(right).localeCompare(feedbackTimestampOf(left))
+    )[0];
+
+    return latest ? buildFamilyFeedbackWriteback(latest, visibleChildren) : null;
+  }, [apiFeedbacks, guardianFeedbacks, visibleChildren]);
   const communicationSummary = useMemo(
     () =>
       buildAdminCommunicationSummary({
@@ -432,6 +491,7 @@ export default function AdminHomePage() {
         adminSummaryLoading={adminSummaryLoading}
         adminSummaryError={adminSummaryError}
         communicationSummary={communicationSummary}
+        latestFamilyFeedback={latestFamilyFeedback}
         onMarkCommunicationHandled={handleMarkCommunicationHandled}
         onOpenFeedbackDetail={handleOpenFeedbackDetail}
         onRefresh={handleRefreshDashboard}

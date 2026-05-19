@@ -13,6 +13,11 @@ import type {
 } from "@/lib/ai/types";
 import { describeAgeBandActionGuidance, getAgeBandLabel, resolveAgeBandContext } from "@/lib/age-band/policy";
 import { toFollowUpFeedbackLite } from "@/lib/feedback/normalize";
+import {
+  formatParentFeedbackExecutionLabel,
+  formatParentFeedbackImprovementLabel,
+  formatParentFeedbackReactionLabel,
+} from "@/lib/feedback/consumption";
 import type { GuardianFeedback } from "@/lib/feedback/types";
 import { getLocalToday, isDateWithinLastDays, normalizeLocalDate } from "@/lib/date";
 import {
@@ -1025,6 +1030,33 @@ function findDemoChild(context: TeacherAgentClassContext, name: string, id: stri
   return context.visibleChildren.find((child) => child.name === name || child.id === id);
 }
 
+function feedbackTimestamp(feedback: TeacherAgentGuardianFeedbackSnapshot) {
+  return feedback.submittedAt ?? feedback.date ?? "";
+}
+
+function latestWeeklyFeedbackForChild(context: TeacherAgentClassContext, childId: string) {
+  return context.weeklyFeedbacks
+    .filter((item) => item.childId === childId)
+    .sort((left, right) => feedbackTimestamp(right).localeCompare(feedbackTimestamp(left)))[0];
+}
+
+function formatTeacherFeedbackWriteback(
+  feedback: TeacherAgentGuardianFeedbackSnapshot | undefined,
+  childName: string
+) {
+  if (!feedback) return undefined;
+  const notes = feedback.notes || feedback.freeNote || feedback.content;
+  return [
+    `${childName}家庭反馈已回流`,
+    `执行：${formatParentFeedbackExecutionLabel(feedback.executionStatus)}`,
+    `孩子反应：${formatParentFeedbackReactionLabel(feedback.childReaction)}`,
+    `效果：${formatParentFeedbackImprovementLabel(feedback.improvementStatus)}`,
+    notes ? `备注：${notes}` : undefined,
+  ]
+    .filter((item): item is string => Boolean(item))
+    .join("；");
+}
+
 function buildDefenseWeeklySummaryParts(context: TeacherAgentClassContext) {
   const lin = findDemoChild(context, "林小雨", "c-1");
   const gao = findDemoChild(context, "高远舟", "c-12");
@@ -1035,12 +1067,17 @@ function buildDefenseWeeklySummaryParts(context: TeacherAgentClassContext) {
   const linName = "林小雨";
   const gaoName = "高远舟";
   const chenName = "陈安安";
+  const linFeedbackSummary = lin
+    ? formatTeacherFeedbackWriteback(latestWeeklyFeedbackForChild(context, lin.id), linName)
+    : undefined;
 
   const actionItems: TeacherAgentActionItem[] = [
     {
       id: "demo-weekly-lin-hallway",
       target: linName,
-      reason: "走廊活动听到响声后害怕、退缩，需要练习勇敢表达与小步尝试。",
+      reason: linFeedbackSummary
+        ? `走廊活动听到响声后害怕、退缩，需要结合最新家庭反馈继续判断。${linFeedbackSummary}`
+        : "走廊活动听到响声后害怕、退缩，需要练习勇敢表达与小步尝试。",
       action: "明天走廊活动前先预告推车声来源，老师牵手陪走一步，引导说出“我有点害怕”或“我想先牵手走一步”。",
       timing: "明天走廊活动前",
     },
@@ -1068,20 +1105,22 @@ function buildDefenseWeeklySummaryParts(context: TeacherAgentClassContext) {
   ];
 
   return {
-    summary: `本周${context.className}需要优先闭环三名儿童和四类班级待办：${linName}在走廊活动听到响声后害怕、退缩，需要勇敢表达与小步尝试；${gaoName}午睡前焦虑且饮水偏少，今日必须离园前复查；${chenName}午餐进食偏少，需要家园同步饮食观察。班级层面同步处理晨检异常、成长记录补录、家长反馈待回复和 48 小时复查。`,
+    summary: `本周${context.className}需要优先闭环三名儿童和四类班级待办：${linName}在走廊活动听到响声后害怕、退缩，需要勇敢表达与小步尝试；${linFeedbackSummary ? `${linFeedbackSummary}；` : ""}${gaoName}午睡前焦虑且饮水偏少，今日必须离园前复查；${chenName}午餐进食偏少，需要家园同步饮食观察。班级层面同步处理晨检异常、成长记录补录、家长反馈待回复和 48 小时复查。`,
     highlights: [
+      ...(linFeedbackSummary ? [linFeedbackSummary] : []),
       `${linName}：走廊活动听到推车声后停在门口，出现害怕和退缩，老师已用“我有点害怕/我想先牵手走一步”做表达示范。`,
       `${gaoName}：午睡前反复确认老师是否在旁边，握水杯但主动饮水少，午后补水记录和离园前复查不能漏。`,
       `${chenName}：午餐主食少量、蔬菜剩余较多，今晚要请家长同步晚餐食量、饮水和次日入园状态。`,
       "班级待办：晨检异常、成长记录补录、家长反馈待回复、48 小时复查需要分时段闭环。",
     ],
     actionItems,
-    parentMessageDraft: `各位家长您好，本周${context.className}已完成观察梳理。老师会重点跟进${linName}走廊活动勇敢表达、${gaoName}午睡前焦虑和饮水偏少、${chenName}午餐进食偏少。今天离园前我们会逐一同步需家庭配合的观察点，如今晚有发热、饮食明显减少、睡眠或情绪波动，请及时反馈给班级老师。`,
+    parentMessageDraft: `各位家长您好，本周${context.className}已完成观察梳理。老师会重点跟进${linName}走廊活动勇敢表达、${gaoName}午睡前焦虑和饮水偏少、${chenName}午餐进食偏少。${linFeedbackSummary ? `其中${linFeedbackSummary}，明天会继续核对家庭执行后的连续变化。` : ""}今天离园前我们会逐一同步需家庭配合的观察点，如今晚有发热、饮食明显减少、睡眠或情绪波动，请及时反馈给班级老师。`,
     tomorrowObservationPoint:
       `明天先复盘${linName}走廊活动是否能说出害怕或请求牵手，午睡后核对${gaoName}饮水和入睡情况，午餐后记录${chenName}主食与蔬菜摄入。`,
     keyChildren: [linName, gaoName, chenName],
     riskTypes: ["走廊活动退缩", "午睡前焦虑", "饮水偏少", "午餐进食偏少", "48 小时复查"],
     reviewItems: [
+      ...(linFeedbackSummary ? [`${linName}：已收到家庭执行结果，明天先核对是否延续到走廊小步尝试。`] : []),
       `${linName}：明天走廊活动后记录是否完成一次小步尝试和勇敢表达。`,
       `${gaoName}：今日 16:30 前复查午睡入睡、精神状态和饮水累计。`,
       `${chenName}：今晚家园同步晚餐食量、饮水和次日入园状态。`,

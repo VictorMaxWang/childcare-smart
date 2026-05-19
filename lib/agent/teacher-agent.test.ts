@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { AiFollowUpResponse, AiSuggestionResponse } from "@/lib/ai/types";
+import type { AiFollowUpResponse, AiSuggestionResponse, WeeklyReportResponse } from "@/lib/ai/types";
 import {
   buildTeacherAgentChildContext,
   buildTeacherAgentClassContext,
   buildTeacherCommunicationResult,
   buildTeacherFollowUpResult,
+  buildTeacherWeeklySummaryResult,
 } from "./teacher-agent.ts";
+import { getLocalToday } from "@/lib/date";
 
 function birthDateMonthsAgo(monthsAgo: number) {
   const today = new Date();
@@ -145,4 +147,107 @@ test("teacher-agent follow-up result uses tri-band action shaping", () => {
   assert.ok(olderToddlerResult.actionItems.some((item) => item.action.includes("先固定一个同伴或规则场景练习")));
   assert.match(olderToddlerResult.tomorrowObservationPoint ?? "", /是否主动靠近同伴、轮流和回应冲突/);
   assert.match(olderToddlerResult.interventionCard?.todayInSchoolAction ?? "", /同伴|规则场景/);
+});
+
+test("teacher-agent weekly summary surfaces Lin Xiaoyu parent feedback writeback", () => {
+  const today = getLocalToday();
+  const classContext = buildTeacherAgentClassContext({
+    currentUser: {
+      name: "李老师",
+      className: "向阳班",
+      institutionId: "inst-1",
+      role: "教师",
+    },
+    visibleChildren: [
+      {
+        id: "c-1",
+        name: "林小雨",
+        birthDate: "2022-03-01",
+        className: "向阳班",
+        allergies: [],
+        specialNotes: "走廊活动听到响声后容易害怕、退缩。",
+        guardians: [{ name: "林妈妈", relation: "妈妈", phone: "DEMO-PHONE-001" }],
+      },
+      {
+        id: "c-12",
+        name: "高远舟",
+        birthDate: "2022-04-01",
+        className: "向阳班",
+        allergies: [],
+        specialNotes: "午睡前焦虑。",
+      },
+      {
+        id: "c-5",
+        name: "陈安安",
+        birthDate: "2022-05-01",
+        className: "向阳班",
+        allergies: [],
+        specialNotes: "午餐进食偏少。",
+      },
+    ],
+    presentChildren: [],
+    healthCheckRecords: [],
+    mealRecords: [],
+    growthRecords: [
+      {
+        id: "growth-c-1-hallway",
+        childId: "c-1",
+        createdAt: today,
+        category: "情绪表现",
+        tags: ["走廊活动"],
+        description: "林小雨走廊活动听到推车声后退缩。",
+        needsAttention: true,
+        reviewStatus: "待复查",
+      },
+    ],
+    guardianFeedbacks: [
+      {
+        feedbackId: "feedback-api-lin-writeback",
+        id: "feedback-api-lin-writeback",
+        childId: "c-1",
+        sourceRole: "parent",
+        sourceChannel: "parent-agent",
+        executionStatus: "completed",
+        executionCount: 1,
+        executorRole: "parent",
+        childReaction: "improved",
+        improvementStatus: "clear_improvement",
+        barriers: [],
+        notes: "写回链路测试：完成共读，孩子愿意复述我害怕并走到门口。",
+        attachments: {},
+        submittedAt: `${today}T21:00:00.000Z`,
+        source: { kind: "structured", workflow: "parent-agent" },
+        fallback: {},
+        date: `${today}T21:00:00.000Z`,
+        status: "completed",
+        content: "写回链路测试：完成共读，孩子愿意复述我害怕并走到门口。",
+        createdBy: "u-parent",
+        createdByRole: "家长",
+        executed: true,
+        improved: true,
+      },
+    ],
+  });
+
+  const result = buildTeacherWeeklySummaryResult({
+    classContext,
+    report: {
+      schemaVersion: "v2-actionized",
+      role: "teacher",
+      summary: "",
+      highlights: [],
+      risks: [],
+      nextWeekActions: [],
+      trendPrediction: "stable",
+      sections: [],
+      disclaimer: "test",
+      source: "fallback",
+    } satisfies WeeklyReportResponse,
+  });
+  const text = JSON.stringify(result);
+
+  assert.match(text, /家庭反馈已回流/);
+  assert.match(text, /写回链路测试/);
+  assert.match(text, /孩子反应比之前更顺|明显更顺/);
+  assert.match(text, /已经出现明确改善|明确改善/);
 });

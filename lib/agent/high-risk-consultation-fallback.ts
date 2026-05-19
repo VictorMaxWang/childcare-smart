@@ -125,6 +125,7 @@ function buildEvidenceItems(params: {
   followUp48h: string[];
   childId: string;
   socialEmotionalCase: boolean;
+  parentFeedbackNote?: string;
 }) {
   const teacherObservation = params.socialEmotionalCase
     ? "走廊活动听到推车声后，林小雨停在门口害怕退缩；周老师蹲下陪伴后，她能说出“我害怕”。"
@@ -132,9 +133,11 @@ function buildEvidenceItems(params: {
   const growthRecord = params.socialEmotionalCase
     ? "成长记录记录了“走廊活动、勇敢表达、小步尝试”：孩子在陪伴下完成牵手向前走一小步。"
     : "成长记录提示当前动作需要拆成可复查的小目标。";
-  const parentFeedback = params.socialEmotionalCase
-    ? "家长反馈目标是今晚共读《林小雨的一小步勇敢》，观察孩子能否复述故事并尝试走到门口。"
-    : "家长反馈需要补齐今晚家庭动作执行情况和孩子第一反应。";
+  const parentFeedback =
+    params.parentFeedbackNote ??
+    (params.socialEmotionalCase
+      ? "家长反馈目标是今晚共读《林小雨的一小步勇敢》，观察孩子能否复述故事并尝试走到门口。"
+      : "家长反馈需要补齐今晚家庭动作执行情况和孩子第一反应。");
   const memorySnapshot = params.socialEmotionalCase
     ? "记忆快照显示本轮主题持续围绕“勇敢表达与小步尝试”，需要 48 小时复查是否能独立表达需求。"
     : "历史跟进显示该儿童已进入会诊闭环，需要在 48 小时内复核执行结果。";
@@ -176,7 +179,11 @@ function buildEvidenceItems(params: {
       id: `ce:${params.consultationId}:guardian_feedback:parent_feedback:0`,
       sourceType: "guardian_feedback",
       sourceLabel: "家长反馈",
-      sourceId: params.socialEmotionalCase ? "feedback-defense-c-1" : `guardian-feedback-${params.childId}`,
+      sourceId: params.parentFeedbackNote
+        ? `guardian-feedback-latest-${params.childId}`
+        : params.socialEmotionalCase
+          ? "feedback-defense-c-1"
+          : `guardian-feedback-${params.childId}`,
       summary: parentFeedback,
       excerpt: parentFeedback,
       confidence: "medium",
@@ -291,6 +298,7 @@ export function buildLocalHighRiskConsultationFallback(params: {
   const schoolAction = todayInSchoolActions[0];
   const homeAction = tonightAtHomeActions[0];
   const reviewIn48h = followUp48h[0];
+  const latestParentFeedbackNote = autoContext?.parentFeedbackNotes[0];
   const triggerType: ConsultationTriggerType[] = ["admin-priority", "multi-risk"];
   const explainability: ExplainabilityItem[] = [
     {
@@ -299,7 +307,9 @@ export function buildLocalHighRiskConsultationFallback(params: {
     },
     {
       label: "证据链",
-      detail: "教师观察、成长记录、家长反馈和记忆快照均指向同一支持目标。",
+      detail: latestParentFeedbackNote
+        ? `教师观察、成长记录、最新家长反馈和记忆快照均指向同一支持目标。${latestParentFeedbackNote}`
+        : "教师观察、成长记录、家长反馈和记忆快照均指向同一支持目标。",
     },
     {
       label: "协调结论",
@@ -310,6 +320,7 @@ export function buildLocalHighRiskConsultationFallback(params: {
     [
       ...(input.continuityNotes ?? []),
       socialEmotionalCase ? "历史跟进主题：勇敢表达与小步尝试。" : undefined,
+      latestParentFeedbackNote ? `最新家庭反馈：${latestParentFeedbackNote}` : undefined,
       params.fallbackReason ? `fallback：${params.fallbackReason}` : undefined,
     ],
     6
@@ -323,6 +334,7 @@ export function buildLocalHighRiskConsultationFallback(params: {
     followUp48h,
     childId: input.childId,
     socialEmotionalCase,
+    parentFeedbackNote: latestParentFeedbackNote,
   });
 
   const healthAgentView = buildView(
@@ -348,7 +360,7 @@ export function buildLocalHighRiskConsultationFallback(params: {
   const parentCommunicationAgentView = buildView(
     "ParentCommunicationAgent",
     "家园沟通",
-    homeAction,
+    latestParentFeedbackNote ? `最新家庭反馈已回流：${latestParentFeedbackNote}` : homeAction,
     takeUnique([autoContext?.parentFeedbackNotes[0], keyFindings[2]], 4),
     tonightAtHomeActions,
     ["家长是否完成共读", "孩子是否愿意尝试", "明早反馈是否覆盖第一反应"],

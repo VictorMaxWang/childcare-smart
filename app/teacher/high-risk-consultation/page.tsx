@@ -55,6 +55,8 @@ import {
   type ConsultationTraceMode,
   type FollowUp48hCardData,
 } from "@/lib/consultation/trace-types";
+import { listFeedback as listApiFeedback, type ApiFeedback } from "@/lib/api/communication";
+import { normalizeGuardianFeedbackCollection } from "@/lib/feedback/normalize";
 import { getDraftSyncStatusLabel } from "@/lib/mobile/local-draft-cache";
 import { buildReminderItems } from "@/lib/mobile/reminders";
 import { formatDisplayDate, getAgeText, useApp } from "@/lib/store";
@@ -466,6 +468,7 @@ export default function TeacherHighRiskConsultationPage() {
   const [discussionNotes, setDiscussionNotes] = useState<string[]>([]);
   const [sideActionMessage, setSideActionMessage] = useState<string | null>(null);
   const [setupFocusMessage, setSetupFocusMessage] = useState<string | null>(null);
+  const [apiFeedbacks, setApiFeedbacks] = useState<ApiFeedback[]>([]);
 
   const receivedAnyEventRef = useRef(false);
   const receivedDoneRef = useRef(false);
@@ -473,6 +476,10 @@ export default function TeacherHighRiskConsultationPage() {
   const consultationStartGuardRef = useRef(false);
   const consultationSetupRef = useRef<HTMLDivElement | null>(null);
   const consultationStartButtonRef = useRef<HTMLButtonElement | null>(null);
+  const mergedGuardianFeedbacks = useMemo(
+    () => normalizeGuardianFeedbackCollection([...guardianFeedbacks, ...apiFeedbacks]) ?? guardianFeedbacks,
+    [apiFeedbacks, guardianFeedbacks]
+  );
 
   const classContext = useMemo(
     () =>
@@ -482,9 +489,9 @@ export default function TeacherHighRiskConsultationPage() {
         presentChildren,
         healthCheckRecords,
         growthRecords,
-        guardianFeedbacks,
+        guardianFeedbacks: mergedGuardianFeedbacks,
       }),
-    [currentUser, guardianFeedbacks, growthRecords, healthCheckRecords, presentChildren, visibleChildren]
+    [currentUser, mergedGuardianFeedbacks, growthRecords, healthCheckRecords, presentChildren, visibleChildren]
   );
   const demoChildId = useMemo(
     () => visibleChildren.find((child) => isLinXiaoyuCase(child))?.id ?? "",
@@ -601,6 +608,23 @@ export default function TeacherHighRiskConsultationPage() {
 
   useEffect(() => () => stop(), [stop]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadFeedback() {
+      try {
+        const data = await listApiFeedback();
+        if (!cancelled) setApiFeedbacks(data);
+      } catch {
+        if (!cancelled) setApiFeedbacks([]);
+      }
+    }
+
+    void loadFeedback();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function openConsultationSetup() {
     setShowSetupSections(true);
     setSetupFocusMessage("已定位到会诊输入区，请补充信息后点击一键生成会诊。");
@@ -636,13 +660,22 @@ export default function TeacherHighRiskConsultationPage() {
     receivedDoneRef.current = false;
     streamErroredRef.current = false;
 
+    let workflowFeedbacks = mergedGuardianFeedbacks;
+    try {
+      const latestApiFeedbacks = await listApiFeedback();
+      setApiFeedbacks(latestApiFeedbacks);
+      workflowFeedbacks = normalizeGuardianFeedbackCollection([...guardianFeedbacks, ...latestApiFeedbacks]) ?? workflowFeedbacks;
+    } catch {
+      // Keep local feedback available if the communication API is unavailable.
+    }
+
     const payload = {
       currentUser,
       visibleChildren,
       presentChildren,
       healthCheckRecords,
       growthRecords,
-      guardianFeedbacks,
+      guardianFeedbacks: workflowFeedbacks,
       targetChildId: selectedChild.id,
       teacherNote: form.teacherNote,
       imageInput: form.imageInput,

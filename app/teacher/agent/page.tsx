@@ -96,6 +96,7 @@ import {
 } from "@/lib/api/communication";
 import { updateAssignmentStatus as updateApiAssignmentStatus } from "@/lib/api/assignments";
 import type { ApiAttachment } from "@/lib/api/types";
+import { normalizeGuardianFeedbackCollection } from "@/lib/feedback/normalize";
 import { useApp } from "@/lib/store";
 
 const ACTION_LABELS: Record<TeacherAgentWorkflowType, string> = {
@@ -286,6 +287,10 @@ export default function TeacherAgentPage() {
     routeIntent === "record_observation"
       ? "已从统一入口定位到观察记录入口，可先确认草稿，或直接生成今日跟进行动。"
       : null;
+  const mergedGuardianFeedbacks = useMemo(
+    () => normalizeGuardianFeedbackCollection([...guardianFeedbacks, ...apiFeedbacks]) ?? guardianFeedbacks,
+    [apiFeedbacks, guardianFeedbacks]
+  );
 
   const classContext = useMemo(
     () =>
@@ -301,9 +306,9 @@ export default function TeacherAgentPage() {
         healthCheckRecords,
         mealRecords,
         growthRecords,
-        guardianFeedbacks,
+        guardianFeedbacks: mergedGuardianFeedbacks,
       }),
-    [currentUser.className, currentUser.institutionId, currentUser.name, currentUser.role, guardianFeedbacks, growthRecords, healthCheckRecords, mealRecords, presentChildren, visibleChildren]
+    [currentUser.className, currentUser.institutionId, currentUser.name, currentUser.role, mergedGuardianFeedbacks, growthRecords, healthCheckRecords, mealRecords, presentChildren, visibleChildren]
   );
   const defaultChildId = useMemo(() => pickTeacherAgentDefaultChildId(classContext) ?? "", [classContext]);
   const availableChildIds = useMemo(
@@ -788,6 +793,15 @@ export default function TeacherAgentPage() {
   );
 
   const runWorkflow = useCallback(async (workflow: TeacherAgentWorkflowType, explicitTargetChildId?: string) => {
+    let workflowFeedbacks = mergedGuardianFeedbacks;
+    try {
+      const latestApiFeedbacks = await listApiFeedback();
+      setApiFeedbacks(latestApiFeedbacks);
+      workflowFeedbacks = normalizeGuardianFeedbackCollection([...guardianFeedbacks, ...latestApiFeedbacks]) ?? workflowFeedbacks;
+    } catch {
+      // Keep local snapshot feedback available if the communication API is temporarily unavailable.
+    }
+
     const nextScope: TeacherAgentMode = workflow === "weekly-summary" ? "class" : "child";
     const requestedChildId =
       explicitTargetChildId && availableChildIds.has(explicitTargetChildId)
@@ -843,7 +857,7 @@ export default function TeacherAgentPage() {
       healthCheckRecords,
       mealRecords,
       growthRecords,
-      guardianFeedbacks,
+      guardianFeedbacks: workflowFeedbacks,
     };
 
     try {
@@ -947,6 +961,7 @@ export default function TeacherAgentPage() {
     availableChildIds,
     classContext,
     guardianFeedbacks,
+    mergedGuardianFeedbacks,
     growthRecords,
     healthCheckRecords,
     mealRecords,

@@ -42,6 +42,18 @@ import {
   ReplicaPill,
 } from "./DirectorReplicaPrimitives";
 
+export interface AdminFamilyFeedbackWriteback {
+  feedbackId: string;
+  childName: string;
+  className: string;
+  executionStatusLabel: string;
+  childReactionLabel: string;
+  improvementStatusLabel: string;
+  notes: string;
+  submittedAtLabel: string;
+  sourceLabel: string;
+}
+
 function priorityTone(level: InstitutionPriorityLevel) {
   if (level === "P1") return "red";
   if (level === "P2") return "orange";
@@ -61,6 +73,7 @@ export default function DirectorDashboardReplica({
   adminSummaryLoading,
   adminSummaryError,
   communicationSummary,
+  latestFamilyFeedback,
   onMarkCommunicationHandled,
   onOpenFeedbackDetail,
   onRefresh,
@@ -77,6 +90,7 @@ export default function DirectorDashboardReplica({
   adminSummaryLoading: boolean;
   adminSummaryError: string | null;
   communicationSummary: AdminCommunicationSummary;
+  latestFamilyFeedback?: AdminFamilyFeedbackWriteback | null;
   onMarkCommunicationHandled: (conversationId: string) => void;
   onOpenFeedbackDetail: () => void;
   onRefresh: () => void;
@@ -489,6 +503,42 @@ export default function DirectorDashboardReplica({
               <p className="mt-3 text-xs text-[#7A86A6]">
                 {feedbackExpectedCount > 0 ? `已完成 ${feedbackCompletedCount} / 应完成 ${feedbackExpectedCount}` : "暂无绑定家长反馈对象"}
               </p>
+              {latestFamilyFeedback ? (
+                <article
+                  data-testid="admin-family-feedback-writeback"
+                  className="mt-5 rounded-[15px] border border-[#DCE5FF] bg-white p-4 text-left shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-[#172554]">
+                        {latestFamilyFeedback.childName} · 家庭执行结果
+                      </p>
+                      <p className="mt-1 text-xs text-[#7A86A6]">
+                        {latestFamilyFeedback.className} · {latestFamilyFeedback.submittedAtLabel}
+                      </p>
+                    </div>
+                    <ReplicaPill tone="green">已回流</ReplicaPill>
+                  </div>
+                  <dl className="mt-3 grid gap-2 text-xs text-[#596681]">
+                    <div className="flex items-center justify-between gap-3">
+                      <dt>执行</dt>
+                      <dd className="text-right font-semibold text-[#172554]">{latestFamilyFeedback.executionStatusLabel}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt>孩子反应</dt>
+                      <dd className="text-right font-semibold text-[#172554]">{latestFamilyFeedback.childReactionLabel}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt>效果</dt>
+                      <dd className="text-right font-semibold text-[#172554]">{latestFamilyFeedback.improvementStatusLabel}</dd>
+                    </div>
+                  </dl>
+                  <p className="mt-3 line-clamp-3 text-xs leading-5 text-[#596681]">
+                    {latestFamilyFeedback.notes}
+                  </p>
+                  <p className="mt-2 text-[11px] font-semibold text-[#23B26D]">{latestFamilyFeedback.sourceLabel}</p>
+                </article>
+              ) : null}
               <ReplicaButton data-testid="admin-open-feedback-detail" onClick={onOpenFeedbackDetail} variant="soft" className="mt-5 w-full">
                 查看反馈详情
               </ReplicaButton>
