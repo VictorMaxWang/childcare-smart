@@ -231,11 +231,11 @@ test("teacher-agent route returns demo-ready fallback content for three workflow
         const response = await POST(
           new Request("http://localhost:3000/api/ai/teacher-agent", {
             method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-demo-account-id": "u-teacher",
-              "x-ai-force-fallback": "1",
-            },
+          headers: {
+            "content-type": "application/json",
+            "x-demo-account-id": "u-admin",
+            "x-ai-force-fallback": "1",
+          },
             body: JSON.stringify(buildPayload(item.workflow, item.targetChildId)),
           })
         );

@@ -82,7 +82,33 @@ function buildPayload(): HighRiskConsultationRequestPayload {
         reviewStatus: "待复查",
       },
     ],
-    guardianFeedbacks: [],
+    guardianFeedbacks: [
+      {
+        feedbackId: "feedback-api-high-risk-writeback",
+        id: "feedback-api-high-risk-writeback",
+        childId: "c-1",
+        sourceRole: "parent",
+        sourceChannel: "parent-agent",
+        executionStatus: "completed",
+        executionCount: 1,
+        executorRole: "parent",
+        childReaction: "improved",
+        improvementStatus: "clear_improvement",
+        barriers: [],
+        notes: "高风险会诊写回测试：完成共读，孩子愿意复述我害怕并走到门口。",
+        attachments: {},
+        submittedAt: `${today}T21:00:00.000Z`,
+        source: { kind: "structured", workflow: "parent-agent" },
+        fallback: {},
+        date: `${today}T21:00:00.000Z`,
+        status: "completed",
+        content: "高风险会诊写回测试：完成共读，孩子愿意复述我害怕并走到门口。",
+        createdBy: "u-parent",
+        createdByRole: "家长",
+        executed: true,
+        improved: true,
+      },
+    ],
     teacherNote:
       "走廊活动听到推车声后害怕退缩，已能在老师陪伴下说出“我害怕”，希望生成勇敢表达与小步尝试支持方案。",
   };
@@ -147,6 +173,8 @@ test("high-risk consultation route returns complete Lin Xiaoyu fallback when ext
       assert.match(text, /走廊活动/);
       assert.match(text, /勇敢表达/);
       assert.match(text, /小步尝试/);
+      assert.match(text, /家庭反馈已回流/);
+      assert.match(text, /高风险会诊写回测试/);
       assert.match(text, /48 小时/);
       assert.ok(memoryRequests.length > 0);
     });

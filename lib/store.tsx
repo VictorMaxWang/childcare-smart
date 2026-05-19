@@ -12,6 +12,7 @@ import {
   normalizeGuardianFeedbackCollection,
   normalizeParentStructuredFeedback,
 } from "@/lib/feedback/normalize";
+import { upsertGuardianFeedbackWriteback } from "@/lib/feedback/writeback";
 import type {
   GuardianFeedback as SharedGuardianFeedback,
   GuardianFeedbackInput,
@@ -4741,7 +4742,6 @@ const ALL_INITIAL_GROWTH = attachDemoGrowthMedia([...INITIAL_GROWTH, ...EXTRA_GR
 const ALL_INITIAL_FEEDBACKS = [...INITIAL_FEEDBACKS, ...EXTRA_FEEDBACKS];
 const ALL_INITIAL_TASK_CHECKINS = [...INITIAL_TASK_CHECKINS, ...EXTRA_TASK_CHECKINS];
 
-
 export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const demoAccounts = INITIAL_USERS;
   const [currentUser, setCurrentUser] = useState<User>(UNAUTHENTICATED_USER);
@@ -5354,7 +5354,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     [growthRecords]
   );
   const todayFeedbackMap = useMemo(
-    () => groupRecordsByChildId(guardianFeedbacks.filter((feedback) => feedback.date === TODAY)),
+    () => groupRecordsByChildId(guardianFeedbacks.filter((feedback) => normalizeLocalDate(feedback.date) === TODAY)),
     [guardianFeedbacks]
   );
   const weeklyFeedbackMap = useMemo(
@@ -5710,26 +5710,15 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
   const addGuardianFeedback = useCallback((input: GuardianFeedbackInput) => {
     setGuardianFeedbacks((prev) => {
-      const feedbackId = createClientId("fb");
-      const normalized = normalizeParentStructuredFeedback(
-        {
-          ...input,
-          feedbackId,
-          id: feedbackId,
-          createdBy: currentUser.name,
-          createdByRole: currentUser.role,
-        },
-        {
-          feedbackId,
-          createdBy: currentUser.name,
-          createdByRole: currentUser.role,
-          submittedAt: input.submittedAt ?? input.date,
-          allowGenerateId: false,
-        }
-      );
-
-      if (!normalized) return prev;
-      return normalizeGuardianFeedbackCollection([normalized, ...prev]) ?? [normalized, ...prev];
+      const next = upsertGuardianFeedbackWriteback({
+        previous: prev,
+        input,
+        currentUserName: currentUser.name,
+        currentUserRole: currentUser.role,
+        fallbackFeedbackId: createClientId("fb"),
+      });
+      snapshotStateRef.current = { ...snapshotStateRef.current, feedback: next };
+      return next;
     });
   }, [currentUser.name, currentUser.role]);
 

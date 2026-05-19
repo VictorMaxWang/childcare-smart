@@ -1023,20 +1023,23 @@ export default function ParentAgentPage() {
     setFeedbackStatus("正在提交今晚反馈...");
 
     let savedFeedbackId = "";
+    let savedFeedback: ApiFeedback | null = null;
+    const feedbackContent = buildStructuredFeedbackMessageContent({
+      childName: selectedFeed.child.name,
+      executionStatus: input.executionStatus,
+      childReaction: input.childReaction,
+      improvementStatus: input.improvementStatus,
+      notes: input.notes,
+      barriers: input.barriers,
+    });
     try {
       const detail = await createApiFeedback({
         ...input,
         sourceChannel: "parent-agent",
-        content: buildStructuredFeedbackMessageContent({
-          childName: selectedFeed.child.name,
-          executionStatus: input.executionStatus,
-          childReaction: input.childReaction,
-          improvementStatus: input.improvementStatus,
-          notes: input.notes,
-          barriers: input.barriers,
-        }),
+        content: feedbackContent,
       });
       savedFeedbackId = detail.feedback.feedbackId;
+      savedFeedback = detail.feedback;
       await sendApiMessage({
         childId: input.childId,
         conversationId: getHomeSchoolConversationId(input.childId),
@@ -1066,6 +1069,9 @@ export default function ParentAgentPage() {
 
     flushSync(() => {
       addGuardianFeedback({
+        ...(savedFeedback ?? {}),
+        feedbackId: savedFeedbackId,
+        id: savedFeedbackId,
         childId: input.childId,
         executionStatus: input.executionStatus,
         executionCount: input.executionCount,
@@ -1074,11 +1080,20 @@ export default function ParentAgentPage() {
         improvementStatus: input.improvementStatus,
         barriers: input.barriers,
         notes: input.notes,
+        content: savedFeedback?.content ?? feedbackContent,
+        date: savedFeedback?.date,
+        submittedAt: savedFeedback?.submittedAt,
+        status: savedFeedback?.status,
+        sourceRole: savedFeedback?.sourceRole,
         relatedTaskId: input.relatedTaskId,
         relatedConsultationId: input.relatedConsultationId,
         interventionCardId: input.interventionCardId ?? displayInterventionCard.id,
-        attachments: input.attachments,
-        sourceChannel: "parent-agent",
+        attachments: savedFeedback?.attachments ?? input.attachments,
+        sourceChannel: savedFeedback?.sourceChannel ?? "parent-agent",
+        source: savedFeedback?.source,
+        fallback: savedFeedback?.fallback,
+        createdBy: savedFeedback?.createdBy,
+        createdByRole: savedFeedback?.createdByRole,
       });
 
       if (input.executionStatus !== "not_started") {
@@ -1108,14 +1123,7 @@ export default function ParentAgentPage() {
       childId: input.childId,
       classId: selectedFeed.child.className,
       conversationId: getHomeSchoolConversationId(input.childId),
-      content: buildStructuredFeedbackMessageContent({
-        childName: selectedFeed.child.name,
-        executionStatus: input.executionStatus,
-        childReaction: input.childReaction,
-        improvementStatus: input.improvementStatus,
-        notes: input.notes,
-        barriers: input.barriers,
-      }),
+      content: feedbackContent,
     });
 
     if (messageResult.status === "failed") {
@@ -1136,7 +1144,7 @@ export default function ParentAgentPage() {
     }
 
     setFeedbackStatus(
-      `${formatHomeSchoolPersistStatus(messageResult.status)}：今晚反馈已提交，并已写入家园沟通。`
+      `${formatHomeSchoolPersistStatus(messageResult.status)}：今晚反馈已提交，并已写入家园沟通和演示快照；下一轮建议已更新。`
     );
     return true;
   }

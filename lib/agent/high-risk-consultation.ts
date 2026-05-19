@@ -6,6 +6,11 @@ import {
   type TeacherAgentClassContext,
   type TeacherAgentRequestPayload,
 } from "@/lib/agent/teacher-agent";
+import {
+  formatParentFeedbackExecutionLabel,
+  formatParentFeedbackImprovementLabel,
+  formatParentFeedbackReactionLabel,
+} from "@/lib/feedback/consumption";
 import { createMobileDraft } from "@/lib/mobile/local-draft-cache";
 
 export interface HighRiskConsultationImageInput {
@@ -74,6 +79,21 @@ function takeUnique(items: Array<string | undefined>, limit = 4) {
   return result;
 }
 
+function formatHighRiskParentFeedbackNote(
+  item: TeacherAgentChildContext["recentFeedbacks"][number]
+) {
+  const notes = item.notes || item.freeNote || item.content;
+  return [
+    `${item.date} 家庭反馈已回流`,
+    `执行：${formatParentFeedbackExecutionLabel(item.executionStatus)}`,
+    `孩子反应：${formatParentFeedbackReactionLabel(item.childReaction)}`,
+    `效果：${formatParentFeedbackImprovementLabel(item.improvementStatus)}`,
+    notes ? `备注：${notes}` : undefined,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join("；");
+}
+
 export function buildHighRiskConsultationAutoContext(params: {
   classContext: TeacherAgentClassContext;
   childContext: TeacherAgentChildContext;
@@ -102,7 +122,7 @@ export function buildHighRiskConsultationAutoContext(params: {
       4
     ),
     parentFeedbackNotes: takeUnique(
-      childContext.recentFeedbacks.map((item) => `${item.date} ${item.status}：${item.content}`),
+      childContext.recentFeedbacks.map(formatHighRiskParentFeedbackNote),
       3
     ),
     classSignals: takeUnique(
