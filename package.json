@@ -57,6 +57,7 @@
     "growth-media:test": "playwright test tests/product-completion/growth-media-render.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
     "storybook:generate-xiaoyu-audio": "node scripts/generate-lin-xiaoyu-storybook-audio.mjs",
     "storybook:xiaoyu:test": "playwright test tests/product-completion/lin-xiaoyu-fixed-storybook.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
+    "demo:preflight": "playwright test tests/demo-defense --config=playwright.demo-preflight.config.ts --project=chromium --reporter=line",
     "vivo:tts:test": "playwright test tests/product-completion/vivo-tts-provider.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
     "frontend:responsive": "playwright test tests/frontend-replica/responsive-states.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
     "frontend:states": "playwright test tests/frontend-replica/interaction-states.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
