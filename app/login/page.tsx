@@ -40,7 +40,7 @@ import demoAvatarAdmin from "./assets/demo-avatar-admin.png";
 import demoAvatarParentLin from "./assets/demo-avatar-parent-lin.png";
 import demoAvatarTeacherLi from "./assets/demo-avatar-teacher-li.png";
 import demoAvatarTeacherZhou from "./assets/demo-avatar-teacher-zhou.png";
-import DemoPdfPresentation from "./DemoPdfPresentation";
+import SystemTourPdfPresentation from "./SystemTourPdfPresentation";
 import heroIllustration from "./assets/hero-illustration.png";
 import loginLeftReplica from "./assets/login-left-replica.png";
 import styles from "./login-pixel.module.css";
@@ -449,7 +449,7 @@ export default function LoginPage() {
               </div>
               <div>
                 <h2 className={styles.authTitle}>
-                  <span className={styles.desktopTitleText}>登录与演示入口</span>
+                  <span className={styles.desktopTitleText}>登录与系统导览入口</span>
                   <span className={styles.mobileTitleText}>账号登录</span>
                 </h2>
                 <p className={styles.authSubtitle}>普通账号可注册登录，示例账号可免密直接进入。</p>
@@ -466,10 +466,10 @@ export default function LoginPage() {
               type="button"
               className={styles.presentationButton}
               onClick={() => setPresentationOpen(true)}
-              data-testid="demo-presentation-open"
+              data-testid="system-tour-open"
             >
               <Presentation aria-hidden="true" size={22} />
-              演示模式
+              系统导览
             </button>
 
             <form onSubmit={handleSubmit}>
@@ -574,7 +574,7 @@ export default function LoginPage() {
         </section>
       </main>
 
-      <DemoPdfPresentation open={presentationOpen} onClose={() => setPresentationOpen(false)} />
+      <SystemTourPdfPresentation open={presentationOpen} onClose={() => setPresentationOpen(false)} />
 
       <Dialog
         open={registerOpen}

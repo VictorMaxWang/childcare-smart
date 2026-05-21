@@ -2,7 +2,7 @@
 
 ## 目标
 
-本 fixture 用于让现有 demo provider / app snapshot 在答辩路径中直接展示足够数据，不新增“一键演示模式”、不新增 `demo=1` 自动重置，也不单独重做 storybook 页面。
+本 fixture 用于让现有 demo provider / app snapshot 在答辩路径中直接展示足够数据，不新增“一键系统导览”、不新增 `demo=1` 自动重置，也不单独重做 storybook 页面。
 
 目标页面：
 

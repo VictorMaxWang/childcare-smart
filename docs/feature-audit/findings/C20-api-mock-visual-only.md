@@ -25,7 +25,7 @@
 - 真实 API：必须是功能级 API，能表达该业务对象的创建、更新、读取、错误处理和权限边界。
 - 通用 `/api/state` 快照不计为家园沟通、健康、饮食、成长、幼儿档案、会诊或周报的完整功能 API。
 - 仅 `useState`、store setter、`localStorage`、`sessionStorage`、`toast.success`、`console.log` 或 `setTimeout` 模拟成功，均按 local-state-only、no-api 或 fake-success 记录。
-- API route 返回 fallback/demo/mock 数据，且业务 UI 未清晰隔离为演示模式时，按 mock-only 或 backend-missing 风险记录。
+- API route 返回 fallback/demo/mock 数据，且业务 UI 未清晰隔离为系统导览时，按 mock-only 或 backend-missing 风险记录。
 - 有 UI 入口但按钮 disabled、payload 固定为空、文案写明稍后开放或仅展示，按 visual-only 记录。
 
 ## 最高优先级

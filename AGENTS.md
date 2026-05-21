@@ -12,7 +12,7 @@
 - 不得把真实用户数据硬编码到生产逻辑中；演示数据必须通过 demo fixture、mock provider、seed script 或 app snapshot 注入。
 - 所有 AI fallback 输出必须结构化，不能只返回一段空文本。
 - 所有主要演示页必须具备“无外部 AI 服务也能展示”的兜底能力。
-- 不得新增“一键演示模式 / resetDemo / demo=1 自动重置页面”这类功能。
+- 不得新增“一键系统导览 / resetDemo / demo=1 自动重置页面”这类功能。
 - 不得单独重做 `/parent/storybook` 页面；绘本页只使用现有页面能力和示例数据支撑。
 
 ## 重点保护演示路径
