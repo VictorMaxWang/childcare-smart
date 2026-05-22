@@ -6,9 +6,9 @@ import { ChevronLeft, ChevronRight, Loader2, X } from "lucide-react";
 import styles from "./login-pixel.module.css";
 
 const PDF_URL = "/demo/huiyu-tongxing.pdf";
-const TOUR_IMAGE_BASE_URL = "/demo/system-tour/v2";
+const TOUR_IMAGE_BASE_URL = "/demo/system-tour/v3";
 const TOUR_PREVIEW_BASE_URL = `${TOUR_IMAGE_BASE_URL}/preview`;
-const TOUR_FULL_BASE_URL = `${TOUR_IMAGE_BASE_URL}/full`;
+const TOUR_DISPLAY_BASE_URL = `${TOUR_IMAGE_BASE_URL}/display`;
 const TOUR_PAGE_COUNT = 22;
 const TOUR_PAGES = Array.from({ length: TOUR_PAGE_COUNT }, (_, index) => index + 1);
 const ENTRY_PRELOAD_PAGES = [1, 2, 3];
@@ -19,16 +19,12 @@ type SystemTourPdfPresentationProps = {
 };
 
 type ImagePriority = "high" | "low" | "auto";
-type ConnectionInfo = {
-  saveData?: boolean;
-  effectiveType?: string;
-};
 
 const loadedImageUrls = new Set<string>();
 const pendingImageLoads = new Map<string, Promise<void>>();
 const loadedPreviewPages = new Set<number>();
-const loadedFullPages = new Set<number>();
-let allPreviewWarmupPromise: Promise<void> | null = null;
+const loadedDisplayPages = new Set<number>();
+let allDisplayWarmupPromise: Promise<void> | null = null;
 
 function clampPage(page: number, pageCount: number) {
   if (pageCount <= 0) return 1;
@@ -47,8 +43,12 @@ function getPreviewWebpUrl(page: number) {
   return `${TOUR_PREVIEW_BASE_URL}/${getPageFileName(page, "webp")}`;
 }
 
-function getFullWebpUrl(page: number) {
-  return `${TOUR_FULL_BASE_URL}/${getPageFileName(page, "webp")}`;
+function getDisplayAvifUrl(page: number) {
+  return `${TOUR_DISPLAY_BASE_URL}/${getPageFileName(page, "avif")}`;
+}
+
+function getDisplayWebpUrl(page: number) {
+  return `${TOUR_DISPLAY_BASE_URL}/${getPageFileName(page, "webp")}`;
 }
 
 function isValidTourPage(page: number) {
@@ -90,8 +90,7 @@ function preloadImageUrl(url: string, priority: ImagePriority) {
 }
 
 function preloadTourPreviewPage(page: number, priority: ImagePriority) {
-  if (!isValidTourPage(page)) return Promise.resolve();
-  if (loadedPreviewPages.has(page)) return Promise.resolve();
+  if (!isValidTourPage(page) || loadedPreviewPages.has(page)) return Promise.resolve();
 
   return preloadImageUrl(getPreviewAvifUrl(page), priority)
     .catch(() => preloadImageUrl(getPreviewWebpUrl(page), priority))
@@ -100,13 +99,14 @@ function preloadTourPreviewPage(page: number, priority: ImagePriority) {
     });
 }
 
-function preloadTourFullPage(page: number, priority: ImagePriority) {
-  if (!isValidTourPage(page)) return Promise.resolve();
-  if (loadedFullPages.has(page)) return Promise.resolve();
+function preloadTourDisplayPage(page: number, priority: ImagePriority) {
+  if (!isValidTourPage(page) || loadedDisplayPages.has(page)) return Promise.resolve();
 
-  return preloadImageUrl(getFullWebpUrl(page), priority).then(() => {
-    loadedFullPages.add(page);
-  });
+  return preloadImageUrl(getDisplayAvifUrl(page), priority)
+    .catch(() => preloadImageUrl(getDisplayWebpUrl(page), priority))
+    .then(() => {
+      loadedDisplayPages.add(page);
+    });
 }
 
 function scheduleIdleTask(run: () => void, timeout: number) {
@@ -119,32 +119,28 @@ function scheduleIdleTask(run: () => void, timeout: number) {
   return () => globalThis.clearTimeout(timeoutId);
 }
 
-function canLoadFullImages() {
-  if (typeof navigator === "undefined") return false;
+function warmAllDisplayPages() {
+  if (allDisplayWarmupPromise) return allDisplayWarmupPromise;
 
-  const connection = (navigator as Navigator & { connection?: ConnectionInfo }).connection;
-  if (connection?.saveData) return false;
-  if (connection?.effectiveType === "slow-2g" || connection?.effectiveType === "2g") return false;
+  allDisplayWarmupPromise = TOUR_PAGES.reduce<Promise<void>>(
+    (previous, page) =>
+      previous.then(() =>
+        preloadTourDisplayPage(page, page <= 3 ? "high" : "low").catch(() => undefined),
+      ),
+    Promise.resolve(),
+  );
 
-  return true;
-}
-
-function warmAllPreviewPages() {
-  if (allPreviewWarmupPromise) return allPreviewWarmupPromise;
-
-  allPreviewWarmupPromise = Promise.allSettled(
-    TOUR_PAGES.map((page) => preloadTourPreviewPage(page, page <= 3 ? "high" : "low")),
-  ).then(() => undefined);
-
-  return allPreviewWarmupPromise;
+  return allDisplayWarmupPromise;
 }
 
 export function preloadSystemTourEntry() {
   if (typeof window === "undefined") return;
 
   for (const page of ENTRY_PRELOAD_PAGES) {
-    void preloadTourPreviewPage(page, page === 1 ? "high" : "low").catch(() => undefined);
+    void preloadTourDisplayPage(page, page === 1 ? "high" : "low").catch(() => undefined);
   }
+
+  void preloadTourPreviewPage(1, "low").catch(() => undefined);
 }
 
 function scheduleInitialPreload() {
@@ -153,29 +149,17 @@ function scheduleInitialPreload() {
 }
 
 export default function SystemTourPdfPresentation({ open, onClose }: SystemTourPdfPresentationProps) {
-  preload(getPreviewAvifUrl(1), { as: "image", type: "image/avif", fetchPriority: "high" });
+  preload(getDisplayAvifUrl(1), { as: "image", type: "image/avif", fetchPriority: "high" });
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [loadError, setLoadError] = useState("");
   const [imageLoading, setImageLoading] = useState(false);
-  const [previewWarmupComplete, setPreviewWarmupComplete] = useState(false);
-  const [fullImagePages, setFullImagePages] = useState<Set<number>>(() => new Set(loadedFullPages));
 
-  const showFullImage = fullImagePages.has(currentPage);
   const currentPreviewAvifSrc = useMemo(() => getPreviewAvifUrl(currentPage), [currentPage]);
   const currentPreviewWebpSrc = useMemo(() => getPreviewWebpUrl(currentPage), [currentPage]);
-  const currentFullWebpSrc = useMemo(() => getFullWebpUrl(currentPage), [currentPage]);
-  const currentImageSrc = showFullImage ? currentFullWebpSrc : currentPreviewWebpSrc;
-
-  const markFullPageReady = useCallback((page: number) => {
-    setFullImagePages((previousPages) => {
-      if (previousPages.has(page)) return previousPages;
-      const nextPages = new Set(previousPages);
-      nextPages.add(page);
-      return nextPages;
-    });
-  }, []);
+  const currentDisplayAvifSrc = useMemo(() => getDisplayAvifUrl(currentPage), [currentPage]);
+  const currentDisplayWebpSrc = useMemo(() => getDisplayWebpUrl(currentPage), [currentPage]);
 
   const goNext = useCallback(() => {
     setCurrentPage((prev) => clampPage(prev + 1, TOUR_PAGE_COUNT));
@@ -232,39 +216,25 @@ export default function SystemTourPdfPresentation({ open, onClose }: SystemTourP
 
     setCurrentPage(1);
     setLoadError("");
-    setPreviewWarmupComplete(loadedPreviewPages.size >= TOUR_PAGE_COUNT);
-    setFullImagePages(new Set(loadedFullPages));
     preloadSystemTourEntry();
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    let cancelled = false;
 
     const cancelWarmup = scheduleIdleTask(() => {
-      void warmAllPreviewPages().then(() => {
-        if (!cancelled) setPreviewWarmupComplete(true);
-      });
-    }, 300);
+      void warmAllDisplayPages();
+    }, 450);
 
-    return () => {
-      cancelled = true;
-      cancelWarmup();
-    };
+    return cancelWarmup;
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
 
     let cancelled = false;
-    let cancelFullWarmup: (() => void) | undefined;
     const nearbyPages = [currentPage, currentPage + 1, currentPage - 1, currentPage + 2];
 
     setLoadError("");
-    setImageLoading(!loadedPreviewPages.has(currentPage));
+    setImageLoading(!loadedDisplayPages.has(currentPage));
 
-    void preloadTourPreviewPage(currentPage, "high")
+    void preloadTourDisplayPage(currentPage, "high")
       .then(() => {
         if (!cancelled) setImageLoading(false);
       })
@@ -275,27 +245,16 @@ export default function SystemTourPdfPresentation({ open, onClose }: SystemTourP
         }
       });
 
-    for (const page of nearbyPages) {
-      void preloadTourPreviewPage(page, page === currentPage ? "high" : "low").catch(() => undefined);
-    }
+    void preloadTourPreviewPage(currentPage, "low").catch(() => undefined);
 
-    if (previewWarmupComplete && canLoadFullImages()) {
-      cancelFullWarmup = scheduleIdleTask(() => {
-        for (const page of nearbyPages) {
-          void preloadTourFullPage(page, "low")
-            .then(() => {
-              if (!cancelled) markFullPageReady(page);
-            })
-            .catch(() => undefined);
-        }
-      }, 1800);
+    for (const page of nearbyPages) {
+      void preloadTourDisplayPage(page, page === currentPage ? "high" : "low").catch(() => undefined);
     }
 
     return () => {
       cancelled = true;
-      cancelFullWarmup?.();
     };
-  }, [currentPage, markFullPageReady, open, previewWarmupComplete]);
+  }, [currentPage, open]);
 
   if (!open) return null;
 
@@ -328,10 +287,25 @@ export default function SystemTourPdfPresentation({ open, onClose }: SystemTourP
       </div>
 
       <div className={styles.presentationCanvasFrame}>
-        {showFullImage ? (
+        {imageLoading && !loadError ? (
+          <picture className={styles.presentationPreviewPicture} aria-hidden="true">
+            <source srcSet={currentPreviewAvifSrc} type="image/avif" />
+            <img
+              src={currentPreviewWebpSrc}
+              alt=""
+              className={styles.presentationImage}
+              draggable={false}
+              width={560}
+              height={420}
+              decoding="async"
+            />
+          </picture>
+        ) : null}
+
+        <picture key={currentDisplayWebpSrc} className={styles.presentationPicture}>
+          <source srcSet={currentDisplayAvifSrc} type="image/avif" />
           <img
-            key={currentImageSrc}
-            src={currentFullWebpSrc}
+            src={currentDisplayWebpSrc}
             alt={`系统导览第 ${currentPage} 页`}
             className={styles.presentationImage}
             data-testid="system-tour-image"
@@ -339,36 +313,18 @@ export default function SystemTourPdfPresentation({ open, onClose }: SystemTourP
             width={1200}
             height={900}
             decoding="async"
+            fetchPriority={currentPage === 1 ? "high" : "auto"}
             onLoad={(event) => {
-              loadedImageUrls.add(event.currentTarget.currentSrc || currentFullWebpSrc);
-              loadedFullPages.add(currentPage);
+              loadedImageUrls.add(event.currentTarget.currentSrc || currentDisplayWebpSrc);
+              loadedDisplayPages.add(currentPage);
+              setImageLoading(false);
+            }}
+            onError={() => {
+              setImageLoading(false);
+              setLoadError("系统导览图片加载失败");
             }}
           />
-        ) : (
-          <picture key={currentImageSrc} className={styles.presentationPicture}>
-            <source srcSet={currentPreviewAvifSrc} type="image/avif" />
-            <img
-              src={currentPreviewWebpSrc}
-              alt={`系统导览第 ${currentPage} 页`}
-              className={styles.presentationImage}
-              data-testid="system-tour-image"
-              draggable={false}
-              width={560}
-              height={420}
-              decoding="async"
-              fetchPriority={currentPage === 1 ? "high" : "auto"}
-              onLoad={(event) => {
-                loadedImageUrls.add(event.currentTarget.currentSrc || currentPreviewWebpSrc);
-                loadedPreviewPages.add(currentPage);
-                setImageLoading(false);
-              }}
-              onError={() => {
-                setImageLoading(false);
-                setLoadError("系统导览图片加载失败");
-              }}
-            />
-          </picture>
-        )}
+        </picture>
 
         {imageLoading && !loadError ? (
           <div className={styles.presentationStatus} data-testid="system-tour-loading">

@@ -785,20 +785,32 @@
   justify-content: center;
 }
 
-.presentationPicture {
+.presentationPicture,
+.presentationPreviewPicture {
   display: flex;
-  width: 100%;
-  height: 100%;
+  width: min(calc(100vw - 28px), calc((100vh - 70px) * 4 / 3));
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 4 / 3;
   align-items: center;
   justify-content: center;
 }
 
+.presentationPicture {
+  position: relative;
+  z-index: 1;
+}
+
+.presentationPreviewPicture {
+  position: absolute;
+  z-index: 0;
+  opacity: 0.36;
+}
+
 .presentationImage {
   display: block;
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   user-select: none;
   box-shadow: 0 26px 80px rgba(0, 0, 0, 0.42);

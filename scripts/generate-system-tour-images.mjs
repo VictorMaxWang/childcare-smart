@@ -10,7 +10,7 @@ const execFileAsync = promisify(execFile);
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 const pdfPath = path.join(repoRoot, "public", "demo", "huiyu-tongxing.pdf");
-const outputRoot = path.join(repoRoot, "public", "demo", "system-tour", "v2");
+const outputRoot = path.join(repoRoot, "public", "demo", "system-tour", "v3");
 
 const variants = [
   {
@@ -28,8 +28,15 @@ const variants = [
     encode: (pipeline) => pipeline.webp({ quality: 60 }),
   },
   {
-    key: "fullWebp",
-    dir: "full",
+    key: "displayAvif",
+    dir: "display",
+    extension: "avif",
+    width: 1200,
+    encode: (pipeline) => pipeline.avif({ quality: 45, effort: 4 }),
+  },
+  {
+    key: "displayWebp",
+    dir: "display",
     extension: "webp",
     width: 1200,
     encode: (pipeline) => pipeline.webp({ quality: 78 }),
@@ -40,6 +47,8 @@ const sizeBudgets = {
   previewWebpFirstPageBytes: 40 * 1024,
   previewWebpTotalBytes: 750 * 1024,
   previewAvifTotalBytes: 450 * 1024,
+  displayAvifFirstPageBytes: 95 * 1024,
+  displayWebpFirstPageBytes: 180 * 1024,
 };
 
 function sortByPageNumber(left, right) {
@@ -105,6 +114,18 @@ function assertSizeBudgets(stats) {
   if (stats.previewAvif.totalBytes > sizeBudgets.previewAvifTotalBytes) {
     failures.push(
       `preview AVIF total is ${stats.previewAvif.totalBytes} bytes; budget is ${sizeBudgets.previewAvifTotalBytes}.`,
+    );
+  }
+
+  if (stats.displayAvif.firstPageBytes > sizeBudgets.displayAvifFirstPageBytes) {
+    failures.push(
+      `display/page-01.avif is ${stats.displayAvif.firstPageBytes} bytes; budget is ${sizeBudgets.displayAvifFirstPageBytes}.`,
+    );
+  }
+
+  if (stats.displayWebp.firstPageBytes > sizeBudgets.displayWebpFirstPageBytes) {
+    failures.push(
+      `display/page-01.webp is ${stats.displayWebp.firstPageBytes} bytes; budget is ${sizeBudgets.displayWebpFirstPageBytes}.`,
     );
   }
 
