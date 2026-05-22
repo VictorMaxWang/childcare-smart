@@ -15,6 +15,10 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },
       {
+        source: "/demo/system-tour/v3/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
         source: "/:path*",
         headers: [
           { key: "X-Frame-Options", value: "DENY" },
