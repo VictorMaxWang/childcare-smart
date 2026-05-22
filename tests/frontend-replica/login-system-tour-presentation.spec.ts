@@ -1,7 +1,28 @@
 import { expect, test } from "@playwright/test";
 
+async function expectSystemTourImageLoaded(page: import("@playwright/test").Page) {
+  const image = page.getByTestId("system-tour-image");
+  await expect(image).toBeVisible();
+  await expect
+    .poll(() =>
+      image.evaluate((node) => {
+        if (!(node instanceof HTMLImageElement)) return false;
+        return node.complete && node.naturalWidth > 0 && node.naturalHeight > 0;
+      }),
+    )
+    .toBe(true);
+}
+
 test.describe("login system tour presentation", () => {
-  test("login page opens browser-contained PDF system tour", async ({ page }) => {
+  test("login page opens image-backed system tour without loading the PDF renderer", async ({ page }) => {
+    const blockedTourRendererRequests: string[] = [];
+    page.on("request", (request) => {
+      const url = request.url();
+      if (url.includes("/demo/huiyu-tongxing.pdf") || url.includes("/vendor/pdfjs/pdf.worker.mjs")) {
+        blockedTourRendererRequests.push(url);
+      }
+    });
+
     await page.goto("/login");
 
     await expect(page.getByTestId("system-tour-open")).toBeVisible();
@@ -14,21 +35,24 @@ test.describe("login system tour presentation", () => {
 
     const overlay = page.getByTestId("system-tour-overlay");
     await expect(overlay).toBeVisible();
-    await expect(page.getByTestId("system-tour-canvas")).toBeVisible();
-    await expect(page.getByTestId("system-tour-page-count")).toHaveText("1 / 22", { timeout: 30_000 });
+    await expectSystemTourImageLoaded(page);
+    await expect(page.getByTestId("system-tour-page-count")).toHaveText("1 / 22");
     await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
 
     await page.getByTestId("system-tour-next").click();
     await expect(page.getByTestId("system-tour-page-count")).toHaveText("2 / 22");
+    await expectSystemTourImageLoaded(page);
 
     await page.getByTestId("system-tour-prev").click();
     await expect(page.getByTestId("system-tour-page-count")).toHaveText("1 / 22");
+    await expectSystemTourImageLoaded(page);
 
     await page.keyboard.press("ArrowRight");
     await expect(page.getByTestId("system-tour-page-count")).toHaveText("2 / 22");
 
     await page.keyboard.press("ArrowDown");
     await expect(page.getByTestId("system-tour-page-count")).toHaveText("3 / 22");
+    await expectSystemTourImageLoaded(page);
 
     await page.keyboard.press("ArrowLeft");
     await expect(page.getByTestId("system-tour-page-count")).toHaveText("2 / 22");
@@ -38,5 +62,6 @@ test.describe("login system tour presentation", () => {
 
     await page.keyboard.press("Escape");
     await expect(overlay).toBeHidden();
+    expect(blockedTourRendererRequests).toEqual([]);
   });
 });

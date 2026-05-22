@@ -54,6 +54,7 @@
     "package:gpt-image2": "node scripts/package-gpt-image2-input.mjs",
     "demo-media:ingest": "node scripts/ingest-gpt-image2-local-assets.mjs",
     "demo-media:test": "playwright test tests/product-completion/demo-media-ingest.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
+    "system-tour:images": "node scripts/generate-system-tour-images.mjs",
     "growth-media:test": "playwright test tests/product-completion/growth-media-render.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
     "storybook:generate-xiaoyu-audio": "node scripts/generate-lin-xiaoyu-storybook-audio.mjs",
     "storybook:xiaoyu:test": "playwright test tests/product-completion/lin-xiaoyu-fixed-storybook.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",

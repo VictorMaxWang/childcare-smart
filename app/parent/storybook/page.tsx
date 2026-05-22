@@ -64,6 +64,8 @@ type StoryBookControls = {
 const PAGE_COUNT_OPTIONS = [4, 6, 8] as const satisfies readonly ParentStoryBookPageCount[];
 const MEDIA_POLL_INTERVAL_MS = 2_000;
 const MEDIA_POLL_MAX_ATTEMPTS = 24;
+const STORYBOOK_USER_REQUEST_TIMEOUT_MS = 25_000;
+const STORYBOOK_MEDIA_POLL_TIMEOUT_MS = 8_000;
 function buildInitialControls(input: {
   hasChildContext: boolean;
   preset: ParentStoryBookStylePreset;
@@ -121,8 +123,10 @@ export default function ParentStoryBookPage() {
   const [hasManualStorybookOverride, setHasManualStorybookOverride] = useState(false);
   const hasManualStorybookOverrideRef = useRef(false);
   const networkOnlyRef = useRef(false);
+  const backgroundMediaPollRef = useRef(false);
   const storyRef = useRef<ParentStoryBookResponse | null>(null);
   const requestRef = useRef<ParentStoryBookRequest | null>(null);
+  const lastStoryLoadKeyRef = useRef<string | null>(null);
   const pollAttemptRef = useRef(0);
   const pollingStoryIdRef = useRef<string | null>(null);
   const previousSelectedChildIdRef = useRef<string | undefined>(undefined);
@@ -298,7 +302,7 @@ export default function ParentStoryBookPage() {
 
     const timer = window.setTimeout(() => {
       pollAttemptRef.current += 1;
-      networkOnlyRef.current = true;
+      backgroundMediaPollRef.current = true;
       setReloadToken((previousToken) => previousToken + 1);
     }, MEDIA_POLL_INTERVAL_MS);
 
@@ -411,15 +415,26 @@ export default function ParentStoryBookPage() {
     let cancelled = false;
     const controller = new AbortController();
     const bypassCache = networkOnlyRef.current;
+    const backgroundMediaPoll = backgroundMediaPollRef.current;
     const forceNetworkForManualOverride =
       isLockedLinXiaoyuStorybook && hasManualStorybookOverrideActive;
-    if (forceNetworkForManualOverride) {
-      if (manualStorybookGenerationInFlightRef.current) return;
-      if (storyRef.current && storyRef.current.storyId !== "lin-xiaoyu-one-small-brave-step") return;
-      manualStorybookGenerationInFlightRef.current = true;
-    }
+    const shouldTrackManualGeneration =
+      forceNetworkForManualOverride && !backgroundMediaPoll;
+    backgroundMediaPollRef.current = false;
     const resolvedCacheKey = cacheKey;
     networkOnlyRef.current = false;
+    const storyLoadKey = `${resolvedCacheKey}:${reloadToken}`;
+    if (lastStoryLoadKeyRef.current === storyLoadKey) {
+      return () => {
+        cancelled = true;
+        controller.abort();
+      };
+    }
+    lastStoryLoadKeyRef.current = storyLoadKey;
+    if (shouldTrackManualGeneration) {
+      if (manualStorybookGenerationInFlightRef.current) return;
+      manualStorybookGenerationInFlightRef.current = true;
+    }
 
     if (!bypassCache && !forceNetworkForManualOverride) {
       if (latestSavedStorybook && selectedFeed) {
@@ -467,24 +482,31 @@ export default function ParentStoryBookPage() {
         };
       }
       if (cached) {
-        networkOnlyRef.current = true;
+        networkOnlyRef.current = !backgroundMediaPoll;
       }
     }
 
-    setErrorMessage(null);
-    setRefreshMessage(null);
-    setCacheState({ kind: "none" });
-    setIsRefreshing(Boolean(storyRef.current));
-    if (!storyRef.current) {
-      setStatus("loading");
+    if (!backgroundMediaPoll) {
+      setErrorMessage(null);
+      setRefreshMessage(null);
+      setCacheState({ kind: "none" });
+      setIsRefreshing(Boolean(storyRef.current));
+      if (!storyRef.current) {
+        setStatus("loading");
+      }
     }
 
     async function loadStory() {
+      let timedOut = false;
+      const requestTimeout = window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, backgroundMediaPoll ? STORYBOOK_MEDIA_POLL_TIMEOUT_MS : STORYBOOK_USER_REQUEST_TIMEOUT_MS);
       try {
         const requestHeaders = new Headers({
           "Content-Type": "application/json",
         });
-        if (networkOnlyRef.current || bypassCache || forceNetworkForManualOverride) {
+        if (!backgroundMediaPoll && (networkOnlyRef.current || bypassCache || forceNetworkForManualOverride)) {
           requestHeaders.set("x-smartchildcare-cache-bypass", "1");
         }
 
@@ -512,7 +534,8 @@ export default function ParentStoryBookPage() {
               .filter((record) => record.childId === selectedFeed.child.id)
               .map((record) => record.id)
           : [];
-        const shouldPersistGeneratedStorybook = !forceNetworkForManualOverride;
+        const shouldPersistGeneratedStorybook =
+          !forceNetworkForManualOverride && !backgroundMediaPoll;
         const storybookSaveResult =
           selectedFeed && data.childId === selectedFeed.child.id && shouldPersistGeneratedStorybook
             ? saveParentStorybook({
@@ -545,36 +568,46 @@ export default function ParentStoryBookPage() {
         startTransition(() => {
           setStory(data);
           setStatus(data.mode);
-          setErrorMessage(null);
-          setRefreshMessage(
-            storybookSaveResult?.status === "failed"
-              ? `生成完成，但保存到 D01 失败：${storybookSaveResult.error ?? storybookSaveResult.message}`
-              : apiStorybookSaveError
-                ? `本地演示已保存，但 E01 绘本服务保存失败：${apiStorybookSaveError}`
-                : apiStorybookSaved
-                  ? "绘本已保存到 E01 服务，语音可分享/导出；刷新后仍存在。"
-                  : storybookSaveResult?.status === "local_only"
-                    ? "本地演示已保存到 D01，刷新后仍存在。"
-                    : null
-          );
+          if (!backgroundMediaPoll) {
+            setErrorMessage(null);
+            setRefreshMessage(
+              storybookSaveResult?.status === "failed"
+                ? `生成完成，但保存到 D01 失败：${storybookSaveResult.error ?? storybookSaveResult.message}`
+                : apiStorybookSaveError
+                  ? `本地演示已保存，但 E01 绘本服务保存失败：${apiStorybookSaveError}`
+                  : apiStorybookSaved
+                    ? "绘本已保存到 E01 服务，语音可分享/导出；刷新后仍存在。"
+                    : storybookSaveResult?.status === "local_only"
+                      ? "本地演示已保存到 D01，刷新后仍存在。"
+                      : null
+            );
+          }
           setIsRefreshing(false);
-          setCacheState(
-            persisted || (storybookSaveResult && storybookSaveResult.status !== "failed")
-              ? {
-                  kind: "saved",
-                  savedAt: storybookSaveResult
-                    ? new Date(storybookSaveResult.persistedAt).getTime()
-                    : persisted!.savedAt,
-                }
-              : { kind: "none" }
-          );
+          if (!backgroundMediaPoll || persisted) {
+            setCacheState(
+              persisted || (storybookSaveResult && storybookSaveResult.status !== "failed")
+                ? {
+                    kind: "saved",
+                    savedAt: storybookSaveResult
+                      ? new Date(storybookSaveResult.persistedAt).getTime()
+                      : persisted!.savedAt,
+                  }
+                : { kind: "none" }
+            );
+          }
         });
       } catch (error) {
         if (cancelled) return;
 
         startTransition(() => {
+          if (backgroundMediaPoll && storyRef.current) {
+            setIsRefreshing(false);
+            return;
+          }
           const nextMessage =
-            error instanceof Error ? error.message : "成长绘本生成失败。";
+            timedOut
+              ? "成长绘本资源刷新超时，已保留上一版内容。"
+              : error instanceof Error ? error.message : "成长绘本生成失败。";
 
           if (storyRef.current) {
             setRefreshMessage(`刷新失败，已保留上一版绘本：${nextMessage}`);
@@ -588,7 +621,8 @@ export default function ParentStoryBookPage() {
           setCacheState({ kind: "none" });
         });
       } finally {
-        if (forceNetworkForManualOverride) {
+        window.clearTimeout(requestTimeout);
+        if (shouldTrackManualGeneration) {
           manualStorybookGenerationInFlightRef.current = false;
         }
       }
@@ -597,7 +631,7 @@ export default function ParentStoryBookPage() {
     void loadStory();
 
     return () => {
-      if (!forceNetworkForManualOverride) {
+      if (!shouldTrackManualGeneration) {
         cancelled = true;
         controller.abort();
       }
