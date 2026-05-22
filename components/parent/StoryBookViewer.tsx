@@ -1735,7 +1735,10 @@ export default function StoryBookViewer({
               </div>
             ) : null}
             {isRefreshing ? (
-              <div className="flex items-center gap-2 text-sm text-slate-500">
+              <div
+                className="flex items-center gap-2 text-sm text-slate-500"
+                data-testid="parent-storybook-refreshing-indicator"
+              >
                 <LoaderCircle className="h-4 w-4 animate-spin" />
                 正在刷新绘本资源，当前先保留上一版内容。
               </div>

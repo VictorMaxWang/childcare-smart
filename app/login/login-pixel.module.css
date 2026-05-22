@@ -289,6 +289,7 @@
 .presentationButton:focus-visible,
 .presentationCloseButton:focus-visible,
 .presentationPageButton:focus-visible,
+.presentationFallbackLink:focus-visible,
 .registerButton:focus-visible,
 .passwordToggle:focus-visible,
 .checkboxLabel:focus-within,
@@ -784,10 +785,14 @@
   justify-content: center;
 }
 
-.presentationCanvas {
+.presentationImage {
   display: block;
   max-width: 100%;
   max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  user-select: none;
   box-shadow: 0 26px 80px rgba(0, 0, 0, 0.42);
 }
 
@@ -816,9 +821,22 @@
 .presentationError {
   max-width: min(520px, calc(100vw - 48px));
   border-radius: 14px;
+  flex-direction: column;
   color: #fecaca;
   line-height: 1.6;
   text-align: center;
+}
+
+.presentationFallbackLink {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(254, 202, 202, 0.36);
+  border-radius: 999px;
+  padding: 0 14px;
+  color: #ffffff;
+  text-decoration: none;
 }
 
 .presentationPageButtons {
