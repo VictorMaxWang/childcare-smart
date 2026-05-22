@@ -10,9 +10,37 @@ const execFileAsync = promisify(execFile);
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 const pdfPath = path.join(repoRoot, "public", "demo", "huiyu-tongxing.pdf");
-const outputDir = path.join(repoRoot, "public", "demo", "system-tour", "v1");
-const imageWidth = 1440;
-const webpQuality = 82;
+const outputRoot = path.join(repoRoot, "public", "demo", "system-tour", "v2");
+
+const variants = [
+  {
+    key: "previewAvif",
+    dir: "preview",
+    extension: "avif",
+    width: 560,
+    encode: (pipeline) => pipeline.avif({ quality: 32, effort: 4 }),
+  },
+  {
+    key: "previewWebp",
+    dir: "preview",
+    extension: "webp",
+    width: 560,
+    encode: (pipeline) => pipeline.webp({ quality: 60 }),
+  },
+  {
+    key: "fullWebp",
+    dir: "full",
+    extension: "webp",
+    width: 1200,
+    encode: (pipeline) => pipeline.webp({ quality: 78 }),
+  },
+];
+
+const sizeBudgets = {
+  previewWebpFirstPageBytes: 40 * 1024,
+  previewWebpTotalBytes: 750 * 1024,
+  previewAvifTotalBytes: 450 * 1024,
+};
 
 function sortByPageNumber(left, right) {
   const leftPage = Number(left.match(/\d+/)?.[0] ?? 0);
@@ -21,13 +49,19 @@ function sortByPageNumber(left, right) {
 }
 
 async function removeExistingImages() {
-  await fs.mkdir(outputDir, { recursive: true });
-  const entries = await fs.readdir(outputDir, { withFileTypes: true });
-  await Promise.all(
-    entries
-      .filter((entry) => entry.isFile() && /^page-\d+\.webp$/i.test(entry.name))
-      .map((entry) => fs.rm(path.join(outputDir, entry.name), { force: true })),
-  );
+  await fs.mkdir(outputRoot, { recursive: true });
+
+  for (const variant of variants) {
+    const outputDir = path.join(outputRoot, variant.dir);
+    await fs.mkdir(outputDir, { recursive: true });
+
+    const entries = await fs.readdir(outputDir, { withFileTypes: true });
+    await Promise.all(
+      entries
+        .filter((entry) => entry.isFile() && /^page-\d+\.(?:avif|webp)$/i.test(entry.name))
+        .map((entry) => fs.rm(path.join(outputDir, entry.name), { force: true })),
+    );
+  }
 }
 
 async function renderPdfToPngs(tempDir) {
@@ -40,6 +74,42 @@ async function renderPdfToPngs(tempDir) {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to run pdftoppm. Install Poppler or MiKTeX pdftoppm and retry. ${detail}`);
+  }
+}
+
+async function writeVariantPage(inputPath, variant, page) {
+  const outputDir = path.join(outputRoot, variant.dir);
+  const outputPath = path.join(outputDir, `page-${String(page).padStart(2, "0")}.${variant.extension}`);
+  const pipeline = sharp(inputPath).resize({ width: variant.width, withoutEnlargement: true });
+
+  await variant.encode(pipeline).toFile(outputPath);
+
+  return (await fs.stat(outputPath)).size;
+}
+
+function assertSizeBudgets(stats) {
+  const failures = [];
+
+  if (stats.previewWebp.firstPageBytes > sizeBudgets.previewWebpFirstPageBytes) {
+    failures.push(
+      `preview/page-01.webp is ${stats.previewWebp.firstPageBytes} bytes; budget is ${sizeBudgets.previewWebpFirstPageBytes}.`,
+    );
+  }
+
+  if (stats.previewWebp.totalBytes > sizeBudgets.previewWebpTotalBytes) {
+    failures.push(
+      `preview WebP total is ${stats.previewWebp.totalBytes} bytes; budget is ${sizeBudgets.previewWebpTotalBytes}.`,
+    );
+  }
+
+  if (stats.previewAvif.totalBytes > sizeBudgets.previewAvifTotalBytes) {
+    failures.push(
+      `preview AVIF total is ${stats.previewAvif.totalBytes} bytes; budget is ${sizeBudgets.previewAvifTotalBytes}.`,
+    );
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`System tour image size budget failed:\n${failures.join("\n")}`);
   }
 }
 
@@ -58,30 +128,45 @@ async function main() {
       throw new Error("pdftoppm did not produce any PNG pages.");
     }
 
-    let totalBytes = 0;
+    const stats = Object.fromEntries(
+      variants.map((variant) => [
+        variant.key,
+        {
+          outputDir: path.relative(repoRoot, path.join(outputRoot, variant.dir)).split(path.sep).join("/"),
+          pageCount: pngFiles.length,
+          width: variant.width,
+          extension: variant.extension,
+          totalBytes: 0,
+          averageBytes: 0,
+          firstPageBytes: 0,
+        },
+      ]),
+    );
 
     for (let index = 0; index < pngFiles.length; index += 1) {
       const page = index + 1;
       const inputPath = path.join(tempDir, pngFiles[index]);
-      const outputPath = path.join(outputDir, `page-${String(page).padStart(2, "0")}.webp`);
 
-      await sharp(inputPath)
-        .resize({ width: imageWidth, withoutEnlargement: true })
-        .webp({ quality: webpQuality })
-        .toFile(outputPath);
-
-      totalBytes += (await fs.stat(outputPath)).size;
+      for (const variant of variants) {
+        const bytes = await writeVariantPage(inputPath, variant, page);
+        const variantStats = stats[variant.key];
+        variantStats.totalBytes += bytes;
+        if (page === 1) variantStats.firstPageBytes = bytes;
+      }
     }
+
+    for (const variantStats of Object.values(stats)) {
+      variantStats.averageBytes = Math.round(variantStats.totalBytes / variantStats.pageCount);
+    }
+
+    assertSizeBudgets(stats);
 
     console.log(
       JSON.stringify(
         {
-          outputDir: path.relative(repoRoot, outputDir).split(path.sep).join("/"),
-          pageCount: pngFiles.length,
-          totalBytes,
-          averageBytes: Math.round(totalBytes / pngFiles.length),
-          imageWidth,
-          webpQuality,
+          outputRoot: path.relative(repoRoot, outputRoot).split(path.sep).join("/"),
+          budgets: sizeBudgets,
+          variants: stats,
         },
         null,
         2,
