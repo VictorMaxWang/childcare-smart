@@ -40,7 +40,7 @@ import demoAvatarAdmin from "./assets/demo-avatar-admin.png";
 import demoAvatarParentLin from "./assets/demo-avatar-parent-lin.png";
 import demoAvatarTeacherLi from "./assets/demo-avatar-teacher-li.png";
 import demoAvatarTeacherZhou from "./assets/demo-avatar-teacher-zhou.png";
-import SystemTourPdfPresentation from "./SystemTourPdfPresentation";
+import SystemTourPdfPresentation, { preloadSystemTourEntry } from "./SystemTourPdfPresentation";
 import heroIllustration from "./assets/hero-illustration.png";
 import loginLeftReplica from "./assets/login-left-replica.png";
 import styles from "./login-pixel.module.css";
@@ -465,7 +465,13 @@ export default function LoginPage() {
             <button
               type="button"
               className={styles.presentationButton}
-              onClick={() => setPresentationOpen(true)}
+              onFocus={preloadSystemTourEntry}
+              onMouseEnter={preloadSystemTourEntry}
+              onPointerDown={preloadSystemTourEntry}
+              onClick={() => {
+                preloadSystemTourEntry();
+                setPresentationOpen(true);
+              }}
               data-testid="system-tour-open"
             >
               <Presentation aria-hidden="true" size={22} />
