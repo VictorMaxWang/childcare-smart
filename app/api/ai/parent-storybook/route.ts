@@ -61,6 +61,7 @@ function isParentStoryBookRequest(payload: unknown): payload is ParentStoryBookR
     "pageCount" in payload &&
     payload.pageCount !== undefined &&
     payload.pageCount !== 4 &&
+    payload.pageCount !== 5 &&
     payload.pageCount !== 6 &&
     payload.pageCount !== 8
   ) {
@@ -120,6 +121,7 @@ function attachTransportMetadata(
     timeoutMs?: number | null;
   }
 ) {
+  const storyBrainDiagnostics = story.providerMeta.diagnostics?.brain;
   return {
     ...story,
     fallbackReason: story.fallbackReason ?? meta.fallbackReason,
@@ -129,21 +131,21 @@ function attachTransportMetadata(
       fallbackReason: story.providerMeta.fallbackReason ?? meta.fallbackReason,
       diagnostics: {
         brain: {
-          reachable: meta.transport === "remote-brain-proxy",
-          fallbackReason: meta.fallbackReason,
-          upstreamHost: meta.upstreamHost,
-          statusCode: meta.statusCode ?? story.providerMeta.diagnostics?.brain?.statusCode ?? null,
+          reachable: storyBrainDiagnostics?.reachable ?? meta.transport === "remote-brain-proxy",
+          fallbackReason: storyBrainDiagnostics?.fallbackReason ?? meta.fallbackReason,
+          upstreamHost: storyBrainDiagnostics?.upstreamHost ?? meta.upstreamHost,
+          statusCode: storyBrainDiagnostics?.statusCode ?? meta.statusCode ?? null,
           retryStrategy:
+            storyBrainDiagnostics?.retryStrategy ??
             meta.retryStrategy ??
-            story.providerMeta.diagnostics?.brain?.retryStrategy ??
             "none",
           elapsedMs:
+            storyBrainDiagnostics?.elapsedMs ??
             meta.elapsedMs ??
-            story.providerMeta.diagnostics?.brain?.elapsedMs ??
             null,
           timeoutMs:
+            storyBrainDiagnostics?.timeoutMs ??
             meta.timeoutMs ??
-            story.providerMeta.diagnostics?.brain?.timeoutMs ??
             null,
         },
         image: story.providerMeta.diagnostics?.image ?? {
@@ -254,6 +256,42 @@ function buildLocalStoryBookFallbackHeaders(input: {
     headers.set("x-smartchildcare-storybook-demo-seed", "isolated");
   }
   return headers;
+}
+
+function buildProviderUnavailableResponse(input: {
+  brainForward: BrainForwardResult;
+  fallbackReason: string;
+  statusCode?: number;
+}) {
+  return NextResponse.json(
+    {
+      code: "brain-proxy-unavailable",
+      error: "真实绘本生成暂不可用，请稍后重试。",
+      fallbackReason: input.fallbackReason,
+      diagnostics: {
+        transport: "brain-proxy-error",
+        targetPath: input.brainForward.targetPath,
+        upstreamHost: input.brainForward.upstreamHost,
+        fallbackReason: input.fallbackReason,
+        statusCode: input.brainForward.statusCode,
+        retryStrategy: input.brainForward.retryStrategy,
+        elapsedMs: input.brainForward.elapsedMs,
+        timeoutMs: input.brainForward.timeoutMs,
+      },
+    },
+    {
+      status: input.statusCode ?? 503,
+      headers: mergeHeaders(
+        createBrainTransportHeaders({
+          transport: "brain-proxy-error",
+          targetPath: input.brainForward.targetPath,
+          upstreamHost: input.brainForward.upstreamHost,
+          fallbackReason: input.fallbackReason,
+        }),
+        buildCacheHeaders("bypass")
+      ),
+    }
+  );
 }
 
 export async function POST(request: Request) {
@@ -378,20 +416,10 @@ export async function POST(request: Request) {
       const fallbackReason =
         brainForward.fallbackReason ??
         (!brainForward.response.ok ? "brain-proxy-non-ok" : "brain-proxy-invalid-json");
-      const localStory = buildLocalStoryBookFallback({
-        payload,
+      return buildProviderUnavailableResponse({
         brainForward,
         fallbackReason,
-        cacheState: "bypass",
-      });
-
-      return NextResponse.json(localStory, {
-        status: 200,
-        headers: buildLocalStoryBookFallbackHeaders({
-          brainForward,
-          fallbackReason,
-          cacheState: "bypass",
-        }),
+        statusCode: brainForward.response.status >= 500 ? 503 : brainForward.response.status,
       });
     }
 
@@ -430,19 +458,8 @@ export async function POST(request: Request) {
   }
 
   const fallbackReason = brainForward.fallbackReason ?? "brain-proxy-unavailable";
-  const localStory = buildLocalStoryBookFallback({
-    payload,
+  return buildProviderUnavailableResponse({
     brainForward,
     fallbackReason,
-    cacheState: "bypass",
-  });
-
-  return NextResponse.json(localStory, {
-    status: 200,
-    headers: buildLocalStoryBookFallbackHeaders({
-      brainForward,
-      fallbackReason,
-      cacheState: "bypass",
-    }),
   });
 }

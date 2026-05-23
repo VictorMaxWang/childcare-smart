@@ -40,7 +40,7 @@ function withEnv(
 }
 
 function buildPayload(): ParentStoryBookRequest {
-  return JSON.parse(
+  const payload = JSON.parse(
     readFileSync(
       new URL(
         "../../../../backend/tests/fixtures/parent_storybook/page-recording-c1-bedtime.json",
@@ -49,6 +49,21 @@ function buildPayload(): ParentStoryBookRequest {
       "utf8"
     )
   ) as ParentStoryBookRequest;
+  return {
+    ...payload,
+    requestSource: "route-test",
+  };
+}
+
+function buildStorybookRouteRequest(payload: ParentStoryBookRequest = buildPayload()) {
+  return new Request("http://localhost:3000/api/ai/parent-storybook", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-demo-account-id": "u-parent",
+    },
+    body: JSON.stringify(payload),
+  });
 }
 
 function buildRemoteStory(): ParentStoryBookResponse {
@@ -164,11 +179,7 @@ test("parent storybook route keeps remote brain diagnostics on successful proxy"
       },
       async () => {
         const response = await POST(
-          new Request("http://localhost:3000/api/ai/parent-storybook", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(buildPayload()),
-          })
+          buildStorybookRouteRequest()
         );
         const body = (await response.json()) as ParentStoryBookResponse;
 
@@ -222,11 +233,7 @@ test("parent storybook route returns 503 instead of a next-json-fallback story w
       },
       async () => {
         const response = await POST(
-          new Request("http://localhost:3000/api/ai/parent-storybook", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(buildPayload()),
-          })
+          buildStorybookRouteRequest()
         );
         const body = (await response.json()) as {
           code?: string;
@@ -285,14 +292,8 @@ test("parent storybook route serves cached remote story without re-entering the 
         NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
       },
       async () => {
-        const request = new Request("http://localhost:3000/api/ai/parent-storybook", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildPayload()),
-        });
-
-        const firstResponse = await POST(request);
-        const secondResponse = await POST(request);
+        const firstResponse = await POST(buildStorybookRouteRequest());
+        const secondResponse = await POST(buildStorybookRouteRequest());
         const secondBody = (await secondResponse.json()) as ParentStoryBookResponse;
 
         assert.equal(firstResponse.status, 200);

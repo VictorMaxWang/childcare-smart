@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+import json
 from threading import Event
 from time import perf_counter
 
-from app.providers.base import ProviderResponseError, ProviderResult
+from app.providers.base import ProviderResponseError, ProviderResult, ProviderTextResult
 from app.services import parent_storybook_service
 from app.services.parent_storybook_service import await_storybook_media_warming, run_parent_storybook
 from app.services.storybook_media_cache import get_storybook_media_cache
@@ -205,9 +206,21 @@ def test_parent_storybook_service_first_byte_payload_trims_rich_fixture_fields()
     first_byte_payload = parent_storybook_service._resolve_storybook_first_byte_payload(payload)
 
     assert "recentDetails" in payload["snapshot"]
-    assert "recentDetails" not in first_byte_payload["snapshot"]
-    assert set(first_byte_payload["snapshot"].keys()) == {"child", "summary", "ruleFallback"}
-    assert set(first_byte_payload["snapshot"]["child"].keys()) == {"id", "name", "className"}
+    assert "recentDetails" in first_byte_payload["snapshot"]
+    assert set(first_byte_payload["snapshot"].keys()) == {
+        "child",
+        "summary",
+        "ruleFallback",
+        "recentDetails",
+    }
+    assert set(first_byte_payload["snapshot"]["child"].keys()) == {
+        "id",
+        "name",
+        "className",
+        "ageBand",
+        "specialNotes",
+    }
+    assert len(first_byte_payload["snapshot"]["recentDetails"]["notes"]) <= 4
     assert len(first_byte_payload["highlightCandidates"]) == 4
     assert first_byte_payload["highlightCandidates"][-1]["priority"] == 4
 
@@ -266,9 +279,11 @@ def test_parent_storybook_service_marks_live_when_all_media_is_real(monkeypatch)
     assert await_storybook_media_warming(first["storyId"], timeout_seconds=2.0) is True
 
     result = asyncio.run(run_parent_storybook(_base_payload()))
-    assert result["providerMeta"]["mode"] == "live"
+    assert result["providerMeta"]["mode"] == "mixed"
     assert result["providerMeta"]["realProvider"] is True
-    assert result["fallback"] is False
+    assert result["fallback"] is True
+    assert result["fallbackReason"] == "provider-unconfigured-dev-fallback"
+    assert result["providerMeta"]["textDelivery"] == "fallback"
     assert result["providerMeta"]["imageDelivery"] == "real"
     assert result["providerMeta"]["imageProvider"] == "vivo-story-image"
     assert result["providerMeta"]["audioProvider"] == "vivo-story-tts"
@@ -446,10 +461,11 @@ def test_parent_storybook_service_heavy_payload_returns_first_byte_without_waiti
     assert await_storybook_media_warming(first["storyId"], timeout_seconds=2.0) is True
 
     result = asyncio.run(run_parent_storybook(payload))
-    assert result["providerMeta"]["mode"] == "live"
+    assert result["providerMeta"]["mode"] == "mixed"
     assert result["providerMeta"]["imageDelivery"] == "real"
     assert result["providerMeta"]["audioDelivery"] == "real"
-    assert result["fallback"] is False
+    assert result["fallback"] is True
+    assert result["providerMeta"]["textDelivery"] == "fallback"
 
 
 def test_parent_storybook_service_heavy_payload_warms_into_mixed(monkeypatch):
@@ -687,7 +703,7 @@ def test_parent_storybook_service_reuses_media_cache(monkeypatch):
 
 
 def test_parent_storybook_service_supports_page_count_variants_and_manual_theme_without_child_data():
-    for page_count in (4, 6, 8):
+    for page_count in (4, 5, 6, 8):
         payload = {
             "snapshot": {
                 "child": {},
@@ -758,6 +774,76 @@ def test_parent_storybook_service_hybrid_threads_theme_into_story_content():
     assert all(scene["imageSourceKind"] == "dynamic-fallback" for scene in result["scenes"])
     assert len({scene["imageUrl"] for scene in result["scenes"]}) == 4
     assert all(scene["captionTiming"]["mode"] == "duration-derived" for scene in result["scenes"])
+
+
+def test_parent_storybook_service_uses_real_text_provider_when_configured(monkeypatch):
+    class _TextProvider:
+        provider_name = "vivo-llm"
+
+        def summarize(self, prompt: str, fallback: str) -> ProviderTextResult:
+            del fallback
+            assert "表达情绪" in prompt
+            scenes = [
+                {
+                    "sceneTitle": f"AI 第 {index + 1} 页",
+                    "sceneText": f"安安在第 {index + 1} 页练习把情绪轻轻说出来。",
+                    "audioScript": f"AI 第 {index + 1} 页。安安把情绪轻轻说出来。",
+                    "imagePrompt": "温柔的幼儿园故事角，没有文字。",
+                    "voiceStyle": "warm-storytelling",
+                    "highlightSource": "vivo-llm",
+                }
+                for index in range(5)
+            ]
+            return ProviderTextResult(
+                text=json.dumps(
+                    {
+                        "title": "安安的 AI 情绪小书",
+                        "summary": "AI 根据孩子记录生成的五页故事。",
+                        "moral": "情绪被看见，就能慢慢说出来。",
+                        "parentNote": "今晚先听孩子说一句自己的感受。",
+                        "scenes": scenes,
+                    },
+                    ensure_ascii=False,
+                ),
+                source="vivo",
+                provider="vivo-llm",
+                model="qwen3.5-plus",
+                fallback=False,
+            )
+
+    monkeypatch.setattr(
+        "app.services.parent_storybook_llm._has_real_vivo_text_config",
+        lambda settings: True,
+    )
+    monkeypatch.setattr(
+        "app.services.parent_storybook_llm.resolve_text_provider",
+        lambda settings: _TextProvider(),
+    )
+
+    payload = _base_payload()
+    payload.update(
+        {
+            "generationMode": "hybrid",
+            "manualTheme": "表达情绪",
+            "pageCount": 5,
+            "goalKeywords": ["表达情绪"],
+            "requestSource": "pytest-real-text-provider",
+        }
+    )
+
+    result = asyncio.run(run_parent_storybook(payload))
+
+    assert result["source"] == "vivo"
+    assert result["title"] == "安安的 AI 情绪小书"
+    assert result["providerMeta"]["provider"] == "vivo-llm"
+    assert result["providerMeta"]["textProvider"] == "vivo-llm"
+    assert result["providerMeta"]["textDelivery"] == "real"
+    assert result["providerMeta"]["realProvider"] is True
+    assert result["providerMeta"]["mode"] == "mixed"
+    assert result["fallbackReason"] == "partial-media-fallback"
+    assert len(result["scenes"]) == 5
+    assert all(scene["sceneTitle"].startswith("AI 第") for scene in result["scenes"])
+    assert all("AI画面补充" in scene["imagePrompt"] for scene in result["scenes"])
 
 
 def test_parent_storybook_service_uses_demo_art_only_after_dynamic_fallback_fails(monkeypatch):

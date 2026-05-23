@@ -52,6 +52,7 @@ import {
   formatStoryBookHighlightSource,
   formatStoryBookResponseCache,
   formatStoryBookSceneImageDelivery,
+  formatStoryBookTextDelivery,
   formatStoryBookVoiceStyle,
   getStoryBookPresetCopy,
 } from "@/lib/parent/storybook-viewer-copy";
@@ -911,6 +912,7 @@ export function getRuntimeBannerItemsHotfix(
   const items: Array<{ tone: "warning" | "success" | "info"; label: string; detail: string }> = [];
   const diagnostics = story.providerMeta.diagnostics;
   const transport = story.providerMeta.transport;
+  const textDelivery = story.providerMeta.textDelivery;
   const runtimeState = resolveRuntimeStoryStateHotfix(story, {
     ...runtimeOverrides,
     canUseLocalSpeech,
@@ -918,9 +920,23 @@ export function getRuntimeBannerItemsHotfix(
   const imageDelivery = runtimeState.imageDelivery;
   const audioDelivery = resolveRuntimeAudioDeliveryHotfix(story);
   const isPlayingLocalFallback = runtimeOverrides?.playbackSource === "local";
-  if (transport === "remote-brain-proxy") {
+  if (textDelivery === "real" || story.source === "vivo") {
     items.push({
       tone: "success",
+      label: "AI 成长故事已生成",
+      detail: "当前文本来自实时生成链路，并已按孩子与主题线索整理。",
+    });
+  } else if (textDelivery === "mock" || textDelivery === "fallback" || story.fallbackReason) {
+    items.push({
+      tone: "warning",
+      label: "当前文本为兜底版本",
+      detail: formatStoryBookFallbackReason(
+        story.fallbackReason ?? story.providerMeta.fallbackReason ?? diagnostics?.brain?.fallbackReason
+      ),
+    });
+  } else if (transport === "remote-brain-proxy") {
+    items.push({
+      tone: "info",
       label: "今天的成长故事已生成",
       detail: "当前看到的是按今天成长线索整理好的版本。",
     });
@@ -1756,6 +1772,9 @@ export default function StoryBookViewer({
                       {modeCopy ? (
                         <Badge variant={modeCopy.badgeVariant}>{modeCopy.label}</Badge>
                       ) : null}
+                      <Badge variant={story.providerMeta.textDelivery === "real" ? "success" : "outline"}>
+                        {formatStoryBookTextDelivery(story.providerMeta.textDelivery)}
+                      </Badge>
                       <Badge variant="outline">分镜 {story.providerMeta.sceneCount}</Badge>
                       <Badge variant="outline">亮点 {story.providerMeta.highlightCount}</Badge>
                     </div>

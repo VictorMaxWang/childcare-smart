@@ -24,6 +24,7 @@ from app.providers.story_image_provider import (
     can_use_vivo_story_image_provider,
     resolve_story_image_provider,
 )
+from app.services.parent_storybook_llm import generate_parent_storybook_text
 from app.services.storybook_media_cache import get_storybook_media_cache
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ STYLE_PRESET_PROMPTS = {
 }
 PAGE_STRUCTURES: dict[int, list[str]] = {
     4: ["opening", "challenge", "attempt", "landing"],
+    5: ["opening", "challenge", "support", "attempt", "landing"],
     6: ["opening", "challenge", "support", "attempt", "small-success", "landing"],
     8: [
         "opening",
@@ -228,26 +230,65 @@ def _normalize_keywords(values: Any) -> list[str]:
 
 def _resolve_storybook_first_byte_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     child = snapshot.get("child")
-    growth = snapshot.get("summary", {}).get("growth") if isinstance(snapshot.get("summary"), dict) else {}
-    feedback = snapshot.get("summary", {}).get("feedback") if isinstance(snapshot.get("summary"), dict) else {}
-    return {
+    summary = snapshot.get("summary") if isinstance(snapshot.get("summary"), dict) else {}
+    health = summary.get("health") if isinstance(summary.get("health"), dict) else {}
+    meals = summary.get("meals") if isinstance(summary.get("meals"), dict) else {}
+    growth = summary.get("growth") if isinstance(summary.get("growth"), dict) else {}
+    feedback = summary.get("feedback") if isinstance(summary.get("feedback"), dict) else {}
+    recent_details = snapshot.get("recentDetails")
+
+    result = {
         "child": {
             "id": _normalize_text(child.get("id")) if isinstance(child, dict) else "",
             "name": _normalize_text(child.get("name")) if isinstance(child, dict) else "",
             "className": _normalize_text(child.get("className")) if isinstance(child, dict) else "",
+            "ageBand": _normalize_text(child.get("ageBand")) if isinstance(child, dict) else "",
+            "specialNotes": _normalize_text(child.get("specialNotes")) if isinstance(child, dict) else "",
         },
         "summary": {
+            "health": {
+                "abnormalCount": int(health.get("abnormalCount") or 0) if isinstance(health, dict) else 0,
+                "handMouthEyeAbnormalCount": int(health.get("handMouthEyeAbnormalCount") or 0)
+                if isinstance(health, dict)
+                else 0,
+                "moodKeywords": health.get("moodKeywords") if isinstance(health.get("moodKeywords"), list) else [],
+            },
+            "meals": {
+                "recordCount": int(meals.get("recordCount") or 0) if isinstance(meals, dict) else 0,
+                "hydrationAvg": meals.get("hydrationAvg") if isinstance(meals, dict) else None,
+                "balancedRate": meals.get("balancedRate") if isinstance(meals, dict) else None,
+                "monotonyDays": int(meals.get("monotonyDays") or 0) if isinstance(meals, dict) else 0,
+                "allergyRiskCount": int(meals.get("allergyRiskCount") or 0) if isinstance(meals, dict) else 0,
+            },
             "growth": {
                 "recordCount": int(growth.get("recordCount") or 0) if isinstance(growth, dict) else 0,
+                "attentionCount": int(growth.get("attentionCount") or 0) if isinstance(growth, dict) else 0,
+                "pendingReviewCount": int(growth.get("pendingReviewCount") or 0) if isinstance(growth, dict) else 0,
                 "topCategories": growth.get("topCategories") if isinstance(growth.get("topCategories"), list) else [],
             },
             "feedback": {
                 "count": int(feedback.get("count") or 0) if isinstance(feedback, dict) else 0,
+                "statusCounts": feedback.get("statusCounts") if isinstance(feedback.get("statusCounts"), dict) else {},
                 "keywords": feedback.get("keywords") if isinstance(feedback.get("keywords"), list) else [],
             },
         },
         "ruleFallback": snapshot.get("ruleFallback") if isinstance(snapshot.get("ruleFallback"), list) else [],
     }
+    slim_recent_details: dict[str, Any] = {}
+    if isinstance(recent_details, dict):
+        if isinstance(recent_details.get("health"), list):
+            slim_recent_details["health"] = recent_details["health"][:2]
+        if isinstance(recent_details.get("meals"), list):
+            slim_recent_details["meals"] = recent_details["meals"][:2]
+        if isinstance(recent_details.get("growth"), list):
+            slim_recent_details["growth"] = recent_details["growth"][:3]
+        if isinstance(recent_details.get("feedback"), list):
+            slim_recent_details["feedback"] = recent_details["feedback"][:2]
+    elif isinstance(recent_details, list):
+        slim_recent_details["notes"] = recent_details[:4]
+    if slim_recent_details:
+        result["recentDetails"] = slim_recent_details
+    return result
 
 
 def _resolve_storybook_first_byte_consultation(payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -389,15 +430,15 @@ def _serialize_storybook_media_error(error: Exception) -> tuple[str | None, str 
 
 
 def _resolve_media_live_enabled(*, settings: Any, provider: Any, media_kind: Literal["image", "audio"]) -> bool:
-    if media_kind == "image":
-        if can_use_vivo_story_image_provider(settings):
-            return True
-    else:
-        if can_use_vivo_story_audio_provider(settings):
-            return True
-
     provider_name = _normalize_text(getattr(provider, "provider_name", ""))
     mode_name = _normalize_text(getattr(provider, "mode_name", ""))
+    if media_kind == "image":
+        if can_use_vivo_story_image_provider(settings) and provider_name.startswith("vivo-"):
+            return True
+    else:
+        if can_use_vivo_story_audio_provider(settings) and provider_name.startswith("vivo-"):
+            return True
+
     return mode_name == "live" or provider_name.startswith("vivo-")
 
 
@@ -592,7 +633,7 @@ def _resolve_generation_mode(payload: dict[str, Any]) -> GenerationMode:
 
 def _resolve_page_count(payload: dict[str, Any]) -> int:
     value = _payload_get(payload, "pageCount", "page_count")
-    if value in {4, 6, 8}:
+    if value in {4, 5, 6, 8}:
         return int(value)
     return DEFAULT_PAGE_COUNT
 
@@ -2521,12 +2562,56 @@ async def run_parent_storybook(payload: dict[str, Any]) -> dict[str, Any]:
     ingredients = _build_story_ingredients(first_byte_payload, snapshot, child, highlights)
     scenes_blueprint = _build_story_scenes_v2(ingredients)
     style_preset = ingredients["style_recipe"]["preset"]
-    story_seed = _build_story_seed(first_byte_payload, ingredients, child_id)
+    rule_story_text = {
+        "title": _build_story_title(
+            ingredients["generation_mode"],
+            child_name=ingredients["child_name"],
+            focus_theme=ingredients["focus_theme"],
+        ),
+        "summary": _build_story_summary(
+            ingredients["generation_mode"],
+            ingredients["story_mode"],
+            child_name=ingredients["child_name"],
+            focus_theme=ingredients["focus_theme"],
+            page_count=ingredients["page_count"],
+        ),
+        "moral": _build_moral(
+            protagonist_name=ingredients["protagonist"]["label"],
+            focus_theme=ingredients["focus_theme"],
+            summary_highlight=ingredients["summary_highlight"],
+        ),
+        "parentNote": ingredients["parent_note"],
+        "scenes": scenes_blueprint,
+    }
+    settings = get_settings()
+    text_generation = generate_parent_storybook_text(
+        settings=settings,
+        payload=first_byte_payload,
+        ingredients=ingredients,
+        rule_story=rule_story_text,
+    )
+    scenes_blueprint = text_generation.scenes
+    story_seed = "::".join(
+        [
+            _build_story_seed(first_byte_payload, ingredients, child_id),
+            text_generation.source,
+            text_generation.provider,
+            _stable_hash(
+                "::".join(
+                    [
+                        text_generation.title,
+                        text_generation.summary,
+                        "|".join(scene["sceneText"] for scene in scenes_blueprint),
+                    ]
+                ),
+                length=12,
+            ),
+        ]
+    )
     story_id = f"storybook-{_stable_hash(story_seed)}"
     generated_at = _stable_timestamp(story_seed)
     scene_build_ms = _elapsed_ms(scene_build_started_at)
 
-    settings = get_settings()
     fallback_image_provider = MockStoryImageProvider()
     fallback_audio_provider = MockStoryAudioProvider()
     image_provider = resolve_story_image_provider(settings) if ingredients["story_mode"] == "storybook" else fallback_image_provider
@@ -2717,10 +2802,19 @@ async def run_parent_storybook(payload: dict[str, Any]) -> dict[str, Any]:
         )
     fallback_asset_build_ms = _elapsed_ms(fallback_asset_build_started_at)
 
-    provider_mode = _provider_mode_from_scenes(scenes)
-    if provider_mode == "live":
+    media_provider_mode = _provider_mode_from_scenes(scenes)
+    provider_mode = (
+        "live"
+        if text_generation.real_provider and media_provider_mode == "live"
+        else "mixed"
+        if text_generation.real_provider or media_provider_mode in {"live", "mixed"}
+        else "fallback"
+    )
+    if text_generation.fallback_reason:
+        fallback_reason = text_generation.fallback_reason
+    elif provider_mode == "live":
         fallback_reason = None
-    elif provider_mode == "mixed":
+    elif media_provider_mode == "mixed" or provider_mode == "mixed":
         fallback_reason = "partial-media-fallback"
     elif ingredients["story_mode"] == "card":
         fallback_reason = "sparse-parent-context"
@@ -2736,6 +2830,18 @@ async def run_parent_storybook(payload: dict[str, Any]) -> dict[str, Any]:
         scenes=scenes,
         request_elapsed_ms=_elapsed_ms(request_started_at),
     )
+    diagnostics["brain"] = {
+        **diagnostics.get("brain", {}),
+        "reachable": bool(text_generation.real_provider),
+        "fallbackReason": fallback_reason if text_generation.fallback_reason else None,
+        "upstreamHost": "api-ai.vivo.com.cn" if text_generation.real_provider else None,
+        "statusCode": None,
+        "retryStrategy": "none",
+        "elapsedMs": text_generation.elapsed_ms,
+        "timeoutMs": int(settings.request_timeout_seconds * 1000)
+        if getattr(settings, "request_timeout_seconds", None)
+        else None,
+    }
     first_byte_done_ms = _elapsed_ms(request_started_at)
     logger.info(
         "parent_storybook.first_byte story_id=%s request_source=%s payload_trim_ms=%d scene_build_ms=%d warm_submit_ms=%d fallback_asset_build_ms=%d first_byte_done_ms=%d scene_count=%d cache_hit=%s cache_hit_count=%d image_cache_hit_count=%d audio_cache_hit_count=%d image_live_enabled=%s audio_live_enabled=%s image_pending_scene_count=%d audio_pending_scene_count=%d image_provider=%s audio_provider=%s live_provider_request_thread_policy=priority-sync+async-warm",
@@ -2763,33 +2869,21 @@ async def run_parent_storybook(payload: dict[str, Any]) -> dict[str, Any]:
         "storyId": story_id,
         "childId": child_id,
         "mode": ingredients["story_mode"],
-        "title": _build_story_title(
-            ingredients["generation_mode"],
-            child_name=ingredients["child_name"],
-            focus_theme=ingredients["focus_theme"],
-        ),
-        "summary": _build_story_summary(
-            ingredients["generation_mode"],
-            ingredients["story_mode"],
-            child_name=ingredients["child_name"],
-            focus_theme=ingredients["focus_theme"],
-            page_count=ingredients["page_count"],
-        ),
-        "moral": _build_moral(
-            protagonist_name=ingredients["protagonist"]["label"],
-            focus_theme=ingredients["focus_theme"],
-            summary_highlight=ingredients["summary_highlight"],
-        ),
-        "parentNote": ingredients["parent_note"],
-        "source": "rule",
-        "fallback": provider_mode != "live",
+        "title": text_generation.title,
+        "summary": text_generation.summary,
+        "moral": text_generation.moral,
+        "parentNote": text_generation.parent_note,
+        "source": text_generation.source,
+        "fallback": provider_mode != "live" or text_generation.fallback,
         "fallbackReason": fallback_reason,
         "generatedAt": generated_at,
         "stylePreset": style_preset,
         "providerMeta": {
-            "provider": "parent-storybook-rule",
+            "provider": text_generation.provider,
             "mode": provider_mode,
             "transport": "fastapi-brain",
+            "textProvider": text_generation.provider,
+            "textDelivery": text_generation.text_delivery,
             "imageProvider": _resolve_scene_image_provider_label(
                 getattr(image_provider, "provider_name", "storybook-asset"),
                 [str(scene.get("imageSourceKind") or "svg-fallback") for scene in scenes],
@@ -2805,7 +2899,7 @@ async def run_parent_storybook(payload: dict[str, Any]) -> dict[str, Any]:
             "stylePreset": style_preset,
             "requestSource": request_source,
             "fallbackReason": fallback_reason,
-            "realProvider": provider_mode in {"live", "mixed"},
+            "realProvider": text_generation.real_provider or media_provider_mode in {"live", "mixed"},
             "highlightCount": len(highlights),
             "sceneCount": len(scenes),
             "cacheHitCount": cache_hit_count,

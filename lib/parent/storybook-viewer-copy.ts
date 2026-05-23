@@ -54,6 +54,9 @@ function mapProviderName(kind: "image" | "audio", providerName: string) {
   if (normalized === "vivo-story-tts") {
     return "vivo 真实朗读";
   }
+  if (normalized === "vivo-llm") {
+    return "vivo 文本生成";
+  }
   if (normalized === "parent-storybook-rule") {
     return "规则故事引擎";
   }
@@ -152,6 +155,21 @@ export function formatStoryBookFallbackReason(value?: string | null) {
   if (normalized === "mock-storybook-pipeline") {
     return "当前使用演示绘本结果";
   }
+  if (normalized === "provider-unconfigured-dev-fallback") {
+    return "AI 文本生成未配置，当前使用开发兜底绘本";
+  }
+  if (normalized === "text-provider-disabled-dev-fallback") {
+    return "AI 文本生成未启用，当前使用开发兜底绘本";
+  }
+  if (normalized === "provider-invalid-json-dev-fallback") {
+    return "AI 返回格式不完整，当前使用开发兜底绘本";
+  }
+  if (normalized.startsWith("text-provider-")) {
+    return "AI 文本生成失败，当前使用兜底绘本";
+  }
+  if (normalized.startsWith("provider-")) {
+    return "AI 服务暂不可用";
+  }
   if (normalized === "sparse-parent-context") {
     return "当前上下文较少，先生成轻量版本";
   }
@@ -206,6 +224,13 @@ export function formatStoryBookAudioDelivery(
   if (value === "stream-url") return "短链音频";
   if (value === "inline-data-url") return "内联音频";
   return "文字朗读预览";
+}
+
+export function formatStoryBookTextDelivery(value?: "real" | "mock" | "fallback" | string | null) {
+  if (value === "real") return "AI 文本已生成";
+  if (value === "mock") return "开发模拟文本";
+  if (value === "fallback") return "兜底文本";
+  return "文本来源待确认";
 }
 
 export function formatStoryBookClientCache(kind: "none" | "hit" | "saved") {

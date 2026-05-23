@@ -16,7 +16,7 @@ ParentStoryBookRequestMode = Literal["storybook", "card", "auto"]
 ParentStoryBookResultSource = Literal["ai", "fallback", "mock", "rule", "vivo"]
 ParentStoryBookMediaStatus = Literal["ready", "mock", "fallback", "empty"]
 ParentStoryBookGenerationMode = Literal["child-personalized", "manual-theme", "hybrid"]
-ParentStoryBookPageCount = Literal[4, 6, 8]
+ParentStoryBookPageCount = Literal[4, 5, 6, 8]
 ParentStoryBookStylePreset = Literal["sunrise-watercolor", "moonlit-cutout", "forest-crayon"]
 ParentStoryBookStyleMode = Literal["preset", "custom"]
 ParentStoryBookImageSourceKind = Literal["real", "dynamic-fallback", "demo-art", "svg-fallback"]
@@ -49,6 +49,8 @@ class ParentStoryBookProviderMeta(ParentStoryBookModel):
     provider: str
     mode: str
     transport: str | None = None
+    text_provider: str | None = None
+    text_delivery: Literal["real", "mock", "fallback"] | None = None
     image_provider: str
     audio_provider: str
     image_delivery: Literal["real", "mixed", "dynamic-fallback", "demo-art", "svg-fallback"] | None = None

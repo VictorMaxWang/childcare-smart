@@ -136,7 +136,7 @@ test("buildParentStoryBookRequestFromFeed supports manual-theme without child da
 });
 
 test("buildParentStoryBookResponse honors page count variants", () => {
-  const pageCounts: ParentStoryBookPageCount[] = [4, 6, 8];
+  const pageCounts: ParentStoryBookPageCount[] = [4, 5, 6, 8];
   for (const pageCount of pageCounts) {
     const response = buildParentStoryBookResponse(
       buildRequest({ pageCount, requestSource: `storybook-${pageCount}` })

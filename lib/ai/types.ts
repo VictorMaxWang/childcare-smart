@@ -613,7 +613,7 @@ export type ParentStoryBookGenerationMode =
   | "child-personalized"
   | "manual-theme"
   | "hybrid";
-export type ParentStoryBookPageCount = 4 | 6 | 8;
+export type ParentStoryBookPageCount = 4 | 5 | 6 | 8;
 export type ParentStoryBookStylePreset =
   | "sunrise-watercolor"
   | "moonlit-cutout"
@@ -696,6 +696,8 @@ export interface ParentStoryBookProviderMeta {
   provider: string;
   mode: string;
   transport?: ParentStoryBookTransport;
+  textProvider?: string;
+  textDelivery?: "real" | "mock" | "fallback";
   imageProvider: string;
   audioProvider: string;
   imageDelivery?: ParentStoryBookImageDelivery;

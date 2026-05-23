@@ -159,8 +159,8 @@ def test_parent_storybook_endpoint_accepts_heavy_page_payload_fixture():
     assert body["providerMeta"]["diagnostics"]["brain"]["statusCode"] is None
     assert body["fallbackReason"] != "brain-proxy-timeout"
     assert body["providerMeta"]["fallbackReason"] != "brain-proxy-timeout"
-    assert body["providerMeta"]["diagnostics"]["brain"]["fallbackReason"] is None
-    assert body["providerMeta"]["diagnostics"]["brain"]["timeoutMs"] is None
+    assert body["providerMeta"]["diagnostics"]["brain"]["fallbackReason"] == "provider-unconfigured-dev-fallback"
+    assert body["providerMeta"]["diagnostics"]["brain"]["timeoutMs"] == 20000
 
 
 def test_parent_storybook_endpoint_can_return_live_media(monkeypatch):
@@ -203,11 +203,13 @@ def test_parent_storybook_endpoint_can_return_live_media(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["providerMeta"]["mode"] == "live"
+    assert body["providerMeta"]["mode"] == "mixed"
     assert body["providerMeta"]["realProvider"] is True
+    assert body["providerMeta"]["textDelivery"] == "fallback"
     assert body["providerMeta"]["imageDelivery"] == "real"
     assert body["providerMeta"]["audioDelivery"] == "real"
-    assert body["fallback"] is False
+    assert body["fallback"] is True
+    assert body["fallbackReason"] == "provider-unconfigured-dev-fallback"
     assert body["scenes"][0]["imageStatus"] == "ready"
     assert body["scenes"][0]["audioStatus"] == "ready"
     assert body["scenes"][0]["audioUrl"].startswith("/api/ai/parent-storybook/media/")
@@ -216,7 +218,7 @@ def test_parent_storybook_endpoint_can_return_live_media(monkeypatch):
     assert body["scenes"][0]["voiceName"] == "yige"
     assert body["scenes"][0]["imageSourceKind"] == "real"
     assert body["scenes"][0]["captionTiming"]["mode"] == "duration-derived"
-    assert body["providerMeta"]["diagnostics"]["brain"]["reachable"] is True
+    assert body["providerMeta"]["diagnostics"]["brain"]["reachable"] is False
 
 
 def test_parent_storybook_media_endpoint_serves_cached_audio(monkeypatch):
@@ -257,6 +259,9 @@ def test_parent_storybook_media_endpoint_serves_cached_audio(monkeypatch):
 
 def test_parent_storybook_media_endpoint_serves_cached_fallback_svg(monkeypatch):
     class _LiveEnabledSettings:
+        brain_provider = "mock"
+        enable_mock_provider = True
+        request_timeout_seconds = 20
         storybook_image_provider = "vivo"
         storybook_audio_provider = "mock"
         vivo_app_id = "demo-app"
@@ -402,7 +407,7 @@ def test_parent_storybook_schema_parses_new_v2_fields_with_aliases():
 
 def test_parent_storybook_endpoint_rejects_invalid_page_count():
     payload = build_payload()
-    payload["pageCount"] = 5
+    payload["pageCount"] = 7
 
     response = client.post("/api/v1/agents/parent/storybook", json=payload)
 

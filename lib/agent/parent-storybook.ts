@@ -191,7 +191,7 @@ export const DEFAULT_PARENT_STORYBOOK_STYLE_MODE: ParentStoryBookStyleMode = "pr
 export const DEFAULT_PARENT_STORYBOOK_GENERATION_MODE: ParentStoryBookGenerationMode =
   "child-personalized";
 export const DEFAULT_PARENT_STORYBOOK_PAGE_COUNT: ParentStoryBookPageCount = 6;
-export const PARENT_STORYBOOK_PAGE_OPTIONS: ParentStoryBookPageCount[] = [4, 6, 8];
+export const PARENT_STORYBOOK_PAGE_OPTIONS: ParentStoryBookPageCount[] = [4, 5, 6, 8];
 export const PARENT_STORYBOOK_THEME_CHIPS = [
   "勇气",
   "诚实",
@@ -203,6 +203,7 @@ export const PARENT_STORYBOOK_THEME_CHIPS = [
 
 const PAGE_STRUCTURES: Record<ParentStoryBookPageCount, StoryStage[]> = {
   4: ["opening", "challenge", "attempt", "landing"],
+  5: ["opening", "challenge", "support", "attempt", "landing"],
   6: ["opening", "challenge", "support", "attempt", "small-success", "landing"],
   8: [
     "opening",
@@ -360,7 +361,7 @@ function normalizeKeywords(values?: string[] | null) {
 function resolveParentStoryBookPageCount(
   value?: number | null
 ): ParentStoryBookPageCount {
-  if (value === 4 || value === 6 || value === 8) {
+  if (value === 4 || value === 5 || value === 6 || value === 8) {
     return value;
   }
   return DEFAULT_PARENT_STORYBOOK_PAGE_COUNT;
@@ -2214,6 +2215,8 @@ export function buildParentStoryBookResponse(
       provider: "parent-storybook-rule",
       mode: "fallback",
       transport: options?.transport ?? "next-json-fallback",
+      textProvider: "parent-storybook-rule",
+      textDelivery: "fallback",
       imageProvider: "storybook-dynamic-fallback",
       audioProvider: "storybook-mock-preview",
       imageDelivery: resolveProviderImageDeliveryFromScenes(scenes),

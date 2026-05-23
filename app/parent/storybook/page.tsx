@@ -61,7 +61,7 @@ type StoryBookControls = {
   customStyleNegativePrompt: string;
 };
 
-const PAGE_COUNT_OPTIONS = [4, 6, 8] as const satisfies readonly ParentStoryBookPageCount[];
+const PAGE_COUNT_OPTIONS = [4, 5, 6, 8] as const satisfies readonly ParentStoryBookPageCount[];
 const MEDIA_POLL_INTERVAL_MS = 2_000;
 const MEDIA_POLL_MAX_ATTEMPTS = 24;
 const STORYBOOK_USER_REQUEST_TIMEOUT_MS = 25_000;
@@ -123,6 +123,7 @@ export default function ParentStoryBookPage() {
   const [hasManualStorybookOverride, setHasManualStorybookOverride] = useState(false);
   const hasManualStorybookOverrideRef = useRef(false);
   const networkOnlyRef = useRef(false);
+  const refreshCurrentOnlyRef = useRef(false);
   const backgroundMediaPollRef = useRef(false);
   const storyRef = useRef<ParentStoryBookResponse | null>(null);
   const requestRef = useRef<ParentStoryBookRequest | null>(null);
@@ -415,6 +416,7 @@ export default function ParentStoryBookPage() {
     let cancelled = false;
     const controller = new AbortController();
     const bypassCache = networkOnlyRef.current;
+    const refreshCurrentOnly = refreshCurrentOnlyRef.current;
     const backgroundMediaPoll = backgroundMediaPollRef.current;
     const forceNetworkForManualOverride =
       isLockedLinXiaoyuStorybook && hasManualStorybookOverrideActive;
@@ -423,6 +425,7 @@ export default function ParentStoryBookPage() {
     backgroundMediaPollRef.current = false;
     const resolvedCacheKey = cacheKey;
     networkOnlyRef.current = false;
+    refreshCurrentOnlyRef.current = false;
     const storyLoadKey = `${resolvedCacheKey}:${reloadToken}`;
     if (lastStoryLoadKeyRef.current === storyLoadKey) {
       return () => {
@@ -481,6 +484,25 @@ export default function ParentStoryBookPage() {
           controller.abort();
         };
       }
+      if (
+        refreshCurrentOnly &&
+        storyRef.current &&
+        storyRef.current.childId === (activeRequest.childId ?? activeRequest.snapshot.child.id)
+      ) {
+        const currentStory = storyRef.current;
+        startTransition(() => {
+          setStory(currentStory);
+          setStatus(currentStory.mode);
+          setErrorMessage(null);
+          setRefreshMessage("已刷新当前版本；未重新调用 AI 生成。");
+          setIsRefreshing(false);
+          setCacheState({ kind: "none" });
+        });
+        return () => {
+          cancelled = true;
+          controller.abort();
+        };
+      }
       if (cached) {
         networkOnlyRef.current = !backgroundMediaPoll;
       }
@@ -518,7 +540,26 @@ export default function ParentStoryBookPage() {
         });
 
         if (!response.ok) {
-          throw new Error(`成长绘本请求失败（${response.status}）`);
+          let detail = "";
+          try {
+            const errorPayload = (await response.clone().json()) as {
+              error?: string;
+              detail?: string;
+              fallbackReason?: string;
+            };
+            detail =
+              errorPayload.error ??
+              errorPayload.detail ??
+              errorPayload.fallbackReason ??
+              "";
+          } catch {
+            detail = "";
+          }
+          throw new Error(
+            detail
+              ? `成长绘本请求失败（${response.status}）：${detail}`
+              : `成长绘本请求失败（${response.status}）`
+          );
         }
 
         const data = (await response.json()) as ParentStoryBookResponse;
@@ -801,7 +842,8 @@ export default function ParentStoryBookPage() {
           return;
         }
         if (!request) return;
-        networkOnlyRef.current = true;
+        networkOnlyRef.current = false;
+        refreshCurrentOnlyRef.current = true;
         setReloadToken((previousToken) => previousToken + 1);
       }}
       onExportStorybook={(format) => {
