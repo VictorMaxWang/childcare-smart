@@ -63,7 +63,7 @@ test("TTS route enforces child scope for parent, teacher, and director", async (
   const admin = await demoContext(testInfo, "u-admin");
 
   expect((await parent.get("/api/storybooks/lin-xiaoyu/tts?childId=c-3&page=1")).status()).toBe(403);
-  expect([200, 503]).toContain((await teacherLi.get(TTS_ROUTE)).status());
-  expect((await teacherZhou.get(TTS_ROUTE)).status()).toBe(403);
+  expect((await teacherLi.get(TTS_ROUTE)).status()).toBe(403);
+  expect([200, 503]).toContain((await teacherZhou.get(TTS_ROUTE)).status());
   expect([200, 503]).toContain((await admin.get(TTS_ROUTE)).status());
 });

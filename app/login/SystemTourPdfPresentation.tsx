@@ -214,15 +214,20 @@ export default function SystemTourPdfPresentation({ open, onClose }: SystemTourP
   useEffect(() => {
     if (!open) return;
 
-    setCurrentPage(1);
-    setLoadError("");
     preloadSystemTourEntry();
+    const resetTimer = window.setTimeout(() => {
+      setCurrentPage(1);
+      setLoadError("");
+    }, 0);
 
     const cancelWarmup = scheduleIdleTask(() => {
       void warmAllDisplayPages();
     }, 450);
 
-    return cancelWarmup;
+    return () => {
+      window.clearTimeout(resetTimer);
+      cancelWarmup();
+    };
   }, [open]);
 
   useEffect(() => {
@@ -231,8 +236,11 @@ export default function SystemTourPdfPresentation({ open, onClose }: SystemTourP
     let cancelled = false;
     const nearbyPages = [currentPage, currentPage + 1, currentPage - 1, currentPage + 2];
 
-    setLoadError("");
-    setImageLoading(!loadedDisplayPages.has(currentPage));
+    const loadingTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      setLoadError("");
+      setImageLoading(!loadedDisplayPages.has(currentPage));
+    }, 0);
 
     void preloadTourDisplayPage(currentPage, "high")
       .then(() => {
@@ -253,6 +261,7 @@ export default function SystemTourPdfPresentation({ open, onClose }: SystemTourP
 
     return () => {
       cancelled = true;
+      window.clearTimeout(loadingTimer);
     };
   }, [currentPage, open]);
 

@@ -81,10 +81,20 @@ def test_vivo_story_audio_provider_renders_and_reuses_runtime_cache():
     assert len(calls) == 1
 
 
-def test_story_audio_provider_prefers_vivo_in_auto_mode_when_credentials_exist():
-    provider = resolve_story_audio_provider(_settings(storybook_audio_provider="auto"))
+def test_story_audio_provider_prefers_vivo_in_auto_mode_when_brain_provider_is_vivo():
+    provider = resolve_story_audio_provider(
+        _settings(storybook_audio_provider="auto", brain_provider="vivo")
+    )
 
     assert provider.provider_name == "vivo-story-tts"
+
+
+def test_story_audio_provider_uses_mock_in_auto_mode_when_brain_provider_is_mock():
+    provider = resolve_story_audio_provider(
+        _settings(storybook_audio_provider="auto", brain_provider="mock")
+    )
+
+    assert provider.provider_name == "storybook-mock-preview"
 
 
 def test_story_audio_provider_falls_back_to_mock_without_vivo_credentials():

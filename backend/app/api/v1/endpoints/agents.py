@@ -16,6 +16,7 @@ from app.schemas.parent_storybook import ParentStoryBookRequest, ParentStoryBook
 from app.schemas.parent_trend import ParentTrendQueryRequest, ParentTrendQueryResponse
 from app.schemas.react_tools import ReactRunRequest, ReactRunResponse
 from app.services.orchestrator import Orchestrator, build_orchestrator
+from app.services.parent_storybook_llm import ParentStoryBookTextProviderError
 from app.services.storybook_media_cache import get_storybook_media_cache
 
 router = APIRouter(tags=["agents"])
@@ -66,6 +67,15 @@ async def parent_storybook(
 ):
     try:
         result = await orchestrator.parent_storybook(payload.model_dump(mode="json", by_alias=True))
+    except ParentStoryBookTextProviderError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={
+                "code": "storybook-text-provider-unavailable",
+                "message": str(error),
+                "fallbackReason": error.fallback_reason,
+            },
+        ) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return ParentStoryBookResponse.model_validate(result)

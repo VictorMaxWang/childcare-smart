@@ -56,14 +56,19 @@ def build_story_caption_timing(text: str) -> dict[str, Any]:
 
 
 def _has_vivo_credentials(settings: Settings) -> bool:
-    app_id = (settings.vivo_app_id or "").strip()
-    app_key = settings.vivo_app_key.get_secret_value().strip() if settings.vivo_app_key else ""
+    app_id = (getattr(settings, "vivo_app_id", None) or "").strip()
+    vivo_app_key = getattr(settings, "vivo_app_key", None)
+    app_key = vivo_app_key.get_secret_value().strip() if vivo_app_key else ""
     return bool(app_id and app_key)
 
 
 def story_audio_provider_prefers_vivo(settings: Settings) -> bool:
-    provider_mode = settings.storybook_audio_provider.strip().lower() or "auto"
-    return provider_mode in {"auto", "vivo"}
+    provider_mode = getattr(settings, "storybook_audio_provider", "auto").strip().lower() or "auto"
+    if provider_mode == "vivo":
+        return True
+    if provider_mode != "auto":
+        return False
+    return (getattr(settings, "brain_provider", "") or "").strip().lower() == "vivo"
 
 
 def can_use_vivo_story_audio_provider(settings: Settings) -> bool:
