@@ -588,6 +588,65 @@ test("parent storybook route reports provider failure instead of successful rule
   }
 });
 
+test("parent storybook route uses local scaffold plus real vivo text when backend is too slow", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  parentStoryBookCacheInternals.storyResponseCache.clear();
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    calls.push(url);
+    if (url.includes("api-ai.vivo.com.cn")) {
+      return new Response(
+        JSON.stringify({
+          model: "vivo-test-model",
+          choices: [{ message: { content: buildVivoStoryText(6) } }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    throw new DOMException("Aborted", "AbortError");
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+        PARENT_STORYBOOK_REQUIRE_REAL_TEXT: "1",
+        VIVO_APP_ID: "app-id",
+        VIVO_APP_KEY: "app-key",
+        VIVO_BASE_URL: "https://api-ai.vivo.com.cn",
+        VIVO_LLM_MODEL: "vivo-test-model",
+      },
+      async () => {
+        const response = await POST(
+          buildStorybookRouteRequest({
+            ...buildPayload(),
+            pageCount: 6,
+          })
+        );
+        const body = (await response.json()) as ParentStoryBookResponse;
+
+        assert.equal(response.status, 200);
+        assert.equal(calls.length, 2);
+        assert.equal(response.headers.get(SMARTCHILDCARE_TRANSPORT_HEADER), "next-json-fallback");
+        assert.equal(body.providerMeta.transport, "next-json-fallback");
+        assert.equal(body.providerMeta.textDelivery, "real");
+        assert.equal(body.providerMeta.textProvider, "vivo-chat");
+        assert.equal(body.fallbackReason, null);
+        assert.equal(body.providerMeta.fallbackReason, null);
+        assert.equal(body.scenes.length, 6);
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    parentStoryBookCacheInternals.storyResponseCache.clear();
+    parentStoryBookCacheInternals.mediaAssetCache.clear();
+  }
+});
+
 test("parent storybook route returns 503 instead of a next-json-fallback story when brain is unavailable", async () => {
   const originalFetch = globalThis.fetch;
   const originalSetTimeout = globalThis.setTimeout;

@@ -28,6 +28,7 @@ import { requireDemoSession } from "@/lib/server/session";
 
 export const runtime = "nodejs";
 const DEFAULT_PARENT_STORYBOOK_BRAIN_TIMEOUT_MS = 45_000;
+const REAL_TEXT_BACKEND_GRACE_TIMEOUT_MS = 5_000;
 const ROLE_PARENT = "家长";
 
 function resolveParentStoryBookBrainTimeoutMs() {
@@ -306,7 +307,7 @@ function shouldRequireRealStoryTextInThisRuntime() {
 }
 
 function buildTextProviderUnavailableResponse(input: {
-  brainForward: BrainForwardResult;
+  brainForward?: BrainForwardResult;
   fallbackReason: string;
   statusCode?: number;
 }) {
@@ -316,14 +317,14 @@ function buildTextProviderUnavailableResponse(input: {
       error: "AI 生成失败，请检查服务配置。",
       fallbackReason: input.fallbackReason,
       diagnostics: {
-        transport: "remote-brain-proxy",
-        targetPath: input.brainForward.targetPath,
-        upstreamHost: input.brainForward.upstreamHost,
+        transport: input.brainForward ? "remote-brain-proxy" : "next-json-fallback",
+        targetPath: input.brainForward?.targetPath ?? "/api/v1/agents/parent/storybook",
+        upstreamHost: input.brainForward?.upstreamHost ?? null,
         fallbackReason: input.fallbackReason,
-        statusCode: input.brainForward.statusCode,
-        retryStrategy: input.brainForward.retryStrategy,
-        elapsedMs: input.brainForward.elapsedMs,
-        timeoutMs: input.brainForward.timeoutMs,
+        statusCode: input.brainForward?.statusCode ?? null,
+        retryStrategy: input.brainForward?.retryStrategy ?? "none",
+        elapsedMs: input.brainForward?.elapsedMs ?? null,
+        timeoutMs: input.brainForward?.timeoutMs ?? null,
         textProvider: "vivo-chat",
       },
     },
@@ -332,14 +333,41 @@ function buildTextProviderUnavailableResponse(input: {
       headers: mergeHeaders(
         createBrainTransportHeaders({
           transport: "brain-proxy-error",
-          targetPath: input.brainForward.targetPath,
-          upstreamHost: input.brainForward.upstreamHost,
+          targetPath: input.brainForward?.targetPath ?? "/api/v1/agents/parent/storybook",
+          upstreamHost: input.brainForward?.upstreamHost ?? null,
           fallbackReason: input.fallbackReason,
         }),
         buildCacheHeaders("bypass")
       ),
     }
   );
+}
+
+async function requireVivoStoryTextResponse(input: {
+  payload: ParentStoryBookRequest;
+  story: ParentStoryBookResponse;
+  cacheState: "miss" | "bypass";
+  brainForward?: BrainForwardResult;
+}) {
+  try {
+    return prepareParentStoryBookResponseForDelivery(
+      await enhanceParentStoryBookWithVivoText({
+        payload: input.payload,
+        story: input.story,
+      }),
+      { cacheState: input.cacheState }
+    );
+  } catch (error) {
+    const fallbackReason =
+      error instanceof ParentStoryBookRealTextError
+        ? error.fallbackReason
+        : "provider-response-error";
+    return buildTextProviderUnavailableResponse({
+      brainForward: input.brainForward,
+      fallbackReason,
+      statusCode: error instanceof ParentStoryBookRealTextError ? error.statusCode : 502,
+    });
+  }
 }
 
 export async function POST(request: Request) {
@@ -452,10 +480,15 @@ export async function POST(request: Request) {
     });
   }
 
+  const requireRealStoryText = shouldRequireRealStoryTextInThisRuntime();
   const brainForward = await forwardBrainRequest(
     request,
     "/api/v1/agents/parent/storybook",
-    { timeoutMs: PARENT_STORYBOOK_BRAIN_TIMEOUT_MS }
+    {
+      timeoutMs: requireRealStoryText
+        ? Math.min(PARENT_STORYBOOK_BRAIN_TIMEOUT_MS, REAL_TEXT_BACKEND_GRACE_TIMEOUT_MS)
+        : PARENT_STORYBOOK_BRAIN_TIMEOUT_MS,
+    }
   );
 
   if (brainForward.response) {
@@ -486,31 +519,17 @@ export async function POST(request: Request) {
       }
     );
 
-    if (
-      shouldRequireRealStoryTextInThisRuntime() &&
-      shouldRequireNextVivoStoryText(preparedStory)
-    ) {
-      try {
-        preparedStory = prepareParentStoryBookResponseForDelivery(
-          await enhanceParentStoryBookWithVivoText({
-            payload,
-            story: preparedStory,
-          }),
-          {
-            cacheState: shouldCacheParentStoryBookResponse(preparedStory) ? "miss" : "bypass",
-          }
-        );
-      } catch (error) {
-        const fallbackReason =
-          error instanceof ParentStoryBookRealTextError
-            ? error.fallbackReason
-            : "provider-response-error";
-        return buildTextProviderUnavailableResponse({
-          brainForward,
-          fallbackReason,
-          statusCode: error instanceof ParentStoryBookRealTextError ? error.statusCode : 502,
-        });
+    if (requireRealStoryText && shouldRequireNextVivoStoryText(preparedStory)) {
+      const enhancedStory = await requireVivoStoryTextResponse({
+        payload,
+        story: preparedStory,
+        cacheState: shouldCacheParentStoryBookResponse(preparedStory) ? "miss" : "bypass",
+        brainForward,
+      });
+      if (enhancedStory instanceof NextResponse) {
+        return enhancedStory;
       }
+      preparedStory = enhancedStory;
     }
 
     if (shouldCacheParentStoryBookResponse(preparedStory) && !bypassCache) {
@@ -533,6 +552,37 @@ export async function POST(request: Request) {
   }
 
   const fallbackReason = brainForward.fallbackReason ?? "brain-proxy-unavailable";
+  if (requireRealStoryText) {
+    const localStory = buildLocalStoryBookFallback({
+      payload,
+      brainForward,
+      fallbackReason,
+      cacheState: "bypass",
+    });
+    const enhancedStory = await requireVivoStoryTextResponse({
+      payload,
+      story: localStory,
+      cacheState: "bypass",
+      brainForward,
+    });
+    if (enhancedStory instanceof NextResponse) {
+      return enhancedStory;
+    }
+
+    return NextResponse.json(enhancedStory, {
+      status: 200,
+      headers: mergeHeaders(
+        createBrainTransportHeaders({
+          transport: "next-json-fallback",
+          targetPath: brainForward.targetPath,
+          upstreamHost: brainForward.upstreamHost,
+          fallbackReason: null,
+        }),
+        buildCacheHeaders("bypass")
+      ),
+    });
+  }
+
   return buildProviderUnavailableResponse({
     brainForward,
     fallbackReason,
