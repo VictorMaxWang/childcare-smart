@@ -2812,6 +2812,8 @@ async def run_parent_storybook(payload: dict[str, Any]) -> dict[str, Any]:
     )
     if text_generation.fallback_reason:
         fallback_reason = text_generation.fallback_reason
+    elif text_generation.real_provider:
+        fallback_reason = None
     elif provider_mode == "live":
         fallback_reason = None
     elif media_provider_mode == "mixed" or provider_mode == "mixed":

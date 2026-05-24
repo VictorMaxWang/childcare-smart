@@ -12,10 +12,16 @@ import { parentStoryBookCacheInternals } from "@/lib/server/parent-storybook-cac
 import { POST } from "./route.ts";
 
 function withEnv(
-  overrides: Partial<Record<"BRAIN_API_BASE_URL" | "NEXT_PUBLIC_BACKEND_BASE_URL", string | undefined>>,
+  overrides: Partial<
+    Record<
+      "BACKEND_BASE_URL" | "BRAIN_API_BASE_URL" | "NEXT_PUBLIC_BACKEND_BASE_URL",
+      string | undefined
+    >
+  >,
   fn: () => void | Promise<void>
 ) {
   const previous = {
+    BACKEND_BASE_URL: process.env.BACKEND_BASE_URL,
     BRAIN_API_BASE_URL: process.env.BRAIN_API_BASE_URL,
     NEXT_PUBLIC_BACKEND_BASE_URL: process.env.NEXT_PUBLIC_BACKEND_BASE_URL,
   };
@@ -81,8 +87,10 @@ function buildRemoteStory(): ParentStoryBookResponse {
     generatedAt: "2026-04-10T00:00:00.000Z",
     stylePreset: "sunrise-watercolor",
     providerMeta: {
-      provider: "parent-storybook-rule",
+      provider: "vivo-llm",
       mode: "live",
+      textProvider: "vivo-llm",
+      textDelivery: "real",
       imageProvider: "vivo-story-image",
       audioProvider: "vivo-story-tts",
       imageDelivery: "real",
@@ -350,6 +358,46 @@ test("parent storybook route keeps remote brain diagnostics on successful proxy"
         assert.ok(body.scenes[0].audioRef);
         assert.equal(body.scenes[0].engineId, "short_audio_synthesis_jovi");
         assert.equal(body.scenes[0].voiceName, "yige");
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    parentStoryBookCacheInternals.storyResponseCache.clear();
+    parentStoryBookCacheInternals.mediaAssetCache.clear();
+  }
+});
+
+test("parent storybook route accepts BACKEND_BASE_URL as brain proxy base URL", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  parentStoryBookCacheInternals.storyResponseCache.clear();
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    calls.push(url);
+    return new Response(JSON.stringify(buildRemoteStory()), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BACKEND_BASE_URL: "http://backend.example.com/api/v1",
+        BRAIN_API_BASE_URL: undefined,
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+      },
+      async () => {
+        const response = await POST(buildStorybookRouteRequest());
+        const body = (await response.json()) as ParentStoryBookResponse;
+
+        assert.equal(response.status, 200);
+        assert.equal(calls[0], "http://backend.example.com/api/v1/api/v1/agents/parent/storybook");
+        assert.equal(calls.length, 1);
+        assert.equal(body.providerMeta.transport, "remote-brain-proxy");
+        assert.equal(body.providerMeta.textDelivery, "real");
       }
     );
   } finally {

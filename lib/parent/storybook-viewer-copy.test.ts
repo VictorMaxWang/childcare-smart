@@ -10,6 +10,7 @@ import {
   formatStoryBookResponseCache,
   formatStoryBookSceneImageDelivery,
   formatStoryBookSceneStatus,
+  formatStoryBookTextDelivery,
   formatStoryBookTransport,
   formatStoryBookVoiceStyle,
   getStoryBookPresetCopy,
@@ -35,7 +36,7 @@ test("describeStoryBookMode maps live mixed fallback to Chinese labels and summa
 
 test("storybook viewer copy maps media status and playback labels", () => {
   assert.equal(formatStoryBookSceneStatus("image", "ready"), "已生成插画");
-  assert.equal(formatStoryBookSceneStatus("image", "fallback"), "回退插画");
+  assert.equal(formatStoryBookSceneStatus("image", "fallback"), "备用插画");
   assert.equal(formatStoryBookSceneStatus("audio", "ready"), "已生成音频");
   assert.equal(formatStoryBookSceneStatus("audio", "mock"), "示例音轨");
   assert.equal(formatStoryBookVoiceStyle("gentle-bedtime"), "晚安轻声");
@@ -49,20 +50,22 @@ test("storybook viewer copy maps provider, cache, transport and fallback reasons
   );
   assert.equal(
     formatStoryBookProviderLabel("audio", "storybook-mock-preview"),
-    "音频：字幕预演"
+    "音频：文字朗读预览"
   );
   assert.equal(formatStoryBookResponseCache("hit"), "响应缓存命中");
-  assert.equal(formatStoryBookAudioDelivery("preview-only"), "字幕预演");
+  assert.equal(formatStoryBookAudioDelivery("preview-only"), "文字朗读预览");
   assert.equal(formatStoryBookAudioDelivery("local-speech"), "本地补读");
   assert.equal(formatStoryBookSceneImageDelivery("dynamic-fallback"), "动态剧情插画");
-  assert.equal(formatStoryBookSceneImageDelivery("svg-fallback"), "SVG 兜底插画");
-  assert.equal(formatStoryBookTransport("remote-brain-proxy"), "FastAPI 实时链路");
+  assert.equal(formatStoryBookSceneImageDelivery("svg-fallback"), "基础插画");
+  assert.equal(formatStoryBookTransport("remote-brain-proxy"), "实时生成链路");
   assert.equal(formatStoryBookHighlightSource("interventionCard"), "今晚动作");
-  assert.equal(formatStoryBookFallbackReason("brain-status-504"), "上游 brain 返回 504");
+  assert.equal(formatStoryBookFallbackReason("brain-status-504"), "实时生成暂时超时");
   assert.equal(
     formatStoryBookFallbackReason("brain-base-url-missing"),
-    "未配置 BRAIN_API_BASE_URL"
+    "实时生成服务暂未接通"
   );
+  assert.equal(formatStoryBookTextDelivery("real"), "真实 AI 生成");
+  assert.equal(formatStoryBookTextDelivery("fallback"), "本地兜底生成");
 });
 
 test("getStoryBookPresetCopy returns preset metadata", () => {

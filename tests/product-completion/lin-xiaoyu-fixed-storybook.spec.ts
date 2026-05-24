@@ -82,9 +82,11 @@ test("c-1 fixed default does not block manual vivo storybook generation", async 
         generatedAt: new Date().toISOString(),
         stylePreset: "moonlit-cutout",
         providerMeta: {
-          provider: "vivo",
+          provider: "vivo-llm",
           mode: "storybook",
-          transport: "next-json-fallback",
+          transport: "remote-brain-proxy",
+          textProvider: "vivo-llm",
+          textDelivery: "real",
           imageProvider: "vivo-story-image",
           audioProvider: "vivo-story-tts",
           imageDelivery: "real",
@@ -144,6 +146,7 @@ test("c-1 fixed default does not block manual vivo storybook generation", async 
   ]);
 
   await expect(page.getByText(generatedTitle).first()).toBeVisible();
+  await expect(page.getByTestId("parent-storybook-ai-status")).toContainText("真实 AI 生成");
   expect(generatedRequest.value?.childId).toBe("c-1");
   expect(generatedRequest.value?.pageCount).toBe(4);
   expect(generatedRequest.value?.generationMode).toBe("hybrid");

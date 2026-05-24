@@ -52,7 +52,6 @@ import {
   formatStoryBookHighlightSource,
   formatStoryBookResponseCache,
   formatStoryBookSceneImageDelivery,
-  formatStoryBookTextDelivery,
   formatStoryBookVoiceStyle,
   getStoryBookPresetCopy,
 } from "@/lib/parent/storybook-viewer-copy";
@@ -889,17 +888,69 @@ function getStoryAudioRuntimeLabelHotfix(
   canUseLocalSpeech = false
 ) {
   if (audioDelivery === "local-speech") {
-    return "可用本机朗读";
+    return "本地朗读兜底";
   }
   if (audioDelivery === "real" || audioDelivery === "stream-url" || audioDelivery === "inline-data-url") {
-    return "可播放整本朗读";
+    return "真实 TTS";
   }
   if (audioDelivery === "mixed") {
-    return canUseLocalSpeech ? "部分页面可朗读" : "部分页面带朗读";
+    return canUseLocalSpeech ? "部分真实 TTS + 本地朗读兜底" : "部分真实 TTS";
   }
   return canUseLocalSpeech
-    ? "当前先用本机朗读"
+    ? "本地朗读兜底"
     : "当前先看字幕版";
+}
+
+function normalizeStoryBookReason(value?: string | null) {
+  return value?.trim() || null;
+}
+
+function resolveStoryBookTextFallbackReason(story: StoryBookRuntimeResponse) {
+  return (
+    normalizeStoryBookReason(story.fallbackReason) ??
+    normalizeStoryBookReason(story.providerMeta.fallbackReason) ??
+    normalizeStoryBookReason(story.providerMeta.diagnostics?.brain?.fallbackReason)
+  );
+}
+
+function isProviderUnconfiguredReason(reason: string | null) {
+  return Boolean(
+    reason &&
+      (reason.startsWith("provider-unconfigured") ||
+        reason === "provider-configuration-error" ||
+        reason === "brain-base-url-missing")
+  );
+}
+
+function isProviderFailureReason(reason: string | null) {
+  return Boolean(
+    reason &&
+      (reason.startsWith("provider-") ||
+        reason.startsWith("text-provider-") ||
+        reason.startsWith("brain-"))
+  );
+}
+
+function resolveStoryBookAiGenerationStatus(story: StoryBookRuntimeResponse): {
+  label: string;
+  variant: "success" | "warning" | "danger" | "outline";
+  reason: string | null;
+} {
+  const reason = resolveStoryBookTextFallbackReason(story);
+  const textDelivery = story.providerMeta.textDelivery;
+  const textProvider = story.providerMeta.textProvider ?? story.providerMeta.provider;
+  const realTextProvider = /(?:vivo|qwen|dashscope|llm|ai)/iu.test(textProvider ?? "");
+
+  if (textDelivery === "real" && realTextProvider && !reason) {
+    return { label: "真实 AI 生成", variant: "success", reason: null };
+  }
+  if (isProviderUnconfiguredReason(reason)) {
+    return { label: "AI provider 未配置", variant: "warning", reason };
+  }
+  if (isProviderFailureReason(reason)) {
+    return { label: "AI 生成失败，请检查服务配置", variant: "danger", reason };
+  }
+  return { label: "本地兜底生成", variant: "outline", reason };
 }
 
 export function getRuntimeBannerItemsHotfix(
@@ -913,6 +964,7 @@ export function getRuntimeBannerItemsHotfix(
   const diagnostics = story.providerMeta.diagnostics;
   const transport = story.providerMeta.transport;
   const textDelivery = story.providerMeta.textDelivery;
+  const aiStatus = resolveStoryBookAiGenerationStatus(story);
   const runtimeState = resolveRuntimeStoryStateHotfix(story, {
     ...runtimeOverrides,
     canUseLocalSpeech,
@@ -920,19 +972,29 @@ export function getRuntimeBannerItemsHotfix(
   const imageDelivery = runtimeState.imageDelivery;
   const audioDelivery = resolveRuntimeAudioDeliveryHotfix(story);
   const isPlayingLocalFallback = runtimeOverrides?.playbackSource === "local";
-  if (textDelivery === "real" || story.source === "vivo") {
+  if (aiStatus.label === "真实 AI 生成") {
     items.push({
       tone: "success",
-      label: "AI 成长故事已生成",
+      label: "真实 AI 生成",
       detail: "当前文本来自实时生成链路，并已按孩子与主题线索整理。",
+    });
+  } else if (aiStatus.label === "AI provider 未配置") {
+    items.push({
+      tone: "warning",
+      label: "AI provider 未配置",
+      detail: formatStoryBookFallbackReason(aiStatus.reason),
+    });
+  } else if (aiStatus.label === "AI 生成失败，请检查服务配置") {
+    items.push({
+      tone: "warning",
+      label: "AI 生成失败，请检查服务配置",
+      detail: formatStoryBookFallbackReason(aiStatus.reason),
     });
   } else if (textDelivery === "mock" || textDelivery === "fallback" || story.fallbackReason) {
     items.push({
       tone: "warning",
-      label: "当前文本为兜底版本",
-      detail: formatStoryBookFallbackReason(
-        story.fallbackReason ?? story.providerMeta.fallbackReason ?? diagnostics?.brain?.fallbackReason
-      ),
+      label: "本地兜底生成",
+      detail: formatStoryBookFallbackReason(aiStatus.reason),
     });
   } else if (transport === "remote-brain-proxy") {
     items.push({
@@ -1015,7 +1077,7 @@ export function getRuntimeBannerItemsHotfix(
   } else if (isPlayingLocalFallback) {
     items.push({
       tone: "warning",
-      label: "当前使用本机朗读",
+      label: "本地朗读兜底",
       detail: "这台设备会直接帮你把这一页读出来。",
     });
   } else {
@@ -1184,6 +1246,9 @@ export default function StoryBookViewer({
     : null;
   const modeCopy = runtimeState
     ? describeStoryBookMode(runtimeState.mode)
+    : null;
+  const aiGenerationStatus = runtimeStory
+    ? resolveStoryBookAiGenerationStatus(runtimeStory)
     : null;
   const runtimeBanners = story
     ? getRuntimeBannerItemsHotfix(runtimeStory, canUseLocalSpeech, {
@@ -1772,9 +1837,14 @@ export default function StoryBookViewer({
                       {modeCopy ? (
                         <Badge variant={modeCopy.badgeVariant}>{modeCopy.label}</Badge>
                       ) : null}
-                      <Badge variant={story.providerMeta.textDelivery === "real" ? "success" : "outline"}>
-                        {formatStoryBookTextDelivery(story.providerMeta.textDelivery)}
-                      </Badge>
+                      {aiGenerationStatus ? (
+                        <Badge
+                          variant={aiGenerationStatus.variant}
+                          data-testid="parent-storybook-ai-status"
+                        >
+                          {aiGenerationStatus.label}
+                        </Badge>
+                      ) : null}
                       <Badge variant="outline">分镜 {story.providerMeta.sceneCount}</Badge>
                       <Badge variant="outline">亮点 {story.providerMeta.highlightCount}</Badge>
                     </div>

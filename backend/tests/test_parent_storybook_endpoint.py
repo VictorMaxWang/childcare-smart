@@ -157,6 +157,7 @@ def test_parent_storybook_endpoint_accepts_heavy_page_payload_fixture():
     assert body["providerMeta"]["imageDelivery"] == "dynamic-fallback"
     assert body["providerMeta"]["audioDelivery"] == "preview-only"
     assert body["providerMeta"]["diagnostics"]["brain"]["statusCode"] is None
+    assert body["providerMeta"]["textDelivery"] == "fallback"
     assert body["fallbackReason"] != "brain-proxy-timeout"
     assert body["providerMeta"]["fallbackReason"] != "brain-proxy-timeout"
     assert body["providerMeta"]["diagnostics"]["brain"]["fallbackReason"] == "provider-unconfigured-dev-fallback"
