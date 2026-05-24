@@ -14,7 +14,15 @@ import { POST } from "./route.ts";
 function withEnv(
   overrides: Partial<
     Record<
-      "BACKEND_BASE_URL" | "BRAIN_API_BASE_URL" | "NEXT_PUBLIC_BACKEND_BASE_URL",
+      | "BACKEND_BASE_URL"
+      | "BRAIN_API_BASE_URL"
+      | "NEXT_PUBLIC_BACKEND_BASE_URL"
+      | "NODE_ENV"
+      | "PARENT_STORYBOOK_REQUIRE_REAL_TEXT"
+      | "VIVO_APP_ID"
+      | "VIVO_APP_KEY"
+      | "VIVO_BASE_URL"
+      | "VIVO_LLM_MODEL",
       string | undefined
     >
   >,
@@ -24,6 +32,12 @@ function withEnv(
     BACKEND_BASE_URL: process.env.BACKEND_BASE_URL,
     BRAIN_API_BASE_URL: process.env.BRAIN_API_BASE_URL,
     NEXT_PUBLIC_BACKEND_BASE_URL: process.env.NEXT_PUBLIC_BACKEND_BASE_URL,
+    NODE_ENV: process.env.NODE_ENV,
+    PARENT_STORYBOOK_REQUIRE_REAL_TEXT: process.env.PARENT_STORYBOOK_REQUIRE_REAL_TEXT,
+    VIVO_APP_ID: process.env.VIVO_APP_ID,
+    VIVO_APP_KEY: process.env.VIVO_APP_KEY,
+    VIVO_BASE_URL: process.env.VIVO_BASE_URL,
+    VIVO_LLM_MODEL: process.env.VIVO_LLM_MODEL,
   };
 
   for (const [key, value] of Object.entries(overrides)) {
@@ -166,6 +180,57 @@ function buildRemoteStory(): ParentStoryBookResponse {
       },
     ],
   };
+}
+
+function buildRemoteFallbackStory(): ParentStoryBookResponse {
+  const story = buildRemoteStory();
+  return {
+    ...story,
+    source: "fallback",
+    fallback: true,
+    fallbackReason: "mock-storybook-pipeline",
+    providerMeta: {
+      ...story.providerMeta,
+      provider: "parent-storybook-rule",
+      mode: "fallback",
+      textProvider: "parent-storybook-rule",
+      textDelivery: undefined,
+      imageProvider: "storybook-dynamic-fallback",
+      audioProvider: "storybook-mock-preview",
+      imageDelivery: "dynamic-fallback",
+      audioDelivery: "preview-only",
+      fallbackReason: "mock-storybook-pipeline",
+      realProvider: false,
+      diagnostics: story.providerMeta.diagnostics
+        ? {
+            ...story.providerMeta.diagnostics,
+            brain: {
+              ...story.providerMeta.diagnostics.brain,
+              reachable: true,
+              fallbackReason: null,
+              upstreamHost: "brain.example.com",
+            },
+          }
+        : story.providerMeta.diagnostics,
+    },
+  };
+}
+
+function buildVivoStoryText(sceneCount: number) {
+  return JSON.stringify({
+    title: "AI emotion story",
+    summary: "A real provider wrote a custom story.",
+    moral: "Feelings can be named and shared.",
+    parentNote: "Invite the child to name one feeling after reading.",
+    scenes: Array.from({ length: sceneCount }, (_, index) => ({
+      sceneTitle: `AI Scene ${index + 1}`,
+      sceneText: `AI generated scene ${index + 1} about naming feelings and asking for help.`,
+      audioScript: `AI audio scene ${index + 1}.`,
+      imagePrompt: `warm picture book scene ${index + 1}`,
+      voiceStyle: "warm-storytelling",
+      highlightSource: "manualTheme",
+    })),
+  });
 }
 
 function buildManualThemePayload(
@@ -398,6 +463,122 @@ test("parent storybook route accepts BACKEND_BASE_URL as brain proxy base URL", 
         assert.equal(calls.length, 1);
         assert.equal(body.providerMeta.transport, "remote-brain-proxy");
         assert.equal(body.providerMeta.textDelivery, "real");
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    parentStoryBookCacheInternals.storyResponseCache.clear();
+    parentStoryBookCacheInternals.mediaAssetCache.clear();
+  }
+});
+
+test("parent storybook route upgrades backend rule fallback to real vivo text when required", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  parentStoryBookCacheInternals.storyResponseCache.clear();
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    calls.push(url);
+    if (url.includes("api-ai.vivo.com.cn")) {
+      return new Response(
+        JSON.stringify({
+          model: "vivo-test-model",
+          choices: [{ message: { content: buildVivoStoryText(1) } }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    return new Response(JSON.stringify(buildRemoteFallbackStory()), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+        PARENT_STORYBOOK_REQUIRE_REAL_TEXT: "1",
+        VIVO_APP_ID: "app-id",
+        VIVO_APP_KEY: "app-key",
+        VIVO_BASE_URL: "https://api-ai.vivo.com.cn",
+        VIVO_LLM_MODEL: "vivo-test-model",
+      },
+      async () => {
+        const response = await POST(buildStorybookRouteRequest());
+        const body = (await response.json()) as ParentStoryBookResponse;
+
+        assert.equal(response.status, 200);
+        assert.equal(calls.length, 2);
+        assert.equal(body.title, "AI emotion story");
+        assert.equal(body.source, "vivo");
+        assert.equal(body.fallbackReason, null);
+        assert.equal(body.providerMeta.textDelivery, "real");
+        assert.equal(body.providerMeta.textProvider, "vivo-chat");
+        assert.equal(body.providerMeta.fallbackReason, null);
+        assert.equal(body.providerMeta.diagnostics?.brain.fallbackReason, null);
+        assert.equal(body.providerMeta.diagnostics?.brain.upstreamHost, "api-ai.vivo.com.cn");
+        assert.equal(body.scenes[0].sceneText, "AI generated scene 1 about naming feelings and asking for help.");
+        assert.equal(response.headers.get(SMARTCHILDCARE_TRANSPORT_HEADER), "remote-brain-proxy");
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    parentStoryBookCacheInternals.storyResponseCache.clear();
+    parentStoryBookCacheInternals.mediaAssetCache.clear();
+  }
+});
+
+test("parent storybook route reports provider failure instead of successful rule fallback when real text is required", async () => {
+  const originalFetch = globalThis.fetch;
+  parentStoryBookCacheInternals.storyResponseCache.clear();
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.includes("api-ai.vivo.com.cn")) {
+      return new Response(JSON.stringify({ error: "model permission missing" }), {
+        status: 403,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify(buildRemoteFallbackStory()), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+        PARENT_STORYBOOK_REQUIRE_REAL_TEXT: "1",
+        VIVO_APP_ID: "app-id",
+        VIVO_APP_KEY: "app-key",
+        VIVO_BASE_URL: "https://api-ai.vivo.com.cn",
+        VIVO_LLM_MODEL: "vivo-test-model",
+      },
+      async () => {
+        const response = await POST(buildStorybookRouteRequest());
+        const body = (await response.json()) as {
+          code?: string;
+          fallbackReason?: string;
+          diagnostics?: Record<string, unknown>;
+          storyId?: string;
+        };
+
+        assert.equal(response.status, 502);
+        assert.equal(body.code, "storybook-text-provider-unavailable");
+        assert.equal(body.fallbackReason, "provider-authentication-error");
+        assert.equal(body.storyId, undefined);
+        assert.equal(
+          response.headers.get(SMARTCHILDCARE_FALLBACK_REASON_HEADER),
+          "provider-authentication-error"
+        );
       }
     );
   } finally {

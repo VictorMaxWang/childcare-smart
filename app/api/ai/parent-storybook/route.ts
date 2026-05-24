@@ -18,6 +18,11 @@ import {
   type BrainForwardResult,
   type BrainTransport,
 } from "@/lib/server/brain-client";
+import {
+  enhanceParentStoryBookWithVivoText,
+  ParentStoryBookRealTextError,
+  shouldRequireNextVivoStoryText,
+} from "@/lib/server/parent-storybook-real-text";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import { requireDemoSession } from "@/lib/server/session";
 
@@ -296,6 +301,47 @@ function buildProviderUnavailableResponse(input: {
   );
 }
 
+function shouldRequireRealStoryTextInThisRuntime() {
+  return process.env.PARENT_STORYBOOK_REQUIRE_REAL_TEXT === "1" || process.env.NODE_ENV === "production";
+}
+
+function buildTextProviderUnavailableResponse(input: {
+  brainForward: BrainForwardResult;
+  fallbackReason: string;
+  statusCode?: number;
+}) {
+  return NextResponse.json(
+    {
+      code: "storybook-text-provider-unavailable",
+      error: "AI 生成失败，请检查服务配置。",
+      fallbackReason: input.fallbackReason,
+      diagnostics: {
+        transport: "remote-brain-proxy",
+        targetPath: input.brainForward.targetPath,
+        upstreamHost: input.brainForward.upstreamHost,
+        fallbackReason: input.fallbackReason,
+        statusCode: input.brainForward.statusCode,
+        retryStrategy: input.brainForward.retryStrategy,
+        elapsedMs: input.brainForward.elapsedMs,
+        timeoutMs: input.brainForward.timeoutMs,
+        textProvider: "vivo-chat",
+      },
+    },
+    {
+      status: input.statusCode ?? 503,
+      headers: mergeHeaders(
+        createBrainTransportHeaders({
+          transport: "brain-proxy-error",
+          targetPath: input.brainForward.targetPath,
+          upstreamHost: input.brainForward.upstreamHost,
+          fallbackReason: input.fallbackReason,
+        }),
+        buildCacheHeaders("bypass")
+      ),
+    }
+  );
+}
+
 export async function POST(request: Request) {
   const authError = await authorizeAiRoute(request, {
     requiredRole: "parent",
@@ -425,7 +471,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const preparedStory = attachTransportMetadata(
+    let preparedStory: ParentStoryBookResponse = attachTransportMetadata(
       prepareParentStoryBookResponseForDelivery(remoteStory, {
         cacheState: shouldCacheParentStoryBookResponse(remoteStory) ? "miss" : "bypass",
       }),
@@ -439,6 +485,33 @@ export async function POST(request: Request) {
         timeoutMs: brainForward.timeoutMs,
       }
     );
+
+    if (
+      shouldRequireRealStoryTextInThisRuntime() &&
+      shouldRequireNextVivoStoryText(preparedStory)
+    ) {
+      try {
+        preparedStory = prepareParentStoryBookResponseForDelivery(
+          await enhanceParentStoryBookWithVivoText({
+            payload,
+            story: preparedStory,
+          }),
+          {
+            cacheState: shouldCacheParentStoryBookResponse(preparedStory) ? "miss" : "bypass",
+          }
+        );
+      } catch (error) {
+        const fallbackReason =
+          error instanceof ParentStoryBookRealTextError
+            ? error.fallbackReason
+            : "provider-response-error";
+        return buildTextProviderUnavailableResponse({
+          brainForward,
+          fallbackReason,
+          statusCode: error instanceof ParentStoryBookRealTextError ? error.statusCode : 502,
+        });
+      }
+    }
 
     if (shouldCacheParentStoryBookResponse(preparedStory) && !bypassCache) {
       setCachedParentStoryBookResponse(cacheKey, {
