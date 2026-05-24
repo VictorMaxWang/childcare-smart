@@ -44,6 +44,82 @@ function compactJson(value: unknown) {
   return JSON.stringify(value, null, 0);
 }
 
+function compactTextList(value: unknown, limit: number) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, limit).map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return normalizeText(item).slice(0, 160);
+    }
+    const record = item as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(record)
+        .filter(([, entryValue]) => {
+          const valueType = typeof entryValue;
+          return (
+            entryValue === null ||
+            valueType === "string" ||
+            valueType === "number" ||
+            valueType === "boolean"
+          );
+        })
+        .slice(0, 8)
+        .map(([key, entryValue]) => [
+          key,
+          typeof entryValue === "string" ? normalizeText(entryValue).slice(0, 160) : entryValue,
+        ])
+    );
+  });
+}
+
+function compactRecentDetails(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.entries(record).map(([key, entryValue]) => [key, compactTextList(entryValue, 3)])
+  );
+}
+
+function compactHighlights(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 8).map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return normalizeText(item).slice(0, 160);
+    const record = item as Record<string, unknown>;
+    return {
+      kind: normalizeText(record.kind).slice(0, 40),
+      title: normalizeText(record.title).slice(0, 80),
+      detail: normalizeText(record.detail).slice(0, 180),
+      source: normalizeText(record.source).slice(0, 80),
+    };
+  });
+}
+
+function compactOptionalObject(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.entries(record)
+      .filter(([, entryValue]) => {
+        const valueType = typeof entryValue;
+        return (
+          entryValue === null ||
+          valueType === "string" ||
+          valueType === "number" ||
+          valueType === "boolean" ||
+          Array.isArray(entryValue)
+        );
+      })
+      .slice(0, 10)
+      .map(([key, entryValue]) => [
+        key,
+        Array.isArray(entryValue)
+          ? compactTextList(entryValue, 3)
+          : typeof entryValue === "string"
+            ? normalizeText(entryValue).slice(0, 220)
+            : entryValue,
+      ])
+  );
+}
+
 function stripJsonFence(value: string) {
   return value
     .trim()
@@ -159,7 +235,7 @@ function buildStoryTextPrompt(input: {
     childId: payload.childId,
     child: payload.snapshot.child,
     snapshotSummary: payload.snapshot.summary,
-    recentDetails: payload.snapshot.recentDetails,
+    recentDetails: compactRecentDetails(payload.snapshot.recentDetails),
     generationMode: payload.generationMode,
     manualTheme: payload.manualTheme,
     manualPrompt: payload.manualPrompt,
@@ -167,12 +243,12 @@ function buildStoryTextPrompt(input: {
     goalKeywords: payload.goalKeywords,
     stylePreset: payload.stylePreset,
     styleMode: payload.styleMode,
-    stylePrompt: payload.stylePrompt,
-    customStylePrompt: payload.customStylePrompt,
-    customStyleNegativePrompt: payload.customStyleNegativePrompt,
-    highlightCandidates: payload.highlightCandidates,
-    latestInterventionCard: payload.latestInterventionCard,
-    latestConsultation: payload.latestConsultation,
+    stylePrompt: normalizeText(payload.stylePrompt).slice(0, 260),
+    customStylePrompt: normalizeText(payload.customStylePrompt).slice(0, 180),
+    customStyleNegativePrompt: normalizeText(payload.customStyleNegativePrompt).slice(0, 180),
+    highlightCandidates: compactHighlights(payload.highlightCandidates),
+    latestInterventionCard: compactOptionalObject(payload.latestInterventionCard),
+    latestConsultation: compactOptionalObject(payload.latestConsultation),
     ruleDraft: {
       title: story.title,
       summary: story.summary,
@@ -202,7 +278,7 @@ function buildStoryTextPrompt(input: {
     "Generate an original childcare picture book in Simplified Chinese.",
     "Return strict JSON only. Do not return Markdown, comments, or code fences.",
     `The JSON must contain exactly ${expectedSceneCount} scenes.`,
-    "Each sceneText should be warm, concrete, age-appropriate for a 3-6 year old, and different when theme, style, child, or page count changes.",
+    "Keep the output compact. Each sceneText should be 35-70 Simplified Chinese characters, warm, concrete, age-appropriate for a 3-6 year old, and different when theme, style, child, or page count changes.",
     "Do not use the fixed Lin Xiaoyu demo story or its title.",
     "Use the child context, selected theme, page count, style, teacher observations, growth highlights, parent feedback, intervention card, and consultation summary when present.",
     `JSON schema: ${compactJson(schema)}`,
@@ -294,7 +370,7 @@ export async function enhanceParentStoryBookWithVivoText(input: {
     const result = await requestVivoChat({
       taskType: "parent-storybook-real-text",
       temperature: 0.35,
-      maxTokens: 2800,
+      maxTokens: expectedSceneCount >= 8 ? 2200 : 1800,
       messages: [
         {
           role: "system",
