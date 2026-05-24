@@ -193,7 +193,8 @@ function resolveRequestChildId(payload: ParentStoryBookRequest) {
   }
   const snapshotChild = payload.snapshot.child;
   if (isRecord(snapshotChild) && typeof snapshotChild.id === "string" && snapshotChild.id.trim()) {
-    return snapshotChild.id.trim();
+    const snapshotChildId = snapshotChild.id.trim();
+    return snapshotChildId === "storybook-guest" ? "" : snapshotChildId;
   }
   return "";
 }
@@ -201,7 +202,8 @@ function resolveRequestChildId(payload: ParentStoryBookRequest) {
 function resolveSnapshotChildId(payload: ParentStoryBookRequest) {
   const snapshotChild = payload.snapshot.child;
   if (isRecord(snapshotChild) && typeof snapshotChild.id === "string" && snapshotChild.id.trim()) {
-    return snapshotChild.id.trim();
+    const snapshotChildId = snapshotChild.id.trim();
+    return snapshotChildId === "storybook-guest" ? "" : snapshotChildId;
   }
   return "";
 }

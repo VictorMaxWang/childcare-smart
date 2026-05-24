@@ -160,6 +160,160 @@ function buildRemoteStory(): ParentStoryBookResponse {
   };
 }
 
+function buildManualThemePayload(
+  overrides: Partial<ParentStoryBookRequest> = {}
+): ParentStoryBookRequest {
+  const payload = buildPayload();
+  return {
+    ...payload,
+    childId: "c-1",
+    generationMode: "manual-theme",
+    manualTheme: "emotion practice",
+    manualPrompt: "Turn emotion practice into a bedtime story.",
+    pageCount: 4,
+    goalKeywords: ["emotion practice"],
+    requestSource: "route-test-manual-theme",
+    snapshot: {
+      ...payload.snapshot,
+      child: {
+        ...payload.snapshot.child,
+        id: "storybook-guest",
+        name: "小朋友",
+        className: undefined,
+      },
+    },
+    highlightCandidates: [
+      {
+        kind: "manualTheme",
+        title: "Theme: emotion practice",
+        detail: "Turn emotion practice into a child-friendly story.",
+        priority: 1,
+        source: "manualTheme",
+      },
+    ],
+    ...overrides,
+  };
+}
+
+test("parent storybook route accepts manual-theme with authorized child id and synthetic snapshot", async () => {
+  const originalFetch = globalThis.fetch;
+  let callCount = 0;
+  parentStoryBookCacheInternals.storyResponseCache.clear();
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+
+  globalThis.fetch = (async () => {
+    callCount += 1;
+    return new Response(JSON.stringify(buildRemoteStory()), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+      },
+      async () => {
+        const response = await POST(
+          buildStorybookRouteRequest(buildManualThemePayload())
+        );
+        const body = (await response.json()) as ParentStoryBookResponse;
+
+        assert.equal(response.status, 200);
+        assert.equal(callCount, 1);
+        assert.equal(body.childId, "c-1");
+        assert.equal(body.providerMeta.transport, "remote-brain-proxy");
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    parentStoryBookCacheInternals.storyResponseCache.clear();
+    parentStoryBookCacheInternals.mediaAssetCache.clear();
+  }
+});
+
+test("parent storybook route keeps child authorization across manual-theme page counts", async () => {
+  const originalFetch = globalThis.fetch;
+  let callCount = 0;
+  parentStoryBookCacheInternals.storyResponseCache.clear();
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+
+  globalThis.fetch = (async () => {
+    callCount += 1;
+    return new Response(JSON.stringify(buildRemoteStory()), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+      },
+      async () => {
+        for (const pageCount of [4, 5, 6, 8] as const) {
+          const response = await POST(
+            buildStorybookRouteRequest(
+              buildManualThemePayload({
+                pageCount,
+                requestSource: `route-test-manual-theme-${pageCount}`,
+              })
+            )
+          );
+
+          assert.equal(response.status, 200);
+        }
+        assert.equal(callCount, 4);
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    parentStoryBookCacheInternals.storyResponseCache.clear();
+    parentStoryBookCacheInternals.mediaAssetCache.clear();
+  }
+});
+
+test("parent storybook route still rejects unauthorized child ids", async () => {
+  const response = await POST(
+    buildStorybookRouteRequest(
+      buildManualThemePayload({
+        childId: "c-3",
+      })
+    )
+  );
+  const body = (await response.json()) as { code?: string; error?: string };
+
+  assert.equal(response.status, 403);
+  assert.equal(body.code, "forbidden_scope");
+  assert.ok(body.error);
+});
+
+test("parent storybook route still rejects real snapshot child mismatch", async () => {
+  const payload = buildPayload();
+  const response = await POST(
+    buildStorybookRouteRequest(
+      buildManualThemePayload({
+        childId: "c-1",
+        snapshot: {
+          ...payload.snapshot,
+          child: {
+            ...payload.snapshot.child,
+            id: "c-4",
+          },
+        },
+      })
+    )
+  );
+  const body = (await response.json()) as { error?: string };
+
+  assert.equal(response.status, 403);
+  assert.equal(body.error, "Storybook snapshot child does not match requested child");
+});
+
 test("parent storybook route keeps remote brain diagnostics on successful proxy", async () => {
   const originalFetch = globalThis.fetch;
   parentStoryBookCacheInternals.storyResponseCache.clear();
