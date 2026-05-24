@@ -836,7 +836,7 @@ function createSyntheticThemeRequest(input: {
 }) {
   const usesChildContext = input.generationMode !== "manual-theme" && Boolean(input.feed);
   return buildSyntheticSnapshot({
-    childId: usesChildContext ? input.feed?.child.id : null,
+    childId: input.feed?.child.id ?? null,
     childName: usesChildContext ? input.feed?.child.name : "小朋友",
     className: usesChildContext ? input.feed?.child.className : undefined,
     theme: input.manualTheme,
@@ -915,9 +915,10 @@ export function buildParentStoryBookRequestFromFeed(
 
   return {
     childId:
-      generationMode === "manual-theme"
-        ? undefined
-        : input.feed?.child.id ?? snapshot.child.id ?? undefined,
+      input.feed?.child.id ??
+      (snapshot.child.id && snapshot.child.id !== "storybook-guest"
+        ? snapshot.child.id
+        : undefined),
     storyMode: input.storyMode ?? "storybook",
     generationMode,
     manualTheme: manualTheme || undefined,

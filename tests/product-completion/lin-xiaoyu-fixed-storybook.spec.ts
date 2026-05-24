@@ -54,6 +54,7 @@ test("林妈妈打开 c-1 默认显示固定 6 页绘本并支持刷新", async 
 test("c-1 fixed default does not block manual vivo storybook generation", async ({ page }) => {
   const generatedRequest: { value?: Record<string, unknown> } = {};
   const generatedTitle = `storybook-lock-02-regenerated-${Date.now()}`;
+  let generationPostCount = 0;
 
   await page.route("**/api/ai/parent-storybook**", async (route) => {
     const request = route.request();
@@ -62,6 +63,7 @@ test("c-1 fixed default does not block manual vivo storybook generation", async 
       await route.continue();
       return;
     }
+    generationPostCount += 1;
     generatedRequest.value = JSON.parse(request.postData() ?? "{}") as Record<string, unknown>;
     await route.fulfill({
       status: 200,
@@ -147,6 +149,21 @@ test("c-1 fixed default does not block manual vivo storybook generation", async 
   expect(generatedRequest.value?.generationMode).toBe("hybrid");
   expect(generatedRequest.value?.styleMode).toBe("preset");
   expect(generatedRequest.value?.stylePreset).toBe("moonlit-cutout");
+  expect(generationPostCount).toBe(1);
+
+  const refreshRequested = page
+    .waitForRequest(
+      (request) => {
+        const url = new URL(request.url());
+        return url.pathname === "/api/ai/parent-storybook" && request.method() === "POST";
+      },
+      { timeout: 750 }
+    )
+    .then(() => true)
+    .catch(() => false);
+  await page.getByTestId("parent-storybook-refresh-current").click();
+  expect(await refreshRequested).toBe(false);
+  expect(generationPostCount).toBe(1);
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByText(TITLE).first()).toBeVisible();

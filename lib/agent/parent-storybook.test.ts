@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { ParentStoryBookPageCount, ParentStoryBookRequest } from "@/lib/ai/types";
+import type { ParentFeed } from "@/lib/store";
 import { buildParentStoryBookCacheKey } from "../parent/storybook-cache.ts";
 import {
   buildCaptionTimeline,
@@ -97,6 +98,41 @@ function buildRequest(
   };
 }
 
+function buildParentFeed(childId = "c-1"): ParentFeed {
+  return {
+    child: {
+      id: childId,
+      name: "Lin Xiaoyu",
+      birthDate: "2021-09-01",
+      gender: "女",
+      allergies: [],
+      heightCm: 100,
+      weightKg: 15,
+      guardians: [],
+      institutionId: "demo-kindergarten",
+      className: "Sunrise class",
+      specialNotes: "Slow to warm up; observe before joining.",
+      avatar: "",
+    },
+    todayMeals: [],
+    todayGrowth: [],
+    weeklyGrowth: [],
+    weeklyTrend: {
+      balancedRate: 84,
+      vegetableDays: 4,
+      proteinDays: 5,
+      stapleDays: 5,
+      hydrationAvg: 420,
+      monotonyDays: 0,
+    },
+    suggestions: [],
+    feedbacks: [],
+    recentFeedbacks: [],
+    hasFeedbackToday: false,
+    mediaGallery: [],
+  };
+}
+
 test("buildParentStoryBookRequestFromFeed supports manual-theme without child data", () => {
   const request = buildParentStoryBookRequestFromFeed({
     feed: null,
@@ -133,6 +169,56 @@ test("buildParentStoryBookRequestFromFeed supports manual-theme without child da
     )
   );
   assert.match(response.scenes.at(-1)?.sceneText ?? "", /今晚|明天/);
+});
+
+test("manual-theme with current feed preserves authorized child scope", () => {
+  const request = buildParentStoryBookRequestFromFeed({
+    feed: buildParentFeed("c-1"),
+    healthCheckRecords: [],
+    mealRecords: [],
+    growthRecords: [],
+    guardianFeedbacks: [],
+    taskCheckInRecords: [],
+    requestSource: "storybook-test",
+    generationMode: "manual-theme",
+    manualTheme: "emotion practice",
+    manualPrompt: "Turn emotion practice into a bedtime story.",
+    pageCount: 6,
+    goalKeywords: ["emotion practice"],
+    stylePreset: "moonlit-cutout",
+  });
+
+  assert.equal(request.generationMode, "manual-theme");
+  assert.equal(request.childId, "c-1");
+  assert.equal(request.snapshot.child.id, "c-1");
+  assert.notEqual(request.snapshot.child.id, "storybook-guest");
+  assert.notEqual(request.snapshot.child.name, "Lin Xiaoyu");
+  assert.equal(request.pageCount, 6);
+});
+
+test("manual-theme page count variants preserve child scope", () => {
+  const pageCounts: ParentStoryBookPageCount[] = [4, 5, 6, 8];
+  for (const pageCount of pageCounts) {
+    const request = buildParentStoryBookRequestFromFeed({
+      feed: buildParentFeed("c-1"),
+      healthCheckRecords: [],
+      mealRecords: [],
+      growthRecords: [],
+      guardianFeedbacks: [],
+      taskCheckInRecords: [],
+      requestSource: `storybook-scope-${pageCount}`,
+      generationMode: "manual-theme",
+      manualTheme: "rule awareness",
+      manualPrompt: "Use a gentle story to practice rule awareness.",
+      pageCount,
+      goalKeywords: ["rule awareness"],
+      stylePreset: "sunrise-watercolor",
+    });
+
+    assert.equal(request.childId, "c-1");
+    assert.equal(request.snapshot.child.id, "c-1");
+    assert.equal(request.pageCount, pageCount);
+  }
 });
 
 test("buildParentStoryBookResponse honors page count variants", () => {

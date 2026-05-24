@@ -66,6 +66,20 @@ const MEDIA_POLL_INTERVAL_MS = 2_000;
 const MEDIA_POLL_MAX_ATTEMPTS = 24;
 const STORYBOOK_USER_REQUEST_TIMEOUT_MS = 25_000;
 const STORYBOOK_MEDIA_POLL_TIMEOUT_MS = 8_000;
+const STORYBOOK_API_SAVE_TIMEOUT_MS = 5_000;
+
+function withClientTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  let timeoutId: number | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+    }
+  });
+}
+
 function buildInitialControls(input: {
   hasChildContext: boolean;
   preset: ParentStoryBookStylePreset;
@@ -286,6 +300,9 @@ export default function ParentStoryBookPage() {
   ]);
 
   useEffect(() => {
+    if (isRefreshing) {
+      return;
+    }
     if (!story || !shouldPollParentStoryBookMedia(story)) {
       pollAttemptRef.current = 0;
       pollingStoryIdRef.current = story?.storyId ?? null;
@@ -308,7 +325,7 @@ export default function ParentStoryBookPage() {
     }, MEDIA_POLL_INTERVAL_MS);
 
     return () => window.clearTimeout(timer);
-  }, [story]);
+  }, [isRefreshing, story]);
 
   const requiresTheme =
     draftControls.generationMode === "manual-theme" ||
@@ -419,11 +436,14 @@ export default function ParentStoryBookPage() {
     const refreshCurrentOnly = refreshCurrentOnlyRef.current;
     const backgroundMediaPoll = backgroundMediaPollRef.current;
     const forceNetworkForManualOverride =
-      isLockedLinXiaoyuStorybook && hasManualStorybookOverrideActive;
+      isLockedLinXiaoyuStorybook && hasManualStorybookOverrideActive && !refreshCurrentOnly;
+    const keepUserGenerationRequestAlive =
+      !backgroundMediaPoll && (bypassCache || forceNetworkForManualOverride);
     const shouldTrackManualGeneration =
       forceNetworkForManualOverride && !backgroundMediaPoll;
     backgroundMediaPollRef.current = false;
     const resolvedCacheKey = cacheKey;
+    const activeRequestChildId = activeRequest.childId ?? activeRequest.snapshot.child.id;
     networkOnlyRef.current = false;
     refreshCurrentOnlyRef.current = false;
     const storyLoadKey = `${resolvedCacheKey}:${reloadToken}`;
@@ -440,8 +460,37 @@ export default function ParentStoryBookPage() {
     }
 
     if (!bypassCache && !forceNetworkForManualOverride) {
-      if (latestSavedStorybook && selectedFeed) {
+      if (
+        refreshCurrentOnly &&
+        storyRef.current &&
+        storyRef.current.childId === (activeRequest.childId ?? activeRequest.snapshot.child.id)
+      ) {
+        const currentStory = storyRef.current;
+        startTransition(() => {
+          setStory(currentStory);
+          setStatus(currentStory.mode);
+          setErrorMessage(null);
+          setRefreshMessage("已刷新当前版本；未重新调用 AI 生成。");
+          setIsRefreshing(false);
+          setCacheState({ kind: "none" });
+        });
+        return () => {
+          cancelled = true;
+          controller.abort();
+        };
+      }
+
+      if (!hasManualStorybookOverrideActive && latestSavedStorybook && selectedFeed) {
         const restoredStory = restoreParentStorybookResponse(latestSavedStorybook, selectedFeed.child.name);
+        if (
+          storyRef.current?.storyId === restoredStory.storyId &&
+          storyRef.current.generatedAt === restoredStory.generatedAt
+        ) {
+          return () => {
+            cancelled = true;
+            controller.abort();
+          };
+        }
         void upsertApiStorybook({
           childId: selectedFeed.child.id,
           storybookId: restoredStory.storyId,
@@ -468,6 +517,18 @@ export default function ParentStoryBookPage() {
 
       const cached = readParentStoryBookCache(resolvedCacheKey);
       if (cached && !shouldBypassParentStoryBookCacheOnFirstLoad(cached.story)) {
+        if (
+          storyRef.current?.storyId === cached.story.storyId &&
+          storyRef.current.generatedAt === cached.story.generatedAt
+        ) {
+          startTransition(() => {
+            setIsRefreshing(false);
+          });
+          return () => {
+            cancelled = true;
+            controller.abort();
+          };
+        }
         startTransition(() => {
           setStory(cached.story);
           setStatus(cached.story.mode);
@@ -478,25 +539,6 @@ export default function ParentStoryBookPage() {
             kind: "hit",
             savedAt: cached.savedAt,
           });
-        });
-        return () => {
-          cancelled = true;
-          controller.abort();
-        };
-      }
-      if (
-        refreshCurrentOnly &&
-        storyRef.current &&
-        storyRef.current.childId === (activeRequest.childId ?? activeRequest.snapshot.child.id)
-      ) {
-        const currentStory = storyRef.current;
-        startTransition(() => {
-          setStory(currentStory);
-          setStatus(currentStory.mode);
-          setErrorMessage(null);
-          setRefreshMessage("已刷新当前版本；未重新调用 AI 生成。");
-          setIsRefreshing(false);
-          setCacheState({ kind: "none" });
         });
         return () => {
           cancelled = true;
@@ -564,6 +606,13 @@ export default function ParentStoryBookPage() {
 
         const data = (await response.json()) as ParentStoryBookResponse;
         if (cancelled) return;
+        if (
+          requestRef.current?.childId &&
+          activeRequestChildId &&
+          requestRef.current.childId !== activeRequestChildId
+        ) {
+          return;
+        }
 
         const persisted = writeParentStoryBookCache(
           resolvedCacheKey,
@@ -600,7 +649,11 @@ export default function ParentStoryBookPage() {
             generatedAt: data.generatedAt,
           };
           try {
-            await upsertApiStorybook(apiStorybookInput);
+            await withClientTimeout(
+              upsertApiStorybook(apiStorybookInput),
+              STORYBOOK_API_SAVE_TIMEOUT_MS,
+              "E01 storybook save timed out"
+            );
             apiStorybookSaved = true;
           } catch (saveError) {
             apiStorybookSaveError = saveError instanceof Error ? saveError.message : "E01 绘本服务保存失败。";
@@ -672,7 +725,7 @@ export default function ParentStoryBookPage() {
     void loadStory();
 
     return () => {
-      if (!shouldTrackManualGeneration) {
+      if (!keepUserGenerationRequestAlive) {
         cancelled = true;
         controller.abort();
       }
