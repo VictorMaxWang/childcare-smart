@@ -10,7 +10,11 @@ import {
 function withEnv(
   overrides: Partial<
     Record<
-      "APP_PORT" | "BRAIN_API_BASE_URL" | "NEXT_PUBLIC_BACKEND_BASE_URL" | "NODE_ENV",
+      | "APP_PORT"
+      | "BACKEND_BASE_URL"
+      | "BRAIN_API_BASE_URL"
+      | "NEXT_PUBLIC_BACKEND_BASE_URL"
+      | "NODE_ENV",
       string | undefined
     >
   >,
@@ -18,6 +22,7 @@ function withEnv(
 ) {
   const previous = {
     APP_PORT: process.env.APP_PORT,
+    BACKEND_BASE_URL: process.env.BACKEND_BASE_URL,
     BRAIN_API_BASE_URL: process.env.BRAIN_API_BASE_URL,
     NEXT_PUBLIC_BACKEND_BASE_URL: process.env.NEXT_PUBLIC_BACKEND_BASE_URL,
     NODE_ENV: process.env.NODE_ENV,
@@ -165,6 +170,26 @@ test("brain client retries local dev candidates before failing", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("brain client uses BACKEND_BASE_URL when primary brain env vars are absent", async () => {
+  await withEnv(
+    {
+      BACKEND_BASE_URL: "http://backend.example.com/api/v1/",
+      BRAIN_API_BASE_URL: undefined,
+      NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+      NODE_ENV: "production",
+    },
+    () => {
+      const details = brainClientInternals.resolveBrainBaseUrlDetails();
+
+      assert.equal(getBrainBaseUrl(), "http://backend.example.com");
+      assert.equal(details.rawBaseUrl, "http://backend.example.com/api/v1");
+      assert.equal(details.normalizedBaseUrl, "http://backend.example.com");
+      assert.equal(details.hadApiV1Suffix, true);
+      assert.equal(details.implicitDefault, false);
+    }
+  );
 });
 
 test("brain client returns fallback diagnostics after normalized retry still fails", async () => {

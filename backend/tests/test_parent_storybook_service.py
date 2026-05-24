@@ -3,11 +3,13 @@ from __future__ import annotations
 import asyncio
 from copy import deepcopy
 import json
+import pytest
 from threading import Event
 from time import perf_counter
 
 from app.providers.base import ProviderResponseError, ProviderResult, ProviderTextResult
 from app.services import parent_storybook_service
+from app.services.parent_storybook_llm import ParentStoryBookTextProviderError
 from app.services.parent_storybook_service import await_storybook_media_warming, run_parent_storybook
 from app.services.storybook_media_cache import get_storybook_media_cache
 from conftest import load_storybook_fixture
@@ -840,10 +842,31 @@ def test_parent_storybook_service_uses_real_text_provider_when_configured(monkey
     assert result["providerMeta"]["textDelivery"] == "real"
     assert result["providerMeta"]["realProvider"] is True
     assert result["providerMeta"]["mode"] == "mixed"
-    assert result["fallbackReason"] == "partial-media-fallback"
+    assert result["fallbackReason"] is None
+    assert result["providerMeta"]["fallbackReason"] is None
+    assert result["providerMeta"]["diagnostics"]["brain"]["fallbackReason"] is None
     assert len(result["scenes"]) == 5
     assert all(scene["sceneTitle"].startswith("AI 第") for scene in result["scenes"])
     assert all("AI画面补充" in scene["imagePrompt"] for scene in result["scenes"])
+
+
+def test_parent_storybook_service_raises_when_real_provider_is_required_but_unconfigured(monkeypatch):
+    class _UnconfiguredTextSettings:
+        brain_provider = "vivo"
+        enable_mock_provider = False
+        vivo_app_id = "your_vivo_app_id"
+        vivo_app_key = None
+
+    monkeypatch.setattr(
+        "app.services.parent_storybook_service.get_settings",
+        lambda: _UnconfiguredTextSettings(),
+    )
+
+    with pytest.raises(ParentStoryBookTextProviderError) as exc_info:
+        asyncio.run(run_parent_storybook(_base_payload()))
+
+    assert exc_info.value.fallback_reason == "provider-unconfigured"
+    assert exc_info.value.status_code == 503
 
 
 def test_parent_storybook_service_uses_demo_art_only_after_dynamic_fallback_fails(monkeypatch):

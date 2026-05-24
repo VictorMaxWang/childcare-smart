@@ -14,8 +14,25 @@ const fixturePath = new URL(
   import.meta.url
 );
 
-const payload = JSON.parse(readFileSync(fixturePath, "utf8"));
+const fixturePayload = JSON.parse(readFileSync(fixturePath, "utf8"));
+const payload = {
+  ...fixturePayload,
+  childId: fixturePayload.childId || fixturePayload.snapshot?.child?.id || "c-1",
+  requestSource: process.env.STORYBOOK_SMOKE_REQUEST_SOURCE || `storybook-smoke-real-${Date.now()}`,
+  generationMode: process.env.STORYBOOK_SMOKE_GENERATION_MODE || "manual-theme",
+  manualTheme: process.env.STORYBOOK_SMOKE_THEME || "表达情绪",
+  manualPrompt:
+    process.env.STORYBOOK_SMOKE_MANUAL_PROMPT ||
+    "请生成一套帮助孩子识别、表达和安放情绪的成长绘本。",
+  pageCount: Number(process.env.STORYBOOK_SMOKE_PAGE_COUNT || fixturePayload.pageCount || 6),
+  goalKeywords: (process.env.STORYBOOK_SMOKE_GOAL_KEYWORDS || "表达情绪,情绪命名,温柔沟通")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean),
+};
 const pageUrl = `${baseUrl}/parent/storybook?child=${encodeURIComponent(payload.childId || "c-1")}`;
+const requireRealText = process.env.STORYBOOK_SMOKE_REQUIRE_REAL_TEXT !== "0";
+const realTextProviderPattern = /(?:vivo|qwen|dashscope|llm|ai)/i;
 
 function assert(condition, message) {
   if (!condition) {
@@ -94,9 +111,15 @@ function printStorySummary(label, details) {
   console.log(`transport header: ${transportHeader}`);
   console.log(`fallback header: ${fallbackReasonHeader}`);
   console.log(`body transport: ${providerMeta.transport || "(missing)"}`);
+  console.log(`textProvider: ${providerMeta.textProvider || providerMeta.provider || "(missing)"}`);
+  console.log(`textDelivery: ${providerMeta.textDelivery || "(missing)"}`);
+  console.log(`body fallbackReason: ${details.json?.fallbackReason ?? providerMeta.fallbackReason ?? "(none)"}`);
   console.log(`imageDelivery: ${providerMeta.imageDelivery || "(missing)"}`);
   console.log(`audioDelivery: ${providerMeta.audioDelivery || "(missing)"}`);
   console.log(`scenes: ${scenes.length}`);
+  console.log(`title: ${compactSnippet(details.json?.title, 120)}`);
+  console.log(`first scene: ${compactSnippet(scenes[0]?.sceneText, 160)}`);
+  console.log(`brain diagnostics: ${JSON.stringify(providerMeta.diagnostics?.brain || null)}`);
   console.log(
     `image job: ${providerMeta.diagnostics?.image?.jobStatus || "(missing)"}`
   );
@@ -180,6 +203,43 @@ function assertRemoteProxy(details, label) {
   assert(bodyTransport === "remote-brain-proxy", `${label}: body transport should be remote-brain-proxy, got ${bodyTransport}`);
 }
 
+function getStoryFallbackReason(details) {
+  return (
+    details.headers.get("x-smartchildcare-fallback-reason") ||
+    details.json?.fallbackReason ||
+    details.json?.providerMeta?.fallbackReason ||
+    details.json?.providerMeta?.diagnostics?.brain?.fallbackReason ||
+    null
+  );
+}
+
+function assertRealTextGeneration(details, label) {
+  assertRemoteProxy(details, label);
+
+  const providerMeta = details.json?.providerMeta || {};
+  const textProvider = providerMeta.textProvider || providerMeta.provider || "";
+  const fallbackReason = getStoryFallbackReason(details);
+
+  assert(
+    providerMeta.textDelivery === "real",
+    `${label}: textDelivery should be real, got ${providerMeta.textDelivery || "(missing)"}`
+  );
+  assert(
+    realTextProviderPattern.test(textProvider),
+    `${label}: textProvider should be a real provider, got ${textProvider || "(missing)"}`
+  );
+  assert(!fallbackReason, `${label}: fallbackReason should be empty, got ${fallbackReason}`);
+  assert(!isFixedDemoStory(details), `${label}: direct generation returned the fixed demo story`);
+}
+
+function isFixedDemoStory(details) {
+  const bodyText = JSON.stringify(details.json || {});
+  return (
+    bodyText.includes("林小雨的一小步勇敢") ||
+    bodyText.includes("lin-xiaoyu-one-small-brave-step")
+  );
+}
+
 function hasStoryContent(details) {
   const scenes = details.json?.scenes;
   return (
@@ -244,6 +304,12 @@ async function main() {
     printStorySummary("First request", first);
     assertStorybookResponse("first request", first);
 
+    if (requireRealText) {
+      assertRealTextGeneration(first, "first request");
+      console.log("\n[OK] Storybook smoke passed with real AI text generation.");
+      return;
+    }
+
     if (isWarmEnough(first)) {
       console.log("\n[OK] Storybook smoke passed on first request.");
       return;
@@ -263,6 +329,12 @@ async function main() {
       });
       printStorySummary(`Poll ${attempt}`, polled);
       assertStorybookResponse(`poll ${attempt}`, polled);
+
+      if (requireRealText) {
+        assertRealTextGeneration(polled, `poll ${attempt}`);
+        console.log("\n[OK] Storybook smoke reached real AI text generation.");
+        return;
+      }
 
       if (isWarmEnough(polled)) {
         console.log("\n[OK] Storybook smoke reached mixed/real.");

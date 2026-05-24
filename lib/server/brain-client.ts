@@ -46,7 +46,9 @@ type BrainBaseUrlDetails = {
 
 function resolveBrainBaseUrlDetails(): BrainBaseUrlDetails {
   const configuredBaseUrl = trimTrailingSlash(
-    process.env.BRAIN_API_BASE_URL ?? process.env.NEXT_PUBLIC_BACKEND_BASE_URL
+    process.env.BRAIN_API_BASE_URL ??
+      process.env.NEXT_PUBLIC_BACKEND_BASE_URL ??
+      process.env.BACKEND_BASE_URL
   );
   if (configuredBaseUrl) {
     const normalizedBaseUrl = normalizeBaseUrl(configuredBaseUrl);

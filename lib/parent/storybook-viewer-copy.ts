@@ -227,9 +227,9 @@ export function formatStoryBookAudioDelivery(
 }
 
 export function formatStoryBookTextDelivery(value?: "real" | "mock" | "fallback" | string | null) {
-  if (value === "real") return "AI 文本已生成";
-  if (value === "mock") return "开发模拟文本";
-  if (value === "fallback") return "兜底文本";
+  if (value === "real") return "真实 AI 生成";
+  if (value === "mock") return "本地兜底生成";
+  if (value === "fallback") return "本地兜底生成";
   return "文本来源待确认";
 }
 
