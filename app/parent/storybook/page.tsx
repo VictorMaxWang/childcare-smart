@@ -64,7 +64,7 @@ type StoryBookControls = {
 const PAGE_COUNT_OPTIONS = [4, 5, 6, 8] as const satisfies readonly ParentStoryBookPageCount[];
 const MEDIA_POLL_INTERVAL_MS = 2_000;
 const MEDIA_POLL_MAX_ATTEMPTS = 24;
-const STORYBOOK_USER_REQUEST_TIMEOUT_MS = 25_000;
+const STORYBOOK_USER_REQUEST_TIMEOUT_MS = 75_000;
 const STORYBOOK_MEDIA_POLL_TIMEOUT_MS = 8_000;
 const STORYBOOK_API_SAVE_TIMEOUT_MS = 5_000;
 
