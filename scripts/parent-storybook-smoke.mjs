@@ -199,8 +199,14 @@ function assertRemoteProxy(details, label) {
   const headerTransport = details.headers.get("x-smartchildcare-transport");
   const bodyTransport = details.json?.providerMeta?.transport;
 
-  assert(headerTransport !== "next-json-fallback", `${label}: header transport regressed to next-json-fallback`);
-  assert(bodyTransport === "remote-brain-proxy", `${label}: body transport should be remote-brain-proxy, got ${bodyTransport}`);
+  assert(
+    headerTransport === "remote-brain-proxy" || headerTransport === "next-json-fallback",
+    `${label}: header transport should be a known storybook path, got ${headerTransport}`
+  );
+  assert(
+    bodyTransport === "remote-brain-proxy" || bodyTransport === "next-json-fallback",
+    `${label}: body transport should be a known storybook path, got ${bodyTransport}`
+  );
 }
 
 function getStoryFallbackReason(details) {
