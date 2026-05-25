@@ -431,6 +431,7 @@ export default function ParentStoryBookPage() {
     }
 
     let cancelled = false;
+    let backgroundRetryTimer: number | undefined;
     const controller = new AbortController();
     const bypassCache = networkOnlyRef.current;
     const refreshCurrentOnly = refreshCurrentOnlyRef.current;
@@ -457,6 +458,32 @@ export default function ParentStoryBookPage() {
     if (shouldTrackManualGeneration) {
       if (manualStorybookGenerationInFlightRef.current) return;
       manualStorybookGenerationInFlightRef.current = true;
+    }
+
+    function scheduleBackgroundMediaRetry() {
+      const currentStory = storyRef.current;
+      if (
+        cancelled ||
+        !backgroundMediaPoll ||
+        !currentStory ||
+        !shouldPollParentStoryBookMedia(currentStory) ||
+        pollAttemptRef.current >= MEDIA_POLL_MAX_ATTEMPTS
+      ) {
+        return;
+      }
+
+      backgroundRetryTimer = window.setTimeout(() => {
+        if (
+          cancelled ||
+          !storyRef.current ||
+          !shouldPollParentStoryBookMedia(storyRef.current) ||
+          pollAttemptRef.current >= MEDIA_POLL_MAX_ATTEMPTS
+        ) {
+          return;
+        }
+        backgroundMediaPollRef.current = true;
+        setReloadToken((previousToken) => previousToken + 1);
+      }, MEDIA_POLL_INTERVAL_MS);
     }
 
     if (!bypassCache && !forceNetworkForManualOverride) {
@@ -693,11 +720,15 @@ export default function ParentStoryBookPage() {
       } catch (error) {
         if (cancelled) return;
 
-        startTransition(() => {
-          if (backgroundMediaPoll && storyRef.current) {
+        if (backgroundMediaPoll && storyRef.current) {
+          startTransition(() => {
             setIsRefreshing(false);
-            return;
-          }
+          });
+          scheduleBackgroundMediaRetry();
+          return;
+        }
+
+        startTransition(() => {
           const nextMessage =
             timedOut
               ? "成长绘本资源刷新超时，已保留上一版内容。"
@@ -725,6 +756,9 @@ export default function ParentStoryBookPage() {
     void loadStory();
 
     return () => {
+      if (backgroundRetryTimer !== undefined) {
+        window.clearTimeout(backgroundRetryTimer);
+      }
       if (!keepUserGenerationRequestAlive) {
         cancelled = true;
         controller.abort();
