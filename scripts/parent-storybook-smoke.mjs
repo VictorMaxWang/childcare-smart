@@ -32,6 +32,10 @@ const payload = {
 };
 const pageUrl = `${baseUrl}/parent/storybook?child=${encodeURIComponent(payload.childId || "c-1")}`;
 const requireRealText = process.env.STORYBOOK_SMOKE_REQUIRE_REAL_TEXT !== "0";
+const requireRealImages = process.env.STORYBOOK_SMOKE_REQUIRE_REAL_IMAGES === "1";
+const minRealImageRatio = Number(
+  process.env.STORYBOOK_SMOKE_MIN_REAL_IMAGE_RATIO || (requireRealImages ? 1 : 0)
+);
 const realTextProviderPattern = /(?:vivo|qwen|dashscope|llm|ai)/i;
 
 function assert(condition, message) {
@@ -105,6 +109,7 @@ function printStorySummary(label, details) {
     details.headers.get("x-smartchildcare-fallback-reason") || "(missing)";
   const providerMeta = details.json?.providerMeta || {};
   const scenes = Array.isArray(details.json?.scenes) ? details.json.scenes : [];
+  const realImageScenes = scenes.filter((scene) => isRealImageScene(scene));
 
   console.log(`\n=== ${label} ===`);
   console.log(`status: ${details.status}`);
@@ -117,12 +122,43 @@ function printStorySummary(label, details) {
   console.log(`imageDelivery: ${providerMeta.imageDelivery || "(missing)"}`);
   console.log(`audioDelivery: ${providerMeta.audioDelivery || "(missing)"}`);
   console.log(`scenes: ${scenes.length}`);
+  console.log(`real image scenes: ${realImageScenes.length}/${scenes.length}`);
+  console.log(`image scenes: ${summarizeSceneImages(scenes)}`);
   console.log(`title: ${compactSnippet(details.json?.title, 120)}`);
   console.log(`first scene: ${compactSnippet(scenes[0]?.sceneText, 160)}`);
   console.log(`brain diagnostics: ${JSON.stringify(providerMeta.diagnostics?.brain || null)}`);
   console.log(
     `image job: ${providerMeta.diagnostics?.image?.jobStatus || "(missing)"}`
   );
+}
+
+function isRealImageScene(scene) {
+  const sourceKind = scene?.imageSourceKind || "";
+  const status = scene?.imageStatus || "";
+  const imageUrl = String(scene?.imageUrl || "");
+  return sourceKind === "real" && status === "ready" && /^https?:\/\//i.test(imageUrl);
+}
+
+function summarizeSceneImages(scenes) {
+  if (!scenes.length) return "(none)";
+  return scenes
+    .map((scene) => {
+      const index = scene?.sceneIndex ?? "?";
+      const kind = scene?.imageSourceKind || "(missing)";
+      const status = scene?.imageStatus || "(missing)";
+      const url = String(scene?.imageUrl || "");
+      const urlKind = /^https?:\/\//i.test(url)
+        ? "url"
+        : url.startsWith("/api/ai/parent-storybook/media/")
+          ? "media"
+          : url.startsWith("data:image/")
+            ? "data"
+            : url
+              ? "local"
+              : "none";
+      return `${index}:${kind}/${status}/${urlKind}`;
+    })
+    .join(", ");
 }
 
 async function loginAndGetCookie() {
@@ -238,6 +274,36 @@ function assertRealTextGeneration(details, label) {
   assert(!isFixedDemoStory(details), `${label}: direct generation returned the fixed demo story`);
 }
 
+function hasRequiredRealImages(details) {
+  const scenes = Array.isArray(details.json?.scenes) ? details.json.scenes : [];
+  if (!scenes.length) return false;
+  const realImageScenes = scenes.filter((scene) => isRealImageScene(scene)).length;
+  const ratio = realImageScenes / scenes.length;
+  return (
+    details.json?.providerMeta?.imageDelivery === "real" &&
+    ratio >= minRealImageRatio &&
+    realImageScenes === scenes.length
+  );
+}
+
+function assertRealImageGeneration(details, label) {
+  const scenes = Array.isArray(details.json?.scenes) ? details.json.scenes : [];
+  const realImageScenes = scenes.filter((scene) => isRealImageScene(scene)).length;
+  const ratio = scenes.length ? realImageScenes / scenes.length : 0;
+  const imageDelivery = details.json?.providerMeta?.imageDelivery;
+  const diagnostics = details.json?.providerMeta?.diagnostics?.image;
+
+  assert(scenes.length > 0, `${label}: scenes are missing`);
+  assert(
+    imageDelivery === "real",
+    `${label}: imageDelivery should be real, got ${imageDelivery || "(missing)"}; scenes=${summarizeSceneImages(scenes)}; diagnostics=${JSON.stringify(diagnostics || null)}`
+  );
+  assert(
+    ratio >= minRealImageRatio && realImageScenes === scenes.length,
+    `${label}: expected all scenes to have real image URLs, got ${realImageScenes}/${scenes.length}; scenes=${summarizeSceneImages(scenes)}`
+  );
+}
+
 function isFixedDemoStory(details) {
   const bodyText = JSON.stringify(details.json || {});
   return (
@@ -312,11 +378,18 @@ async function main() {
 
     if (requireRealText) {
       assertRealTextGeneration(first, "first request");
-      console.log("\n[OK] Storybook smoke passed with real AI text generation.");
-      return;
+      if (!requireRealImages) {
+        console.log("\n[OK] Storybook smoke passed with real AI text generation.");
+        return;
+      }
+      if (hasRequiredRealImages(first)) {
+        assertRealImageGeneration(first, "first request");
+        console.log("\n[OK] Storybook smoke passed with real AI text and real images.");
+        return;
+      }
     }
 
-    if (isWarmEnough(first)) {
+    if (!requireRealImages && isWarmEnough(first)) {
       console.log("\n[OK] Storybook smoke passed on first request.");
       return;
     }
@@ -330,19 +403,27 @@ async function main() {
 
     for (let attempt = 1; attempt <= maxPollAttempts; attempt += 1) {
       await sleep(pollIntervalMs);
-      const polled = await postStory(cookie, {
-        "x-smartchildcare-cache-bypass": "1",
-      });
+      const polled = await postStory(
+        cookie,
+        requireRealImages ? {} : { "x-smartchildcare-cache-bypass": "1" }
+      );
       printStorySummary(`Poll ${attempt}`, polled);
       assertStorybookResponse(`poll ${attempt}`, polled);
 
       if (requireRealText) {
         assertRealTextGeneration(polled, `poll ${attempt}`);
-        console.log("\n[OK] Storybook smoke reached real AI text generation.");
-        return;
+        if (!requireRealImages) {
+          console.log("\n[OK] Storybook smoke reached real AI text generation.");
+          return;
+        }
+        if (hasRequiredRealImages(polled)) {
+          assertRealImageGeneration(polled, `poll ${attempt}`);
+          console.log("\n[OK] Storybook smoke reached real AI text and real images.");
+          return;
+        }
       }
 
-      if (isWarmEnough(polled)) {
+      if (!requireRealImages && isWarmEnough(polled)) {
         console.log("\n[OK] Storybook smoke reached mixed/real.");
         return;
       }
@@ -356,7 +437,9 @@ async function main() {
     }
 
     throw new Error(
-      `storybook smoke did not reach mixed/real within ${maxPollAttempts} polls`
+      requireRealImages
+        ? `storybook smoke did not reach real images within ${maxPollAttempts} polls`
+        : `storybook smoke did not reach mixed/real within ${maxPollAttempts} polls`
     );
   } catch (error) {
     console.error("\n[FAIL] Storybook smoke failed.");

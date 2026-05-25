@@ -121,6 +121,14 @@ type StoryBookRuntimeOverrides = {
   playbackSceneIndex?: number | null;
   imageFallbackMap?: Record<string, boolean>;
 };
+type StoryBookStatusBadgeVariant =
+  | "success"
+  | "warning"
+  | "danger"
+  | "outline"
+  | "info"
+  | "pending"
+  | "neutral";
 type StoryBookResolvedRuntimeState = {
   imageDelivery: StoryBookPublicImageDelivery;
   audioDelivery: StoryBookRuntimeAudioDelivery;
@@ -592,23 +600,23 @@ export function getRuntimeBannerItems(
     });
   } else if (imageDelivery === "dynamic-fallback") {
     items.push({
-      tone: "info",
-      label: "真实图片暂未命中，当前使用动态剧情插画",
+      tone: "warning",
+      label: "插图：插图兜底",
       detail: diagnostics?.image?.lastErrorReason
         ? `${formatWarmProgressDetail(diagnostics.image)}`
-        : "当前页面先展示动态剧情插画，方便继续预览绘本内容。",
+        : "当前页面先展示本地动态 SVG/占位插图，不是完整真实图片生成结果。",
     });
   } else if (imageDelivery === "demo-art") {
     items.push({
-      tone: "info",
-      label: "当前使用演示插画",
-      detail: "仅在其他插画暂未就绪时，才会使用这一层演示资源。",
+      tone: "warning",
+      label: "插图：演示插图兜底",
+      detail: "当前使用演示插图资源，不是完整真实图片生成结果。",
     });
   } else {
     items.push({
       tone: "warning",
-      label: "插画暂未就绪，当前使用基础插画",
-      detail: "当前页面先保留基础插画，方便继续预览内容。",
+      label: "插图：基础插图兜底",
+      detail: "当前页面先保留基础插图，不是完整真实图片生成结果。",
     });
   }
 
@@ -933,7 +941,7 @@ function isProviderFailureReason(reason: string | null) {
 
 function resolveStoryBookAiGenerationStatus(story: StoryBookRuntimeResponse): {
   label: string;
-  variant: "success" | "warning" | "danger" | "outline";
+  variant: StoryBookStatusBadgeVariant;
   reason: string | null;
 } {
   const reason = resolveStoryBookTextFallbackReason(story);
@@ -942,15 +950,92 @@ function resolveStoryBookAiGenerationStatus(story: StoryBookRuntimeResponse): {
   const realTextProvider = /(?:vivo|qwen|dashscope|llm|ai)/iu.test(textProvider ?? "");
 
   if (textDelivery === "real" && realTextProvider && !reason) {
-    return { label: "真实 AI 生成", variant: "success", reason: null };
+    return { label: "文案：真实 AI", variant: "success", reason: null };
   }
   if (isProviderUnconfiguredReason(reason)) {
-    return { label: "AI provider 未配置", variant: "warning", reason };
+    return { label: "文案：AI provider 未配置", variant: "warning", reason };
   }
   if (isProviderFailureReason(reason)) {
-    return { label: "AI 生成失败，请检查服务配置", variant: "danger", reason };
+    return { label: "文案：AI 生成失败", variant: "danger", reason };
   }
-  return { label: "本地兜底生成", variant: "outline", reason };
+  return { label: "文案：本地兜底", variant: "outline", reason };
+}
+
+function resolveStoryBookImageGenerationStatus(
+  story: StoryBookRuntimeResponse,
+  runtimeState: StoryBookResolvedRuntimeState
+): {
+  label: string;
+  variant: StoryBookStatusBadgeVariant;
+} {
+  const imageDiagnostics = story.providerMeta.diagnostics?.image;
+  const pendingCount = imageDiagnostics?.pendingSceneCount ?? 0;
+  const readyCount =
+    imageDiagnostics?.readySceneCount ??
+    story.scenes.filter((scene) => scene.imageSourceKind === "real").length;
+
+  if (imageDiagnostics?.jobStatus === "warming" || pendingCount > 0) {
+    return {
+      label:
+        readyCount > 0
+          ? `插图：生成中 ${readyCount}/${story.scenes.length}`
+          : "插图：生成中",
+      variant: "pending",
+    };
+  }
+  if (runtimeState.imageDelivery === "real") {
+    return { label: "插图：真实插图", variant: "success" };
+  }
+  if (runtimeState.imageDelivery === "mixed") {
+    return {
+      label:
+        readyCount > 0
+          ? `插图：部分真实 ${readyCount}/${story.scenes.length}`
+          : "插图：部分真实",
+      variant: "warning",
+    };
+  }
+  return { label: "插图：插图兜底", variant: "warning" };
+}
+
+function resolveStoryBookAudioGenerationStatus(
+  story: StoryBookRuntimeResponse,
+  canUseLocalSpeech: boolean
+): {
+  label: string;
+  variant: StoryBookStatusBadgeVariant;
+} {
+  const audioDelivery = resolveRuntimeAudioDeliveryHotfix(story);
+  const audioDiagnostics = story.providerMeta.diagnostics?.audio;
+  const pendingCount = audioDiagnostics?.pendingSceneCount ?? 0;
+  const readyCount =
+    audioDiagnostics?.readySceneCount ??
+    story.scenes.filter((scene) => scene.audioStatus === "ready" && scene.audioUrl).length;
+
+  if (audioDiagnostics?.jobStatus === "warming" || pendingCount > 0) {
+    return {
+      label:
+        readyCount > 0
+          ? `朗读：生成中 ${readyCount}/${story.scenes.length}`
+          : "朗读：生成中",
+      variant: "pending",
+    };
+  }
+  if (audioDelivery === "real") {
+    return { label: "朗读：真实 TTS", variant: "success" };
+  }
+  if (audioDelivery === "mixed") {
+    return {
+      label:
+        readyCount > 0
+          ? `朗读：部分真实 TTS ${readyCount}/${story.scenes.length}`
+          : "朗读：部分真实 TTS",
+      variant: "warning",
+    };
+  }
+  return canUseLocalSpeech
+    ? { label: "朗读：本地朗读兜底", variant: "warning" }
+    : { label: "朗读：字幕预览", variant: "outline" };
 }
 
 export function getRuntimeBannerItemsHotfix(
@@ -972,28 +1057,28 @@ export function getRuntimeBannerItemsHotfix(
   const imageDelivery = runtimeState.imageDelivery;
   const audioDelivery = resolveRuntimeAudioDeliveryHotfix(story);
   const isPlayingLocalFallback = runtimeOverrides?.playbackSource === "local";
-  if (aiStatus.label === "真实 AI 生成") {
+  if (aiStatus.label === "文案：真实 AI") {
     items.push({
       tone: "success",
-      label: "真实 AI 生成",
-      detail: "当前文本来自实时生成链路，并已按孩子与主题线索整理。",
+      label: "文案：真实 AI",
+      detail: "当前文案来自实时生成链路；插图和朗读状态请以各自标识为准。",
     });
-  } else if (aiStatus.label === "AI provider 未配置") {
+  } else if (aiStatus.label === "文案：AI provider 未配置") {
     items.push({
       tone: "warning",
-      label: "AI provider 未配置",
+      label: "文案：AI provider 未配置",
       detail: formatStoryBookFallbackReason(aiStatus.reason),
     });
-  } else if (aiStatus.label === "AI 生成失败，请检查服务配置") {
+  } else if (aiStatus.label === "文案：AI 生成失败") {
     items.push({
       tone: "warning",
-      label: "AI 生成失败，请检查服务配置",
+      label: "文案：AI 生成失败，请检查服务配置",
       detail: formatStoryBookFallbackReason(aiStatus.reason),
     });
   } else if (textDelivery === "mock" || textDelivery === "fallback" || story.fallbackReason) {
     items.push({
       tone: "warning",
-      label: "本地兜底生成",
+      label: "文案：本地兜底",
       detail: formatStoryBookFallbackReason(aiStatus.reason),
     });
   } else if (transport === "remote-brain-proxy") {
@@ -1021,70 +1106,72 @@ export function getRuntimeBannerItemsHotfix(
   if (diagnostics?.image?.jobStatus === "warming") {
     items.push({
       tone: "info",
-      label: "插画继续补齐中",
-      detail: "当前先保留可阅读的插画版本。",
+      label: "插图生成中",
+      detail: formatWarmProgressDetail(diagnostics.image),
     });
   }
 
   if (imageDelivery === "real") {
     items.push({
       tone: "success",
-      label: "整本插画已准备好",
-      detail: "每一页都能看到完整插画。",
+      label: "插图：真实插图",
+      detail: "每一页都已命中真实图片生成结果。",
     });
   } else if (imageDelivery === "mixed") {
     items.push({
-      tone: "info",
-      label: "部分页面已换成正式插画",
-      detail: "其余页面先保留可阅读版本，不影响继续看故事。",
+      tone: "warning",
+      label: "插图：部分真实",
+      detail: "只有部分页面命中真实图片；其余页面仍是插图兜底。",
     });
   } else if (imageDelivery === "dynamic-fallback") {
     items.push({
-      tone: "info",
-      label: "当前先看故事插画版",
-      detail: "插画会继续按故事内容补齐，现在这一版已经可以阅读。",
+      tone: "warning",
+      label: "插图：插图兜底",
+      detail: "当前主要显示本地动态 SVG/占位插图，不是完整真实绘本插图。",
     });
   } else {
     items.push({
       tone: "warning",
-      label: "当前先保留基础插画",
-      detail: "故事内容已准备好，插画资源会继续补齐。",
+      label: "插图：插图兜底",
+      detail: "当前插图仍是演示或基础兜底资源，不是完整真实图片生成结果。",
     });
   }
 
   if (diagnostics?.audio?.jobStatus === "warming") {
     items.push({
       tone: "info",
-      label: "朗读资源继续补齐中",
-      detail: "现在已经可以先看字幕版或使用本机朗读。",
+      label: "朗读生成中",
+      detail: formatWarmProgressDetail(diagnostics.audio),
     });
   }
 
   if (audioDelivery === "real") {
     items.push({
       tone: "success",
-      label: "整本可直接播放朗读",
-      detail: "每一页都会优先播放可用朗读。",
+      label: "朗读：真实 TTS",
+      detail: "每一页都会优先播放后端生成的真实 TTS。",
     });
   } else if (audioDelivery === "mixed") {
     items.push({
-      tone: "info",
-      label: "部分页面已带朗读",
+      tone: "warning",
+      label: "朗读：部分真实 TTS",
       detail: canUseLocalSpeech
-        ? "其余页面会自动切到本机朗读。"
-        : "其余页面先保留字幕版。",
+        ? "其余页面会明确切到本地朗读兜底。"
+        : "其余页面先保留字幕预览。",
     });
   } else if (isPlayingLocalFallback) {
     items.push({
       tone: "warning",
-      label: "本地朗读兜底",
-      detail: "这台设备会直接帮你把这一页读出来。",
+      label: "朗读：本地朗读兜底",
+      detail: "当前播放来自浏览器 speechSynthesis，不是云端真实 TTS。",
     });
   } else {
     items.push({
       tone: "warning",
-      label: "当前先看字幕版",
-      detail: "朗读资源还在补齐，先不影响阅读故事。",
+      label: canUseLocalSpeech ? "朗读：本地朗读兜底" : "朗读：字幕预览",
+      detail: canUseLocalSpeech
+        ? "后端真实 TTS 未命中时，将使用浏览器本地朗读。"
+        : "后端真实 TTS 未命中，当前只展示字幕预览。",
     });
   }
 
@@ -1249,6 +1336,12 @@ export default function StoryBookViewer({
     : null;
   const aiGenerationStatus = runtimeStory
     ? resolveStoryBookAiGenerationStatus(runtimeStory)
+    : null;
+  const imageGenerationStatus = runtimeStory && runtimeState
+    ? resolveStoryBookImageGenerationStatus(runtimeStory, runtimeState)
+    : null;
+  const audioGenerationStatus = runtimeStory
+    ? resolveStoryBookAudioGenerationStatus(runtimeStory, canUseLocalSpeech)
     : null;
   const runtimeBanners = story
     ? getRuntimeBannerItemsHotfix(runtimeStory, canUseLocalSpeech, {
@@ -1840,9 +1933,25 @@ export default function StoryBookViewer({
                       {aiGenerationStatus ? (
                         <Badge
                           variant={aiGenerationStatus.variant}
-                          data-testid="parent-storybook-ai-status"
+                          data-testid="parent-storybook-text-status"
                         >
                           {aiGenerationStatus.label}
+                        </Badge>
+                      ) : null}
+                      {imageGenerationStatus ? (
+                        <Badge
+                          variant={imageGenerationStatus.variant}
+                          data-testid="parent-storybook-image-status"
+                        >
+                          {imageGenerationStatus.label}
+                        </Badge>
+                      ) : null}
+                      {audioGenerationStatus ? (
+                        <Badge
+                          variant={audioGenerationStatus.variant}
+                          data-testid="parent-storybook-audio-status"
+                        >
+                          {audioGenerationStatus.label}
                         </Badge>
                       ) : null}
                       <Badge variant="outline">分镜 {story.providerMeta.sceneCount}</Badge>

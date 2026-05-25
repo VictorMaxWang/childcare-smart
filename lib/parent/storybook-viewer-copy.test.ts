@@ -46,7 +46,7 @@ test("storybook viewer copy maps media status and playback labels", () => {
 test("storybook viewer copy maps provider, cache, transport and fallback reasons", () => {
   assert.equal(
     formatStoryBookProviderLabel("image", "vivo-story-image+storybook-dynamic-fallback"),
-    "插画：vivo 真实图片 + 动态剧情插画"
+    "插画：vivo 真实图片 + 插图兜底"
   );
   assert.equal(
     formatStoryBookProviderLabel("audio", "storybook-mock-preview"),
@@ -55,8 +55,8 @@ test("storybook viewer copy maps provider, cache, transport and fallback reasons
   assert.equal(formatStoryBookResponseCache("hit"), "响应缓存命中");
   assert.equal(formatStoryBookAudioDelivery("preview-only"), "文字朗读预览");
   assert.equal(formatStoryBookAudioDelivery("local-speech"), "本地补读");
-  assert.equal(formatStoryBookSceneImageDelivery("dynamic-fallback"), "动态剧情插画");
-  assert.equal(formatStoryBookSceneImageDelivery("svg-fallback"), "基础插画");
+  assert.equal(formatStoryBookSceneImageDelivery("dynamic-fallback"), "插图兜底");
+  assert.equal(formatStoryBookSceneImageDelivery("svg-fallback"), "基础插图兜底");
   assert.equal(formatStoryBookTransport("remote-brain-proxy"), "实时生成链路");
   assert.equal(formatStoryBookHighlightSource("interventionCard"), "今晚动作");
   assert.equal(formatStoryBookFallbackReason("brain-status-504"), "实时生成暂时超时");
@@ -64,8 +64,8 @@ test("storybook viewer copy maps provider, cache, transport and fallback reasons
     formatStoryBookFallbackReason("brain-base-url-missing"),
     "实时生成服务暂未接通"
   );
-  assert.equal(formatStoryBookTextDelivery("real"), "真实 AI 生成");
-  assert.equal(formatStoryBookTextDelivery("fallback"), "本地兜底生成");
+  assert.equal(formatStoryBookTextDelivery("real"), "文案：真实 AI");
+  assert.equal(formatStoryBookTextDelivery("fallback"), "文案：本地兜底");
 });
 
 test("getStoryBookPresetCopy returns preset metadata", () => {

@@ -28,7 +28,6 @@ import { requireDemoSession } from "@/lib/server/session";
 
 export const runtime = "nodejs";
 const DEFAULT_PARENT_STORYBOOK_BRAIN_TIMEOUT_MS = 45_000;
-const REAL_TEXT_BACKEND_GRACE_TIMEOUT_MS = 5_000;
 const ROLE_PARENT = "家长";
 
 function resolveParentStoryBookBrainTimeoutMs() {
@@ -42,6 +41,19 @@ function resolveParentStoryBookBrainTimeoutMs() {
 }
 
 const PARENT_STORYBOOK_BRAIN_TIMEOUT_MS = resolveParentStoryBookBrainTimeoutMs();
+
+function resolveParentStoryBookBackendMediaTimeoutMs() {
+  const rawValue =
+    process.env.PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS?.trim() ??
+    process.env.PARENT_STORYBOOK_BACKEND_GRACE_TIMEOUT_MS?.trim();
+  const parsed = rawValue ? Number(rawValue) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : PARENT_STORYBOOK_BRAIN_TIMEOUT_MS;
+}
+
+const PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS =
+  resolveParentStoryBookBackendMediaTimeoutMs();
 
 function normalizeStoryBookTransport(transport: BrainTransport): ParentStoryBookTransport {
   if (transport === "brain-proxy-error") {
@@ -486,7 +498,7 @@ export async function POST(request: Request) {
     "/api/v1/agents/parent/storybook",
     {
       timeoutMs: requireRealStoryText
-        ? Math.min(PARENT_STORYBOOK_BRAIN_TIMEOUT_MS, REAL_TEXT_BACKEND_GRACE_TIMEOUT_MS)
+        ? PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS
         : PARENT_STORYBOOK_BRAIN_TIMEOUT_MS,
     }
   );
