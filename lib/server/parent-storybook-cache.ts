@@ -84,7 +84,10 @@ function parseDataUrl(dataUrl: string) {
 
 function countRealScenes(story: ParentStoryBookResponse) {
   return story.scenes.filter(
-    (scene) => scene.imageStatus === "ready" || scene.audioStatus === "ready"
+    (scene) =>
+      (scene.imageSourceKind ?? resolveSceneImageSourceKind(scene)) === "real" &&
+      scene.imageStatus === "ready" &&
+      Boolean(scene.imageUrl)
   ).length;
 }
 

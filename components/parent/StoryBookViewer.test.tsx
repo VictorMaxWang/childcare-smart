@@ -59,6 +59,8 @@ function buildStory(
       provider: "parent-storybook-rule",
       mode: "fallback",
       transport: "remote-brain-proxy",
+      textProvider: "vivo-llm",
+      textDelivery: "real",
       imageProvider: "vivo-story-image",
       audioProvider: "vivo-story-tts",
       imageDelivery: "real",
@@ -270,11 +272,47 @@ test("runtime banners hotfix maps brain 504 and local speech honestly", () => {
     playbackSource: "local",
   });
 
-  assert.ok(items.some((item) => item.label.includes("FastAPI brain")));
-  assert.ok(items.some((item) => item.detail.includes("504")));
+  assert.ok(items.some((item) => item.detail.includes("超时")));
   assert.ok(items.some((item) => item.detail.includes("ready 1")));
-  assert.ok(items.some((item) => item.label.includes("local speech")));
+  assert.ok(items.some((item) => item.label.includes("朗读：本地朗读兜底")));
   assert.ok(items.every((item) => !item.label.includes("mixed")));
+});
+
+test("runtime banners split real text from fallback illustrations", () => {
+  const baseStory = buildStory();
+  const story = buildStory({
+    providerMeta: {
+      ...baseStory.providerMeta,
+      mode: "mixed",
+      imageDelivery: "dynamic-fallback",
+      audioDelivery: "preview-only",
+      diagnostics: {
+        ...baseStory.providerMeta.diagnostics!,
+        image: {
+          ...baseStory.providerMeta.diagnostics!.image,
+          resolvedProvider: "storybook-dynamic-fallback",
+          jobStatus: "idle",
+          readySceneCount: 0,
+          pendingSceneCount: 0,
+        },
+      },
+    },
+    scenes: [
+      buildScene({
+        imageStatus: "fallback",
+        imageSourceKind: "dynamic-fallback",
+        imageUrl: "/api/ai/parent-storybook/media/fallback-scene-1",
+        assetRef: "/api/ai/parent-storybook/media/fallback-scene-1",
+      }),
+    ],
+  });
+
+  const items = getRuntimeBannerItemsHotfix(story, true);
+  const labels = items.map((item) => item.label);
+
+  assert.ok(labels.some((label) => label.includes("文案：真实 AI")));
+  assert.ok(labels.some((label) => label.includes("插图：插图兜底")));
+  assert.ok(labels.every((label) => !label.includes("真实 AI 生成")));
 });
 
 test("runtime banners hotfix keeps mixed backend audio visible even if current playback was local", () => {
@@ -320,6 +358,6 @@ test("runtime banners hotfix keeps mixed backend audio visible even if current p
   });
 
   assert.equal(resolveRuntimeAudioDeliveryHotfix(story), "mixed");
-  assert.ok(items.some((item) => item.label.includes("mixed")));
-  assert.ok(items.every((item) => !item.label.includes("local speech")));
+  assert.ok(items.some((item) => item.label.includes("朗读：部分真实 TTS")));
+  assert.ok(items.every((item) => !item.label.includes("朗读：本地朗读兜底")));
 });

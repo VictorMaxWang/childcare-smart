@@ -31,16 +31,16 @@ function mapProviderName(kind: "image" | "audio", providerName: string) {
   }
 
   if (normalized === "storybook-dynamic-fallback") {
-    return "动态剧情插画";
+    return "插图兜底";
   }
   if (normalized === "storybook-local-dynamic-fallback") {
-    return "本地动态剧情插画";
+    return "本地插图兜底";
   }
   if (normalized === "storybook-demo-art") {
-    return "演示插画";
+    return "演示插图兜底";
   }
   if (normalized === "storybook-svg-fallback") {
-    return "基础插画";
+    return "基础插图兜底";
   }
   if (normalized === "storybook-asset") {
     return "预置绘本资产";
@@ -124,10 +124,10 @@ export function formatStoryBookSceneImageDelivery(
   value?: StoryBookRuntimeImageDelivery | ParentStoryBookMediaStatus | "mixed"
 ) {
   if (value === "real" || value === "ready") return "真实图片";
-  if (value === "mixed") return "图片逐步补齐";
-  if (value === "dynamic-fallback" || value === "fallback") return "动态剧情插画";
-  if (value === "demo-art" || value === "mock") return "演示插画";
-  return "基础插画";
+  if (value === "mixed") return "部分真实插图";
+  if (value === "dynamic-fallback" || value === "fallback") return "插图兜底";
+  if (value === "demo-art" || value === "mock") return "演示插图兜底";
+  return "基础插图兜底";
 }
 
 export function formatStoryBookTransport(value?: StoryBookRuntimeTransport | string | null) {
@@ -227,9 +227,9 @@ export function formatStoryBookAudioDelivery(
 }
 
 export function formatStoryBookTextDelivery(value?: "real" | "mock" | "fallback" | string | null) {
-  if (value === "real") return "真实 AI 生成";
-  if (value === "mock") return "本地兜底生成";
-  if (value === "fallback") return "本地兜底生成";
+  if (value === "real") return "文案：真实 AI";
+  if (value === "mock") return "文案：本地兜底";
+  if (value === "fallback") return "文案：本地兜底";
   return "文本来源待确认";
 }
 

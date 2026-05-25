@@ -14,11 +14,10 @@ from app.providers.base import (
     ProviderResponseError,
     ProviderResult,
 )
-from app.providers.vivo_llm import VivoLlmProvider
 from app.services.storybook_runtime_cache import get_storybook_runtime_cache
 
-IMAGE_SUBMIT_PATH = "/api/v1/task_submit"
-IMAGE_PROGRESS_PATH = "/api/v1/task_progress"
+IMAGE_GENERATION_PATH = "/api/v1/image_generation"
+IMAGE_GENERATION_MODULE = "aigc"
 DEFAULT_IMAGE_NEGATIVE_PROMPT = (
     "不要任何中文、不要任何英文、不要任何数字、不要任何标题、不要任何对话气泡、不要任何对白框、"
     "不要任何书页文字、不要任何海报排版文字、不要任何logo、不要任何watermark、不要任何水印、"
@@ -30,19 +29,6 @@ def _normalize_text(value: Any) -> str:
     if value is None:
         return ""
     return " ".join(str(value).split())
-
-
-def _normalize_int(value: Any, *, default: int) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _normalize_list(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [_normalize_text(item) for item in value if _normalize_text(item)]
 
 
 def _ensure_no_text_image_prompt(prompt: str) -> str:
@@ -94,18 +80,14 @@ def _build_default_prompt(
 def _build_story_image_cache_key(
     *,
     prompt: str,
-    business_code: str,
-    style_config: str,
-    width: int,
-    height: int,
+    model: str,
+    size: str,
 ) -> str:
     seed = "::".join(
         [
             prompt,
-            business_code,
-            style_config,
-            str(width),
-            str(height),
+            model,
+            size,
         ]
     )
     return hashlib.sha256(seed.encode("utf-8")).hexdigest()
@@ -202,10 +184,8 @@ class VivoStoryImageProvider:
         )
         cache_key = _build_story_image_cache_key(
             prompt=prompt,
-            business_code=self.settings.storybook_image_business_code,
-            style_config=self.settings.storybook_image_style_config,
-            width=self.settings.storybook_image_width,
-            height=self.settings.storybook_image_height,
+            model=self.settings.storybook_image_model,
+            size=self.settings.storybook_image_size,
         )
         cached_result = get_storybook_runtime_cache().get(cache_key)
         if not cached_result:
@@ -250,10 +230,8 @@ class VivoStoryImageProvider:
         )
         cache_key = _build_story_image_cache_key(
             prompt=prompt,
-            business_code=self.settings.storybook_image_business_code,
-            style_config=self.settings.storybook_image_style_config,
-            width=self.settings.storybook_image_width,
-            height=self.settings.storybook_image_height,
+            model=self.settings.storybook_image_model,
+            size=self.settings.storybook_image_size,
         )
         cached_result = self.read_cached_scene(
             story_mode=story_mode,
@@ -269,93 +247,60 @@ class VivoStoryImageProvider:
         if cached_result:
             return cached_result
 
-        app_id, app_key = self._require_credentials()
+        _app_id, app_key = self._require_credentials()
         request_id = uuid4().hex
 
-        submit_payload = {
-            "dataId": request_id,
-            "businessCode": self.settings.storybook_image_business_code,
-            "userAccount": self._build_user_account(child_id=child_id, story_id=story_id, scene_index=scene_index),
+        image_payload = {
+            "model": self.settings.storybook_image_model,
             "prompt": prompt,
-            "styleConfig": self.settings.storybook_image_style_config,
-            "width": self.settings.storybook_image_width,
-            "height": self.settings.storybook_image_height,
+            "parameters": {
+                "size": self.settings.storybook_image_size,
+            },
         }
-        submit_response = requests.post(
-            self._url(IMAGE_SUBMIT_PATH),
-            headers=self._build_headers(
-                app_id=app_id,
-                app_key=app_key,
-                method="POST",
-                path=IMAGE_SUBMIT_PATH,
-            ),
-            json=submit_payload,
+        query = {
+            "module": IMAGE_GENERATION_MODULE,
+            "request_id": request_id,
+            "system_time": int(time.time()),
+        }
+        response = requests.post(
+            self._url(IMAGE_GENERATION_PATH),
+            params=query,
+            headers=self._build_headers(app_key=app_key),
+            json=image_payload,
             timeout=self.settings.request_timeout_seconds,
         )
-        submit_result = self._parse_response(stage="task_submit", response=submit_response)
-        task_id = _normalize_text((submit_result.get("result") or {}).get("task_id"))
-        if not task_id:
-            raise ProviderResponseError("Vivo story image submit succeeded without task_id")
-
-        poll_interval = max(self.settings.storybook_image_poll_interval_ms, 0) / 1000
-        deadline = time.monotonic() + max(self.settings.storybook_image_poll_timeout_ms, 0) / 1000
-
-        while True:
-            query = {"task_id": task_id}
-            progress_response = requests.get(
-                self._url(IMAGE_PROGRESS_PATH),
-                params=query,
-                headers=self._build_headers(
-                    app_id=app_id,
-                    app_key=app_key,
-                    method="GET",
-                    path=IMAGE_PROGRESS_PATH,
-                    query=query,
-                ),
-                timeout=self.settings.request_timeout_seconds,
-            )
-            progress_payload = self._parse_response(stage="task_progress", response=progress_response)
-            progress_result = progress_payload.get("result") or {}
-            status = _normalize_text(progress_result.get("status"))
-            finished = bool(progress_result.get("finished")) or status == "2"
-            images = _normalize_list(progress_result.get("images_url") or progress_result.get("imagesUrl"))
-
-            if finished:
-                if not images:
-                    raise ProviderResponseError("Vivo story image task finished without images_url")
-                image_url = images[0]
-                model_name = _normalize_text(progress_result.get("model")) or None
-                output = {
-                    "imagePrompt": prompt,
-                    "imageUrl": image_url,
-                    "assetRef": image_url,
-                    "imageStatus": "ready",
-                    "cacheHit": False,
-                }
-                get_storybook_runtime_cache().set(
-                    cache_key,
-                    {
-                        "output": output,
-                        "model": model_name,
-                        "requestId": request_id,
-                    },
-                )
-                return ProviderResult(
-                    output=output,
-                    provider=self.provider_name,
-                    mode=self.mode_name,
-                    source="vivo",
-                    model=model_name,
-                    request_id=request_id,
-                )
-
-            if status in {"3", "4"}:
-                raise ProviderResponseError(
-                    f"Vivo story image task failed with status={status or 'unknown'}"
-                )
-            if time.monotonic() >= deadline:
-                raise ProviderResponseError("Vivo story image task timed out before completion")
-            time.sleep(poll_interval)
+        payload = self._parse_response(stage="image_generation", response=response)
+        data = payload.get("data") or {}
+        if not isinstance(data, dict):
+            raise ProviderResponseError("Vivo story image response data is not a JSON object")
+        image_url = self._extract_image_url(data)
+        if not image_url:
+            raise ProviderResponseError("Vivo story image generation finished without image url")
+        model_name = _normalize_text(data.get("model")) or self.settings.storybook_image_model
+        output = {
+            "imagePrompt": prompt,
+            "imageUrl": image_url,
+            "assetRef": image_url,
+            "imageStatus": "ready",
+            "cacheHit": False,
+            "providerTraceId": _normalize_text(payload.get("trace_id")) or None,
+        }
+        get_storybook_runtime_cache().set(
+            cache_key,
+            {
+                "output": output,
+                "model": model_name,
+                "requestId": request_id,
+            },
+        )
+        return ProviderResult(
+            output=output,
+            provider=self.provider_name,
+            mode=self.mode_name,
+            source="vivo",
+            model=model_name,
+            request_id=request_id,
+        )
 
     def _require_credentials(self) -> tuple[str, str]:
         app_id = (self.settings.vivo_app_id or "").strip()
@@ -366,25 +311,10 @@ class VivoStoryImageProvider:
             )
         return app_id, app_key
 
-    def _build_headers(
-        self,
-        *,
-        app_id: str,
-        app_key: str,
-        method: str,
-        path: str,
-        query: dict[str, Any] | None = None,
-    ) -> dict[str, str]:
+    def _build_headers(self, *, app_key: str) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {app_key}",
             "Content-Type": "application/json; charset=utf-8",
-            **VivoLlmProvider._build_gateway_headers(
-                app_id=app_id,
-                app_key=app_key,
-                method=method,
-                uri=path,
-                query=query or {},
-            ),
         }
 
     def _parse_response(self, *, stage: str, response: requests.Response) -> dict[str, Any]:
@@ -398,10 +328,31 @@ class VivoStoryImageProvider:
         if response.status_code >= 400:
             message = _normalize_text(payload.get("msg") or payload.get("message")) or "http-error"
             raise ProviderResponseError(f"Vivo story image {stage} failed: {message}")
-        if not _is_success_code(payload.get("code")):
+        code = payload.get("code")
+        if not _is_success_code(code):
             message = _normalize_text(payload.get("msg") or payload.get("message")) or "business-error"
+            if str(code).strip() == "1002":
+                raise ProviderAuthenticationError(f"Vivo story image {stage} permission denied: {message}")
+            if str(code).strip() == "1003":
+                raise ProviderResponseError(f"Vivo story image {stage} rate limited: {message}")
+            if str(code).strip() == "1004":
+                raise ProviderResponseError(f"Vivo story image {stage} content moderation failed: {message}")
             raise ProviderResponseError(f"Vivo story image {stage} failed: {message}")
         return payload
+
+    @staticmethod
+    def _extract_image_url(data: dict[str, Any]) -> str:
+        images = data.get("images")
+        if isinstance(images, list):
+            for item in images:
+                if isinstance(item, dict):
+                    url = _normalize_text(item.get("url"))
+                    if url:
+                        return url
+                url = _normalize_text(item)
+                if url:
+                    return url
+        return _normalize_text(data.get("image"))
 
     @staticmethod
     def _try_parse_json(response: requests.Response) -> dict[str, Any]:
@@ -412,17 +363,6 @@ class VivoStoryImageProvider:
         if not isinstance(payload, dict):
             raise ProviderResponseError("Vivo story image response is not a JSON object")
         return payload
-
-    @staticmethod
-    def _build_user_account(*, child_id: str | None, story_id: str | None, scene_index: int) -> str:
-        seed = "::".join(
-            [
-                _normalize_text(child_id) or "child",
-                _normalize_text(story_id) or "story",
-                str(scene_index + 1),
-            ]
-        )
-        return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:32]
 
     def _url(self, path: str) -> str:
         return f"{self.settings.vivo_base_url.rstrip('/')}{path}"

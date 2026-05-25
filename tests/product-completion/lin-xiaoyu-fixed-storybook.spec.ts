@@ -146,7 +146,9 @@ test("c-1 fixed default does not block manual vivo storybook generation", async 
   ]);
 
   await expect(page.getByText(generatedTitle).first()).toBeVisible();
-  await expect(page.getByTestId("parent-storybook-ai-status")).toContainText("真实 AI 生成");
+  await expect(page.getByTestId("parent-storybook-text-status")).toContainText("文案：真实 AI");
+  await expect(page.getByTestId("parent-storybook-image-status")).toContainText("插图：真实插图");
+  await expect(page.getByTestId("parent-storybook-audio-status")).toContainText("朗读：真实 TTS");
   expect(generatedRequest.value?.childId).toBe("c-1");
   expect(generatedRequest.value?.pageCount).toBe(4);
   expect(generatedRequest.value?.generationMode).toBe("hybrid");
