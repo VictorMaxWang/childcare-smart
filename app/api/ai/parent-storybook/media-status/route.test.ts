@@ -14,7 +14,7 @@ import { POST } from "./route.ts";
 function withEnv(
   overrides: Partial<
     Record<
-      "BRAIN_API_BASE_URL" | "NEXT_PUBLIC_BACKEND_BASE_URL" | "VIVO_APP_ID" | "VIVO_APP_KEY" | "VIVO_BASE_URL",
+      "BRAIN_API_BASE_URL" | "NEXT_PUBLIC_BACKEND_BASE_URL" | "VIVO_APP_ID" | "VIVO_APP_KEY" | "VIVO_BASE_URL" | "STORYBOOK_IMAGE_RETRY_BACKOFF_MS",
       string | undefined
     >
   >,
@@ -26,6 +26,7 @@ function withEnv(
     VIVO_APP_ID: process.env.VIVO_APP_ID,
     VIVO_APP_KEY: process.env.VIVO_APP_KEY,
     VIVO_BASE_URL: process.env.VIVO_BASE_URL,
+    STORYBOOK_IMAGE_RETRY_BACKOFF_MS: process.env.STORYBOOK_IMAGE_RETRY_BACKOFF_MS,
   };
 
   for (const [key, value] of Object.entries(overrides)) {
@@ -181,6 +182,39 @@ function buildMediaStatusPayload(
   };
 }
 
+function buildAudioReadyStory(overrides: Partial<ParentStoryBookResponse> = {}) {
+  const story = buildProgressiveStory();
+  const baseDiagnostics = story.providerMeta.diagnostics!;
+  const overrideDiagnostics = overrides.providerMeta?.diagnostics;
+  return {
+    ...story,
+    ...overrides,
+    providerMeta: {
+      ...story.providerMeta,
+      ...(overrides.providerMeta ?? {}),
+      audioDelivery: "real" as const,
+      diagnostics: {
+        brain: overrideDiagnostics?.brain ?? baseDiagnostics.brain,
+        image: overrideDiagnostics?.image ?? baseDiagnostics.image,
+        audio: {
+          ...baseDiagnostics.audio,
+          ...(overrideDiagnostics?.audio ?? {}),
+          jobStatus: "ready",
+          pendingSceneCount: 0,
+          readySceneCount: story.scenes.length,
+          errorSceneCount: 0,
+        },
+      },
+    },
+    scenes: story.scenes.map((scene) => ({
+      ...scene,
+      audioUrl: scene.audioUrl ?? `/api/ai/parent-storybook/media/audio-${scene.sceneIndex}`,
+      audioRef: scene.audioRef ?? `audio-${scene.sceneIndex}`,
+      audioStatus: "ready" as const,
+    })),
+  } satisfies ParentStoryBookResponse;
+}
+
 function buildMediaStatusRouteRequest(payload: ParentStoryBookMediaStatusRequest) {
   return new Request("http://localhost:3000/api/ai/parent-storybook/media-status", {
     method: "POST",
@@ -326,6 +360,131 @@ test("parent storybook media-status route falls back to local media status when 
           "VIVO_APP_ID",
           "VIVO_APP_KEY",
         ]);
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("parent storybook media-status route backs off vivo image rate limits", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  const startedAt = Date.now();
+  const story = buildAudioReadyStory();
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    calls.push(url);
+    if (url.includes("/api/v1/agents/parent/storybook/media-status")) {
+      return new Response(JSON.stringify({ detail: "Not Found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(
+      JSON.stringify({ code: 1003, msg: "Rate limit exceeded for model Doubao-Seedream-4.5" }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+        VIVO_APP_ID: "app-id",
+        VIVO_APP_KEY: "app-key",
+        VIVO_BASE_URL: "https://api-ai.vivo.com.cn",
+        STORYBOOK_IMAGE_RETRY_BACKOFF_MS: "5000",
+      },
+      async () => {
+        const response = await POST(
+          buildMediaStatusRouteRequest(
+            buildMediaStatusPayload({
+              story,
+            })
+          )
+        );
+        const body = (await response.json()) as ParentStoryBookResponse;
+
+        assert.equal(response.status, 200);
+        assert.equal(calls.length, 2);
+        assert.match(calls[1], /\/api\/v1\/image_generation/u);
+        assert.equal(body.providerMeta.imageDelivery, "mixed");
+        assert.equal(body.providerMeta.audioDelivery, "real");
+        assert.equal(body.providerMeta.diagnostics?.image.rateLimited, true);
+        assert.equal(body.providerMeta.diagnostics?.image.retryAfterMs, 5000);
+        assert.ok((body.providerMeta.diagnostics?.image.nextRetryAtMs ?? 0) >= startedAt + 5000);
+        assert.match(body.providerMeta.diagnostics?.image.lastErrorReason ?? "", /1003/u);
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("parent storybook media-status route honors vivo image retry backoff", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  const nextRetryAtMs = Date.now() + 60_000;
+  const baseStory = buildProgressiveStory();
+  const baseDiagnostics = baseStory.providerMeta.diagnostics!;
+  const story = buildAudioReadyStory({
+    providerMeta: {
+      ...baseStory.providerMeta,
+      diagnostics: {
+        ...baseDiagnostics,
+        image: {
+          ...baseDiagnostics.image,
+          lastErrorStage: "next-vivo-image",
+          lastErrorReason: "vivo image generation failed: 1003 Rate limit exceeded",
+          retryAfterMs: 60_000,
+          nextRetryAtMs,
+          rateLimited: true,
+        },
+      },
+    },
+  });
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    calls.push(url);
+    if (url.includes("/api/v1/image_generation")) {
+      throw new Error("image generation should wait for retry backoff");
+    }
+    return new Response(JSON.stringify({ detail: "Not Found" }), {
+      status: 404,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+        VIVO_APP_ID: "app-id",
+        VIVO_APP_KEY: "app-key",
+        VIVO_BASE_URL: "https://api-ai.vivo.com.cn",
+      },
+      async () => {
+        const response = await POST(
+          buildMediaStatusRouteRequest(
+            buildMediaStatusPayload({
+              story,
+            })
+          )
+        );
+        const body = (await response.json()) as ParentStoryBookResponse;
+
+        assert.equal(response.status, 200);
+        assert.equal(calls.length, 1);
+        assert.equal(body.providerMeta.imageDelivery, "mixed");
+        assert.equal(body.providerMeta.diagnostics?.image.pendingSceneCount, 1);
+        assert.equal(body.providerMeta.diagnostics?.image.errorSceneCount, 0);
+        assert.equal(body.providerMeta.diagnostics?.image.rateLimited, true);
+        assert.equal(body.providerMeta.diagnostics?.image.nextRetryAtMs, nextRetryAtMs);
       }
     );
   } finally {

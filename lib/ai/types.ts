@@ -664,6 +664,9 @@ export interface ParentStoryBookDiagnosticsChannel {
   errorSceneCount?: number;
   lastErrorStage?: string | null;
   lastErrorReason?: string | null;
+  retryAfterMs?: number | null;
+  nextRetryAtMs?: number | null;
+  rateLimited?: boolean;
   elapsedMs?: number | null;
 }
 
