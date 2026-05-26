@@ -77,6 +77,9 @@ class ParentStoryBookDiagnosticsMedia(ParentStoryBookModel):
     error_scene_count: int = 0
     last_error_stage: str | None = None
     last_error_reason: str | None = None
+    retry_after_ms: int | None = None
+    next_retry_at_ms: int | None = None
+    rate_limited: bool = False
     elapsed_ms: int | None = None
 
 

@@ -64,7 +64,8 @@ type StoryBookControls = {
 
 const PAGE_COUNT_OPTIONS = [4, 5, 6, 8] as const satisfies readonly ParentStoryBookPageCount[];
 const MEDIA_POLL_INTERVAL_MS = 2_000;
-const MEDIA_POLL_MAX_ATTEMPTS = 24;
+const MEDIA_POLL_MAX_DELAY_MS = 70_000;
+const MEDIA_POLL_MAX_ATTEMPTS = 40;
 const STORYBOOK_USER_REQUEST_TIMEOUT_MS = 75_000;
 const STORYBOOK_MEDIA_POLL_TIMEOUT_MS = 50_000;
 const STORYBOOK_API_SAVE_TIMEOUT_MS = 5_000;
@@ -80,6 +81,18 @@ function buildMediaStatusPrioritySceneIndices(
     sceneIndex <= sceneCount &&
     list.indexOf(sceneIndex) === index
   );
+}
+
+function resolveMediaPollDelayMs(story: ParentStoryBookResponse) {
+  const imageNextRetryAtMs = story.providerMeta.diagnostics?.image?.nextRetryAtMs;
+  const retryAt = Number(imageNextRetryAtMs);
+  if (Number.isFinite(retryAt) && retryAt > Date.now()) {
+    return Math.min(
+      MEDIA_POLL_MAX_DELAY_MS,
+      Math.max(MEDIA_POLL_INTERVAL_MS, retryAt - Date.now() + 500)
+    );
+  }
+  return MEDIA_POLL_INTERVAL_MS;
 }
 
 function withClientTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
@@ -340,7 +353,7 @@ export default function ParentStoryBookPage() {
       pollAttemptRef.current += 1;
       backgroundMediaPollRef.current = true;
       setReloadToken((previousToken) => previousToken + 1);
-    }, MEDIA_POLL_INTERVAL_MS);
+    }, resolveMediaPollDelayMs(story));
 
     return () => window.clearTimeout(timer);
   }, [isRefreshing, story]);
@@ -501,7 +514,7 @@ export default function ParentStoryBookPage() {
         }
         backgroundMediaPollRef.current = true;
         setReloadToken((previousToken) => previousToken + 1);
-      }, MEDIA_POLL_INTERVAL_MS);
+      }, resolveMediaPollDelayMs(currentStory));
     }
 
     if (!backgroundMediaPoll && !bypassCache && !forceNetworkForManualOverride) {

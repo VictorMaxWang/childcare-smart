@@ -22,6 +22,8 @@ export const runtime = "nodejs";
 const ROLE_PARENT = "家长";
 const VIVO_IMAGE_GENERATION_PATH = "/api/v1/image_generation";
 const VIVO_IMAGE_GENERATION_MODULE = "aigc";
+const VIVO_IMAGE_RATE_LIMIT_BACKOFF_MS = 70_000;
+const VIVO_IMAGE_ERROR_BACKOFF_MS = 20_000;
 
 function resolveMediaStatusTimeoutMs() {
   const raw =
@@ -150,6 +152,28 @@ function normalizeErrorReason(error: unknown) {
   return error instanceof Error ? error.message : String(error || "unknown provider error");
 }
 
+function isVivoRateLimitError(errorReason: string | null | undefined) {
+  return /(?:\b1003\b|rate\s*limit|too many requests|限流|频率)/iu.test(
+    String(errorReason ?? "")
+  );
+}
+
+function resolveImageRetryBackoffMs(errorReason: string) {
+  const envValue = Number(process.env.STORYBOOK_IMAGE_RETRY_BACKOFF_MS);
+  const fallback = isVivoRateLimitError(errorReason)
+    ? VIVO_IMAGE_RATE_LIMIT_BACKOFF_MS
+    : VIVO_IMAGE_ERROR_BACKOFF_MS;
+  if (Number.isFinite(envValue) && envValue >= 1_000) {
+    return Math.max(1_000, Math.floor(envValue));
+  }
+  return fallback;
+}
+
+function readEpochMs(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 function resolveVivoImageUrl(baseUrl: string, path: string) {
   return new URL(path, `${baseUrl.replace(/\/+$/u, "")}/`);
 }
@@ -238,13 +262,35 @@ async function completeStoryMediaLocally(input: {
   const audioLiveEnabled = missingCoreEnv.length === 0;
   const prioritySceneIndices = normalizePrioritySceneIndices(story, input.payload.prioritySceneIndices);
   const scenesByIndex = new Map(story.scenes.map((scene, index) => [scene.sceneIndex, index]));
+  const previousDiagnostics = story.providerMeta.diagnostics;
+  const previousImageDiagnostics = previousDiagnostics?.image;
+  const previousImageRetryAtMs = readEpochMs(previousImageDiagnostics?.nextRetryAtMs);
+  const previousImageRateLimited = Boolean(
+    previousImageDiagnostics?.rateLimited ||
+      isVivoRateLimitError(previousImageDiagnostics?.lastErrorReason)
+  );
+  const imageBackoffActive = Boolean(
+    imageLiveEnabled &&
+      previousImageRetryAtMs &&
+      previousImageRetryAtMs > startedAt
+  );
+  const effectiveImageConcurrency = previousImageRateLimited ? 1 : imageConcurrency;
   let imageErrorCount = 0;
   let audioErrorCount = 0;
   let lastImageError: string | null = null;
   let lastAudioError: string | null = null;
+  let imageRetryAfterMs: number | null = imageBackoffActive && previousImageRetryAtMs
+    ? Math.max(previousImageRetryAtMs - startedAt, 1_000)
+    : null;
+  let imageNextRetryAtMs: number | null = imageBackoffActive && previousImageRetryAtMs
+    ? previousImageRetryAtMs
+    : null;
+  let imageRateLimited = imageBackoffActive || previousImageRateLimited;
 
   const imageCandidates = imageLiveEnabled
-    ? orderedScenes(story, prioritySceneIndices).filter((scene) => !isRealImageScene(scene)).slice(0, imageConcurrency)
+    ? imageBackoffActive
+      ? []
+      : orderedScenes(story, prioritySceneIndices).filter((scene) => !isRealImageScene(scene)).slice(0, effectiveImageConcurrency)
     : [];
   const audioCandidates = audioLiveEnabled
     ? orderedScenes(story, prioritySceneIndices).filter((scene) => !isRealAudioScene(scene)).slice(0, audioConcurrency)
@@ -267,6 +313,10 @@ async function completeStoryMediaLocally(input: {
     } catch (error) {
       imageErrorCount += 1;
       lastImageError = normalizeErrorReason(error);
+      const retryAfterMs = resolveImageRetryBackoffMs(lastImageError);
+      imageRetryAfterMs = Math.max(imageRetryAfterMs ?? 0, retryAfterMs);
+      imageNextRetryAtMs = Date.now() + retryAfterMs;
+      imageRateLimited = imageRateLimited || isVivoRateLimitError(lastImageError);
     }
   });
 
@@ -311,9 +361,11 @@ async function completeStoryMediaLocally(input: {
   const audioPendingSceneCount = audioLiveEnabled ? story.scenes.length - audioReadySceneCount : 0;
   const imageDelivery = resolveImageDelivery(story);
   const audioDelivery = resolveAudioDelivery(story);
-  const previousDiagnostics = story.providerMeta.diagnostics;
   const textIsReal = story.providerMeta.textDelivery === "real";
   const allReal = textIsReal && imageDelivery === "real" && audioDelivery === "real";
+  const imageLastErrorReason =
+    lastImageError ??
+    (imageBackoffActive ? previousImageDiagnostics?.lastErrorReason ?? null : null);
 
   story.fallback = !allReal;
   story.fallbackReason = textIsReal ? null : story.fallbackReason ?? story.providerMeta.fallbackReason ?? null;
@@ -351,8 +403,11 @@ async function completeStoryMediaLocally(input: {
         pendingSceneCount: imagePendingSceneCount,
         readySceneCount: imageReadySceneCount,
         errorSceneCount: imageErrorCount,
-        lastErrorStage: imageErrorCount > 0 ? "next-vivo-image" : null,
-        lastErrorReason: lastImageError,
+        lastErrorStage: imageErrorCount > 0 || imageBackoffActive ? "next-vivo-image" : null,
+        lastErrorReason: imageLastErrorReason,
+        retryAfterMs: imageRetryAfterMs,
+        nextRetryAtMs: imageNextRetryAtMs,
+        rateLimited: imageRateLimited,
         elapsedMs: Date.now() - startedAt,
       },
       audio: {
