@@ -39,7 +39,7 @@ from app.services.high_risk_consultation_contract import (
     normalize_high_risk_consultation_result,
 )
 from app.services.intent_router import route_intent
-from app.services.parent_storybook_service import run_parent_storybook
+from app.services.parent_storybook_service import run_parent_storybook, run_parent_storybook_media_status
 from app.services.parent_trend_service import run_parent_trend_query
 from app.services.react_runner import ReactRunner
 from app.services.streaming import encode_sse, mock_agent_stream
@@ -693,6 +693,15 @@ class Orchestrator:
             runner=run_parent_storybook,
             node_name="parent-storybook",
             snapshot_type="parent-storybook-result",
+        )
+
+    async def parent_storybook_media_status(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self._run_with_trace(
+            task="parent-storybook-media-status",
+            payload=payload,
+            runner=run_parent_storybook_media_status,
+            node_name="parent-storybook-media-status",
+            snapshot_type="parent-storybook-media-status-result",
         )
 
     async def health_file_bridge(self, payload: dict[str, Any]) -> dict[str, Any]:

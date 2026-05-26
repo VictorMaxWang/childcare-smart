@@ -135,7 +135,9 @@ class Settings(BaseSettings):
     storybook_image_provider: str = "mock"
     storybook_image_model: str = "Doubao-Seedream-4.5"
     storybook_image_size: str = "2K"
+    storybook_image_concurrency: int = 2
     storybook_audio_provider: str = "auto"
+    storybook_tts_concurrency: int = 4
     storybook_image_business_code: str = "pc"
     storybook_image_style_config: str = "4cbc9165bc615ea0815301116e7925a3"
     storybook_image_width: int = 768

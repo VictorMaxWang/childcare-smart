@@ -90,9 +90,11 @@ def _build_story_audio_cache_key(
     script: str,
     voice_style: str,
     settings: Settings,
+    child_id: str | None = None,
 ) -> str:
     seed = "::".join(
         [
+            _normalize_text(child_id),
             script,
             voice_style,
             settings.storybook_tts_engineid,
@@ -191,7 +193,7 @@ class VivoStoryAudioProvider:
         audio_script: str | None = None,
         voice_style: str | None = None,
     ) -> ProviderResult[dict[str, Any]] | None:
-        del story_mode, child_id, story_id
+        del story_mode, story_id
         script = audio_script or _build_mock_audio_script(
             child_name=child_name,
             scene_index=scene_index,
@@ -203,6 +205,7 @@ class VivoStoryAudioProvider:
             script=script,
             voice_style=resolved_voice_style,
             settings=self.settings,
+            child_id=child_id,
         )
         cached_result = get_storybook_runtime_cache().get(cache_key)
         if not cached_result:
@@ -247,6 +250,7 @@ class VivoStoryAudioProvider:
             script=script,
             voice_style=resolved_voice_style,
             settings=self.settings,
+            child_id=child_id,
         )
         cached_result = self.read_cached_scene(
             story_mode=story_mode,

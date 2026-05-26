@@ -26,6 +26,7 @@ import {
 } from "@/lib/agent/parent-storybook-demo-seeds";
 import type {
   ParentStoryBookGenerationMode,
+  ParentStoryBookMediaStatusRequest,
   ParentStoryBookPageCount,
   ParentStoryBookRequest,
   ParentStoryBookResponse,
@@ -67,6 +68,19 @@ const MEDIA_POLL_MAX_ATTEMPTS = 24;
 const STORYBOOK_USER_REQUEST_TIMEOUT_MS = 75_000;
 const STORYBOOK_MEDIA_POLL_TIMEOUT_MS = 50_000;
 const STORYBOOK_API_SAVE_TIMEOUT_MS = 5_000;
+
+function buildMediaStatusPrioritySceneIndices(
+  story: ParentStoryBookResponse,
+  activeSceneIndex: number
+) {
+  const sceneCount = story.scenes.length;
+  const candidates = [activeSceneIndex + 1, 1, activeSceneIndex + 2];
+  return candidates.filter((sceneIndex, index, list) =>
+    sceneIndex >= 1 &&
+    sceneIndex <= sceneCount &&
+    list.indexOf(sceneIndex) === index
+  );
+}
 
 function withClientTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
   let timeoutId: number | undefined;
@@ -139,6 +153,7 @@ export default function ParentStoryBookPage() {
   const networkOnlyRef = useRef(false);
   const refreshCurrentOnlyRef = useRef(false);
   const backgroundMediaPollRef = useRef(false);
+  const activeSceneIndexRef = useRef(0);
   const storyRef = useRef<ParentStoryBookResponse | null>(null);
   const requestRef = useRef<ParentStoryBookRequest | null>(null);
   const lastStoryLoadKeyRef = useRef<string | null>(null);
@@ -270,6 +285,9 @@ export default function ParentStoryBookPage() {
   }, [draftControls.preset, parentD01.invalidChildId, rawChildFromQuery, resolvedDemoSeedId, selectedFeed?.child.id]);
 
   useEffect(() => {
+    if (storyRef.current?.storyId !== story?.storyId) {
+      activeSceneIndexRef.current = 0;
+    }
     storyRef.current = story;
   }, [story]);
 
@@ -486,7 +504,7 @@ export default function ParentStoryBookPage() {
       }, MEDIA_POLL_INTERVAL_MS);
     }
 
-    if (!bypassCache && !forceNetworkForManualOverride) {
+    if (!backgroundMediaPoll && !bypassCache && !forceNetworkForManualOverride) {
       if (
         refreshCurrentOnly &&
         storyRef.current &&
@@ -601,12 +619,40 @@ export default function ParentStoryBookPage() {
           requestHeaders.set("x-smartchildcare-cache-bypass", "1");
         }
 
-        const response = await fetch("/api/ai/parent-storybook", {
-          method: "POST",
-          headers: requestHeaders,
-          body: JSON.stringify(activeRequest),
-          signal: controller.signal,
-        });
+        const mediaStatusStory = backgroundMediaPoll ? storyRef.current : null;
+        if (backgroundMediaPoll) {
+          if (
+            !mediaStatusStory ||
+            mediaStatusStory.childId !== activeRequestChildId ||
+            !shouldPollParentStoryBookMedia(mediaStatusStory)
+          ) {
+            return;
+          }
+        }
+        const mediaStatusPayload: ParentStoryBookMediaStatusRequest | null =
+          mediaStatusStory
+            ? {
+                childId: mediaStatusStory.childId,
+                storyId: mediaStatusStory.storyId,
+                prioritySceneIndices: buildMediaStatusPrioritySceneIndices(
+                  mediaStatusStory,
+                  activeSceneIndexRef.current
+                ),
+                retryFailed: true,
+                story: mediaStatusStory,
+              }
+            : null;
+        const response = await fetch(
+          backgroundMediaPoll
+            ? "/api/ai/parent-storybook/media-status"
+            : "/api/ai/parent-storybook",
+          {
+            method: "POST",
+            headers: requestHeaders,
+            body: JSON.stringify(mediaStatusPayload ?? activeRequest),
+            signal: controller.signal,
+          }
+        );
 
         if (!response.ok) {
           let detail = "";
@@ -633,6 +679,16 @@ export default function ParentStoryBookPage() {
 
         const data = (await response.json()) as ParentStoryBookResponse;
         if (cancelled) return;
+        if (backgroundMediaPoll) {
+          const currentStory = storyRef.current;
+          if (
+            !currentStory ||
+            data.storyId !== currentStory.storyId ||
+            data.childId !== currentStory.childId
+          ) {
+            return;
+          }
+        }
         if (
           requestRef.current?.childId &&
           activeRequestChildId &&
@@ -932,6 +988,19 @@ export default function ParentStoryBookPage() {
         networkOnlyRef.current = false;
         refreshCurrentOnlyRef.current = true;
         setReloadToken((previousToken) => previousToken + 1);
+      }}
+      onActiveSceneChange={(index) => {
+        if (activeSceneIndexRef.current === index) return;
+        activeSceneIndexRef.current = index;
+        const currentStory = storyRef.current;
+        if (
+          !isRefreshing &&
+          currentStory &&
+          shouldPollParentStoryBookMedia(currentStory)
+        ) {
+          backgroundMediaPollRef.current = true;
+          setReloadToken((previousToken) => previousToken + 1);
+        }
       }}
       onExportStorybook={(format) => {
         void handleExportStorybook(format);

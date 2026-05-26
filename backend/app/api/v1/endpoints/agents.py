@@ -12,7 +12,11 @@ from app.schemas.demand_insight import DemandInsightRequest, DemandInsightRespon
 from app.schemas.health_file_bridge import HealthFileBridgeRequest, HealthFileBridgeResponse
 from app.schemas.intent_router import IntentRouterRequest, IntentRouterResponse
 from app.schemas.parent_message import ParentMessageReflexionRequest, ParentMessageReflexionResponse
-from app.schemas.parent_storybook import ParentStoryBookRequest, ParentStoryBookResponse
+from app.schemas.parent_storybook import (
+    ParentStoryBookMediaStatusRequest,
+    ParentStoryBookRequest,
+    ParentStoryBookResponse,
+)
 from app.schemas.parent_trend import ParentTrendQueryRequest, ParentTrendQueryResponse
 from app.schemas.react_tools import ReactRunRequest, ReactRunResponse
 from app.services.orchestrator import Orchestrator, build_orchestrator
@@ -76,6 +80,18 @@ async def parent_storybook(
                 "fallbackReason": error.fallback_reason,
             },
         ) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return ParentStoryBookResponse.model_validate(result)
+
+
+@router.post("/agents/parent/storybook/media-status", response_model=ParentStoryBookResponse)
+async def parent_storybook_media_status(
+    payload: ParentStoryBookMediaStatusRequest,
+    orchestrator: Orchestrator = Depends(get_orchestrator),
+):
+    try:
+        result = await orchestrator.parent_storybook_media_status(payload.model_dump(mode="json", by_alias=True))
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return ParentStoryBookResponse.model_validate(result)

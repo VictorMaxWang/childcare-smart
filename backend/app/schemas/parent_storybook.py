@@ -210,3 +210,14 @@ class ParentStoryBookResponse(ParentStoryBookModel):
     style_preset: ParentStoryBookStylePreset | None = None
     provider_meta: ParentStoryBookProviderMeta
     scenes: list[ParentStoryBookScene] = Field(default_factory=list)
+
+
+class ParentStoryBookMediaStatusRequest(ParentStoryBookModel):
+    child_id: str = Field(validation_alias=AliasChoices("childId", "child_id"))
+    story_id: str = Field(validation_alias=AliasChoices("storyId", "story_id"))
+    priority_scene_indices: list[int] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("prioritySceneIndices", "priority_scene_indices"),
+    )
+    retry_failed: bool = Field(default=False, validation_alias=AliasChoices("retryFailed", "retry_failed"))
+    story: ParentStoryBookResponse
