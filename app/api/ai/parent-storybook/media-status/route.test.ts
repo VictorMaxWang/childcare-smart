@@ -367,6 +367,86 @@ test("parent storybook media-status route falls back to local media status when 
   }
 });
 
+test("parent storybook media-status route batches pending vivo images into one group task", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  let imageRequestBody: Record<string, unknown> | null = null;
+  const story = buildAudioReadyStory();
+  story.providerMeta.imageDelivery = "dynamic-fallback";
+  story.providerMeta.diagnostics!.image = {
+    ...story.providerMeta.diagnostics!.image,
+    jobStatus: "warming",
+    pendingSceneCount: 2,
+    readySceneCount: 0,
+    errorSceneCount: 0,
+  };
+  story.scenes = story.scenes.map((scene) => ({
+    ...scene,
+    imageUrl: `/api/ai/parent-storybook/media/fallback-${scene.sceneIndex}`,
+    assetRef: `/api/ai/parent-storybook/media/fallback-${scene.sceneIndex}`,
+    imageStatus: "fallback",
+    imageSourceKind: "dynamic-fallback",
+  }));
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    calls.push(url);
+    if (url.includes("/api/v1/agents/parent/storybook/media-status")) {
+      return new Response(JSON.stringify({ detail: "Not Found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    imageRequestBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    return new Response(
+      JSON.stringify({
+        code: 0,
+        message: "success",
+        data: {
+          images: [
+            { url: "https://cdn.example.com/group-1.png", size: "2048x2048" },
+            { url: "https://cdn.example.com/group-2.png", size: "2048x2048" },
+          ],
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+        VIVO_APP_ID: "app-id",
+        VIVO_APP_KEY: "app-key",
+        VIVO_BASE_URL: "https://api-ai.vivo.com.cn",
+      },
+      async () => {
+        const response = await POST(
+          buildMediaStatusRouteRequest(
+            buildMediaStatusPayload({
+              prioritySceneIndices: [1, 2],
+              story,
+            })
+          )
+        );
+        const body = (await response.json()) as ParentStoryBookResponse;
+
+        assert.equal(response.status, 200);
+        assert.equal(calls.filter((url) => url.includes("/api/v1/image_generation")).length, 1);
+        assert.equal((imageRequestBody?.parameters as { sequential_image_generation?: string })?.sequential_image_generation, "auto");
+        assert.match(String(imageRequestBody?.prompt ?? ""), /exactly 2/u);
+        assert.equal(body.providerMeta.imageDelivery, "real");
+        assert.equal(body.scenes[0].imageSourceKind, "real");
+        assert.equal(body.scenes[1].imageSourceKind, "real");
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("parent storybook media-status route backs off vivo image rate limits", async () => {
   const originalFetch = globalThis.fetch;
   const calls: string[] = [];
