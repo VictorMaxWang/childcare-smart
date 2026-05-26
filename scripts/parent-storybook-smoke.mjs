@@ -9,6 +9,7 @@ const loginEndpoint = `${baseUrl}/api/auth/demo-login`;
 const demoAccountId = process.env.STORYBOOK_SMOKE_DEMO_ACCOUNT_ID || "u-parent";
 const timeoutMs = Number(process.env.STORYBOOK_SMOKE_TIMEOUT_MS || 20000);
 const pollIntervalMs = Number(process.env.STORYBOOK_SMOKE_POLL_INTERVAL_MS || 2000);
+const maxPollDelayMs = Number(process.env.STORYBOOK_SMOKE_MAX_POLL_DELAY_MS || 90000);
 const maxPollAttempts = Number(process.env.STORYBOOK_SMOKE_MAX_POLLS || 18);
 const fixturePath = new URL(
   process.env.STORYBOOK_SMOKE_FIXTURE || "../backend/tests/fixtures/parent_storybook/page-recording-c1-bedtime.json",
@@ -47,6 +48,17 @@ function assert(condition, message) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolveMediaPollDelayMs(story) {
+  const retryAt = Number(story?.providerMeta?.diagnostics?.image?.nextRetryAtMs);
+  if (Number.isFinite(retryAt) && retryAt > Date.now()) {
+    return Math.min(
+      Math.max(maxPollDelayMs, pollIntervalMs),
+      Math.max(pollIntervalMs, retryAt - Date.now() + 500)
+    );
+  }
+  return pollIntervalMs;
 }
 
 function compactSnippet(value, length = 180) {
@@ -128,6 +140,8 @@ function printStorySummary(label, details) {
   console.log(`title: ${compactSnippet(details.json?.title, 120)}`);
   console.log(`first scene: ${compactSnippet(scenes[0]?.sceneText, 160)}`);
   console.log(`brain diagnostics: ${JSON.stringify(providerMeta.diagnostics?.brain || null)}`);
+  console.log(`image diagnostics: ${JSON.stringify(providerMeta.diagnostics?.image || null)}`);
+  console.log(`audio diagnostics: ${JSON.stringify(providerMeta.diagnostics?.audio || null)}`);
   console.log(
     `image job: ${providerMeta.diagnostics?.image?.jobStatus || "(missing)"}`
   );
@@ -423,7 +437,7 @@ async function main() {
 
     let latestStory = first.json;
     for (let attempt = 1; attempt <= maxPollAttempts; attempt += 1) {
-      await sleep(pollIntervalMs);
+      await sleep(resolveMediaPollDelayMs(latestStory));
       const polled = await postMediaStatus(cookie, latestStory, [1, 2, 3]);
       printStorySummary(`Poll ${attempt}`, polled);
       assertStorybookResponse(`poll ${attempt}`, polled);
