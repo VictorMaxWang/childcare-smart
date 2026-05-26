@@ -33,10 +33,12 @@ type ParentStoryBookRuntimeProviderMeta = ParentStoryBookResponse["providerMeta"
     image?: {
       jobStatus?: string | null;
       pendingSceneCount?: number;
+      liveEnabled?: boolean;
     } | null;
     audio?: {
       jobStatus?: string | null;
       pendingSceneCount?: number;
+      liveEnabled?: boolean;
     } | null;
   } | null;
 };
@@ -130,7 +132,27 @@ export function shouldBypassParentStoryBookCacheOnFirstLoad(
 export function shouldPollParentStoryBookMedia(
   story: ParentStoryBookResponse | null | undefined
 ) {
-  return hasActiveParentStoryBookMediaWarming(story);
+  if (!story) return false;
+  const runtime = story as ParentStoryBookRuntimeStory;
+  if (hasActiveParentStoryBookMediaWarming(runtime)) return true;
+
+  const imageDiagnostics = runtime.providerMeta.diagnostics?.image;
+  if (
+    imageDiagnostics?.liveEnabled &&
+    runtime.providerMeta.imageDelivery !== "real"
+  ) {
+    return true;
+  }
+
+  const audioDiagnostics = runtime.providerMeta.diagnostics?.audio;
+  if (
+    audioDiagnostics?.liveEnabled &&
+    runtime.providerMeta.audioDelivery !== "real"
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 export function readParentStoryBookCache(cacheKey: string) {

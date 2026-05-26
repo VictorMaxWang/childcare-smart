@@ -10,7 +10,11 @@ from time import perf_counter
 from app.providers.base import ProviderResponseError, ProviderResult, ProviderTextResult
 from app.services import parent_storybook_service
 from app.services.parent_storybook_llm import ParentStoryBookTextProviderError
-from app.services.parent_storybook_service import await_storybook_media_warming, run_parent_storybook
+from app.services.parent_storybook_service import (
+    await_storybook_media_warming,
+    run_parent_storybook,
+    run_parent_storybook_media_status,
+)
 from app.services.storybook_media_cache import get_storybook_media_cache
 from conftest import load_storybook_fixture
 
@@ -468,6 +472,194 @@ def test_parent_storybook_service_heavy_payload_returns_first_byte_without_waiti
     assert result["providerMeta"]["audioDelivery"] == "real"
     assert result["fallback"] is True
     assert result["providerMeta"]["textDelivery"] == "fallback"
+
+
+def test_parent_storybook_media_status_updates_media_without_regenerating_text(monkeypatch):
+    image_provider = _SceneProvider(provider_name="vivo-story-image", image_status="ready")
+    audio_provider = _SceneProvider(provider_name="vivo-story-tts", audio_status="ready")
+    get_storybook_media_cache()._entries.clear()
+
+    monkeypatch.setattr(
+        "app.services.parent_storybook_service.resolve_story_image_provider",
+        lambda settings: image_provider,
+    )
+    monkeypatch.setattr(
+        "app.services.parent_storybook_service.resolve_story_audio_provider",
+        lambda settings: audio_provider,
+    )
+
+    payload = _heavy_payload("media-status-no-text")
+    first = asyncio.run(run_parent_storybook(payload))
+    original_title = first["title"]
+    original_scene_texts = [scene["sceneText"] for scene in first["scenes"]]
+
+    assert first["providerMeta"]["diagnostics"]["image"]["jobStatus"] == "warming"
+    assert await_storybook_media_warming(first["storyId"], timeout_seconds=2.0) is True
+
+    def _fail_text_provider(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("media-status must not call the text provider")
+
+    monkeypatch.setattr(
+        "app.services.parent_storybook_service.generate_parent_storybook_text",
+        _fail_text_provider,
+    )
+
+    result = asyncio.run(
+        run_parent_storybook_media_status(
+            {
+                "childId": first["childId"],
+                "storyId": first["storyId"],
+                "prioritySceneIndices": [3, 1, 4],
+                "retryFailed": True,
+                "story": first,
+            }
+        )
+    )
+
+    assert result["storyId"] == first["storyId"]
+    assert result["title"] == original_title
+    assert [scene["sceneText"] for scene in result["scenes"]] == original_scene_texts
+    assert result["providerMeta"]["imageDelivery"] == "real"
+    assert result["providerMeta"]["audioDelivery"] == "real"
+    assert result["providerMeta"]["diagnostics"]["image"]["jobStatus"] == "ready"
+    assert result["providerMeta"]["diagnostics"]["audio"]["jobStatus"] == "ready"
+    assert all(scene["imageSourceKind"] == "real" for scene in result["scenes"])
+    assert all(scene["audioStatus"] == "ready" for scene in result["scenes"])
+
+
+def test_parent_storybook_media_status_schedules_only_non_real_media(monkeypatch):
+    image_provider = _SceneProvider(provider_name="vivo-story-image", image_status="ready")
+    audio_provider = _SceneProvider(provider_name="vivo-story-tts", audio_status="ready")
+    story = {
+        "storyId": "storybook-media-status-sparse",
+        "childId": "child-1",
+        "mode": "storybook",
+        "title": "Media status sparse story",
+        "summary": "Only one page still needs media.",
+        "moral": "Keep the text stable.",
+        "parentNote": "Retry only unfinished media.",
+        "source": "vivo",
+        "fallback": True,
+        "fallbackReason": None,
+        "generatedAt": "2026-05-26T00:00:00.000Z",
+        "stylePreset": "sunrise-watercolor",
+        "providerMeta": {
+            "provider": "vivo-llm",
+            "mode": "mixed",
+            "transport": "fastapi-brain",
+            "textProvider": "vivo-llm",
+            "textDelivery": "real",
+            "imageProvider": "vivo-story-image+storybook-dynamic-fallback",
+            "audioProvider": "vivo-story-tts+storybook-mock-preview",
+            "imageDelivery": "mixed",
+            "audioDelivery": "mixed",
+            "realProvider": True,
+            "highlightCount": 1,
+            "sceneCount": 3,
+            "cacheHitCount": 0,
+            "cacheWindowSeconds": 900,
+            "diagnostics": {},
+        },
+        "scenes": [
+            {
+                "sceneIndex": 1,
+                "sceneTitle": "Ready scene",
+                "sceneText": "Already real.",
+                "imagePrompt": "ready image",
+                "imageUrl": "https://cdn.example.com/ready.png",
+                "assetRef": "https://cdn.example.com/ready.png",
+                "imageStatus": "ready",
+                "imageSourceKind": "real",
+                "audioUrl": "https://cdn.example.com/ready.wav",
+                "audioRef": "ready-audio",
+                "audioScript": "Already real.",
+                "audioStatus": "ready",
+                "captionTiming": {"mode": "duration-derived", "segmentTexts": ["Already real."], "segmentDurationsMs": [1200]},
+                "voiceStyle": "warm-storytelling",
+                "highlightSource": "manualTheme",
+            },
+            {
+                "sceneIndex": 2,
+                "sceneTitle": "Fallback scene",
+                "sceneText": "Needs media.",
+                "imagePrompt": "needs image",
+                "imageUrl": "/api/ai/parent-storybook/media/fallback-2",
+                "assetRef": "/api/ai/parent-storybook/media/fallback-2",
+                "imageStatus": "ready",
+                "imageSourceKind": "dynamic-fallback",
+                "audioUrl": None,
+                "audioRef": "fallback-audio",
+                "audioScript": "Needs media.",
+                "audioStatus": "fallback",
+                "captionTiming": {"mode": "duration-derived", "segmentTexts": ["Needs media."], "segmentDurationsMs": [1200]},
+                "voiceStyle": "warm-storytelling",
+                "highlightSource": "manualTheme",
+            },
+            {
+                "sceneIndex": 3,
+                "sceneTitle": "Ready scene 3",
+                "sceneText": "Still already real.",
+                "imagePrompt": "ready image 3",
+                "imageUrl": "https://cdn.example.com/ready-3.png",
+                "assetRef": "https://cdn.example.com/ready-3.png",
+                "imageStatus": "ready",
+                "imageSourceKind": "real",
+                "audioUrl": "https://cdn.example.com/ready-3.wav",
+                "audioRef": "ready-audio-3",
+                "audioScript": "Still already real.",
+                "audioStatus": "ready",
+                "captionTiming": {"mode": "duration-derived", "segmentTexts": ["Still already real."], "segmentDurationsMs": [1200]},
+                "voiceStyle": "warm-storytelling",
+                "highlightSource": "manualTheme",
+            },
+        ],
+    }
+
+    monkeypatch.setattr(
+        "app.services.parent_storybook_service.resolve_story_image_provider",
+        lambda settings: image_provider,
+    )
+    monkeypatch.setattr(
+        "app.services.parent_storybook_service.resolve_story_audio_provider",
+        lambda settings: audio_provider,
+    )
+
+    result = asyncio.run(
+        run_parent_storybook_media_status(
+            {
+                "childId": story["childId"],
+                "storyId": story["storyId"],
+                "prioritySceneIndices": [2, 1],
+                "retryFailed": True,
+                "story": story,
+            }
+        )
+    )
+    assert await_storybook_media_warming(story["storyId"], timeout_seconds=2.0) is True
+
+    assert [call["scene_index"] for call in image_provider.calls] == [1]
+    assert [call["scene_index"] for call in audio_provider.calls] == [1]
+    assert result["title"] == story["title"]
+    assert result["scenes"][1]["imageSourceKind"] == "dynamic-fallback"
+    assert result["providerMeta"]["diagnostics"]["image"]["pendingSceneCount"] == 1
+    assert result["providerMeta"]["diagnostics"]["audio"]["pendingSceneCount"] == 1
+
+
+def test_parent_storybook_media_priority_prefers_active_first_next_then_rest():
+    scene_requests = [
+        {"sceneIndex": 1},
+        {"sceneIndex": 2},
+        {"sceneIndex": 3},
+        {"sceneIndex": 4},
+    ]
+
+    ordered = parent_storybook_service._prioritize_storybook_media_scene_requests(
+        scene_requests,
+        priority_scene_indices=[4, 1, 3],
+    )
+
+    assert [item["sceneIndex"] for item in ordered] == [4, 1, 3, 2]
 
 
 def test_parent_storybook_service_heavy_payload_warms_into_mixed(monkeypatch):

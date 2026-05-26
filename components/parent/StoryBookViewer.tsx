@@ -1253,6 +1253,7 @@ export default function StoryBookViewer({
   onCustomStyleNegativePromptChange,
   onGenerate,
   onRetry,
+  onActiveSceneChange,
   onExportStorybook,
   onShareStorybook,
   parentHref = "/parent",
@@ -1289,6 +1290,7 @@ export default function StoryBookViewer({
   onCustomStyleNegativePromptChange: (value: string) => void;
   onGenerate: () => void;
   onRetry?: () => void;
+  onActiveSceneChange?: (index: number) => void;
   onExportStorybook?: (format: StorybookExportFormat) => void;
   onShareStorybook?: () => void;
   parentHref?: string;
@@ -1367,6 +1369,7 @@ export default function StoryBookViewer({
       theme={theme}
       paged={lockedStorybook?.paged ?? false}
       onRuntimeStateChange={setSceneRuntimeState}
+      onActiveSceneChange={onActiveSceneChange}
     />
   );
   const previewScenes = story?.scenes.slice(0, 3) ?? [];
@@ -2017,11 +2020,13 @@ function StoryBookSceneStream({
   theme,
   paged = false,
   onRuntimeStateChange,
+  onActiveSceneChange,
 }: {
   story: ParentStoryBookResponse;
   theme: StoryBookTheme;
   paged?: boolean;
   onRuntimeStateChange?: (state: StoryBookSceneRuntimeState) => void;
+  onActiveSceneChange?: (index: number) => void;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -2068,6 +2073,10 @@ function StoryBookSceneStream({
       imageFallbackMap,
     });
   }, [imageFallbackMap, onRuntimeStateChange, playbackSceneIndex, playbackSource, story.storyId]);
+
+  useEffect(() => {
+    onActiveSceneChange?.(activeIndex);
+  }, [activeIndex, onActiveSceneChange]);
 
   function invalidate() {
     tokenRef.current += 1;

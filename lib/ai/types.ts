@@ -783,6 +783,14 @@ export interface ParentStoryBookResponse {
   cacheMeta?: ParentStoryBookCacheMeta;
 }
 
+export interface ParentStoryBookMediaStatusRequest {
+  childId: string;
+  storyId: string;
+  prioritySceneIndices?: number[];
+  retryFailed?: boolean;
+  story: ParentStoryBookResponse;
+}
+
 export type ParentTrendIntent = "emotion" | "diet" | "sleep" | "health" | "growth_overall";
 export type ParentTrendLabel = "改善" | "波动" | "稳定" | "需关注";
 export type ParentTrendDirection = "up" | "down" | "flat" | "insufficient";

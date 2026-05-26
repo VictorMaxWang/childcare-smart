@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const baseUrl = String(process.env.AI_SMOKE_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
 const endpoint = `${baseUrl}/api/ai/parent-storybook`;
+const mediaStatusEndpoint = `${baseUrl}/api/ai/parent-storybook/media-status`;
 const loginEndpoint = `${baseUrl}/api/auth/demo-login`;
 const demoAccountId = process.env.STORYBOOK_SMOKE_DEMO_ACCOUNT_ID || "u-parent";
 const timeoutMs = Number(process.env.STORYBOOK_SMOKE_TIMEOUT_MS || 20000);
@@ -212,6 +213,24 @@ async function postStory(cookie, headers = {}) {
   return readResponseDetails(response);
 }
 
+async function postMediaStatus(cookie, story, prioritySceneIndices = [1, 2]) {
+  const response = await fetchWithTimeout(mediaStatusEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: cookie,
+    },
+    body: JSON.stringify({
+      childId: story.childId,
+      storyId: story.storyId,
+      prioritySceneIndices,
+      retryFailed: true,
+      story,
+    }),
+  });
+  return readResponseDetails(response);
+}
+
 function assertStorybookResponse(label, details) {
   if (!details.ok) {
     if (details.status === 503) {
@@ -362,6 +381,7 @@ function isWarmEnough(details) {
 
 async function main() {
   console.log(`Storybook smoke target: ${endpoint}`);
+  console.log(`Storybook media-status target: ${mediaStatusEndpoint}`);
   console.log(`Storybook smoke page: ${pageUrl}`);
   console.log(`Storybook smoke fixture: ${fixturePath.pathname}`);
   console.log(`Storybook smoke demo account: ${demoAccountId}`);
@@ -401,14 +421,13 @@ async function main() {
 
     assertRemoteProxy(first, "first request");
 
+    let latestStory = first.json;
     for (let attempt = 1; attempt <= maxPollAttempts; attempt += 1) {
       await sleep(pollIntervalMs);
-      const polled = await postStory(
-        cookie,
-        requireRealImages ? {} : { "x-smartchildcare-cache-bypass": "1" }
-      );
+      const polled = await postMediaStatus(cookie, latestStory, [1, 2, 3]);
       printStorySummary(`Poll ${attempt}`, polled);
       assertStorybookResponse(`poll ${attempt}`, polled);
+      latestStory = polled.json;
 
       if (requireRealText) {
         assertRealTextGeneration(polled, `poll ${attempt}`);

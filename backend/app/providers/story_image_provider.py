@@ -82,9 +82,16 @@ def _build_story_image_cache_key(
     prompt: str,
     model: str,
     size: str,
+    child_id: str | None = None,
+    story_id: str | None = None,
+    scene_text: str | None = None,
 ) -> str:
+    scene_text_hash = hashlib.sha256(_normalize_text(scene_text).encode("utf-8")).hexdigest()[:16]
     seed = "::".join(
         [
+            _normalize_text(child_id),
+            _normalize_text(story_id),
+            scene_text_hash,
             prompt,
             model,
             size,
@@ -172,7 +179,7 @@ class VivoStoryImageProvider:
         class_name: str | None = None,
         image_prompt: str | None = None,
     ) -> ProviderResult[dict[str, Any]] | None:
-        del story_mode, scene_index, child_id, story_id
+        del story_mode, scene_index
         prompt = _ensure_no_text_image_prompt(
             image_prompt
             or _build_default_prompt(
@@ -186,6 +193,9 @@ class VivoStoryImageProvider:
             prompt=prompt,
             model=self.settings.storybook_image_model,
             size=self.settings.storybook_image_size,
+            child_id=child_id,
+            story_id=story_id,
+            scene_text=scene_text,
         )
         cached_result = get_storybook_runtime_cache().get(cache_key)
         if not cached_result:
@@ -232,6 +242,9 @@ class VivoStoryImageProvider:
             prompt=prompt,
             model=self.settings.storybook_image_model,
             size=self.settings.storybook_image_size,
+            child_id=child_id,
+            story_id=story_id,
+            scene_text=scene_text,
         )
         cached_result = self.read_cached_scene(
             story_mode=story_mode,

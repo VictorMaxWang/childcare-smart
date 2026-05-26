@@ -103,6 +103,14 @@ STORYBOOK_MEDIA_WARM_PRIORITY_SCENE_COUNT = 2
 STORYBOOK_AUDIO_PRIORITY_SYNC_TIMEOUT_SECONDS = 0.3
 STORYBOOK_FIRST_BYTE_HIGHLIGHT_LIMIT = 4
 
+
+def _bounded_concurrency(value: Any, *, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, min(maximum, parsed))
+
 MediaWarmJobStatus = Literal["disabled", "idle", "warming", "ready", "partial", "error"]
 
 
@@ -2053,13 +2061,22 @@ def _complete_storybook_media_warm_job(story_id: str) -> None:
 
 def _prioritize_storybook_media_scene_requests(
     scene_requests: list[dict[str, Any]],
+    priority_scene_indices: list[int] | None = None,
 ) -> list[dict[str, Any]]:
+    priority_order: dict[int, int] = {}
+    for index in priority_scene_indices or []:
+        try:
+            scene_index = int(index)
+        except (TypeError, ValueError):
+            continue
+        if scene_index >= 1 and scene_index not in priority_order:
+            priority_order[scene_index] = len(priority_order)
+
     return sorted(
         scene_requests,
         key=lambda scene_request: (
-            0
-            if int(scene_request["sceneIndex"]) <= STORYBOOK_MEDIA_WARM_PRIORITY_SCENE_COUNT
-            else 1,
+            priority_order.get(int(scene_request["sceneIndex"]), 10_000),
+            0 if int(scene_request["sceneIndex"]) <= STORYBOOK_MEDIA_WARM_PRIORITY_SCENE_COUNT else 1,
             int(scene_request["sceneIndex"]),
         ),
     )
@@ -2116,38 +2133,86 @@ def _warm_storybook_media_job(
     audio_provider: Any,
     image_pending_scene_indices: set[int],
     audio_pending_scene_indices: set[int],
+    priority_scene_indices: list[int] | None = None,
 ) -> None:
     try:
-        prioritized_scene_requests = _prioritize_storybook_media_scene_requests(scene_requests)
-        warm_tasks: list[tuple[Literal["image", "audio"], Any, dict[str, Any]]] = []
+        prioritized_scene_requests = _prioritize_storybook_media_scene_requests(
+            scene_requests,
+            priority_scene_indices=priority_scene_indices,
+        )
+        image_tasks: list[tuple[Literal["image"], Any, dict[str, Any]]] = []
+        audio_tasks: list[tuple[Literal["audio"], Any, dict[str, Any]]] = []
 
         for scene_request in prioritized_scene_requests:
             scene_index = int(scene_request["sceneIndex"])
             if scene_index in image_pending_scene_indices:
-                warm_tasks.append(("image", image_provider, scene_request["image_kwargs"]))
+                image_tasks.append(("image", image_provider, scene_request["image_kwargs"]))
             if scene_index in audio_pending_scene_indices:
-                warm_tasks.append(("audio", audio_provider, scene_request["audio_kwargs"]))
+                audio_tasks.append(("audio", audio_provider, scene_request["audio_kwargs"]))
 
-        if not warm_tasks:
+        if not image_tasks and not audio_tasks:
             return
 
-        max_workers = max(1, min(STORYBOOK_MEDIA_WARM_MAX_WORKERS, len(warm_tasks)))
-        with ThreadPoolExecutor(
-            max_workers=max_workers,
-            thread_name_prefix="storybook-media-warm",
-        ) as executor:
-            futures = [
-                executor.submit(
-                    _run_storybook_media_warm_task,
-                    story_id=story_id,
-                    media_kind=media_kind,
-                    provider=provider,
-                    kwargs=kwargs,
+        settings = get_settings()
+        image_workers = min(
+            len(image_tasks),
+            _bounded_concurrency(
+                getattr(settings, "storybook_image_concurrency", None),
+                default=2,
+                minimum=1,
+                maximum=3,
+            ),
+        )
+        audio_workers = min(
+            len(audio_tasks),
+            _bounded_concurrency(
+                getattr(settings, "storybook_tts_concurrency", None),
+                default=4,
+                minimum=1,
+                maximum=4,
+            ),
+        )
+        futures: list[Future[Any]] = []
+        image_executor: ThreadPoolExecutor | None = None
+        audio_executor: ThreadPoolExecutor | None = None
+        try:
+            if image_workers > 0:
+                image_executor = ThreadPoolExecutor(
+                    max_workers=image_workers,
+                    thread_name_prefix="storybook-image-warm",
                 )
-                for media_kind, provider, kwargs in warm_tasks
-            ]
+                futures.extend(
+                    image_executor.submit(
+                        _run_storybook_media_warm_task,
+                        story_id=story_id,
+                        media_kind=media_kind,
+                        provider=provider,
+                        kwargs=kwargs,
+                    )
+                    for media_kind, provider, kwargs in image_tasks
+                )
+            if audio_workers > 0:
+                audio_executor = ThreadPoolExecutor(
+                    max_workers=audio_workers,
+                    thread_name_prefix="storybook-audio-warm",
+                )
+                futures.extend(
+                    audio_executor.submit(
+                        _run_storybook_media_warm_task,
+                        story_id=story_id,
+                        media_kind=media_kind,
+                        provider=provider,
+                        kwargs=kwargs,
+                    )
+                    for media_kind, provider, kwargs in audio_tasks
+                )
             for future in as_completed(futures):
                 future.result()
+        finally:
+            if image_executor is not None:
+                image_executor.shutdown(wait=True, cancel_futures=False)
+            if audio_executor is not None:
+                audio_executor.shutdown(wait=True, cancel_futures=False)
     finally:
         _complete_storybook_media_warm_job(story_id)
 
@@ -2164,6 +2229,7 @@ def _ensure_storybook_media_warming(
     audio_ready_scene_count: int,
     image_pending_scene_indices: set[int],
     audio_pending_scene_indices: set[int],
+    priority_scene_indices: list[int] | None = None,
 ) -> _StoryBookMediaWarmJob | None:
     if not image_live_enabled and not audio_live_enabled:
         return None
@@ -2205,6 +2271,7 @@ def _ensure_storybook_media_warming(
             audio_provider=audio_provider,
             image_pending_scene_indices=set(image_pending_scene_indices),
             audio_pending_scene_indices=set(audio_pending_scene_indices),
+            priority_scene_indices=list(priority_scene_indices or []),
         )
         _storybook_media_warm_jobs[story_id] = job
         return job
@@ -2530,6 +2597,207 @@ def _resolve_audio_delivery(scenes: list[dict[str, Any]]) -> Literal["real", "mi
     return "mixed"
 
 
+def _normalize_priority_scene_indices(values: Any, scene_count: int) -> list[int]:
+    ordered: list[int] = []
+    for raw_value in values or []:
+        try:
+            scene_index = int(raw_value)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= scene_index <= scene_count and scene_index not in ordered:
+            ordered.append(scene_index)
+    for scene_index in range(1, min(STORYBOOK_MEDIA_WARM_PRIORITY_SCENE_COUNT, scene_count) + 1):
+        if scene_index not in ordered:
+            ordered.append(scene_index)
+    return ordered
+
+
+def _scene_is_real_image(scene: dict[str, Any]) -> bool:
+    return (
+        scene.get("imageSourceKind") == "real"
+        and scene.get("imageStatus") == "ready"
+        and bool(scene.get("imageUrl"))
+    )
+
+
+def _scene_is_real_audio(scene: dict[str, Any]) -> bool:
+    return scene.get("audioStatus") == "ready" and bool(scene.get("audioUrl"))
+
+
+async def run_parent_storybook_media_status(payload: dict[str, Any]) -> dict[str, Any]:
+    request_started_at = monotonic()
+    story = dict(payload.get("story") or {})
+    story_id = _normalize_text(payload.get("storyId") or payload.get("story_id") or story.get("storyId"))
+    child_id = _normalize_text(payload.get("childId") or payload.get("child_id") or story.get("childId"))
+    if not story_id:
+        raise ValueError("storyId is required for storybook media status")
+    if not child_id:
+        raise ValueError("childId is required for storybook media status")
+    if _normalize_text(story.get("storyId")) != story_id:
+        raise ValueError("storybook media status storyId mismatch")
+    if _normalize_text(story.get("childId")) != child_id:
+        raise ValueError("storybook media status childId mismatch")
+
+    scenes_input = story.get("scenes")
+    if not isinstance(scenes_input, list) or not scenes_input:
+        raise ValueError("storybook media status requires scenes")
+
+    settings = get_settings()
+    fallback_image_provider = MockStoryImageProvider()
+    fallback_audio_provider = MockStoryAudioProvider()
+    story_mode = _normalize_text(story.get("mode")) or "storybook"
+    image_provider = resolve_story_image_provider(settings) if story_mode == "storybook" else fallback_image_provider
+    audio_provider = resolve_story_audio_provider(settings) if story_mode == "storybook" else fallback_audio_provider
+    image_live_enabled = _resolve_media_live_enabled(settings=settings, provider=image_provider, media_kind="image")
+    audio_live_enabled = _resolve_media_live_enabled(settings=settings, provider=audio_provider, media_kind="audio")
+    retry_failed = bool(payload.get("retryFailed") or payload.get("retry_failed"))
+    priority_scene_indices = _normalize_priority_scene_indices(
+        payload.get("prioritySceneIndices") or payload.get("priority_scene_indices"),
+        len(scenes_input),
+    )
+
+    scenes: list[dict[str, Any]] = []
+    scene_requests: list[dict[str, Any]] = []
+    image_pending_scene_indices: set[int] = set()
+    audio_pending_scene_indices: set[int] = set()
+    image_cache_hit_count = 0
+    audio_cache_hit_count = 0
+
+    for raw_scene in scenes_input:
+        if not isinstance(raw_scene, dict):
+            continue
+        scene = dict(raw_scene)
+        scene_index = int(scene.get("sceneIndex") or len(scenes) + 1)
+        zero_based_scene_index = scene_index - 1
+        image_kwargs = {
+            "story_mode": story_mode,
+            "scene_index": zero_based_scene_index,
+            "child_name": "小朋友",
+            "scene_title": scene.get("sceneTitle") or "",
+            "scene_text": scene.get("sceneText") or "",
+            "child_id": child_id,
+            "story_id": story_id,
+            "class_name": None,
+            "image_prompt": scene.get("imagePrompt") or "",
+        }
+        audio_kwargs = {
+            "story_mode": story_mode,
+            "scene_index": zero_based_scene_index,
+            "child_name": "小朋友",
+            "scene_title": scene.get("sceneTitle") or "",
+            "scene_text": scene.get("sceneText") or "",
+            "child_id": child_id,
+            "story_id": story_id,
+            "audio_script": scene.get("audioScript") or scene.get("sceneText") or "",
+            "voice_style": scene.get("voiceStyle") or "",
+        }
+
+        if image_live_enabled and not _scene_is_real_image(scene):
+            cached_image_result = _read_cached_scene(provider=image_provider, kwargs=image_kwargs)
+            if cached_image_result is not None and _scene_has_real_image(cached_image_result):
+                scene["imageUrl"] = cached_image_result.output.get("imageUrl")
+                scene["assetRef"] = cached_image_result.output.get("assetRef") or scene["imageUrl"]
+                scene["imageStatus"] = "ready"
+                scene["imageSourceKind"] = "real"
+                scene["imageCacheHit"] = True
+                image_cache_hit_count += 1
+
+        if audio_live_enabled and not _scene_is_real_audio(scene):
+            cached_audio_result = _read_cached_scene(provider=audio_provider, kwargs=audio_kwargs)
+            if cached_audio_result is not None and _scene_has_real_audio(cached_audio_result):
+                audio_url, audio_ref = _maybe_store_audio_asset(
+                    story_id=story_id,
+                    scene_index=zero_based_scene_index,
+                    audio_script=cached_audio_result.output.get("audioScript") or audio_kwargs["audio_script"],
+                    voice_style=cached_audio_result.output.get("voiceStyle") or audio_kwargs["voice_style"],
+                    audio_status=cached_audio_result.output.get("audioStatus", "ready"),
+                    audio_result=cached_audio_result,
+                )
+                scene["audioUrl"] = audio_url
+                scene["audioRef"] = audio_ref or cached_audio_result.output.get("audioRef")
+                scene["audioStatus"] = "ready"
+                scene["captionTiming"] = cached_audio_result.output.get("captionTiming") or scene.get("captionTiming")
+                scene["engineId"] = _normalize_text(cached_audio_result.output.get("engineId")) or scene.get("engineId")
+                scene["voiceName"] = _normalize_text(cached_audio_result.output.get("voiceName")) or scene.get("voiceName")
+                scene["audioCacheHit"] = True
+                audio_cache_hit_count += 1
+
+        if image_live_enabled and not _scene_is_real_image(scene) and (retry_failed or scene.get("imageStatus") != "ready"):
+            image_pending_scene_indices.add(scene_index)
+        if audio_live_enabled and not _scene_is_real_audio(scene) and (retry_failed or scene.get("audioStatus") != "ready"):
+            audio_pending_scene_indices.add(scene_index)
+
+        scenes.append(scene)
+        scene_requests.append(
+            {
+                "sceneIndex": scene_index,
+                "scene": scene,
+                "image_kwargs": image_kwargs,
+                "audio_kwargs": audio_kwargs,
+            }
+        )
+
+    _ensure_storybook_media_warming(
+        story_id=story_id,
+        scene_requests=scene_requests,
+        image_provider=image_provider,
+        audio_provider=audio_provider,
+        image_live_enabled=image_live_enabled,
+        audio_live_enabled=audio_live_enabled,
+        image_ready_scene_count=sum(1 for scene in scenes if _scene_is_real_image(scene)),
+        audio_ready_scene_count=sum(1 for scene in scenes if _scene_is_real_audio(scene)),
+        image_pending_scene_indices=image_pending_scene_indices,
+        audio_pending_scene_indices=audio_pending_scene_indices,
+        priority_scene_indices=priority_scene_indices,
+    )
+
+    image_source_kinds = [str(scene.get("imageSourceKind") or "svg-fallback") for scene in scenes]
+    image_delivery = _resolve_image_delivery(image_source_kinds)
+    audio_delivery = _resolve_audio_delivery(scenes)
+    media_provider_mode = _provider_mode_from_scenes(scenes)
+    provider_meta = dict(story.get("providerMeta") or {})
+    diagnostics = _resolve_media_diagnostics(
+        story_id=story_id,
+        settings=settings,
+        image_provider=image_provider,
+        audio_provider=audio_provider,
+        scenes=scenes,
+        request_elapsed_ms=_elapsed_ms(request_started_at),
+    )
+    previous_diagnostics = provider_meta.get("diagnostics") if isinstance(provider_meta.get("diagnostics"), dict) else {}
+    previous_brain = previous_diagnostics.get("brain") if isinstance(previous_diagnostics.get("brain"), dict) else {}
+    diagnostics["brain"] = {
+        **previous_brain,
+        "reachable": bool(previous_brain.get("reachable", True)),
+        "fallbackReason": previous_brain.get("fallbackReason"),
+    }
+
+    all_real = media_provider_mode == "live" and provider_meta.get("textDelivery") == "real"
+    story["scenes"] = scenes
+    story["fallback"] = not all_real
+    story["fallbackReason"] = provider_meta.get("fallbackReason") if provider_meta.get("textDelivery") != "real" else None
+    story["providerMeta"] = {
+        **provider_meta,
+        "mode": "live" if all_real else "mixed" if media_provider_mode in {"live", "mixed"} else provider_meta.get("mode", "mixed"),
+        "imageProvider": _resolve_scene_image_provider_label(
+            getattr(image_provider, "provider_name", "storybook-asset"),
+            image_source_kinds,
+        ),
+        "audioProvider": _provider_label(
+            primary_name=getattr(audio_provider, "provider_name", "storybook-mock-preview"),
+            fallback_name=fallback_audio_provider.provider_name,
+            scenes=scenes,
+            status_key="audioStatus",
+        ),
+        "imageDelivery": image_delivery,
+        "audioDelivery": audio_delivery,
+        "realProvider": bool(provider_meta.get("realProvider")) or media_provider_mode in {"live", "mixed"},
+        "cacheHitCount": int(provider_meta.get("cacheHitCount") or 0) + image_cache_hit_count + audio_cache_hit_count,
+        "diagnostics": diagnostics,
+    }
+    return story
+
+
 async def run_parent_storybook(payload: dict[str, Any]) -> dict[str, Any]:
     request_started_at = monotonic()
     payload_trim_started_at = request_started_at
@@ -2737,6 +3005,7 @@ async def run_parent_storybook(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         image_pending_scene_indices=image_pending_scene_indices,
         audio_pending_scene_indices=audio_pending_scene_indices,
+        priority_scene_indices=list(range(1, min(STORYBOOK_MEDIA_WARM_PRIORITY_SCENE_COUNT, len(scene_requests)) + 1)),
     )
     warm_submit_ms = _elapsed_ms(warm_submit_started_at)
 
