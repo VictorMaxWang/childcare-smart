@@ -12,12 +12,20 @@ import {
 import { POST } from "./route.ts";
 
 function withEnv(
-  overrides: Partial<Record<"BRAIN_API_BASE_URL" | "NEXT_PUBLIC_BACKEND_BASE_URL", string | undefined>>,
+  overrides: Partial<
+    Record<
+      "BRAIN_API_BASE_URL" | "NEXT_PUBLIC_BACKEND_BASE_URL" | "VIVO_APP_ID" | "VIVO_APP_KEY" | "VIVO_BASE_URL",
+      string | undefined
+    >
+  >,
   fn: () => void | Promise<void>
 ) {
   const previous = {
     BRAIN_API_BASE_URL: process.env.BRAIN_API_BASE_URL,
     NEXT_PUBLIC_BACKEND_BASE_URL: process.env.NEXT_PUBLIC_BACKEND_BASE_URL,
+    VIVO_APP_ID: process.env.VIVO_APP_ID,
+    VIVO_APP_KEY: process.env.VIVO_APP_KEY,
+    VIVO_BASE_URL: process.env.VIVO_BASE_URL,
   };
 
   for (const [key, value] of Object.entries(overrides)) {
@@ -274,6 +282,50 @@ test("parent storybook media-status route forwards media-only polling without st
         assert.equal(body.title, "Progressive story text");
         assert.equal(body.providerMeta.imageDelivery, "real");
         assert.equal(body.providerMeta.audioDelivery, "real");
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("parent storybook media-status route falls back to local media status when backend route is missing", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    calls.push(url);
+    return new Response(JSON.stringify({ detail: "Not Found" }), {
+      status: 404,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+        VIVO_APP_ID: undefined,
+        VIVO_APP_KEY: undefined,
+        VIVO_BASE_URL: undefined,
+      },
+      async () => {
+        const response = await POST(buildMediaStatusRouteRequest(buildMediaStatusPayload()));
+        const body = (await response.json()) as ParentStoryBookResponse;
+
+        assert.equal(response.status, 200);
+        assert.equal(calls.length, 1);
+        assert.equal(response.headers.get(SMARTCHILDCARE_TRANSPORT_HEADER), "next-json-fallback");
+        assert.equal(body.title, "Progressive story text");
+        assert.equal(body.providerMeta.textDelivery, "real");
+        assert.equal(body.providerMeta.imageDelivery, "mixed");
+        assert.equal(body.providerMeta.audioDelivery, "mixed");
+        assert.deepEqual(body.providerMeta.diagnostics?.image.missingConfig, [
+          "VIVO_APP_ID",
+          "VIVO_APP_KEY",
+        ]);
       }
     );
   } finally {
