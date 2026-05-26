@@ -24,6 +24,7 @@ const VIVO_IMAGE_GENERATION_PATH = "/api/v1/image_generation";
 const VIVO_IMAGE_GENERATION_MODULE = "aigc";
 const VIVO_IMAGE_RATE_LIMIT_BACKOFF_MS = 70_000;
 const VIVO_IMAGE_ERROR_BACKOFF_MS = 20_000;
+const VIVO_IMAGE_GROUP_BATCH_SIZE = 4;
 
 function resolveMediaStatusTimeoutMs() {
   const raw =
@@ -178,21 +179,27 @@ function resolveVivoImageUrl(baseUrl: string, path: string) {
   return new URL(path, `${baseUrl.replace(/\/+$/u, "")}/`);
 }
 
-function extractVivoImageUrl(payload: unknown) {
-  if (!payload || typeof payload !== "object") return "";
+function extractVivoImageUrls(payload: unknown) {
+  if (!payload || typeof payload !== "object") return [];
   const root = payload as Record<string, unknown>;
   const data = root.data && typeof root.data === "object" ? root.data as Record<string, unknown> : root;
+  const imageUrls: string[] = [];
   const images = data.images;
   if (Array.isArray(images)) {
     for (const item of images) {
-      if (typeof item === "string" && item.trim()) return item.trim();
+      if (typeof item === "string" && item.trim()) {
+        imageUrls.push(item.trim());
+        continue;
+      }
       if (item && typeof item === "object") {
         const url = String((item as Record<string, unknown>).url ?? "").trim();
-        if (url) return url;
+        if (url) imageUrls.push(url);
       }
     }
   }
-  return String(data.image ?? data.url ?? "").trim();
+  const legacyUrl = String(data.image ?? data.url ?? "").trim();
+  if (legacyUrl && !imageUrls.includes(legacyUrl)) imageUrls.push(legacyUrl);
+  return imageUrls;
 }
 
 function assertVivoBusinessSuccess(payload: unknown) {
@@ -206,18 +213,44 @@ function assertVivoBusinessSuccess(payload: unknown) {
   throw new Error(`vivo image generation failed: ${code} ${message}`);
 }
 
-async function requestVivoStoryImage(scene: ParentStoryBookScene) {
+function resolveStoryImageModel() {
+  return process.env.STORYBOOK_IMAGE_MODEL?.trim() || "Doubao-Seedream-4.5";
+}
+
+function resolveStoryImageSize() {
+  return process.env.STORYBOOK_IMAGE_SIZE?.trim() || "2K";
+}
+
+function buildVivoStoryImagePrompt(scenes: ParentStoryBookScene[]) {
+  if (scenes.length === 1) return scenes[0].imagePrompt;
+  return [
+    `Generate exactly ${scenes.length} separate children's picture-book illustrations in order.`,
+    "Keep one coherent visual style across the set. Do not add text, captions, logos, watermarks, or UI.",
+    "Each numbered item below must become one image:",
+    ...scenes.map((scene) => `${scene.sceneIndex}. ${scene.imagePrompt}`),
+  ].join("\n");
+}
+
+async function requestVivoStoryImages(scenes: ParentStoryBookScene[]) {
   const env = getVivoEnv();
   if (!env.appKey || !env.appId) {
     throw new Error("VIVO_APP_ID/VIVO_APP_KEY missing for story image generation");
   }
+  if (scenes.length === 0) return [];
   const requestId = typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
     : `img-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const url = resolveVivoImageUrl(env.baseUrl, VIVO_IMAGE_GENERATION_PATH);
   url.searchParams.set("module", VIVO_IMAGE_GENERATION_MODULE);
   url.searchParams.set("request_id", requestId);
-  url.searchParams.set("system_time", String(Date.now()));
+  url.searchParams.set("system_time", String(Math.floor(Date.now() / 1000)));
+
+  const parameters: Record<string, unknown> = {
+    size: resolveStoryImageSize(),
+  };
+  if (scenes.length > 1) {
+    parameters.sequential_image_generation = "auto";
+  }
 
   const response = await fetch(url, {
     method: "POST",
@@ -226,11 +259,9 @@ async function requestVivoStoryImage(scene: ParentStoryBookScene) {
       "Content-Type": "application/json; charset=utf-8",
     },
     body: JSON.stringify({
-      model: process.env.STORYBOOK_IMAGE_MODEL?.trim() || "Doubao-Seedream-4.5",
-      prompt: scene.imagePrompt,
-      parameters: {
-        size: process.env.STORYBOOK_IMAGE_SIZE?.trim() || "2K",
-      },
+      model: resolveStoryImageModel(),
+      prompt: buildVivoStoryImagePrompt(scenes),
+      parameters,
     }),
     cache: "no-store",
   });
@@ -240,11 +271,11 @@ async function requestVivoStoryImage(scene: ParentStoryBookScene) {
     throw new Error(`vivo image generation HTTP ${response.status}`);
   }
   assertVivoBusinessSuccess(payload);
-  const imageUrl = extractVivoImageUrl(payload);
-  if (!imageUrl) {
+  const imageUrls = extractVivoImageUrls(payload);
+  if (imageUrls.length === 0) {
     throw new Error("vivo image generation returned no image URL");
   }
-  return imageUrl;
+  return imageUrls;
 }
 
 async function completeStoryMediaLocally(input: {
@@ -256,6 +287,7 @@ async function completeStoryMediaLocally(input: {
   const startedAt = Date.now();
   const story = JSON.parse(JSON.stringify(input.payload.story)) as ParentStoryBookResponse;
   const imageConcurrency = boundedConcurrency(process.env.STORYBOOK_IMAGE_CONCURRENCY, 2, 3);
+  const imageBatchSize = boundedConcurrency(process.env.STORYBOOK_IMAGE_BATCH_SIZE, VIVO_IMAGE_GROUP_BATCH_SIZE, VIVO_IMAGE_GROUP_BATCH_SIZE);
   const audioConcurrency = boundedConcurrency(process.env.STORYBOOK_TTS_CONCURRENCY, 4, 4);
   const missingCoreEnv = missingVivoCoreEnv();
   const imageLiveEnabled = missingCoreEnv.length === 0;
@@ -274,7 +306,7 @@ async function completeStoryMediaLocally(input: {
       previousImageRetryAtMs &&
       previousImageRetryAtMs > startedAt
   );
-  const effectiveImageConcurrency = previousImageRateLimited ? 1 : imageConcurrency;
+  const effectiveImageBatchSize = previousImageRateLimited ? 1 : Math.max(imageConcurrency, imageBatchSize);
   let imageErrorCount = 0;
   let audioErrorCount = 0;
   let lastImageError: string | null = null;
@@ -290,35 +322,42 @@ async function completeStoryMediaLocally(input: {
   const imageCandidates = imageLiveEnabled
     ? imageBackoffActive
       ? []
-      : orderedScenes(story, prioritySceneIndices).filter((scene) => !isRealImageScene(scene)).slice(0, effectiveImageConcurrency)
+      : orderedScenes(story, prioritySceneIndices).filter((scene) => !isRealImageScene(scene)).slice(0, effectiveImageBatchSize)
     : [];
   const audioCandidates = audioLiveEnabled
     ? orderedScenes(story, prioritySceneIndices).filter((scene) => !isRealAudioScene(scene)).slice(0, audioConcurrency)
     : [];
 
-  const imageTasks = imageCandidates.map(async (scene) => {
+  const imageTasks = imageCandidates.length > 0 ? [(async () => {
     try {
-      const imageUrl = await requestVivoStoryImage(scene);
-      const index = scenesByIndex.get(scene.sceneIndex);
-      if (typeof index === "number") {
-        story.scenes[index] = {
-          ...story.scenes[index],
-          imageUrl,
-          assetRef: imageUrl,
-          imageStatus: "ready",
-          imageSourceKind: "real",
-          imageCacheHit: false,
-        };
+      const imageUrls = await requestVivoStoryImages(imageCandidates);
+      for (const [candidateIndex, imageUrl] of imageUrls.slice(0, imageCandidates.length).entries()) {
+        const scene = imageCandidates[candidateIndex];
+        const index = scenesByIndex.get(scene.sceneIndex);
+        if (typeof index === "number") {
+          story.scenes[index] = {
+            ...story.scenes[index],
+            imageUrl,
+            assetRef: imageUrl,
+            imageStatus: "ready",
+            imageSourceKind: "real",
+            imageCacheHit: false,
+          };
+        }
+      }
+      if (imageUrls.length < imageCandidates.length) {
+        imageErrorCount += imageCandidates.length - imageUrls.length;
+        lastImageError = `vivo image generation returned ${imageUrls.length}/${imageCandidates.length} images`;
       }
     } catch (error) {
-      imageErrorCount += 1;
+      imageErrorCount += imageCandidates.length;
       lastImageError = normalizeErrorReason(error);
       const retryAfterMs = resolveImageRetryBackoffMs(lastImageError);
       imageRetryAfterMs = Math.max(imageRetryAfterMs ?? 0, retryAfterMs);
       imageNextRetryAtMs = Date.now() + retryAfterMs;
       imageRateLimited = imageRateLimited || isVivoRateLimitError(lastImageError);
     }
-  });
+  })()] : [];
 
   const audioTasks = audioCandidates.map(async (scene) => {
     try {
