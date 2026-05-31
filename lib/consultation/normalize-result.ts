@@ -402,6 +402,48 @@ function buildDataQuality(params: {
   };
 }
 
+function buildManualReviewSummary(evidenceItems: ConsultationEvidenceItem[]) {
+  const reviewItems = evidenceItems.filter((item) => item.requiresHumanReview);
+  const lowConfidenceItems = evidenceItems.filter((item) => item.confidence === "low");
+  const required = reviewItems.length > 0;
+
+  return {
+    required,
+    reviewRequiredCount: reviewItems.length,
+    lowConfidenceCount: lowConfidenceItems.length,
+    totalEvidenceCount: evidenceItems.length,
+    evidenceItemIds: reviewItems.map((item) => item.id).slice(0, 12),
+    summary: required
+      ? `${reviewItems.length} 条证据需要人工复核；请由老师或园长结合现场观察确认。`
+      : "证据来源明确，仍建议按常规复核节奏记录。",
+  };
+}
+
+function buildSafetyWarnings(params: {
+  dataQualityWarnings: string[];
+  providerFallback: boolean;
+  manualReviewSummary: ReturnType<typeof buildManualReviewSummary>;
+  memoryMeta: Record<string, unknown>;
+  rawWarnings?: unknown;
+}) {
+  return uniqueStrings(
+    [
+      ...asStringArray(params.rawWarnings, 12),
+      ...params.dataQualityWarnings,
+      params.providerFallback
+        ? "当前会诊包含 fallback / 本地规则结果，需结合老师现场观察复核。"
+        : "",
+      params.manualReviewSummary.required
+        ? params.manualReviewSummary.summary
+        : "",
+      asBoolean(params.memoryMeta.degraded)
+        ? "记忆或历史记录不完整，本次建议采用保守表达。"
+        : "",
+    ],
+    12
+  );
+}
+
 export function normalizeHighRiskConsultationResult(
   rawResult: Record<string, unknown>,
   options: NormalizationOptions = {}
@@ -453,6 +495,14 @@ export function normalizeHighRiskConsultationResult(
     shouldEscalateToAdmin,
     providerFallback: Boolean(providerTrace.fallback),
   });
+  const manualReviewSummary = buildManualReviewSummary(evidenceItems);
+  const warnings = buildSafetyWarnings({
+    dataQualityWarnings: asStringArray(dataQuality.warnings, 12),
+    providerFallback: Boolean(providerTrace.fallback),
+    manualReviewSummary,
+    memoryMeta,
+    rawWarnings: result.warnings,
+  });
 
   const normalized: Record<string, unknown> = {
     ...result,
@@ -474,6 +524,9 @@ export function normalizeHighRiskConsultationResult(
     nextCheckpoints,
     continuityNotes,
     evidenceItems,
+    warnings,
+    humanReviewRequired: manualReviewSummary.required,
+    manualReviewSummary,
     participants,
     shouldEscalateToAdmin,
     coordinatorSummary,
@@ -499,6 +552,9 @@ export function normalizeHighRiskConsultationResult(
       keyFindings,
       evidenceCount: evidenceItems.length,
       dataQuality,
+      warnings,
+      humanReviewRequired: manualReviewSummary.required,
+      manualReviewSummary,
     },
     explainability,
     reviewIn48h:

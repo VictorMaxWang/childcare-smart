@@ -49,8 +49,8 @@ SmartChildcare Agent 是一个面向托育场景的**移动端优先、多角色
 
 - 不是普通托育后台外接一个聊天框
 - 不是只做单轮问答的 AI demo
-- 不是已经 fully live 的线上平台
-- 不是 staging、vivo 上游、真实远端链路都已经 fully verified 的系统
+- 不是已经完成真实机构生产化全链路的线上平台
+- 不是 staging、vivo 上游、真实远端链路都已经完成长期生产验收的系统
 - 不是每个线程都能随意扩写叙事、重排主路径、顺手重构的开放工作台
 
 涉及 vivo 能力接入时，只允许使用官方文档口径，并且只允许通过环境变量注入 `VIVO_APP_ID` / `VIVO_APP_KEY`：
@@ -85,7 +85,7 @@ SmartChildcare Agent 是一个面向托育场景的**移动端优先、多角色
 
 发生冲突时，统一按下面的优先级处理：
 
-`代码事实 > docs/current-status-ledger.md > docs/competition-architecture.md > README.md / 旧任务地图 / 旧描述`
+`代码事实 > docs/competition-message-guide.md > docs/current-status-ledger.md > docs/competition-architecture.md > README.md / 旧任务地图 / 旧描述`
 
 各文档的单一职责固定为：
 
@@ -104,7 +104,7 @@ SmartChildcare Agent 是一个面向托育场景的**移动端优先、多角色
 
 - 先核代码事实，再修正文档，不要盲目相信旧表述
 - 不要把已具展示能力的内容误写回“未开始”
-- 不要把代码层接入写成 fully live
+- 不要把代码层接入写成真实机构生产化全链路已完成
 - 不要把 staging 写成 `fully healthy` / `fully switched`
 - 不要夸大 vivo 上游真实状态
 
@@ -350,8 +350,8 @@ Task ID:
 - “Parent storybook 未开始”
 - “`T13B` 仍未开始”
 - “旧 `T0-T13` 就是当前主任务表”
-- “staging 已 fully healthy / fully switched”
-- “vivo provider 已 fully live”
+- “staging 已完成全量健康切换”
+- “vivo provider 已完成真实机构生产化全链路”
 - “Parent trend 是本地完整能力”
 - “高风险会诊已经等于完整 T8 全量交付”
 

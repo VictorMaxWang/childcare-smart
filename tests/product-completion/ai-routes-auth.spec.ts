@@ -160,7 +160,7 @@ test.describe("E11 /api/ai auth regression", () => {
 
     const allowed = await page.request.post("/api/ai/suggestions", {
       data: buildParentSuggestionPayload(CHILD_PARENT),
-      headers: { "x-ai-force-fallback": "1" },
+      headers: { "x-ai-force-fallback": "1", "x-demo-account-id": "u-parent" },
     });
     expect(allowed.status()).toBe(200);
     const allowedBody = await allowed.json();
@@ -173,7 +173,7 @@ test.describe("E11 /api/ai auth regression", () => {
           childId: CHILD_FORBIDDEN,
           ...buildParentSuggestionPayload(CHILD_FORBIDDEN, "晨曦班"),
         },
-        headers: { "x-ai-force-fallback": "1" },
+        headers: { "x-ai-force-fallback": "1", "x-demo-account-id": "u-parent" },
       }),
       403,
       "forbidden_scope"

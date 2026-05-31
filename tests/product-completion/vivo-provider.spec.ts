@@ -49,7 +49,7 @@ test.describe("E11 vivo provider status regression", () => {
   });
 
   test("health parser reports OCR provider state without exposing credentials", async ({}, testInfo) => {
-    const teacher = await demoContext(testInfo, "u-teacher");
+    const teacher = await demoContext(testInfo, "u-teacher2");
     const token = `e11-vivo-${Date.now()}`;
 
     try {

@@ -159,7 +159,7 @@
 - Next route 在 brain 不可用时支持 `next-json-fallback`
 - service 允许 rule / asset / mock / media fallback
 - 当前可表述为“Parent 微绘本已具展示能力并形成 wow factor”
-- 当前不可表述为“图像 / 配音上游 fully live”
+- 当前不可表述为“图像 / 配音上游已完成真实机构生产化全链路”
 
 ## 6. 真实链路与不该说的话
 
@@ -173,8 +173,8 @@
 
 ### 不该说
 
-- staging 已 fully healthy / fully switched
-- vivo 已 fully live
+- staging 已完成全量健康切换
+- vivo 已完成真实机构生产化全链路
 - Parent trend 有完整本地 fallback
 - Parent storybook 图像 / 配音已完成真实上游验收
 - Admin 第二展示位等于 `T9D` / `T9C` 已结束

@@ -31,7 +31,7 @@ Updated: `2026-04-07`
 - `fallback`: upstream media failed, but the story, viewer, and subtitle preview still demo cleanly.
 
 ## Fallback policy
-- Do not claim fully live media if the badges say `mixed` or `fallback`.
+- Do not claim production-complete media if the badges say `mixed` or `fallback`.
 - If image generation drops from `live` to `mixed`, continue the demo and explain that the product keeps successful real scenes and fills the rest with fallback.
 - If TTS account permissions block a voice or engine, continue with subtitle preview instead of retrying repeatedly.
 - Short-term cache is expected to make the second demo pass faster and more stable.

@@ -206,6 +206,15 @@ export interface ConsultationEvidenceItem {
   metadata?: Record<string, unknown>;
 }
 
+export interface ConsultationManualReviewSummary {
+  required: boolean;
+  reviewRequiredCount: number;
+  lowConfidenceCount: number;
+  totalEvidenceCount: number;
+  evidenceItemIds: string[];
+  summary: string;
+}
+
 export interface ConsultationCoordinatorSummary {
   finalConclusion: string;
   riskLevel: AiRiskLevel;
@@ -239,6 +248,9 @@ export interface HighRiskConsultationResult {
   directorDecisionCard: DirectorDecisionCard;
   explainability: ExplainabilityItem[];
   evidenceItems: ConsultationEvidenceItem[];
+  warnings?: string[];
+  humanReviewRequired?: boolean;
+  manualReviewSummary?: ConsultationManualReviewSummary;
   nextCheckpoints: string[];
   coordinatorSummary: ConsultationCoordinatorSummary;
   schoolAction: string;

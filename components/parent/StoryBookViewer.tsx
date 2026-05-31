@@ -56,6 +56,11 @@ import {
   getStoryBookPresetCopy,
 } from "@/lib/parent/storybook-viewer-copy";
 import { cn } from "@/lib/utils";
+import {
+  getBrowserTtsSupport,
+  resolvePreferredBrowserTtsVoice,
+  stopBrowserTts,
+} from "@/lib/voice/browser-tts";
 
 type StoryBookViewerStatus = "loading" | "storybook" | "card" | "empty" | "error";
 type PlaybackState = "idle" | "loading" | "playing" | "paused" | "preview" | "local";
@@ -147,6 +152,15 @@ type StoryBookImageProps = {
   className?: string;
   loading?: "eager" | "lazy";
   onError?: (event: SyntheticEvent<HTMLImageElement>) => void;
+};
+type StoryBookEvidenceItem = {
+  label: string;
+  value: string;
+};
+type StoryBookFixedAction = {
+  tonightAction?: string;
+  feedbackPrompt?: string;
+  feedbackHref: string;
 };
 const StoryBookLink = forwardRef<HTMLAnchorElement, AnchorHTMLAttributes<HTMLAnchorElement>>(
   function StoryBookLink({ children, href, ...props }, ref) {
@@ -717,6 +731,27 @@ function getRuntimeCaptionStatusText(
   return isPlaying ? "当前仅在进行字幕预演" : "当前仅字幕预演，未生成真实音频";
 }
 
+function getSceneRuntimeCaptionStatusText(
+  scene: ParentStoryBookScene,
+  playbackSource: PlaybackSource,
+  isPlaying: boolean,
+  playbackState: PlaybackState,
+  canUseLocalSpeech: boolean
+) {
+  if (!isPlaying && sceneHasReadyAudioHotfix(scene)) {
+    return "真实朗读已就绪，点击后播放缓存音频。";
+  }
+  if (!isPlaying && canUseLocalSpeech) {
+    return "后端真实朗读未命中时，将切换本机朗读。";
+  }
+  return getRuntimeCaptionStatusText(
+    playbackSource,
+    isPlaying,
+    playbackState,
+    canUseLocalSpeech
+  );
+}
+
 function getRuntimePlaybackTimeLabel(
   playbackSource: PlaybackSource,
   isSceneActive: boolean,
@@ -1257,6 +1292,8 @@ export default function StoryBookViewer({
   onExportStorybook,
   onShareStorybook,
   parentHref = "/parent",
+  tonightActionHref = "/parent/agent",
+  feedbackHref = "/parent/agent#feedback",
   lockedStorybook,
 }: {
   status: StoryBookViewerStatus;
@@ -1294,10 +1331,15 @@ export default function StoryBookViewer({
   onExportStorybook?: (format: StorybookExportFormat) => void;
   onShareStorybook?: () => void;
   parentHref?: string;
+  tonightActionHref?: string;
+  feedbackHref?: string;
   lockedStorybook?: {
     subtitle: string;
     paged?: boolean;
     fixedDefault?: boolean;
+    evidenceItems?: StoryBookEvidenceItem[];
+    tonightAction?: string;
+    feedbackPrompt?: string;
   };
 }) {
   const theme = getTheme(story?.stylePreset ?? selectedPresetId);
@@ -1305,10 +1347,7 @@ export default function StoryBookViewer({
   const selectedThemeChip = themeChips.includes(manualTheme.trim()) ? manualTheme.trim() : null;
   const requiresTheme =
     generationMode === "manual-theme" || generationMode === "hybrid";
-  const canUseLocalSpeech =
-    typeof window !== "undefined" &&
-    "speechSynthesis" in window &&
-    typeof window.speechSynthesis?.speak === "function";
+  const canUseLocalSpeech = getBrowserTtsSupport().supported;
   const [sceneRuntimeState, setSceneRuntimeState] = useState<StoryBookSceneRuntimeState>({
     storyId: story?.storyId ?? null,
     playbackSource: "preview",
@@ -1368,6 +1407,15 @@ export default function StoryBookViewer({
       story={story}
       theme={theme}
       paged={lockedStorybook?.paged ?? false}
+      fixedStorybookAction={
+        lockedStorybook?.fixedDefault
+          ? {
+              tonightAction: lockedStorybook.tonightAction,
+              feedbackPrompt: lockedStorybook.feedbackPrompt,
+              feedbackHref,
+            }
+          : undefined
+      }
       onRuntimeStateChange={setSceneRuntimeState}
       onActiveSceneChange={onActiveSceneChange}
     />
@@ -1394,7 +1442,7 @@ export default function StoryBookViewer({
   return (
     <div
       className={cn(
-        "min-h-[100svh] px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+7rem)] sm:px-6 sm:pt-6 sm:pb-[calc(env(safe-area-inset-bottom)+7.5rem)] lg:pb-6",
+        "min-h-[100svh] px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+9.5rem)] sm:px-6 sm:pt-6 sm:pb-[calc(env(safe-area-inset-bottom)+9.75rem)] lg:pb-6",
         theme.page
       )}
     >
@@ -1406,8 +1454,8 @@ export default function StoryBookViewer({
                 <BookOpenText className="h-5 w-5" />
               </span>
               <div>
-                <p className="text-lg font-black text-slate-950">智慧托育平台</p>
-                <p className="text-xs text-slate-500">家长端</p>
+                <p className="text-lg font-black text-slate-950">慧育童行</p>
+                <p className="text-xs text-slate-500">SmartChildcare Agent · 家长端</p>
               </div>
             </div>
             <nav className="mt-8 space-y-2 text-sm font-semibold text-slate-500">
@@ -1491,32 +1539,53 @@ export default function StoryBookViewer({
                 记录{selectedChildName ?? "孩子"}在园的每个成长瞬间，见证她的点滴进步与美好时光。
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" className={cn("rounded-full", theme.quiet)} onClick={onRetry ?? onGenerate}>
+            <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-none sm:flex sm:flex-wrap">
+              <Button type="button" variant="outline" className={cn("hidden rounded-full sm:inline-flex", theme.quiet)} onClick={onRetry ?? onGenerate}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 刷新故事
               </Button>
-              <Button type="button" className={cn("rounded-full shadow-sm", theme.accent)} disabled={!canGenerate} onClick={onGenerate}>
+              <Button type="button" className={cn("w-full rounded-full shadow-sm sm:w-auto", theme.accent)} disabled={!canGenerate} onClick={onGenerate}>
                 <Sparkles className="mr-2 h-4 w-4" />
                 添加故事
               </Button>
               {story ? (
                 <>
                   <Button
+                    asChild
+                    className={cn("w-full rounded-full shadow-sm sm:w-auto", theme.accent)}
+                    data-testid="lin-xiaoyu-tonight-action-link"
+                  >
+                    <StoryBookLink href={tonightActionHref}>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      看今晚怎么做
+                    </StoryBookLink>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className={cn("w-full rounded-full sm:w-auto", theme.quiet)}
+                    data-testid="lin-xiaoyu-feedback-link"
+                  >
+                    <StoryBookLink href={feedbackHref}>
+                      <MessageCircle className="mr-2 h-4 w-4" />
+                      做完去反馈
+                    </StoryBookLink>
+                  </Button>
+                  <Button
                     type="button"
                     variant="outline"
-                    className={cn("rounded-full", theme.quiet)}
+                    className={cn("hidden rounded-full sm:inline-flex", theme.quiet)}
                     data-testid="e10-storybook-export-markdown"
                     disabled={isStorybookActionPending || !onExportStorybook}
                     onClick={() => onExportStorybook?.("markdown")}
                   >
                     <Download className="mr-2 h-4 w-4" />
-                    导出
+                    下载绘本摘要
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    className={cn("rounded-full", theme.quiet)}
+                    className={cn("hidden rounded-full sm:inline-flex", theme.quiet)}
                     data-testid="e10-storybook-share-local"
                     disabled={isStorybookActionPending || !onShareStorybook}
                     onClick={onShareStorybook}
@@ -1529,18 +1598,18 @@ export default function StoryBookViewer({
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
             {storyStats.map((item) => {
               const Icon = item.icon;
               return (
-                <div key={item.label} className="rounded-2xl border border-white bg-white/88 p-4 shadow-sm">
+                <div key={item.label} className="rounded-2xl border border-white bg-white/88 p-3 shadow-sm sm:p-4">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
-                      <Icon className="h-5 w-5" />
+                    <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-violet-100 text-violet-600 sm:h-11 sm:w-11">
+                      <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                     </span>
                     <div>
                       <p className="text-sm text-slate-500">{item.label}</p>
-                      <p className="mt-1 text-2xl font-black text-slate-950">{item.value}</p>
+                      <p className="mt-1 text-xl font-black text-slate-950 sm:text-2xl">{item.value}</p>
                     </div>
                   </div>
                 </div>
@@ -1659,9 +1728,52 @@ export default function StoryBookViewer({
               </CardDescription>
             </div>
 
+            {lockedStorybook?.fixedDefault &&
+            lockedStorybook.evidenceItems &&
+            lockedStorybook.evidenceItems.length > 0 ? (
+              <div
+                className="grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 sm:grid-cols-2"
+                data-testid="lin-xiaoyu-evidence-panel"
+              >
+                {lockedStorybook.evidenceItems.map((item) => (
+                  <div key={item.label} className="rounded-xl bg-white/85 p-3">
+                    <p className="text-xs font-semibold text-emerald-700">{item.label}</p>
+                    <p className="mt-1 text-sm leading-6 text-slate-700">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {lockedStorybook?.fixedDefault && lockedStorybook.tonightAction ? (
+              <div
+                className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 sm:flex-row sm:items-center sm:justify-between"
+                data-testid="lin-xiaoyu-tonight-action-panel"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-amber-900">今晚亲子小任务</p>
+                  <p className="mt-1 text-sm leading-6 text-amber-900">
+                    {lockedStorybook.tonightAction}
+                  </p>
+                  {lockedStorybook.feedbackPrompt ? (
+                    <p className="mt-1 text-xs leading-5 text-amber-800">
+                      {lockedStorybook.feedbackPrompt}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                  <Button asChild className={cn("rounded-full shadow-sm", theme.accent)}>
+                    <StoryBookLink href={tonightActionHref}>看今晚怎么做</StoryBookLink>
+                  </Button>
+                  <Button asChild variant="outline" className={cn("rounded-full", theme.quiet)}>
+                    <StoryBookLink href={feedbackHref}>做完去反馈</StoryBookLink>
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
             {(
             <div
-              className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5"
+              className={cn("rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5", story ? "hidden sm:block" : "")}
               data-testid="parent-storybook-generation-panel"
             >
               <div className="flex flex-wrap items-center gap-2">
@@ -1925,6 +2037,26 @@ export default function StoryBookViewer({
           <CardContent className="space-y-5 pb-6">
             {bodyContent}
 
+            {story && lockedStorybook?.fixedDefault && lockedStorybook.feedbackPrompt ? (
+              <div
+                className="flex flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50/80 p-4 sm:flex-row sm:items-center sm:justify-between"
+                data-testid="lin-xiaoyu-storybook-feedback-cta"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-sky-950">读完后写回家庭反馈</p>
+                  <p className="mt-1 text-sm leading-6 text-sky-900">
+                    {lockedStorybook.feedbackPrompt}
+                  </p>
+                </div>
+                <Button asChild className={cn("shrink-0 rounded-full shadow-sm", theme.accent)}>
+                  <StoryBookLink href={feedbackHref}>
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    记录今晚反馈
+                  </StoryBookLink>
+                </Button>
+              </div>
+            ) : null}
+
             {story ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <Card className={cn("rounded-2xl border-slate-200", theme.panel)}>
@@ -2019,12 +2151,14 @@ function StoryBookSceneStream({
   story,
   theme,
   paged = false,
+  fixedStorybookAction,
   onRuntimeStateChange,
   onActiveSceneChange,
 }: {
   story: ParentStoryBookResponse;
   theme: StoryBookTheme;
   paged?: boolean;
+  fixedStorybookAction?: StoryBookFixedAction;
   onRuntimeStateChange?: (state: StoryBookSceneRuntimeState) => void;
   onActiveSceneChange?: (index: number) => void;
 }) {
@@ -2054,10 +2188,7 @@ function StoryBookSceneStream({
   const [isBookPlaying, setIsBookPlaying] = useState(false);
   const [playbackErrorMessage, setPlaybackErrorMessage] = useState<string | null>(null);
   const [imageFallbackMap, setImageFallbackMap] = useState<Record<string, boolean>>({});
-  const canUseLocalSpeech =
-    typeof window !== "undefined" &&
-    "speechSynthesis" in window &&
-    typeof window.speechSynthesis?.speak === "function";
+  const canUseLocalSpeech = getBrowserTtsSupport().supported;
 
   const scenes = useMemo(() => story.scenes ?? [], [story.scenes]);
 
@@ -2091,10 +2222,7 @@ function StoryBookSceneStream({
   }
 
   function clearSpeech() {
-    const speech = window.speechSynthesis;
-    if (speech) {
-      speech.cancel();
-    }
+    stopBrowserTts();
     speechRef.current = null;
   }
 
@@ -2302,7 +2430,11 @@ function StoryBookSceneStream({
     const speech = window.speechSynthesis;
     const utteranceText = scene.audioScript || scene.sceneText;
     const utterance = new SpeechSynthesisUtterance(utteranceText);
-    utterance.lang = "zh-CN";
+    const preferredVoice = resolvePreferredBrowserTtsVoice();
+    utterance.lang = preferredVoice?.lang ?? "zh-CN";
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
     utterance.rate = 1;
     utterance.pitch = 1;
     speechRef.current = utterance;
@@ -2718,12 +2850,12 @@ function StoryBookSceneStream({
           </div>
 
           <div className="relative mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="relative aspect-[3/2] w-full">
+            <div className="relative aspect-[4/3] w-full sm:aspect-[16/10] lg:aspect-[16/9]">
               <StoryBookImage
                 src={sceneImageSrc}
                 alt={scene.sceneTitle}
                 loading="eager"
-                className="absolute inset-0 h-full w-full object-contain"
+                className="absolute inset-0 h-full w-full object-cover"
                 onError={() => {
                   if (!scene.assetRef || scene.assetRef === scene.imageUrl) return;
                   setImageFallbackMap((current) => {
@@ -2755,7 +2887,8 @@ function StoryBookSceneStream({
                 >
                   {isSceneActive && playbackErrorMessage
                     ? playbackErrorMessage
-                    : getRuntimeCaptionStatusText(
+                    : getSceneRuntimeCaptionStatusText(
+                        scene,
                         playbackSource,
                         isPlaying,
                         playbackState,
@@ -2824,6 +2957,39 @@ function StoryBookSceneStream({
               ))}
             </div>
           </div>
+
+          {fixedStorybookAction?.tonightAction && safeActiveIndex === 0 ? (
+            <div
+              className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/90 p-4"
+              data-testid="lin-xiaoyu-page-tonight-task"
+            >
+              <p className="text-sm font-semibold text-amber-950">今晚亲子小任务</p>
+              <p className="mt-1 text-sm leading-6 text-amber-900">
+                {fixedStorybookAction.tonightAction}
+              </p>
+            </div>
+          ) : null}
+
+          {fixedStorybookAction && safeActiveIndex === scenes.length - 1 ? (
+            <div
+              className="mt-4 flex flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50/90 p-4 sm:flex-row sm:items-center sm:justify-between"
+              data-testid="lin-xiaoyu-final-feedback-task"
+            >
+              <div>
+                <p className="text-sm font-semibold text-sky-950">把今晚观察写回去</p>
+                <p className="mt-1 text-sm leading-6 text-sky-900">
+                  {fixedStorybookAction.feedbackPrompt ??
+                    "记录孩子今晚的尝试，方便老师明早继续接力。"}
+                </p>
+              </div>
+              <Button asChild className={cn("shrink-0 rounded-full shadow-sm", theme.accent)}>
+                <StoryBookLink href={fixedStorybookAction.feedbackHref}>
+                  <MessageCircle className="mr-2 h-4 w-4" />
+                  记录今晚反馈
+                </StoryBookLink>
+              </Button>
+            </div>
+          ) : null}
         </article>
 
         <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -3028,7 +3194,8 @@ function StoryBookSceneStream({
                       <p className="mt-1 text-xs leading-6 text-slate-500">
                         {isSceneActive && playbackErrorMessage
                           ? playbackErrorMessage
-                          : getRuntimeCaptionStatusText(
+                          : getSceneRuntimeCaptionStatusText(
+                              scene,
                               playbackSource,
                               isPlaying,
                               playbackState,

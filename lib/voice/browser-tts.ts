@@ -44,7 +44,7 @@ function getSpeechSynthesisApi() {
   return window.speechSynthesis ?? null;
 }
 
-function resolvePreferredVoice() {
+export function resolvePreferredBrowserTtsVoice() {
   const speech = getSpeechSynthesisApi();
   if (!speech) return null;
 
@@ -118,7 +118,7 @@ export function speakBrowserText(options: SpeakBrowserTextOptions) {
 
   const sessionId = ++activeSpeechId;
   const utterance = new SpeechSynthesisUtterance(nextText);
-  const preferredVoice = resolvePreferredVoice();
+  const preferredVoice = resolvePreferredBrowserTtsVoice();
 
   utterance.lang = options.lang ?? preferredVoice?.lang ?? "zh-CN";
   utterance.rate = options.rate ?? 1;

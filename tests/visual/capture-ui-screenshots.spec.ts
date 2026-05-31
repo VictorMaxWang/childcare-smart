@@ -143,10 +143,10 @@ const ROLE_SPECS: RoleSpec[] = [
   },
   {
     role: "parent",
-    demoAccount: "林妈妈",
-    demoButtonText: "林妈妈",
+    demoAccount: "林小雨妈妈",
+    demoButtonText: "林小雨妈妈",
     accountId: "u-parent",
-    roleLabel: "家长端 / 林妈妈",
+    roleLabel: "家长端 / 林小雨妈妈",
     routes: [
       { route: "/parent", slug: "parent-home", title: "家长首页", module: "家长首页", notes: "家长默认落点，含孩子状态、AI 提醒、今晚任务和反馈入口。", recommended: true },
       { route: "/parent?child=c-1", slug: "parent-child-overview", title: "孩子概览", module: "孩子概览", notes: "指定孩子上下文的家长首页。", recommended: true },
@@ -336,7 +336,7 @@ async function captureLoginStates(page: Page) {
       viewport: "desktop",
       mode: "state",
       stateName: "demo-accounts",
-      notes: "示例账号入口区域，包含陈园长、李老师、周老师、林妈妈。",
+      notes: "示例账号入口区域，包含陈园长、李老师、周老师、林小雨妈妈。",
       recommendedForGPTImage2: true,
     });
   }
@@ -363,8 +363,27 @@ async function loginViaDemoButton(page: Page, spec: RoleSpec) {
   try {
     await page.setViewportSize(VIEWPORTS.desktop);
     await clearBrowserState(page);
+    const apiLogin = await page.request.post(`${BASE_URL}/api/auth/demo-login`, {
+      data: { accountId: spec.accountId },
+    }).catch(() => null);
+    if (apiLogin?.ok()) {
+      const landingRoute = spec.routes[0]?.route ?? "/";
+      await gotoAndWait(page, landingRoute);
+      const finalUrl = page.url();
+      const ok = !finalUrl.includes("/login");
+      roleLoginResults[spec.role] = {
+        ok,
+        reason: ok ? "API demo login succeeded" : "API demo login did not enter role page",
+        finalUrl,
+      };
+      return ok;
+    }
+
     await gotoAndWait(page, "/login");
-    const button = page.getByRole("button").filter({ hasText: spec.demoButtonText }).first();
+    let button = page.getByTestId(`demo-account-${spec.accountId}`).first();
+    if ((await button.count()) === 0) {
+      button = page.getByRole("button").filter({ hasText: spec.demoButtonText }).first();
+    }
     await button.waitFor({ state: "visible", timeout: 20_000 });
     await button.click();
     await waitForStablePage(page, 8000);
@@ -791,7 +810,7 @@ function buildFilename(role: CaptureRole, viewport: ViewportName, mode: CaptureM
 async function maskSensitiveData(page: Page) {
   try {
     await page.evaluate(() => {
-      const allowedNames = new Set(["陈园长", "李老师", "周老师", "林妈妈"]);
+      const allowedNames = new Set(["陈园长", "李老师", "周老师", "林小雨妈妈"]);
       const childNames = [
         "林小雨",
         "小雨",
@@ -1003,7 +1022,7 @@ function buildScreenshotInventory() {
     director: "园长端 / 陈园长",
     "teacher-li": "教师端 / 李老师",
     "teacher-zhou": "教师端 / 周老师",
-    parent: "家长端 / 林妈妈",
+    parent: "家长端 / 林小雨妈妈",
   };
   const lines = ["# 截图清单", "", `采集站点：${BASE_URL}`, `生成时间：${new Date().toISOString()}`, ""];
   for (const role of Object.keys(roleTitles) as CaptureRole[]) {

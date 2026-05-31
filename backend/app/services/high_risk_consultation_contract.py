@@ -164,6 +164,119 @@ def _normalize_provider_trace(
     return normalized
 
 
+def _build_data_quality(
+    *,
+    evidence_items: list[dict[str, Any]],
+    today_in_school_actions: list[str],
+    tonight_at_home_actions: list[str],
+    follow_up_48h: list[str],
+    should_escalate_to_admin: bool,
+    provider_fallback: bool,
+) -> dict[str, Any]:
+    source_types = {_coalesce_text(safe_dict(item).get("sourceType")) for item in evidence_items}
+    covered_sources: list[str] = []
+    if source_types.intersection({"teacher_note", "teacher_voice", "health_check"}):
+        covered_sources.append("教师观察")
+    if source_types.intersection({"trend", "derived_explainability"}):
+        covered_sources.append("成长记录")
+    if source_types.intersection({"guardian_feedback", "ocr_document"}):
+        covered_sources.append("家长反馈")
+    if source_types.intersection({"memory_snapshot", "consultation_history"}):
+        covered_sources.append("记忆快照 / 历史跟进")
+
+    required_sources = ["教师观察", "成长记录", "家长反馈", "记忆快照 / 历史跟进"]
+    warnings = unique_texts(
+        [
+            "证据链少于 4 条" if len(evidence_items) < 4 else "",
+            "证据来源覆盖不足" if len(covered_sources) < len(required_sources) else "",
+            "今日园内动作缺失" if not today_in_school_actions else "",
+            "今晚家庭任务缺失" if not tonight_at_home_actions else "",
+            "48 小时复查缺失" if not follow_up_48h else "",
+            "管理端承接未开启" if not should_escalate_to_admin else "",
+        ],
+        limit=12,
+    )
+
+    return {
+        "status": "complete" if not warnings else "review",
+        "evidenceCount": len(evidence_items),
+        "requiredSourceCoverage": f"{len(covered_sources)}/{len(required_sources)}",
+        "coveredSources": covered_sources,
+        "requiredSources": required_sources,
+        "actionCoverage": {
+            "todayInSchool": bool(today_in_school_actions),
+            "tonightAtHome": bool(tonight_at_home_actions),
+            "followUp48h": bool(follow_up_48h),
+            "adminHandoff": should_escalate_to_admin,
+        },
+        "providerFallback": provider_fallback,
+        "warnings": warnings,
+    }
+
+
+def _build_manual_review_summary(evidence_items: list[dict[str, Any]]) -> dict[str, Any]:
+    review_items = [
+        safe_dict(item)
+        for item in evidence_items
+        if _as_bool(safe_dict(item).get("requiresHumanReview"))
+    ]
+    low_confidence_items = [
+        safe_dict(item)
+        for item in evidence_items
+        if _coalesce_text(safe_dict(item).get("confidence")) == "low"
+    ]
+    required = bool(review_items)
+
+    return {
+        "required": required,
+        "reviewRequiredCount": len(review_items),
+        "lowConfidenceCount": len(low_confidence_items),
+        "totalEvidenceCount": len(evidence_items),
+        "evidenceItemIds": [
+            _coalesce_text(item.get("id"))
+            for item in review_items[:12]
+            if _coalesce_text(item.get("id"))
+        ],
+        "summary": (
+            f"{len(review_items)} 条证据需要人工复核；请由老师或园长结合现场观察确认。"
+            if required
+            else "证据来源明确，仍建议按常规复核节奏记录。"
+        ),
+    }
+
+
+def _build_safety_warnings(
+    *,
+    data_quality: dict[str, Any],
+    provider_trace: dict[str, Any],
+    manual_review_summary: dict[str, Any],
+    memory_meta: dict[str, Any],
+    existing_warnings: Any,
+) -> list[str]:
+    return unique_texts(
+        [
+            *_as_string_list(existing_warnings, limit=12),
+            *_as_string_list(data_quality.get("warnings"), limit=12),
+            (
+                "当前会诊包含 fallback / 本地规则结果，需结合老师现场观察复核。"
+                if _as_bool(provider_trace.get("fallback"))
+                else ""
+            ),
+            (
+                _coalesce_text(manual_review_summary.get("summary"))
+                if _as_bool(manual_review_summary.get("required"))
+                else ""
+            ),
+            (
+                "记忆或历史记录不完整，本次建议采用保守表达。"
+                if _as_bool(memory_meta.get("degraded"))
+                else ""
+            ),
+        ],
+        limit=12,
+    )
+
+
 def _normalize_participants(value: Any) -> list[dict[str, str]]:
     participants: list[dict[str, str]] = []
     for item in safe_list(value):
@@ -929,6 +1042,23 @@ def normalize_high_risk_consultation_result(
         multimodal_notes=safe_dict(result.get("multimodalNotes")),
         raw_evidence_items=result.get("evidenceItems"),
     )
+    should_escalate_to_admin = bool(coordinator_summary["shouldEscalateToAdmin"])
+    data_quality = _build_data_quality(
+        evidence_items=evidence_items,
+        today_in_school_actions=today_in_school_actions,
+        tonight_at_home_actions=tonight_at_home_actions,
+        follow_up_48h=follow_up_48h,
+        should_escalate_to_admin=should_escalate_to_admin,
+        provider_fallback=bool(provider_trace["fallback"]),
+    )
+    manual_review_summary = _build_manual_review_summary(evidence_items)
+    warnings = _build_safety_warnings(
+        data_quality=data_quality,
+        provider_trace=provider_trace,
+        manual_review_summary=manual_review_summary,
+        memory_meta=memory_meta,
+        existing_warnings=result.get("warnings"),
+    )
 
     existing_trace_meta = safe_dict(result.get("traceMeta"))
     trace_meta = {
@@ -949,6 +1079,10 @@ def normalize_high_risk_consultation_result(
         "coordinationConclusion": coordinator_summary["finalConclusion"],
         "keyFindings": key_findings,
         "evidenceCount": len(evidence_items),
+        "dataQuality": data_quality,
+        "warnings": warnings,
+        "humanReviewRequired": bool(manual_review_summary["required"]),
+        "manualReviewSummary": manual_review_summary,
     }
 
     normalized = {
@@ -978,8 +1112,11 @@ def normalize_high_risk_consultation_result(
         "nextCheckpoints": next_checkpoints,
         "continuityNotes": continuity_notes,
         "evidenceItems": evidence_items,
+        "warnings": warnings,
+        "humanReviewRequired": bool(manual_review_summary["required"]),
+        "manualReviewSummary": manual_review_summary,
         "participants": participants,
-        "shouldEscalateToAdmin": coordinator_summary["shouldEscalateToAdmin"],
+        "shouldEscalateToAdmin": should_escalate_to_admin,
         "coordinatorSummary": coordinator_summary,
         "directorDecisionCard": director_decision_card,
         "providerTrace": provider_trace,

@@ -1730,7 +1730,7 @@ export default function ParentAgentPage() {
                 ref={feedbackSectionRef}
                 tabIndex={-1}
                 data-testid="r07-parent-agent-feedback-section"
-                className="scroll-mt-24 scroll-mb-[calc(env(safe-area-inset-bottom)+8rem)] pb-[calc(env(safe-area-inset-bottom)+7rem)] lg:scroll-mb-0 lg:pb-0"
+                className="scroll-mt-32 scroll-mb-[calc(env(safe-area-inset-bottom)+9.5rem)] pb-[calc(env(safe-area-inset-bottom)+8.5rem)] lg:scroll-mb-0 lg:pb-0"
               >
                 <SectionCard
                   title="做完后告诉老师"
@@ -2543,7 +2543,7 @@ export default function ParentAgentPage() {
               ref={feedbackSectionRef}
               tabIndex={-1}
               data-testid="r07-parent-agent-feedback-section"
-              className="scroll-mt-24 scroll-mb-[calc(env(safe-area-inset-bottom)+8rem)] pb-[calc(env(safe-area-inset-bottom)+7rem)] lg:scroll-mb-0 lg:pb-0"
+              className="scroll-mt-32 scroll-mb-[calc(env(safe-area-inset-bottom)+9.5rem)] pb-[calc(env(safe-area-inset-bottom)+8.5rem)] lg:scroll-mb-0 lg:pb-0"
             >
               <SectionCard title="提交今晚反馈" description="把今晚做了没有、孩子反应和补充情况记下来，下一轮建议会继续参考。">
                 <ParentStructuredFeedbackComposer

@@ -50,7 +50,7 @@ export const ROLE_ASSISTANT_NAMES: Record<AssistantRole, string> = {
 };
 
 export const ROLE_EXAMPLES: Record<AssistantRole, string[]> = {
-  director: ["生成本周周报", "查看高风险儿童", "查看未处理反馈", "给李老师派单，跟进小明晨检异常"],
+  director: ["生成本周周报", "查看重点跟进记录", "查看未处理反馈", "给李老师派单，跟进小明晨检异常"],
   teacher: ["给小明记录晨检，体温三十六点八，状态正常", "记录小明午餐吃完了", "回复林妈妈，今天小明午睡很好", "查看未回复家长消息"],
   parent: ["给老师留言，今天晚上孩子有点咳嗽", "查看今天吃了什么", "标记这个提醒已读", "打开成长绘本"],
 };

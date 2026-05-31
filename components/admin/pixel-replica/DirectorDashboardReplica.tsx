@@ -162,7 +162,7 @@ export default function DirectorDashboardReplica({
   }));
   const riskDistributionRows: ReplicaDonutDatum[] = [
     { label: "晨检异常", value: adminSummary?.healthAbnormalCount ?? scope.healthAbnormalCount, color: replicaChartColors.red },
-    { label: "高风险儿童", value: riskChildrenCount, color: replicaChartColors.amber },
+    { label: "重点跟进记录", value: riskChildrenCount, color: replicaChartColors.amber },
     { label: "高风险会诊", value: adminSummary?.highRiskConsultationCount ?? 0, color: replicaChartColors.violet },
     { label: "未处理反馈", value: adminSummary?.unresolvedFeedbackCount ?? 0, color: replicaChartColors.sky },
     { label: "待派单", value: assignmentCounts.pending + assignmentCounts.inProgress + assignmentCounts.overdue, color: replicaChartColors.primary },
@@ -286,7 +286,7 @@ export default function DirectorDashboardReplica({
         <ReplicaPanel
           title="风险优先级板"
           description="按 P1/P2、会诊风险、状态和生成时间排序，点击可在同屏查看承接详情。"
-          actions={<ReplicaPill tone="red">待处理高风险个案 {highRiskPendingCount}</ReplicaPill>}
+          actions={<ReplicaPill tone="red">待处理重点复核 {highRiskPendingCount}</ReplicaPill>}
         >
           <div data-testid="admin-risk-priority-compact" className="space-y-3">
             {governanceDemo.riskItems.map((item, index) => {

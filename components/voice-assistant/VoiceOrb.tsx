@@ -556,7 +556,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
   return (
     <div
       className={cn(
-        "pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.9rem)] z-50 flex flex-col gap-3 px-3 sm:bottom-6 sm:left-auto sm:block sm:px-0",
+        "pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-50 flex flex-col gap-3 px-3 sm:bottom-6 sm:left-auto sm:block sm:px-0",
         isTeacherRoute ? "items-start sm:right-[8.5rem]" : "items-end sm:right-6"
       )}
     >
@@ -602,7 +602,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
             </div>
           </div>
 
-          <div className="max-h-[min(72vh,640px)] space-y-3 overflow-y-auto px-4 py-4">
+          <div className="max-h-[min(64vh,560px)] space-y-3 overflow-y-auto px-4 py-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge
                 variant={providerReady ? "success" : "warning"}
@@ -816,7 +816,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
             setMinimized(false);
           }}
           className={cn(
-            "voice-orb-purple-button pointer-events-auto relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-indigo-200 bg-linear-to-br from-indigo-500 via-violet-500 to-sky-400 text-white shadow-[0_22px_50px_rgba(99,102,241,0.3)] ring-1 ring-white/65 transition hover:-translate-y-0.5 hover:from-indigo-600 hover:via-fuchsia-500 hover:to-sky-400 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-200",
+            "voice-orb-purple-button pointer-events-auto relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-indigo-200 bg-linear-to-br from-indigo-500 via-violet-500 to-sky-400 text-white shadow-[0_22px_50px_rgba(99,102,241,0.3)] ring-1 ring-white/65 transition hover:-translate-y-0.5 hover:from-indigo-600 hover:via-fuchsia-500 hover:to-sky-400 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-200 sm:h-14 sm:w-14",
             expanded && !minimized ? "sm:ml-auto" : ""
           )}
           data-testid="voice-orb-button"

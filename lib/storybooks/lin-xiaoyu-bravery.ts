@@ -9,6 +9,29 @@ export const LIN_XIAOYU_CHILD_NAME = "林小雨";
 export const LIN_XIAOYU_IMAGE_BASE = "/demo-media/storybooks/lin-xiaoyu/images";
 export const LIN_XIAOYU_AUDIO_BASE = "/demo-media/storybooks/lin-xiaoyu/audio";
 export const LIN_XIAOYU_IMAGE_FALLBACK = "/demo-media/storybooks/demo-storybook-placeholder.svg";
+export const LIN_XIAOYU_RUNTIME_TTS_BASE = "/api/storybooks/lin-xiaoyu/tts";
+export const LIN_XIAOYU_TONIGHT_ACTION =
+  "今晚睡前和小雨一起做 1 次“先听声音、抱抱小兔、再向前走一小步”的勇敢练习，并记录她愿不愿意尝试。";
+export const LIN_XIAOYU_FEEDBACK_PROMPT =
+  "做完后回到家长 AI 助手反馈：孩子是否完成一小步、情绪有没有放松、明早入园是否还需要老师接力安抚。";
+export const LIN_XIAOYU_FIXED_STORYBOOK_EVIDENCE = [
+  {
+    label: "儿童状态",
+    value: "听到走廊声会紧张，会抱紧小兔并说“我有一点害怕”。",
+  },
+  {
+    label: "教师记录",
+    value: "老师先蹲下共情，再带她深呼吸，把勇敢拆成“先走一小步”。",
+  },
+  {
+    label: "教育主题",
+    value: "勇敢不是不害怕，而是害怕时仍愿意尝试一个很小的动作。",
+  },
+  {
+    label: "家庭反馈",
+    value: "今晚用同一句话和同一个动作在家复现，方便老师明早继续观察。",
+  },
+] as const;
 
 export type LinXiaoyuFixedStorybookPage = {
   page: number;
@@ -102,7 +125,8 @@ export function getLinXiaoyuFixedStorybookPage(page: number | string | null | un
 
 export function linXiaoyuFixedStorybookScenes(): ParentStoryBookScene[] {
   return LIN_XIAOYU_FIXED_STORYBOOK_PAGES.map((page) => {
-    const audioEndpoint = `/api/storybooks/lin-xiaoyu/tts?childId=${LIN_XIAOYU_CHILD_ID}&page=${page.page}`;
+    const audioEndpoint = `${LIN_XIAOYU_RUNTIME_TTS_BASE}?childId=${LIN_XIAOYU_CHILD_ID}&page=${page.page}`;
+    const runtimeAudioEndpoint = `${audioEndpoint}&bypassStatic=1`;
     return {
     sceneIndex: page.page,
     sceneTitle: page.title,
@@ -113,7 +137,7 @@ export function linXiaoyuFixedStorybookScenes(): ParentStoryBookScene[] {
     imageSourceKind: "real",
     imageStatus: "ready",
     audioUrl: audioEndpoint,
-    audioRef: audioEndpoint,
+    audioRef: runtimeAudioEndpoint,
     audioScript: page.text,
     audioStatus: "ready",
     voiceStyle: "温柔女声 · 儿童绘本朗读 · 语速略慢",
@@ -141,7 +165,7 @@ export function buildLinXiaoyuFixedStorybookResponse(
     title: LIN_XIAOYU_FIXED_STORYBOOK_TITLE,
     summary: LIN_XIAOYU_FIXED_STORYBOOK_SUBTITLE,
     moral: "勇敢不是不害怕，勇敢是害怕的时候，也愿意试一小步。",
-    parentNote: "固定演示绘本使用本地静态图片和预生成朗读音频；vivo 不可用时仍可稳定阅读图文。",
+    parentNote: `${LIN_XIAOYU_TONIGHT_ACTION} 固定演示绘本使用本地静态图片和预生成朗读音频；vivo 不可用时仍可稳定阅读图文。`,
     source: "rule",
     fallback: false,
     fallbackReason: null,

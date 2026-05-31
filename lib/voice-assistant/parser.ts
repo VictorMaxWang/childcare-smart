@@ -505,7 +505,7 @@ function directorIntent(context: AssistantParseContext, utterance: AssistantUtte
     });
   }
 
-  if (/高风险儿童|风险儿童|高风险孩子|优先关注|哪些孩子|异常晨检|晨检异常/.test(text)) {
+  if (/高风险(?:儿童|孩子)|风险(?:儿童|孩子)|优先关注|哪些孩子|异常晨检|晨检异常/.test(text)) {
     const focusType = /异常晨检|晨检异常|多少/.test(text) ? "morning_abnormal" : "risk";
     return commandBase({
       context,
@@ -513,7 +513,7 @@ function directorIntent(context: AssistantParseContext, utterance: AssistantUtte
       intent: "query_director_risk",
       confidence: 0.86,
       safetyLevel: "safe",
-      previewText: focusType === "morning_abnormal" ? "查询今日异常晨检" : "查看高风险儿童",
+      previewText: focusType === "morning_abnormal" ? "查询今日异常晨检" : "查看重点跟进记录",
       execute: "query.director_risk",
       params: { focusType, ...childParams(child) },
     });
@@ -536,7 +536,7 @@ function directorIntent(context: AssistantParseContext, utterance: AssistantUtte
 }
 
 function directorOnlyIntentFor(text: string): AssistantIntent | null {
-  if (/未处理反馈|待处理反馈|未解决反馈|高风险儿童|风险儿童|高风险孩子|异常晨检|晨检异常/.test(text)) {
+  if (/未处理反馈|待处理反馈|未解决反馈|高风险(?:儿童|孩子)|风险(?:儿童|孩子)|异常晨检|晨检异常/.test(text)) {
     return /反馈/.test(text) ? "query_director_feedback" : "query_director_risk";
   }
   if (/园长首页|园长端首页|园所首页/.test(text)) return "navigate";
@@ -956,7 +956,7 @@ export function parseAssistantCommand(context: AssistantParseContext, utterance:
     });
   }
 
-  if (/查看|查询/.test(text) && /(看板|概览|高风险儿童|未处理反馈|数据)/.test(text)) {
+  if (/查看|查询/.test(text) && /(看板|概览|高风险(?:儿童|孩子)|未处理反馈|数据)/.test(text)) {
     return commandBase({
       context,
       utterance,

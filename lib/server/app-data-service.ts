@@ -1,4 +1,5 @@
 import { DEMO_ACCOUNTS, type SessionUser } from "@/lib/auth/accounts";
+import { normalizeHighRiskConsultationResult } from "@/lib/consultation/normalize-result";
 import type {
   ApiAttachment,
   ApiAssignment,
@@ -336,6 +337,56 @@ function buildConsultation(input: {
     sourceMaterialId: input.sourceMaterialId,
     updatedAt: now,
   } as AppStateSnapshot["consultations"][number];
+}
+
+const RICH_CONSULTATION_FIELDS = [
+  "consultationId",
+  "evidenceItems",
+  "todayInSchoolActions",
+  "tonightAtHomeActions",
+  "followUp48h",
+  "providerTrace",
+  "traceMeta",
+  "interventionCard",
+];
+
+function isRichConsultationPayload(input: AnyRecord) {
+  return RICH_CONSULTATION_FIELDS.some((field) => field in input);
+}
+
+function buildRichConsultation(input: {
+  session: SessionUser;
+  childId: string;
+  payload: AnyRecord;
+}) {
+  const now = nowIso();
+  try {
+    const normalized = normalizeHighRiskConsultationResult({
+      ...input.payload,
+      consultationId: readString(input.payload.consultationId) || createApiId("consult"),
+      childId: input.childId,
+      generatedAt: readString(input.payload.generatedAt) || now,
+      source: readString(input.payload.source) || "rule",
+    });
+
+    return {
+      ...normalized,
+      status: readString(input.payload.status) || "active",
+      workflowStatus: readString(input.payload.workflowStatus) || "pending",
+      notes: readString(input.payload.notes)
+        ? [{ note: readString(input.payload.notes), createdAt: now, createdBy: input.session.id }]
+        : readArray(input.payload.notes),
+      createdBy: readString(input.payload.createdBy) || input.session.id,
+      sourceMaterialId: readString(input.payload.sourceMaterialId) || undefined,
+      updatedAt: now,
+    } as AppStateSnapshot["consultations"][number];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "invalid high-risk consultation payload";
+    throw new ApiRouteError(
+      "invalid_request",
+      `完整高风险会诊结果缺少必要字段，未保存 shell 记录：${message}`
+    );
+  }
 }
 
 export class AppDataService {
@@ -971,14 +1022,20 @@ export class AppDataService {
     if (!childId) throw new ApiRouteError("invalid_request", "会诊必须提供 childId。");
     return this.mutate("consultation", "new", "create", (snapshot) => {
       requireChildAccess(this.session, snapshot, childId);
-      const consultation = buildConsultation({
-        session: this.session,
-        childId,
-        riskLevel: input.riskLevel === "low" || input.riskLevel === "medium" || input.riskLevel === "high" ? input.riskLevel : "medium",
-        summary: readString(input.summary, readString(input.notes, "E01 consultation")),
-        notes: readString(input.notes) || undefined,
-        sourceMaterialId: readString(input.sourceMaterialId) || undefined,
-      });
+      const consultation = isRichConsultationPayload(input)
+        ? buildRichConsultation({
+            session: this.session,
+            childId,
+            payload: input,
+          })
+        : buildConsultation({
+            session: this.session,
+            childId,
+            riskLevel: input.riskLevel === "low" || input.riskLevel === "medium" || input.riskLevel === "high" ? input.riskLevel : "medium",
+            summary: readString(input.summary, readString(input.notes, "E01 consultation")),
+            notes: readString(input.notes) || undefined,
+            sourceMaterialId: readString(input.sourceMaterialId) || undefined,
+          });
       snapshot.consultations = [consultation, ...snapshot.consultations];
       return consultation;
     });

@@ -647,7 +647,7 @@ test("parent storybook route uses local scaffold plus real vivo text when backen
   }
 });
 
-test("parent storybook route returns 503 instead of a next-json-fallback story when brain is unavailable", async () => {
+test("parent storybook route returns a next-json-fallback story when brain is unavailable", async () => {
   const originalFetch = globalThis.fetch;
   const originalSetTimeout = globalThis.setTimeout;
   parentStoryBookCacheInternals.storyResponseCache.clear();
@@ -677,15 +677,10 @@ test("parent storybook route returns 503 instead of a next-json-fallback story w
         const response = await POST(
           buildStorybookRouteRequest()
         );
-        const body = (await response.json()) as {
-          code?: string;
-          diagnostics?: Record<string, unknown>;
-          error?: string;
-          storyId?: string;
-        };
+        const body = (await response.json()) as ParentStoryBookResponse;
 
-        assert.equal(response.status, 503);
-        assert.equal(response.headers.get(SMARTCHILDCARE_TRANSPORT_HEADER), "brain-proxy-error");
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get(SMARTCHILDCARE_TRANSPORT_HEADER), "next-json-fallback");
         assert.equal(
           response.headers.get(SMARTCHILDCARE_FALLBACK_REASON_HEADER),
           "brain-proxy-timeout"
@@ -698,11 +693,11 @@ test("parent storybook route returns 503 instead of a next-json-fallback story w
           response.headers.get("x-smartchildcare-storybook-cache"),
           "bypass"
         );
-        assert.equal(body.code, "brain-proxy-unavailable");
-        assert.equal(body.storyId, undefined);
-        assert.equal(body.diagnostics?.transport, "brain-proxy-error");
-        assert.equal(body.diagnostics?.fallbackReason, "brain-proxy-timeout");
-        assert.equal(typeof body.diagnostics?.timeoutMs, "number");
+        assert.equal(typeof body.storyId, "string");
+        assert.equal(body.providerMeta.transport, "next-json-fallback");
+        assert.equal(body.providerMeta.fallbackReason, "brain-proxy-timeout");
+        assert.equal(body.providerMeta.diagnostics?.brain.fallbackReason, "brain-proxy-timeout");
+        assert.equal(typeof body.providerMeta.diagnostics?.brain.timeoutMs, "number");
       }
     );
   } finally {

@@ -881,9 +881,9 @@ def build_mock_high_risk_bundle(payload: dict[str, Any]) -> dict[str, Any]:
     summary = first_non_empty(
         [
             continuity_notes[0] if continuity_notes else "",
-            f"{child_name} 已进入高风险会诊闭环，建议今天先补齐园内记录，今晚形成家庭反馈。",
+            f"{child_name} 已进入重点会诊闭环，建议今天先补齐园内记录，今晚形成家庭反馈。",
         ],
-        f"{child_name} 已进入高风险会诊闭环，建议今天先补齐园内记录，今晚形成家庭反馈。",
+        f"{child_name} 已进入重点会诊闭环，建议今天先补齐园内记录，今晚形成家庭反馈。",
     )
     observation_points = ["情绪波动", "进食与饮水", "入睡与晨起状态"]
     review_in_48h = "48 小时内复查执行结果，并决定是否继续升级。"
@@ -893,7 +893,7 @@ def build_mock_high_risk_bundle(payload: dict[str, Any]) -> dict[str, Any]:
         "consultationId": consultation_id,
         "triggerReason": "教师主动发起高风险会诊",
         "triggerType": ["multi-risk"],
-        "triggerReasons": auto_context["focusReasons"][:3] or ["需要启动高风险闭环"],
+        "triggerReasons": auto_context["focusReasons"][:3] or ["需要启动重点跟进闭环"],
         "participants": [
             {"id": "health-agent", "label": "健康观察"},
             {"id": "diet-agent", "label": "饮食行为"},
@@ -999,9 +999,9 @@ def build_mock_high_risk_bundle(payload: dict[str, Any]) -> dict[str, Any]:
             "reason": first_non_empty(
                 [
                     prompt_context["open_loops"][0] if prompt_context["open_loops"] else "",
-                    "当前属于高风险闭环优先级，建议教师先执行，必要时再升级机构派单。",
+                    "当前属于重点跟进闭环优先级，建议教师先执行，必要时再升级机构派单。",
                 ],
-                "当前属于高风险闭环优先级，建议教师先执行，必要时再升级机构派单。",
+                "当前属于重点跟进闭环优先级，建议教师先执行，必要时再升级机构派单。",
             ),
             "recommendedOwnerRole": "teacher",
             "recommendedOwnerName": "班级老师",
@@ -1018,7 +1018,7 @@ def build_mock_high_risk_bundle(payload: dict[str, Any]) -> dict[str, Any]:
         ],
         "nextCheckpoints": unique_texts(["今晚形成家庭反馈", "明早核对园内与家庭观察", review_in_48h, *prompt_context["open_loops"][:1]], limit=4),
         "coordinatorSummary": {
-            "finalConclusion": "高风险闭环已启动",
+            "finalConclusion": "重点跟进闭环已启动",
             "riskLevel": "high",
             "problemDefinition": first_non_empty(
                 [

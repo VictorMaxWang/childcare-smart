@@ -22,11 +22,13 @@
 ## 固定录屏顺序
 
 1. `/teacher`
-2. `/teacher/agent`
+2. `/teacher/high-risk-consultation`
 3. `/admin`
-4. `/admin/agent?action=weekly-report`
-5. `/parent`
+4. `/parent`
+5. `/parent/storybook?child=c-1`
 6. `/parent/agent?child=c-1`
+
+可选备份路线：`/teacher/agent` 用于补充 Teacher Copilot；`/admin/agent?action=weekly-report` 用于补充周报工作区，不再作为首选主线。
 
 ## 页面讲解重点
 
@@ -35,9 +37,10 @@
 - 首屏应同时看到异常晨检、待复查、待沟通、正向亮点。
 - 风险不要只落在一个 child，优先讲 `c-8 / c-11 / c-14 / c-15` 的差异化。
 
-### `/teacher/agent`
+### `/teacher/high-risk-consultation`
 
 - 优先围绕 `c-8` 讲会诊闭环。
+- 重点展示阶段流、证据链、教师动作、家长今夜任务和园长承接信息。
 - 可补 `c-14` 作为晨曦班睡眠复核 drill-down。
 
 ### `/admin`
@@ -45,10 +48,10 @@
 - 首屏优先讲 top 4 consultation：`c-15 / c-14 / c-8 / c-11`。
 - 同时覆盖班级分布、风险差异、attendance、反馈完成度。
 
-### `/admin/agent?action=weekly-report`
+### `/parent/storybook?child=c-1`
 
-- 默认 child 为 `c-15`，适合讲补水趋势、follow-up、reminder、risk child distribution。
-- 这页不再依赖绝对日期录屏。
+- 作为家长端 wow factor，重点讲成长亮点、今晚行动和情感连接。
+- 强调绘本是 demo-safe illustration 和内容组织能力展示，不写成真实儿童影像采集。
 
 ### `/parent`
 
@@ -71,6 +74,7 @@
 - 首页日期应分散在最近几天，不要扎堆同一天。
 - `/parent` 必须看到 meals 图、growth media、feedback、weekly preview。
 - `/teacher` 至少要有 `3-5` 个可讲 child case。
+- `/teacher/high-risk-consultation` 必须能稳定展示阶段流、证据链和干预卡。
 - `/admin` 必须稳定出现 risk child、risk class、attendance、consultation、weekly 入口。
 
 ## 剩余限制

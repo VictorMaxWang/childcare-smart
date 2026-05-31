@@ -168,7 +168,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
               <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
-              <span className="block truncate text-sm sm:text-base">智慧托育平台</span>
+              <span className="block truncate text-sm sm:text-base">慧育童行</span>
               <span className="mt-0.5 block truncate text-[10px] font-semibold text-(--text-helper) sm:mt-1 sm:text-xs">
                 {ROLE_LABEL_MAP[currentUser.role]} · {currentUser.name}
               </span>

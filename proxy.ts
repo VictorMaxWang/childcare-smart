@@ -31,7 +31,7 @@ const API_ROUTE_HANDLED_AUTH_PREFIXES = [
   "/api/ai",
   "/api/voice-assistant",
 ];
-const PUBLIC_ASSET_PREFIXES = ["/demo", "/vendor"];
+const PUBLIC_ASSET_PREFIXES = ["/demo", "/demo-media", "/vendor"];
 
 function normalizeBase64Url(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");

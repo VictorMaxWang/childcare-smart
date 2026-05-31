@@ -193,6 +193,8 @@ function ResultCorePanel({ result }: { result: ConsultationApiResult }) {
   const provider = getProviderSummary(result);
   const dataQuality = getDataQualitySummary(result);
   const evidenceItems = sortConsultationEvidenceItems(result.evidenceItems);
+  const safetyWarnings = Array.isArray(result.warnings) ? result.warnings : dataQuality.warnings;
+  const manualReviewSummary = result.manualReviewSummary;
   const adminHandoff = result.shouldEscalateToAdmin
     ? `需要管理端承接 · ${result.directorDecisionCard.recommendedOwnerName} · ${result.directorDecisionCard.recommendedAt}`
     : "教师端继续观察";
@@ -204,12 +206,13 @@ function ResultCorePanel({ result }: { result: ConsultationApiResult }) {
       actions={<Badge variant={result.shouldEscalateToAdmin ? "warning" : "outline"}>{adminHandoff}</Badge>}
     >
       <div className="space-y-5 lg:pr-72 2xl:pr-0">
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-5">
           {[
             { label: "风险等级", value: getRiskPriorityLabel(result), tone: "border-rose-100 bg-rose-50 text-rose-800" },
             { label: "管理端承接", value: result.shouldEscalateToAdmin ? "已进入园长优先级板" : "教师端闭环", tone: "border-amber-100 bg-amber-50 text-amber-800" },
             { label: "Provider / fallback", value: `${provider.provider} · ${provider.label}`, tone: "border-indigo-100 bg-indigo-50 text-indigo-800" },
             { label: "DataQuality", value: `证据 ${dataQuality.evidenceCount} 条 · 来源 ${dataQuality.requiredSourceCoverage}`, tone: "border-emerald-100 bg-emerald-50 text-emerald-800" },
+            { label: "人工复核", value: manualReviewSummary?.required ? `${manualReviewSummary.reviewRequiredCount} 条需复核` : "常规复核", tone: "border-sky-100 bg-sky-50 text-sky-800" },
           ].map((item) => (
             <div key={item.label} className={`rounded-2xl border p-4 ${item.tone}`}>
               <p className="text-xs font-medium opacity-80">{item.label}</p>
@@ -272,8 +275,8 @@ function ResultCorePanel({ result }: { result: ConsultationApiResult }) {
                 已覆盖：{dataQuality.coveredSources.length > 0 ? dataQuality.coveredSources.join("、") : "教师观察、成长记录、家长反馈、记忆快照 / 历史跟进"}
               </p>
             </div>
-            <Badge variant={dataQuality.status === "complete" ? "success" : "warning"}>
-              {dataQuality.status === "complete" ? "证据完整" : "需复核"}
+            <Badge variant={result.humanReviewRequired ? "warning" : dataQuality.status === "complete" ? "success" : "warning"}>
+              {result.humanReviewRequired ? "需人工复核" : dataQuality.status === "complete" ? "证据完整" : "需复核"}
             </Badge>
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -303,8 +306,8 @@ function ResultCorePanel({ result }: { result: ConsultationApiResult }) {
             <p className="mt-2 text-sm leading-6 text-slate-600">
               provider={provider.provider}；model={provider.model}；transport={provider.transport}；fallback={provider.fallback ? "true" : "false"}；dataQuality={dataQuality.status}。
             </p>
-            {dataQuality.warnings.length > 0 ? (
-              <p className="mt-2 text-xs leading-5 text-amber-700">{dataQuality.warnings.join("；")}</p>
+            {safetyWarnings.length > 0 ? (
+              <p className="mt-2 text-xs leading-5 text-amber-700">{safetyWarnings.join("；")}</p>
             ) : null}
           </div>
           <Button asChild variant="premium" className="h-full min-h-20 rounded-2xl">
@@ -390,7 +393,7 @@ function ConsultationInputCard({
           <div className="text-sm text-slate-600">点击后会按“长期画像 → 最近会诊 → 当前建议”流式展示，并在结束后保留最终会诊卡。</div>
           <Button
             ref={startButtonRef}
-            className="gap-2 rounded-xl"
+            className="gap-2 rounded-xl bg-[linear-gradient(135deg,#4f46e5,#7c3aed)] text-white shadow-md shadow-indigo-500/25 disabled:border disabled:border-slate-200 disabled:bg-none disabled:bg-slate-100 disabled:text-slate-500 disabled:shadow-none"
             variant="premium"
             data-testid="r06-consultation-start-button"
             onClick={() =>
@@ -986,8 +989,8 @@ export default function TeacherHighRiskConsultationPage() {
 
   return (
     <RolePageShell
-      badge={`高风险儿童会诊 · ${classContext.className}`}
-      title="高风险儿童一键会诊"
+      badge={`重点会诊 · ${classContext.className}`}
+      title="重点儿童支持会诊"
       description="按长期画像、最近会诊、当前建议分阶段流式展示，适合移动端录屏。"
       testId="r06-high-risk-consultation-page"
       actions={
@@ -1012,7 +1015,7 @@ export default function TeacherHighRiskConsultationPage() {
                         <Badge variant="info" className="rounded-full px-3 py-1">教师工作台</Badge>
                         <Badge variant="warning" className="rounded-full px-3 py-1">高风险</Badge>
                       </div>
-                      <h1 className="mt-4 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">高风险儿童一键会诊</h1>
+                      <h1 className="mt-4 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">重点儿童支持会诊</h1>
                       <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                         按长期画像、最近会诊、当前建议分阶段流式展示，适合移动端录屏。
                       </p>
@@ -1024,7 +1027,7 @@ export default function TeacherHighRiskConsultationPage() {
                       <Button
                         type="button"
                         variant="premium"
-                        className="rounded-2xl"
+                        className="rounded-2xl bg-[linear-gradient(135deg,#4f46e5,#7c3aed)] text-white shadow-md shadow-indigo-500/25"
                         onClick={openConsultationSetup}
                         aria-controls="consultation-setup"
                       >
@@ -1062,7 +1065,7 @@ export default function TeacherHighRiskConsultationPage() {
                         { label: "待处理会诊", value: `${autoContext.pendingReviewNotes.length + autoContext.morningCheckAlerts.length}`, tone: "bg-sky-50 text-sky-700", icon: ClipboardList },
                         { label: "在会诊中", value: isStreaming ? "1" : result ? "0" : "0", tone: "bg-indigo-50 text-indigo-700", icon: UsersRound },
                       { label: "本周完成会诊", value: result ? "1" : "0", tone: "bg-emerald-50 text-emerald-700", icon: CheckCircle2 },
-                      { label: "高风险儿童", value: `${classContext.focusChildren.length}`, tone: "bg-rose-50 text-rose-700", icon: ShieldAlert },
+                      { label: "重点跟进记录", value: `${classContext.focusChildren.length}`, tone: "bg-rose-50 text-rose-700", icon: ShieldAlert },
                       { label: "未回复家长消息", value: `${autoContext.parentFeedbackNotes.length}`, tone: "bg-emerald-50 text-emerald-700", icon: MessageSquareText },
                     ].map((item) => {
                       const Icon = item.icon;

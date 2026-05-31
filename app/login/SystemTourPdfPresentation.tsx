@@ -279,7 +279,7 @@ export default function SystemTourPdfPresentation({ open, onClose }: SystemTourP
     >
       <div className={styles.presentationTopBar}>
         <div className={styles.presentationMeta}>
-          <span className={styles.presentationTitle}>系统导览</span>
+          <span className={styles.presentationTitle}>慧育童行系统导览</span>
           <span className={styles.presentationPageCount} data-testid="system-tour-page-count">
             {currentPage} / {TOUR_PAGE_COUNT}
           </span>
@@ -297,7 +297,7 @@ export default function SystemTourPdfPresentation({ open, onClose }: SystemTourP
 
       <div className={styles.presentationCanvasFrame}>
         {imageLoading && !loadError ? (
-          <picture className={styles.presentationPreviewPicture} aria-hidden="true">
+          <picture className={styles.presentationPreviewPicture}>
             <source srcSet={currentPreviewAvifSrc} type="image/avif" />
             <img
               src={currentPreviewWebpSrc}

@@ -4,6 +4,7 @@
 
 ## 当前状态
 
+- 比赛展示口径已统一为 `慧育童行 - SmartChildcare Agent`，中文展示名为 `慧育童行`，英文名 / 技术系统名为 `SmartChildcare Agent`。
 - 当前 demo 数据热修已经切到“相对日期 + 固定 hero child matrix”模式。
 - 前端本地 demo snapshot 与后端 `build_demo_snapshot()` 已经围绕同一批 child case 对齐。
 - Parent / Teacher / Admin 三端的主要录屏页现在都能拿到更饱满的 demo 内容。
@@ -29,10 +30,12 @@
 
 - `/parent`
 - `/parent/agent?child=c-1`
+- `/parent/storybook?child=c-1`
 - `/teacher`
-- `/teacher/agent`
+- `/teacher/high-risk-consultation`
 - `/admin`
-- `/admin/agent?action=weekly-report`
+
+补充路线仍保留 `/teacher/agent` 与 `/admin/agent?action=weekly-report`，但答辩主线优先按 `docs/competition-message-guide.md` 执行。
 
 ## 演示素材口径
 

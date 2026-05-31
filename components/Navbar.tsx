@@ -114,7 +114,7 @@ const ROLE_META: Record<
     shellRole: "parent",
     shellMode: "mobile-app",
     description: "孩子状态、成长回看与反馈闭环",
-    shortDescription: "普惠托育智慧管理平台",
+    shortDescription: "SmartChildcare Agent",
     navCue: "孩子状态",
     accentClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
     heroToneClassName: "from-emerald-50 via-white to-violet-50",
@@ -268,7 +268,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           roleMeta.shellMode === "mobile-app" && "parent-app-stage"
         )}
       >
-        <main className="pixel-app-main min-h-[calc(100vh-86px)] overflow-x-hidden pb-[calc(env(safe-area-inset-bottom)+5.9rem)] sm:min-h-[calc(100vh-72px)] lg:min-h-[calc(100vh-80px)] lg:pb-0">
+        <main className="pixel-app-main min-h-[calc(100vh-86px)] overflow-x-hidden pb-[calc(env(safe-area-inset-bottom)+7.75rem)] sm:min-h-[calc(100vh-72px)] sm:pb-[calc(env(safe-area-inset-bottom)+8.25rem)] lg:min-h-[calc(100vh-80px)] lg:pb-0">
           {children}
         </main>
         <VoiceOrb hideFloatingButton={currentUser.role === "教师"} />
@@ -314,14 +314,14 @@ function ShellTopbar({
           <Link href="/" className="hidden min-w-0 shrink-0 items-center gap-3 sm:flex">
             <BrandMark compact={roleMeta.shellMode === "sidebar"} />
             <div className="min-w-0">
-              <p className="truncate text-base font-bold leading-tight text-slate-950 lg:text-lg">智慧托育平台</p>
-              <p className="mt-0.5 truncate text-xs font-medium text-slate-500">普惠托育智慧管理平台</p>
+              <p className="truncate text-base font-bold leading-tight text-slate-950 lg:text-lg">慧育童行</p>
+              <p className="mt-0.5 truncate text-xs font-medium text-slate-500">SmartChildcare Agent</p>
             </div>
           </Link>
           <Link href="/" className="flex min-w-0 items-center gap-2 sm:hidden">
             <BrandMark compact />
             <div className="min-w-0">
-              <p className="truncate text-base font-bold leading-tight text-slate-950">智慧托育平台</p>
+              <p className="truncate text-base font-bold leading-tight text-slate-950">慧育童行</p>
               <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">{roleMeta.shortDescription}</p>
             </div>
           </Link>
@@ -642,5 +642,5 @@ function resolvePageTitle(currentLocation: string, activeItem?: PrimaryNavItem) 
     return pathname === item.prefix || pathname.startsWith(`${item.prefix}/`);
   });
 
-  return routeTitle?.title ?? activeItem?.label ?? "智慧托育平台";
+  return routeTitle?.title ?? activeItem?.label ?? "慧育童行";
 }

@@ -150,6 +150,12 @@ def test_high_risk_consultation_stream_uses_memory_and_canonical_done(tmp_path, 
     assert done_data["providerTrace"]["transportSource"] == "fastapi-brain"
     assert done_data["providerTrace"]["brainProvider"] in {"mock", "vivo"}
     assert done_data["result"]["traceMeta"]["memory"]["usedSources"]
+    assert done_data["result"]["traceMeta"]["dataQuality"]["evidenceCount"] == len(
+        done_data["result"]["evidenceItems"]
+    )
+    assert isinstance(done_data["result"]["warnings"], list)
+    assert done_data["result"]["humanReviewRequired"] is True
+    assert done_data["result"]["manualReviewSummary"]["required"] is True
     assert done_data["result"]["traceMeta"]["transport"] == "fastapi-brain"
     assert done_data["result"]["consultationId"]
     assert done_data["result"]["evidenceItems"]

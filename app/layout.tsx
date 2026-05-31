@@ -5,9 +5,13 @@ import AppShell from "@/components/Navbar";
 import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "sonner";
 
+const enableVercelAnalytics =
+  process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === "1" ||
+  process.env.VERCEL_ENV === "production";
+
 export const metadata: Metadata = {
-  title: "普惠托育智慧管理平台",
-  description: "普惠性托育机构智慧干预管理系统",
+  title: "慧育童行 | SmartChildcare Agent",
+  description: "面向托育场景的多智能体闭环决策系统",
 };
 
 export default function RootLayout({
@@ -38,7 +42,7 @@ export default function RootLayout({
             }}
           />
         </AppProvider>
-        <Analytics />
+        {enableVercelAnalytics ? <Analytics /> : null}
       </body>
     </html>
   );

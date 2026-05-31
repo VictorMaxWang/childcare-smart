@@ -322,7 +322,7 @@ export function buildInterventionCardFromConsultation(
 
   return finalizeInterventionCard({
     childName: input.childName,
-    title: `${input.childName} 高风险家庭干预卡`,
+    title: `${input.childName} 家庭支持卡`,
     riskLevel: consultation.riskLevel,
     targetChildId: input.targetChildId,
     triggerReason: consultation.triggerReasons[0] ?? consultation.triggerReason,

@@ -1676,7 +1676,7 @@ function buildWeeklyActionItems(
       id: "weekly-abnormal-priority",
       target: "班级",
       reason: "本周已出现晨检异常，需要保留晨间优先处理节奏",
-      action: "下周继续把晨检异常儿童列为晨间优先处理对象，先复查再安排家园沟通",
+      action: "下周继续把晨检异常记录列为晨间优先处理对象，先复查再安排家园沟通",
       timing: "下周晨间",
       priority: 2,
     });

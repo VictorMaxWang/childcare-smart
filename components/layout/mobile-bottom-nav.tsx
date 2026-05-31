@@ -14,7 +14,7 @@ export function MobileBottomNav({ items, pathname }: { items: MobileBottomNavIte
   return (
     <nav
       data-testid="r02-mobile-bottom-nav"
-      className="pixel-bottom-tabs fixed inset-x-3 bottom-3 z-40 rounded-[1.65rem] border border-white/85 bg-white/94 px-2 py-2 shadow-[var(--replica-shadow-shell)] backdrop-blur-xl lg:hidden"
+      className="pixel-bottom-tabs fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-40 rounded-[1.65rem] border border-white/85 bg-white/94 px-2 py-2 shadow-[var(--replica-shadow-shell)] backdrop-blur-xl lg:hidden"
       aria-label="移动端快捷导航"
     >
       <div className="grid grid-cols-5 gap-1">

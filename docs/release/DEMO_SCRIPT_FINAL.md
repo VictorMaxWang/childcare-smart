@@ -1,5 +1,9 @@
 # Final Demo Script
 
+Product naming for defense materials: `慧育童行 - SmartChildcare Agent`.
+
+Preferred competition route: `/login` -> `/teacher` -> `/teacher/high-risk-consultation` -> `/admin` -> `/parent` -> `/parent/storybook?child=c-1` -> `/parent/agent?child=c-1`. Older `/teacher/agent` and `/admin/agent?action=weekly-report` flows are backup or deep-dive segments.
+
 Each step should stay within 1-2 minutes. Skip deeper explanation if the room is short on time; the goal is to show the working loop, not every feature.
 
 ## Chen Director Script

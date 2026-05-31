@@ -8,6 +8,7 @@ import WebSocket from "ws";
 const { loadEnvConfig } = nextEnv;
 const projectDir = process.cwd();
 const force = process.argv.includes("--force");
+const checkOnly = process.argv.includes("--check") || process.argv.includes("--dry-run");
 
 loadEnvConfig(projectDir, false, {
   info: () => {},
@@ -45,6 +46,8 @@ const story = {
     },
   ],
 };
+const audioDir = path.join(projectDir, "public/demo-media/storybooks/lin-xiaoyu/audio");
+const manifestPath = path.join(audioDir, "audio-manifest.json");
 
 const requiredEnv = [
   "VIVO_APP_ID",
@@ -79,6 +82,86 @@ function readNumberEnv(name, fallback) {
 
 function sha256(bufferOrText) {
   return createHash("sha256").update(bufferOrText).digest("hex");
+}
+
+function audioFileName(pageNumber) {
+  return `page-${String(pageNumber).padStart(2, "0")}.mp3`;
+}
+
+function publicAudioPath(fileName) {
+  return `/demo-media/storybooks/lin-xiaoyu/audio/${fileName}`;
+}
+
+function readExistingManifest() {
+  if (!fs.existsSync(manifestPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function buildExistingFileRecord(page, status = "skipped-existing") {
+  const fileName = audioFileName(page.page);
+  const mp3Path = path.join(audioDir, fileName);
+  const bytes = fs.readFileSync(mp3Path);
+  return {
+    page: page.page,
+    path: publicAudioPath(fileName),
+    mimeType: "audio/mpeg",
+    sizeBytes: bytes.byteLength,
+    sha256: sha256(bytes),
+    textHash: sha256(page.text),
+    status,
+  };
+}
+
+function checkStaticAudioManifest() {
+  const issues = [];
+  const manifest = readExistingManifest();
+  const checkedFiles = [];
+
+  if (!manifest) {
+    issues.push("audio-manifest.json is missing or invalid");
+  } else if (manifest.storybookId !== story.id) {
+    issues.push(`manifest storybookId mismatch: ${manifest.storybookId}`);
+  }
+
+  for (const page of story.pages) {
+    const fileName = audioFileName(page.page);
+    const mp3Path = path.join(audioDir, fileName);
+    if (!fs.existsSync(mp3Path)) {
+      issues.push(`missing audio file: ${fileName}`);
+      continue;
+    }
+
+    const record = buildExistingFileRecord(page, "checked");
+    checkedFiles.push(record.path);
+    const manifestRecord = Array.isArray(manifest?.files)
+      ? manifest.files.find((file) => Number(file.page) === page.page)
+      : null;
+    if (!manifestRecord) {
+      issues.push(`manifest missing page ${page.page}`);
+      continue;
+    }
+
+    for (const key of ["path", "mimeType", "sizeBytes", "sha256", "textHash"]) {
+      if (manifestRecord[key] !== record[key]) {
+        issues.push(`manifest page ${page.page} ${key} mismatch`);
+      }
+    }
+  }
+
+  console.log(JSON.stringify({
+    status: issues.length ? "mismatch" : "ok",
+    storybookId: story.id,
+    manifestPath,
+    checkedFiles,
+    issues,
+  }, null, 2));
+  if (issues.length) {
+    process.exitCode = 1;
+  }
 }
 
 function canonicalQueryString(query) {
@@ -280,6 +363,11 @@ function convertWavToMp3(wavPath, mp3Path) {
 }
 
 async function main() {
+  if (checkOnly) {
+    checkStaticAudioManifest();
+    return;
+  }
+
   const missingEnv = requiredEnv.filter((name) => !readEnv(name));
   if (missingEnv.length) {
     console.error(JSON.stringify({
@@ -291,35 +379,28 @@ async function main() {
     return;
   }
 
-  const audioDir = path.join(projectDir, "public/demo-media/storybooks/lin-xiaoyu/audio");
   const workDir = path.join(projectDir, "artifacts/demo-media/STORYBOOK-LOCK-01/audio-work");
   fs.mkdirSync(audioDir, { recursive: true });
   fs.mkdirSync(workDir, { recursive: true });
 
+  const existingManifest = readExistingManifest();
+  let generatedAny = false;
   const manifest = {
     storybookId: story.id,
     provider: "vivo",
-    generatedAt: new Date().toISOString(),
+    generatedAt: existingManifest?.generatedAt ?? new Date().toISOString(),
     files: [],
   };
 
   for (const page of story.pages) {
-    const fileName = `page-${String(page.page).padStart(2, "0")}.mp3`;
+    const fileName = audioFileName(page.page);
     const mp3Path = path.join(audioDir, fileName);
     if (!force && fs.existsSync(mp3Path)) {
-      const bytes = fs.readFileSync(mp3Path);
-      manifest.files.push({
-        page: page.page,
-        path: `/demo-media/storybooks/lin-xiaoyu/audio/${fileName}`,
-        mimeType: "audio/mpeg",
-        sizeBytes: bytes.byteLength,
-        sha256: sha256(bytes),
-        textHash: sha256(page.text),
-        status: "skipped-existing",
-      });
+      manifest.files.push(buildExistingFileRecord(page));
       continue;
     }
 
+    generatedAny = true;
     const { wavBytes, engineId, voice } = await synthesizePage(page);
     const wavPath = path.join(workDir, `page-${String(page.page).padStart(2, "0")}.wav`);
     fs.writeFileSync(wavPath, wavBytes);
@@ -329,7 +410,7 @@ async function main() {
     const bytes = fs.readFileSync(mp3Path);
     manifest.files.push({
       page: page.page,
-      path: `/demo-media/storybooks/lin-xiaoyu/audio/${fileName}`,
+      path: publicAudioPath(fileName),
       mimeType: "audio/mpeg",
       sizeBytes: bytes.byteLength,
       sha256: sha256(bytes),
@@ -340,8 +421,17 @@ async function main() {
     });
   }
 
+  if (!generatedAny && existingManifest) {
+    console.log(JSON.stringify({
+      status: "unchanged",
+      manifestPath,
+      files: manifest.files.map((file) => file.path),
+    }));
+    return;
+  }
+
   fs.writeFileSync(
-    path.join(audioDir, "audio-manifest.json"),
+    manifestPath,
     `${JSON.stringify(manifest, null, 2)}\n`,
     "utf8"
   );

@@ -150,7 +150,7 @@ export default function PixelParentHomeReplica({
   }));
 
   return (
-    <div className="mx-auto max-w-[72rem] min-w-0 pb-24" data-testid="r07-parent-replica-page" data-child-name={childName}>
+    <div className="mx-auto max-w-[72rem] min-w-0 pb-36 sm:pb-32 lg:pb-0" data-testid="r07-parent-replica-page" data-child-name={childName}>
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-5">
           <section className="relative min-h-[150px] overflow-hidden rounded-[24px] border border-violet-100 bg-[linear-gradient(135deg,#f7f4ff_0%,#fffefe_58%,#eef8ff_100%)] p-4 shadow-[0_22px_70px_rgb(111_96_255_/_0.13)] sm:min-h-0 sm:rounded-[28px] sm:p-7">
@@ -167,7 +167,7 @@ export default function PixelParentHomeReplica({
             <div className="relative min-w-0 max-w-[11rem] sm:max-w-2xl">
               <div className="flex items-center gap-2 text-sm font-semibold text-violet-600">
                 <ShieldCheck className="h-5 w-5" />
-                智慧托育平台 · 家长端
+                慧育童行 · SmartChildcare Agent
               </div>
               <h1 className="mt-3 text-[22px] font-black leading-tight tracking-normal text-slate-950 sm:mt-5 sm:text-4xl">
                 {currentUserName}，晚上好！
@@ -241,13 +241,13 @@ export default function PixelParentHomeReplica({
                 {statusLabel}
               </Badge>
             </div>
-            <div className="mt-4 grid grid-cols-5 gap-2 sm:mt-7 sm:gap-3">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:mt-7 sm:grid-cols-5">
               {statusItems.map((item) => (
                 <div
                   key={item.id}
                   data-testid="r07-parent-status-card"
                   data-status-id={item.id}
-                  className="rounded-[18px] border border-slate-100 bg-white px-1.5 py-3 text-center shadow-[0_10px_28px_rgb(15_23_42_/_0.06)] sm:rounded-[22px] sm:px-3 sm:py-4"
+                  className="min-h-[8.75rem] rounded-[18px] border border-slate-100 bg-white px-3 py-3 text-center shadow-[0_10px_28px_rgb(15_23_42_/_0.06)] sm:rounded-[22px] sm:px-3 sm:py-4"
                 >
                   <div
                     className={cn(
@@ -258,8 +258,8 @@ export default function PixelParentHomeReplica({
                     {statusIconMap[item.id] ?? <Sparkles className="h-7 w-7" />}
                   </div>
                   <p className="mt-2 text-xs text-slate-500 sm:mt-3 sm:text-base">{item.label}</p>
-                  <div className="mt-1 text-[13px] font-semibold leading-tight text-slate-950 sm:text-xl">{item.value}</div>
-                  <Badge variant={item.tone === "orange" ? "warning" : "info"} className="mt-2 rounded-full px-1.5 text-[10px] sm:mt-3 sm:px-2.5 sm:text-xs">
+                  <div className="mt-1 text-base font-semibold leading-tight text-slate-950 sm:text-xl">{item.value}</div>
+                  <Badge variant={item.tone === "orange" ? "warning" : "info"} className="mt-2 rounded-full px-2 text-[10px] leading-tight sm:mt-3 sm:px-2.5 sm:text-xs">
                     {item.helper}
                   </Badge>
                 </div>

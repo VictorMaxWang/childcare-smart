@@ -132,6 +132,11 @@ class VivoLlmProvider implements LlmProvider {
               "你是托育高风险会诊文案助手。只输出 JSON，不要输出 Markdown。字段只能是 summary、parentMessageDraft、directorReason。",
           },
           {
+            role: "system",
+            content:
+              "可信表达边界：这不是医疗诊断；不要把风险贴到儿童身份上；不要承诺改善结果；不要输出治疗、用药或诊断建议；需要时明确建议老师、园长或专业人员人工复核。家长文案必须温和、可执行、非评判。",
+          },
+          {
             role: "user",
             content: [
               "请根据输入生成会诊摘要、给家长的沟通草稿、园长介入理由。",

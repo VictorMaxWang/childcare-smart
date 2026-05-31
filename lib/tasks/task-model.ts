@@ -335,6 +335,15 @@ export function buildConsultationAdminTask(consultation: ConsultationResult) {
 
   const createdAt = safeIso(consultation.generatedAt);
   const title = consultation.coordinatorSummary.finalConclusion || consultation.summary || DEFAULT_TASK_TITLE;
+  const has48hFollowUp =
+    consultation.followUp48h.length > 0 || /48\s*小?时|48h/i.test(consultation.reviewIn48h);
+  const recommendedAtMs = safeDateMs(consultation.directorDecisionCard.recommendedAt);
+  const dueAt =
+    recommendedAtMs > 0
+      ? consultation.directorDecisionCard.recommendedAt
+      : has48hFollowUp
+        ? addHours(createdAt, 48)
+        : consultation.generatedAt;
   return buildTaskBase({
     childId: consultation.childId,
     sourceType: "consultation",
@@ -343,8 +352,8 @@ export function buildConsultationAdminTask(consultation: ConsultationResult) {
     ownerRole: "admin",
     title,
     description: consultation.coordinatorSummary.finalConclusion || consultation.reviewIn48h || consultation.summary,
-    dueWindow: buildDueWindow("deadline"),
-    dueAt: consultation.directorDecisionCard.recommendedAt || consultation.generatedAt,
+    dueWindow: buildDueWindow(has48hFollowUp ? "within_48h" : "deadline"),
+    dueAt,
     evidenceSubmissionMode: "dispatch_status_update",
     createdAt,
     updatedAt: createdAt,
@@ -418,7 +427,9 @@ function findMatchingFeedback(task: CanonicalTask, feedback: GuardianFeedback) {
   if (task.childId !== feedback.childId) return false;
   if (task.ownerRole !== "parent") return false;
   if (feedback.relatedTaskId) {
-    return feedback.relatedTaskId === task.taskId;
+    if (feedback.relatedTaskId === task.taskId) return true;
+    const legacyCardId = task.legacyRefs?.interventionCardId ?? task.sourceId;
+    if (feedback.relatedTaskId === legacyCardId) return true;
   }
   const consultationId = task.legacyRefs?.consultationId;
   if (feedback.relatedConsultationId && consultationId) {
@@ -616,7 +627,7 @@ export function buildTaskFromAdminDispatchEvent(event: AdminDispatchEvent): Foll
   const coreStatus = coerceTaskCoreStatus(event.status);
   return {
     ...baseTask,
-    status: resolveTaskStatus(baseTask, coreStatus),
+    status: coreStatus,
     completedAt: event.completedAt ?? undefined,
   };
 }

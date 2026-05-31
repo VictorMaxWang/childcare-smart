@@ -259,7 +259,7 @@ export function buildTeacherHomeViewModel(params: {
     pendingReviews,
     parentsToCommunicate,
     heroStats: [
-      { label: "今日异常儿童", value: `${todayAbnormalChildren.length}` },
+      { label: "今日异常记录", value: `${todayAbnormalChildren.length}` },
       { label: "未完成晨检", value: `${uncheckedMorningChecks.length}` },
       { label: "待复查名单", value: `${pendingReviews.length}` },
       { label: "待沟通家长", value: `${parentsToCommunicate.length}` },

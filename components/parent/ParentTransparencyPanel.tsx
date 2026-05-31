@@ -63,6 +63,12 @@ function ParentTransparencyPanelContent({
           </p>
         </div>
 
+        {model.boundaryNotes[0] ? (
+          <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm leading-7 text-sky-900">
+            {model.boundaryNotes[0]}
+          </div>
+        ) : null}
+
         {showDetailBlocks ? (
           <>
             <div className="flex flex-wrap gap-2">
