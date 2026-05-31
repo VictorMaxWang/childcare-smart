@@ -294,7 +294,7 @@ export function buildLocalHighRiskConsultationFallback(params: {
     : ["核心风险是否减弱", "家庭动作是否完成", "是否需要二次分派"];
   const summary = socialEmotionalCase
     ? `${childName} 在走廊活动中因推车声害怕退缩，本次会诊聚焦“勇敢表达与小步尝试”，需要园内、家庭和管理端在 48 小时内完成闭环。`
-    : `${childName} 当前已进入高风险会诊闭环，建议把园内复核、今晚家庭动作和 48 小时复查压缩到同一条执行路径。`;
+    : `${childName} 当前已进入重点会诊闭环，建议把园内复核、今晚家庭动作和 48 小时复查压缩到同一条执行路径。`;
   const schoolAction = todayInSchoolActions[0];
   const homeAction = tonightAtHomeActions[0];
   const reviewIn48h = followUp48h[0];

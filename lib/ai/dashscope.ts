@@ -254,7 +254,7 @@ function buildInstitutionPrompt(snapshot: InstitutionSuggestionSnapshot): string
   return [
     "你是托育机构的园长运营决策助手。",
     "你只做机构级风险归因、优先级判断和动作建议，不做医疗诊断，不输出任何额外文本。",
-    "请基于机构近7天汇总、优先级列表、高风险儿童、高风险班级、家长协同风险和待处理派单，输出严格JSON。",
+    "请基于机构近7天汇总、优先级列表、重点跟进儿童记录、高风险班级、家长协同风险和待处理派单，输出严格JSON。",
     "JSON字段必须包含 riskLevel, summary, highlights, concerns, actions, actionPlan, disclaimer。",
     "summary 要说明今天园长最该优先推动什么、为什么、先动谁。",
     "highlights 写机构层面可直接用于UI展示的重点摘要。",

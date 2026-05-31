@@ -205,7 +205,7 @@ export async function maybeRunHighRiskConsultation(input: ConsultationInput): Pr
     5
   );
   const summary = [
-    `${input.childName} 当前已进入高风险会诊闭环，建议把园内复核、今晚家庭动作和 48 小时复查压缩到同一条执行路径。`,
+    `${input.childName} 当前已进入重点会诊闭环，建议把园内复核、今晚家庭动作和 48 小时复查压缩到同一条执行路径。`,
     input.continuityNotes?.[0] ?? "",
   ]
     .filter(Boolean)

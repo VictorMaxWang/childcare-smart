@@ -286,7 +286,7 @@ function formatDateTimeLabel(value: string) {
 }
 
 function getRiskLabel(riskLevel: ConsultationResult["riskLevel"]) {
-  if (riskLevel === "high") return "高风险预警";
+  if (riskLevel === "high") return "P1 重点复核";
   if (riskLevel === "medium") return "重点跟进";
   return "持续观察";
 }

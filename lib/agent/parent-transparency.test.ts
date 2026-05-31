@@ -242,6 +242,7 @@ test("buildParentHomeTransparencyModel marks live suggestion and weekly report a
   assert.ok(model.sourceBadges.some((item) => item.label === "老师观察"));
   assert.ok(model.sourceBadges.some((item) => item.label === "延续上周观察"));
   assert.ok(model.coverageText?.includes("覆盖率约"));
+  assert.ok(model.boundaryNotes[0]?.includes("不是医疗诊断"));
 });
 
 test("buildParentAgentTransparencyModel exposes fallback mode when suggestion falls back and trend is absent", () => {
@@ -256,7 +257,7 @@ test("buildParentAgentTransparencyModel exposes fallback mode when suggestion fa
     pendingFeedback: true,
   });
 
-  assert.ok(model.sourceBadges.some((item) => item.label === "保守补位"));
+  assert.ok(model.sourceBadges.some((item) => item.label === "记录待补充"));
   assert.equal(model.defaultExpanded, true);
   assert.match(model.reliabilityText, /初步建议/);
   assert.ok(model.warnings.some((item) => item.includes("保守补位")));

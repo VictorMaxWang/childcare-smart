@@ -352,7 +352,7 @@ def main() -> None:
     draw.text((150, 1522), "技术口径", font=SECTION_FONT, fill=INK)
     footer_text = (
         "前端：Next.js + React + TypeScript 角色工作台 | 后端：FastAPI 编排与结构化服务 | "
-        "中枢：记忆、快照、轨迹、反馈回流 | 能力接入：兼容 Qwen / DeepSeek 等国产通用大模型能力"
+        "中枢：记忆、快照、轨迹、反馈回流 | 能力接入：vivo Chat/OCR/ASR 代码接入、测试与受控演示验证"
     )
     draw.text((315, 1524), footer_text, font=FOOTER_FONT, fill=MUTED)
 

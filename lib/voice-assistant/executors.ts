@@ -745,7 +745,7 @@ export async function executeAssistantCommand(session: SessionUser, command: Ass
         ? `今天有 ${abnormalToday.length} 条异常晨检。`
         : riskyChildren.length > 0
           ? `当前有 ${riskyChildren.length} 名需优先关注儿童：${riskyChildren.slice(0, 5).map((child) => child.name).join("、")}。`
-          : "当前没有高风险儿童。";
+          : "当前没有需要重点跟进的儿童记录。";
     return {
       command: { ...command, status: "executed" },
       message,

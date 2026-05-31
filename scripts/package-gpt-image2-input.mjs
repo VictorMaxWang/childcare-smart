@@ -25,7 +25,7 @@ const batchMeta = {
   "batch-01-login-and-design-system": {
     title: "登录页与整体设计系统",
     role: "登录页 / 全局设计系统",
-    goal: "建立智慧托育平台的整体视觉语言、登录页重设计方向和通用组件风格。",
+    goal: "建立慧育童行 - SmartChildcare Agent 的整体视觉语言、登录页重设计方向和通用组件风格。",
   },
   "batch-02-director-dashboard-and-management": {
     title: "园长端首页、风险看板与管理页",
@@ -177,7 +177,7 @@ function buildReadme(items) {
   const byBatch = groupBy(items, "uploadBatch");
   return `# GPT Image 2 输入包
 
-这个文件夹用于把智慧托育平台 / 普惠托育智慧管理平台的现有界面截图、页面清单、覆盖说明和重设计提示词统一交给 GPT Image 2。
+这个文件夹用于把慧育童行 - SmartChildcare Agent 的现有界面截图、页面清单、覆盖说明和重设计提示词统一交给 GPT Image 2。
 
 ## 如何使用
 
@@ -226,11 +226,11 @@ ${risky.length ? risky.map((item) => `  - ${item.packagedFile}：${item.notes}`)
 function buildMasterPrompt() {
   return `# GPT Image 2 总提示词
 
-你是资深中文 B2B SaaS 产品视觉设计师。请基于我上传的智慧托育平台截图，重新设计一套更专业、可信、温和、有亲和力的界面方案。
+你是资深中文 B2B SaaS 产品视觉设计师。请基于我上传的慧育童行 - SmartChildcare Agent 截图，重新设计一套更专业、可信、温和、有亲和力的界面方案。
 
 ## 项目
 
-- 产品名称：智慧托育平台 / 普惠托育智慧管理平台
+- 产品名称：慧育童行 - SmartChildcare Agent
 - 业务场景：托育机构运营、儿童照护记录、教师日常协作、园长风险管理、家园反馈闭环
 - 目标用户：园长、教师、家长
 - 输出语言：简体中文
@@ -302,7 +302,7 @@ function buildDesignBrief() {
 
 ## 平台定位
 
-智慧托育平台是面向普惠托育机构的多角色管理与协同系统，覆盖园长管理、教师日常记录、家长查看与反馈。它不是宣传站，而是高频使用的运营型 SaaS。
+慧育童行 - SmartChildcare Agent 是面向托育机构的多角色管理与协同系统，覆盖园长管理、教师日常记录、家长查看与反馈。它不是宣传站，而是高频使用的运营型 SaaS。
 
 ## 用户角色
 
@@ -381,8 +381,8 @@ function buildCoverageSummary(docs) {
     "## 优先发给 GPT Image 2 的截图",
     "",
     "- 登录页 desktop 默认、输入、注册弹窗、mobile。",
-    "- 园长端 /admin、/、/admin/agent、/admin/agent?action=weekly-report、/children、/health、/diet。",
-    "- 教师端 /teacher、/teacher/agent、/teacher/high-risk-consultation、/health、/diet、/growth。",
+    "- 园长端 /admin、/、/children、/health、/diet；/admin/agent 与 /admin/agent?action=weekly-report 作为补充截图。",
+    "- 教师端 /teacher、/teacher/high-risk-consultation、/health、/diet、/growth；/teacher/agent 作为补充截图。",
     "- 家长端 /parent、/parent/agent?child=c-1、/parent/agent?child=c-1#feedback、/parent/storybook?child=c-1。",
     "- 所有 mobile/tablet 截图用于响应式重设计。",
     "",

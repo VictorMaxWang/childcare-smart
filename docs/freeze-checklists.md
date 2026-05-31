@@ -81,10 +81,10 @@
 
 ### fallback 出现时的话术
 
-- Teacher：只说“结构化草稿链路可演示”，不说 ASR fully live
+- Teacher：只说“结构化草稿链路可演示”，不说 ASR 已完成真实机构生产化全链路
 - Consultation：只说“页面级 fallback”，不说远端 brain 已验收
 - Admin：只说“展示层复用 consultation 结果”，不说远端聚合已打通
-- Storybook：只说“wow factor 可展示”，不说图像 / 配音上游 fully live
+- Storybook：只说“wow factor 可展示”，不说图像 / 配音上游已完成真实机构生产化全链路
 - Trend：若出现 `demo_snapshot`，必须明确是 backend 数据降级
 
 ### 录屏前最好再人工确认一遍
@@ -119,7 +119,7 @@
 
 ### 如果评委追问 fallback
 
-- “我们把 fallback 明确保留在画面里，是为了诚实表达当前质量边界，而不是把演示态包装成 fully live。”
+- “我们把 fallback 明确保留在画面里，是为了诚实表达当前质量边界，而不是把演示态包装成完整生产化。”
 
 ### 如果评委追问为什么保留微绘本
 

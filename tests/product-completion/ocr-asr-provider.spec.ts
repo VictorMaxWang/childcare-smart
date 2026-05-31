@@ -4,7 +4,7 @@ import { CHILD_TEACHER, demoContext, expectFailure, expectOk, tinyPngDataUrl } f
 
 test.describe("E11 OCR and ASR fallback regression", () => {
   test("OCR image input without text does not become fake health parse success", async ({}, testInfo) => {
-    const teacher = await demoContext(testInfo, "u-teacher");
+    const teacher = await demoContext(testInfo, "u-teacher2");
     const token = `e11-ocr-${Date.now()}`;
 
     try {
@@ -39,7 +39,7 @@ test.describe("E11 OCR and ASR fallback regression", () => {
   });
 
   test("ASR audio-only fails closed but typed transcript fallback succeeds", async ({}, testInfo) => {
-    const teacher = await demoContext(testInfo, "u-teacher");
+    const teacher = await demoContext(testInfo, "u-teacher2");
     const token = `e11-asr-${Date.now()}`;
 
     try {

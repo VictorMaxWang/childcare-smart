@@ -298,7 +298,9 @@ function providerMeta(providerStatus: ChatProviderStatus) {
 }
 
 function fallbackReasonMeta(options: AiRuntimeOptions, providerStatus: ChatProviderStatus) {
-  return options.fallbackReason ?? providerStatus.reason ?? (options.forceFallback ? "force-fallback" : null);
+  const explicitReason = options.fallbackReason?.trim();
+  const providerReason = providerStatus.reason?.trim();
+  return explicitReason || providerReason || (options.forceFallback ? "force-fallback" : null);
 }
 
 export function isValidSuggestionSnapshot(snapshot: unknown): snapshot is ChildSuggestionSnapshot {

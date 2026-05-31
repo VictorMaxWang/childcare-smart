@@ -278,7 +278,7 @@ export default function LoginPage() {
   return (
     <div className={styles.page}>
       <main className={styles.shell}>
-        <section className={styles.leftColumn} aria-label="智慧托育平台介绍与示例账号入口">
+        <section className={styles.leftColumn} aria-label="慧育童行 SmartChildcare Agent 介绍与示例账号入口">
           {showDesktopReplicaImage ? (
             <Image
               src={loginLeftReplica}
@@ -307,8 +307,8 @@ export default function LoginPage() {
                 unoptimized
               />
               <div>
-                <p className={styles.brandTitle}>智慧托育平台</p>
-                <p className={styles.brandSub}>普惠托育管理平台</p>
+                <p className={styles.brandTitle}>慧育童行</p>
+                <p className={styles.brandSub}>SmartChildcare Agent</p>
               </div>
             </div>
 
@@ -318,7 +318,7 @@ export default function LoginPage() {
                 <br />
                 与家长反馈<span className={styles.accentText}>更顺畅</span>
               </h1>
-              <p className={styles.heroLead}>支持园所数字化管理，教师高效协作，家长便捷反馈，全面提升托育服务质量与运营效率。</p>
+              <p className={styles.heroLead}>面向托育场景的多智能体闭环决策系统，支持园所数字化管理、教师高效协作与家长结构化反馈。</p>
             </div>
 
             <div className={styles.heroImageFrame} aria-hidden="true">

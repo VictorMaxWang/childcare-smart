@@ -155,6 +155,7 @@ def _build_narrative_prompt(payload: dict[str, Any], scaffold: dict[str, Any], s
             "2. 再点出最近连续风险或快照变化。",
             "3. 最后给出今天最重要的一条会诊建议。",
             "4. 不要输出标题、列表或技术术语，不超过120字。",
+            "可信表达边界：这不是医疗诊断；不要把风险贴到儿童身份上；不要承诺改善结果；不要输出治疗、用药或诊断建议；必要时说明需要老师、园长或专业人员人工复核。",
             f"儿童：{sections['childName']}",
             f"班级：{_coerce_text(auto_context.get('className')) or '当前班级'}",
             "长期画像：",

@@ -168,7 +168,7 @@ export function getConsultationEvidenceConfidenceLabel(confidence: ConsultationE
 }
 
 export function getConsultationEvidenceHumanReviewLabel(requiresHumanReview: boolean) {
-  return requiresHumanReview ? "需人工复核" : "可直接采信";
+  return requiresHumanReview ? "需人工复核" : "来源明确";
 }
 
 export function formatConsultationEvidenceSupportLabel(ref: ConsultationEvidenceSupportRef) {

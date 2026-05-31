@@ -268,7 +268,7 @@ export default function TeacherWorkbenchPage() {
     { label: "晨检异常", value: abnormalCount },
     { label: "饮食完成率", value: todayMealCompletionRate },
     { label: "成长记录", value: recentGrowthCount },
-    { label: "高风险儿童", value: highPriorityChildren.length },
+    { label: "重点跟进记录", value: highPriorityChildren.length },
     { label: "家长沟通", value: recentParentMessageCount },
   ];
   const completedMorningChecks = Math.max(visualAttendance - pendingMorningChecks, 0);
@@ -405,7 +405,7 @@ function DesktopWorkbench({
           <div className="mt-3 grid gap-4 xl:grid-cols-4">
             <PixelMetricCard label="在园人数" value={`${visualAttendance}人`} subLabel={`应到 ${visualClassSize}人`} tone="violet" icon={<UsersRound className="h-6 w-6" />} testId="r06-teacher-present-count" />
             <PixelMetricCard label="待处理记录" value={`${pendingRecords}条`} subLabel="晨检/饮食/成长" tone="blue" icon={<ClipboardCheck className="h-6 w-6" />} />
-            <PixelMetricCard label="异常儿童" value={`${abnormalCount}人`} subLabel="需关注" tone="orange" icon={<AlertTriangle className="h-6 w-6" />} />
+            <PixelMetricCard label="健康异常记录" value={`${abnormalCount}条`} subLabel="需关注" tone="orange" icon={<AlertTriangle className="h-6 w-6" />} />
             <PixelMetricCard label="未回复家长消息" value={`${waitingMessages}条`} subLabel="真实待沟通" tone="green" icon={<MessageSquareText className="h-6 w-6" />} />
           </div>
         </div>
@@ -535,7 +535,7 @@ function DesktopWorkbench({
       </div>
 
       <div className="grid gap-3.5 sm:grid-cols-4">
-        <BottomStat label="今日异常儿童" value={abnormalCount} tone="border-l-amber-400" />
+        <BottomStat label="今日异常记录" value={abnormalCount} tone="border-l-amber-400" />
         <BottomStat label="未完成晨检" value={pendingMorningChecks} tone="border-l-sky-400" />
         <BottomStat label="待处理记录" value={pendingRecords} tone="border-l-violet-400" />
         <BottomStat label="待沟通家长" value={waitingMessages} tone="border-l-emerald-400" />
@@ -764,7 +764,7 @@ function TeacherChartsOverview({
         <PixelSectionTitle title="记录完成与家园沟通" meta="饮食 / 成长 / 反馈 / 派单" />
         <div className="mt-4">
           <ReplicaComboChart
-            data={summaryRows.filter((row) => ["饮食完成率", "成长记录", "高风险儿童", "家长沟通"].includes(row.label))}
+            data={summaryRows.filter((row) => ["饮食完成率", "成长记录", "重点跟进记录", "家长沟通"].includes(row.label))}
             testId="r03-teacher-operations-combo"
             series={[{ key: "value", label: "真实值", color: replicaChartColors.cyan, kind: "bar" }]}
             height={200}

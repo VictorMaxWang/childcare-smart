@@ -50,7 +50,7 @@ const EMPTY_MEMORY_META: MemoryContextMeta = {
 
 const BASE_INTERVENTION_CARD: InterventionCard = {
   id: "card-demo-001",
-  title: "小满 高风险家庭干预卡",
+  title: "小满 家庭支持卡",
   riskLevel: "high",
   targetChildId: "child-demo-1",
   triggerReason: "午睡前抓耳、家长反馈夜间哭闹，近 48 小时连续出现。",

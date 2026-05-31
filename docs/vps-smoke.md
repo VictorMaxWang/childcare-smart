@@ -2,6 +2,8 @@
 
 适用场景：staging 部署完成后，验证 SmartChildcare Agent 是否满足“真 staging + 真 vivo + 真 memory + 真 SSE + 真 remote proxy”。
 
+域名边界：`api-staging.smartchildcareagent.cn` 仅作为后端 staging / remote brain proxy 域名，不作为比赛前台主域名。
+
 边界：
 
 - 不修改 consultation 的 stage 顺序和 SSE 事件名。

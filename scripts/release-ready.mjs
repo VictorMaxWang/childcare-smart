@@ -62,7 +62,7 @@ function reportFresh(report, maxAgeMinutes) {
   return (Date.now() - ts) / (1000 * 60) <= maxAgeMinutes;
 }
 
-const localReportPath = getArg("--local-report=", "release-report.json");
+const localReportPath = getArg("--local-report=", "artifacts/release-gate.local.json");
 const remoteReportPath = getArg("--remote-report=", "artifacts/release-report.remote.json");
 const sqlCheckPath = getArg("--sql-check=", "artifacts/release-sql-check.json");
 const envFilePath = getArg("--env-file=", ".env.release");

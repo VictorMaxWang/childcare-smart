@@ -134,7 +134,11 @@ async function main() {
     "app/layout.tsx",
     "app/page.tsx",
     ".env.release.example",
+    "playwright.online-smoke.config.ts",
+    "scripts/demo-preflight-all.mjs",
+    "scripts/online-smoke-gate.mjs",
     "scripts/release-check.mjs",
+    "scripts/release-local-gate.mjs",
     "scripts/release-status.mjs",
     "scripts/release-ready.mjs",
     "scripts/release-env-init.mjs",
@@ -170,6 +174,9 @@ async function main() {
     "release:sql:fail",
     "release:status",
     "release:ready",
+    "demo:preflight:all",
+    "demo:preflight:remote",
+    "online:smoke",
   ];
   for (const s of requiredScripts) {
     const ok = Boolean(pkg.scripts?.[s]);
@@ -293,7 +300,7 @@ async function main() {
     report.summary.blockers.push("One or more remote checks failed.");
   }
 
-  const defaultReportPath = requireRemote ? "artifacts/release-report.remote.json" : "release-report.json";
+  const defaultReportPath = requireRemote ? "artifacts/release-report.remote.json" : "artifacts/release-check.json";
   const reportPath = reportArg ? reportArg.slice("--report-path=".length) : defaultReportPath;
   const absReport = path.isAbsolute(reportPath) ? reportPath : path.join(cwd, reportPath);
   fs.mkdirSync(path.dirname(absReport), { recursive: true });

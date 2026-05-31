@@ -412,7 +412,7 @@ export default function ParentStructuredFeedbackComposer({
                 </span>
                 <span className="font-bold text-slate-950">心情</span>
               </div>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 sm:gap-2">
                 {pixelMoodOptions.map((option, index) => {
                   const selected = childReaction === option.value && (option.value !== "improved" || index === 4);
                   return (
@@ -449,7 +449,7 @@ export default function ParentStructuredFeedbackComposer({
                 </span>
                 <span className="font-bold text-slate-950">睡眠</span>
               </div>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 sm:gap-2">
                 {pixelSleepOptions.map((option, index) => {
                   const selected =
                     improvementStatus === option.value &&
@@ -489,7 +489,7 @@ export default function ParentStructuredFeedbackComposer({
                 </span>
                 <span className="font-bold text-slate-950">食欲</span>
               </div>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 sm:gap-2">
                 {pixelAppetiteOptions.map((option, index) => {
                   const selected =
                     executionStatus === option.value &&
@@ -575,7 +575,7 @@ export default function ParentStructuredFeedbackComposer({
           </div>
         </section>
 
-        <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+6.75rem)] z-10 lg:bottom-4">
+        <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+8.5rem)] z-10 sm:bottom-[calc(env(safe-area-inset-bottom)+8.75rem)] lg:bottom-4">
           <Button
             type="button"
             data-testid="parent-submit-structured-feedback"

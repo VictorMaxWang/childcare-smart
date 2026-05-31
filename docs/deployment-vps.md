@@ -4,8 +4,8 @@
 
 - 服务器：腾讯云香港轻量服务器 Linux VPS
 - 公网 IP：`150.109.77.178`
-- 域名：`api-staging.smartchildcareagent.cn`
-- 拓扑：[`docker-compose.yml`](C:/Users/12804/Desktop/smartchildcare-agent/childcare-smart/docker-compose.yml) + [`Caddyfile`](C:/Users/12804/Desktop/smartchildcare-agent/childcare-smart/Caddyfile)
+- 域名：`api-staging.smartchildcareagent.cn`，仅作为后端 staging / remote brain proxy 域名，不作为比赛前台主域名。
+- 拓扑：[`docker-compose.yml`](../docker-compose.yml) + [`Caddyfile`](../Caddyfile)
 - 前端：继续部署在 Vercel 或现有前端平台，通过 `BRAIN_API_BASE_URL` 走 remote brain proxy
 
 边界：

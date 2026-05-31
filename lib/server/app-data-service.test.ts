@@ -147,6 +147,117 @@ test("record create/read/update/archive persists through the repository", async 
   assert.equal(withArchived.some((record) => asTestRecord(record).id === created.id && asTestRecord(record).archivedAt), true);
 });
 
+test("createConsultation preserves rich high-risk result fields", async () => {
+  const repo = new MemoryRepository();
+  const service = new AppDataService(demoUser("u-teacher2"), repo);
+
+  const created = await service.createConsultation({
+    consultationId: "consult-rich-safety",
+    childId: "c-1",
+    generatedAt: "2026-04-10T10:00:00.000Z",
+    riskLevel: "high",
+    source: "fallback",
+    summary: "重点会诊闭环已启动，先完成园内复核和家庭反馈。",
+    parentMessageDraft: "今晚请先完成一个稳定陪伴动作，完成后反馈孩子反应。本建议不替代医疗诊断。",
+    reviewIn48h: "48 小时内复查园内和家庭反馈。",
+    triggerReasons: ["连续观察信号需要复核"],
+    keyFindings: ["分离过渡需要持续支持"],
+    todayInSchoolActions: ["老师记录过渡前后的情绪变化"],
+    tonightAtHomeActions: ["家长完成 10 分钟共读并反馈反应"],
+    followUp48h: ["48 小时内由老师复查执行情况"],
+    nextCheckpoints: ["明早入园过渡"],
+    explainability: [{ label: "关键发现", detail: "来自老师观察和家庭反馈。" }],
+    participants: [{ id: "coordinator", label: "Coordinator" }],
+    shouldEscalateToAdmin: true,
+    coordinatorSummary: {
+      finalConclusion: "重点会诊闭环已启动",
+      riskLevel: "high",
+      problemDefinition: "连续观察信号需要复核",
+      schoolAction: "老师记录过渡前后的情绪变化",
+      homeAction: "家长完成 10 分钟共读并反馈反应",
+      observationPoints: ["入园过渡"],
+      reviewIn48h: "48 小时内复查园内和家庭反馈。",
+      shouldEscalateToAdmin: true,
+    },
+    directorDecisionCard: {
+      title: "P1 重点复核",
+      reason: "需要园长确认闭环责任人。",
+      recommendedOwnerRole: "admin",
+      recommendedOwnerName: "园长",
+      recommendedAt: "2026-04-11T10:00:00.000Z",
+      status: "pending",
+    },
+    interventionCard: {
+      id: "card-rich-safety",
+      title: "林小雨 家庭支持卡",
+      riskLevel: "high",
+      targetChildId: "c-1",
+      triggerReason: "连续观察信号需要复核",
+      summary: "重点会诊闭环已启动",
+      todayInSchoolAction: "老师记录过渡前后的情绪变化",
+      tonightHomeAction: "家长完成 10 分钟共读并反馈反应",
+      homeSteps: ["共读 10 分钟", "反馈孩子反应"],
+      observationPoints: ["是否愿意说出感受"],
+      tomorrowObservationPoint: "明早入园过渡",
+      reviewIn48h: "48 小时内复查园内和家庭反馈。",
+      parentMessageDraft: "今晚请先完成一个稳定陪伴动作。",
+      teacherFollowupDraft: "明早复查入园过渡。",
+      source: "fallback",
+    },
+    evidenceItems: [
+      {
+        id: "evidence-rich-teacher",
+        sourceType: "teacher_note",
+        sourceLabel: "老师观察",
+        sourceId: "note-1",
+        summary: "老师记录到入园过渡需要陪伴。",
+        confidence: "medium",
+        requiresHumanReview: true,
+        evidenceCategory: "risk_control",
+        supports: [{ type: "finding", targetId: "finding:key:0", targetLabel: "分离过渡需要持续支持" }],
+      },
+    ],
+    providerTrace: {
+      provider: "local",
+      source: "fallback",
+      model: "rules",
+      transport: "test",
+      transportSource: "test",
+      consultationSource: "unit-test",
+      realProvider: false,
+      fallback: true,
+    },
+    memoryMeta: {
+      backend: "memory",
+      degraded: false,
+      usedSources: [],
+      errors: [],
+      matchedSnapshotIds: [],
+      matchedTraceIds: [],
+    },
+    traceMeta: {
+      memory: {
+        backend: "memory",
+        degraded: false,
+        usedSources: [],
+        errors: [],
+        matchedSnapshotIds: [],
+        matchedTraceIds: [],
+      },
+    },
+  });
+
+  const record = created as unknown as Record<string, unknown>;
+  const evidenceItems = record.evidenceItems as Array<Record<string, unknown>>;
+  assert.equal(record.consultationId, "consult-rich-safety");
+  assert.ok(evidenceItems.some((item) => item.id === "evidence-rich-teacher"));
+  assert.equal((record.followUp48h as string[])[0], "48 小时内由老师复查执行情况");
+  assert.equal(record.humanReviewRequired, true);
+  assert.ok((record.manualReviewSummary as { reviewRequiredCount?: number }).reviewRequiredCount);
+  assert.ok(Array.isArray(record.warnings));
+  assert.equal(((record.traceMeta as Record<string, unknown>).dataQuality as { evidenceCount?: number }).evidenceCount, evidenceItems.length);
+});
+
 test("director can create, update, archive and restore child profiles through scoped service", async () => {
   const repo = new MemoryRepository();
   const director = new AppDataService(demoUser("u-admin"), repo);

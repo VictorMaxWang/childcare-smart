@@ -36,7 +36,7 @@
 
 ### fallback 讲法
 
-- “微绘本当前允许规则 / 资产 / media fallback，所以这里我们讲成可展示 wow factor，不把它讲成图像 / 配音上游 fully live。”
+- “微绘本当前允许规则 / 资产 / media fallback，所以这里我们讲成可展示 wow factor，不把它讲成图像 / 配音上游已完成真实机构生产化全链路。”
 
 ## 路线 B：Parent 趋势线与反馈闭环
 

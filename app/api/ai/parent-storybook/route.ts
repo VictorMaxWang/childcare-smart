@@ -595,8 +595,19 @@ export async function POST(request: Request) {
     });
   }
 
-  return buildProviderUnavailableResponse({
+  const localStory = buildLocalStoryBookFallback({
+    payload,
     brainForward,
     fallbackReason,
+    cacheState: "bypass",
+  });
+
+  return NextResponse.json(localStory, {
+    status: 200,
+    headers: buildLocalStoryBookFallbackHeaders({
+      brainForward,
+      fallbackReason,
+      cacheState: "bypass",
+    }),
   });
 }

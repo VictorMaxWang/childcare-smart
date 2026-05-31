@@ -105,6 +105,13 @@ test("normalizeHighRiskConsultationResult emits evidenceItems and keeps legacy f
         item.sourceType === "derived_explainability" && item.requiresHumanReview
     )
   );
+  assert.equal(normalized.humanReviewRequired, true);
+  const manualReviewSummary = normalized.manualReviewSummary;
+  assert.ok(manualReviewSummary);
+  assert.ok(manualReviewSummary.required);
+  assert.ok(manualReviewSummary.reviewRequiredCount > 0);
+  const warnings = normalized.warnings ?? [];
+  assert.ok(warnings.some((item) => item.includes("人工复核")));
 });
 
 test("normalizeHighRiskConsultationResult merges raw evidenceItems with generated evidence", () => {
@@ -146,4 +153,9 @@ test("normalizeHighRiskConsultationResult merges raw evidenceItems with generate
     (normalized.traceMeta?.dataQuality as { evidenceCount?: number } | undefined)?.evidenceCount,
     normalized.evidenceItems.length
   );
+  assert.equal(
+    (normalized.traceMeta?.manualReviewSummary as { totalEvidenceCount?: number } | undefined)?.totalEvidenceCount,
+    normalized.evidenceItems.length
+  );
+  assert.ok(Array.isArray(normalized.warnings));
 });

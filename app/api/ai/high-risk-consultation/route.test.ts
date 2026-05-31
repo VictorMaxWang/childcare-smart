@@ -158,6 +158,8 @@ test("high-risk consultation route returns complete Lin Xiaoyu fallback when ext
       const sourceLabels = evidenceItems.map((item) => String(item.sourceLabel));
       const traceMeta = body.traceMeta as Record<string, unknown>;
       const dataQuality = traceMeta.dataQuality as Record<string, unknown>;
+      const warnings = body.warnings as string[];
+      const manualReviewSummary = body.manualReviewSummary as Record<string, unknown>;
 
       assert.equal(response.status, 200);
       assert.equal(body.childId, "c-1");
@@ -169,6 +171,11 @@ test("high-risk consultation route returns complete Lin Xiaoyu fallback when ext
       assert.ok(sourceLabels.includes("家长反馈"));
       assert.ok(sourceLabels.includes("记忆快照 / 历史跟进"));
       assert.equal(dataQuality.status, "complete");
+      assert.equal(body.humanReviewRequired, true);
+      assert.equal(manualReviewSummary.required, true);
+      assert.ok(Array.isArray(warnings));
+      assert.ok(warnings.some((item) => item.includes("fallback")));
+      assert.ok(warnings.some((item) => item.includes("人工复核")));
       assert.match(text, /林小雨/);
       assert.match(text, /走廊活动/);
       assert.match(text, /勇敢表达/);

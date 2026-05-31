@@ -27,25 +27,29 @@ const VIEWPORTS: Record<ViewportName, { width: number; height: number }> = {
 const KEY_PAGES: Array<{
   id: Exclude<KeyPageId, "login">;
   route: string;
+  accountId: string;
   demoName: string;
   reference: string;
 }> = [
   {
     id: "admin",
     route: "/admin",
+    accountId: "u-admin",
     demoName: "陈园长",
     reference: "artifacts/refactor-design-assets/images/ai_powered_childcare_management_dashboard.png",
   },
   {
     id: "teacher",
     route: "/teacher",
+    accountId: "u-teacher",
     demoName: "李老师",
     reference: "artifacts/refactor-design-assets/images/teacher_dashboard_with_class_overview_and_tasks.png",
   },
   {
     id: "parent",
     route: "/parent?child=c-1",
-    demoName: "林妈妈",
+    accountId: "u-parent",
+    demoName: "林小雨妈妈",
     reference: "artifacts/refactor-design-assets/images/soft_pastel_parenting_dashboard_ui_design.png",
   },
 ];
@@ -69,7 +73,7 @@ test("capture key visual parity pages", async ({ browser }) => {
   for (const spec of KEY_PAGES) {
     for (const viewportName of Object.keys(VIEWPORTS) as ViewportName[]) {
       const page = await newPage(browser, viewportName);
-      await loginWithDemo(page, spec.demoName);
+      await loginWithDemo(page, spec.accountId);
       await gotoStable(page, spec.route);
       await capture(page, spec.id, spec.route, viewportName, spec.reference, entries);
       await page.context().close();
@@ -90,11 +94,13 @@ async function newPage(browser: Browser, viewportName: ViewportName) {
   return page;
 }
 
-async function loginWithDemo(page: Page, demoName: string) {
-  await gotoStable(page, "/login");
-  const button = page.getByRole("button").filter({ hasText: demoName }).first();
-  await button.click();
-  await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 20_000 });
+async function loginWithDemo(page: Page, accountId: string) {
+  const response = await page.request.post(`${BASE_URL}/api/auth/demo-login`, {
+    data: { accountId },
+  });
+  if (!response.ok()) {
+    throw new Error(`Demo login failed for ${accountId}: ${response.status()} ${await response.text()}`);
+  }
   await settle(page);
 }
 

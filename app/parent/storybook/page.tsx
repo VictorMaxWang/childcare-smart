@@ -44,7 +44,10 @@ import {
 import {
   LIN_XIAOYU_CHILD_ALIAS,
   LIN_XIAOYU_CHILD_ID,
+  LIN_XIAOYU_FEEDBACK_PROMPT,
+  LIN_XIAOYU_FIXED_STORYBOOK_EVIDENCE,
   LIN_XIAOYU_FIXED_STORYBOOK_SUBTITLE,
+  LIN_XIAOYU_TONIGHT_ACTION,
   buildLinXiaoyuFixedStorybookResponse,
   resolveLinXiaoyuChildId,
 } from "@/lib/storybooks/lin-xiaoyu-bravery";
@@ -879,7 +882,7 @@ export default function ParentStoryBookPage() {
       anchor.click();
       anchor.remove();
       window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
-      setStorybookActionStatus(`已生成本地导出文件 ${exported.filename}；当前未接入外部 PDF/公开链接服务。`);
+      setStorybookActionStatus(`已下载绘本摘要 ${exported.filename}，可直接用于家园沟通记录。`);
     } catch (error) {
       setStorybookActionStatus(error instanceof Error ? error.message : "成长绘本导出失败。");
     } finally {
@@ -896,7 +899,13 @@ export default function ParentStoryBookPage() {
     setIsStorybookActionPending(true);
     setStorybookActionStatus(null);
     try {
-      const shared = await shareStorybook(story.storyId, { summary: story.summary });
+      const shareIncludesTonightAction =
+        isLinXiaoyuFixedStorybookVisible && !hasManualStorybookOverrideActive;
+      const shareSummary =
+        shareIncludesTonightAction
+          ? `${story.summary}\n今晚行动：${LIN_XIAOYU_TONIGHT_ACTION}`
+          : story.summary;
+      const shared = await shareStorybook(story.storyId, { summary: shareSummary });
       let copied = false;
       try {
         await navigator.clipboard?.writeText(shared.copyText);
@@ -906,8 +915,12 @@ export default function ParentStoryBookPage() {
       }
       setStorybookActionStatus(
         copied
-          ? "已生成本地分享文案并复制到剪贴板；外部分享服务未接入。"
-          : "已生成本地分享文案；浏览器未允许自动复制，请在分享结果中手动复制。"
+          ? shareIncludesTonightAction
+            ? "已复制带今晚行动的绘本分享文案。"
+            : "已复制绘本分享文案。"
+          : shareIncludesTonightAction
+            ? "已生成带今晚行动的绘本分享文案；浏览器未允许自动复制。"
+            : "已生成绘本分享文案；浏览器未允许自动复制。"
       );
     } catch (error) {
       setStorybookActionStatus(error instanceof Error ? error.message : "成长绘本分享失败。");
@@ -945,10 +958,19 @@ export default function ParentStoryBookPage() {
               subtitle: LIN_XIAOYU_FIXED_STORYBOOK_SUBTITLE,
               paged: true,
               fixedDefault: true,
+              evidenceItems: [...LIN_XIAOYU_FIXED_STORYBOOK_EVIDENCE],
+              tonightAction: LIN_XIAOYU_TONIGHT_ACTION,
+              feedbackPrompt: LIN_XIAOYU_FEEDBACK_PROMPT,
             }
           : undefined
       }
       parentHref={selectedFeed?.child.id ? `/parent?child=${selectedFeed.child.id}` : "/parent"}
+      tonightActionHref={
+        selectedFeed?.child.id ? `/parent/agent?child=${selectedFeed.child.id}` : "/parent/agent"
+      }
+      feedbackHref={
+        selectedFeed?.child.id ? `/parent/agent?child=${selectedFeed.child.id}#feedback` : "/parent/agent#feedback"
+      }
       onSelectPreset={(preset) =>
         setDraftControls((current) => ({ ...current, preset }))
       }

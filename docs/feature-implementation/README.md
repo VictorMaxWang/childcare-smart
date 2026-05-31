@@ -1,4 +1,4 @@
-# D00 智慧托育平台功能补齐总控
+# D00 慧育童行 / SmartChildcare Agent 功能补齐总控
 
 本目录承接 `docs/feature-audit` 的 C10-C23 功能完整性审计，将发现的问题转化为 D01-D08 可执行开发任务。
 
@@ -31,4 +31,3 @@
 - `PRODUCT_DECISIONS_NEEDED.md`: 产品规则待定项。
 - `results/`: 后续线程结果文件。
 - `prompts/`: D01-D08、D90、D99 后续执行提示词。
-

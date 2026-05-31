@@ -581,7 +581,7 @@ function buildClassItems(
     const reason = reasons.slice(0, 2).join("、") || "班级内高风险对象和闭环问题较集中";
     const action =
       uncheckedMorningCount > 0
-        ? `先补齐${className}今日晨检，再按优先级处理待复查与高风险儿童。`
+        ? `先补齐${className}今日晨检，再按优先级处理待复查与重点跟进记录。`
         : `优先处理${className}班内待复查积压和家长反馈薄弱点，形成班级整改清单。`;
     const deadline = uncheckedMorningCount > 0 ? "今日上午" : "本周五前";
     const id = `priority-class-${className}`;
@@ -780,7 +780,7 @@ function buildIssueItems(input: PriorityEngineInput, today: string) {
         reason: "当日健康异常需要先完成复核与后续安排，避免高风险对象遗漏。",
         evidence,
         recommendedOwner: owner,
-        recommendedAction: "优先复核今日晨检异常儿童，并明确是否需要家长协同或后续观察。",
+        recommendedAction: "优先复核今日晨检异常记录，并明确是否需要家长协同或后续观察。",
         recommendedDeadline: "今日上午",
         relatedChildIds: todayAbnormalChildren.map((record) => record.childId),
         relatedClassNames: Array.from(
@@ -800,7 +800,7 @@ function buildIssueItems(input: PriorityEngineInput, today: string) {
           priorityLevel: level,
           owner,
           reason: "当日健康异常需要先完成复核与后续安排，避免高风险对象遗漏。",
-          action: "优先复核今日晨检异常儿童，并明确是否需要家长协同或后续观察。",
+          action: "优先复核今日晨检异常记录，并明确是否需要家长协同或后续观察。",
           deadline: "今日上午",
           evidence,
           relatedChildIds: todayAbnormalChildren.map((record) => record.childId),
@@ -842,7 +842,7 @@ function buildIssueItems(input: PriorityEngineInput, today: string) {
         reason: "待复查记录积压会直接影响重点儿童闭环和机构级复盘判断。",
         evidence,
         recommendedOwner: owner,
-        recommendedAction: "按优先级清理待复查积压，先完成今日到期和高风险儿童的复查动作。",
+        recommendedAction: "按优先级清理待复查积压，先完成今日到期和重点跟进记录的复查动作。",
         recommendedDeadline: "今日放学前",
         relatedChildIds: pendingReviews.map((record) => record.childId),
         relatedClassNames: Array.from(
@@ -862,7 +862,7 @@ function buildIssueItems(input: PriorityEngineInput, today: string) {
           priorityLevel: level,
           owner,
           reason: "待复查记录积压会直接影响重点儿童闭环和机构级复盘判断。",
-          action: "按优先级清理待复查积压，先完成今日到期和高风险儿童的复查动作。",
+          action: "按优先级清理待复查积压，先完成今日到期和重点跟进记录的复查动作。",
           deadline: "今日放学前",
           evidence,
           relatedChildIds: pendingReviews.map((record) => record.childId),
