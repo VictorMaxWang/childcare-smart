@@ -1,5 +1,6 @@
 import type { AccountRole, SessionUser } from "@/lib/auth/accounts";
 import type { ApiErrorCode } from "@/lib/api/types";
+import type { AiCapabilityMode, AiProviderTrace } from "@/lib/ai/provider-trace";
 
 export type AssistantRole = "director" | "teacher" | "parent";
 
@@ -174,10 +175,15 @@ export interface AssistantCommandApiRequest {
 
 export interface VoiceProviderCapabilityStatus {
   providerName: string;
-  capability: "chat" | "asr" | "ocr" | "tts";
+  capability: "chat" | "llm" | "asr" | "ocr" | "tts" | "storybook-image" | "storybook-audio";
+  state: "configured" | "live" | "fallback" | "mock";
   configured: boolean;
   supported: boolean;
   isRealProvider: boolean;
+  live: boolean;
+  fallback: boolean;
+  mock: boolean;
+  mode?: AiCapabilityMode;
   status: "ready" | "missing-env" | "unsupported" | "provider-unavailable" | "error";
   reason?: string;
   warnings: string[];
@@ -186,9 +192,13 @@ export interface VoiceProviderCapabilityStatus {
 
 export interface AssistantProviderStatus {
   chat: VoiceProviderCapabilityStatus;
+  llm?: VoiceProviderCapabilityStatus;
   ocr: VoiceProviderCapabilityStatus;
   asr: VoiceProviderCapabilityStatus;
   tts: VoiceProviderCapabilityStatus;
+  storybookImage?: VoiceProviderCapabilityStatus;
+  storybookAudio?: VoiceProviderCapabilityStatus;
+  capabilities?: Record<string, VoiceProviderCapabilityStatus>;
   fallbackText: string;
 }
 
@@ -207,7 +217,10 @@ export interface VoiceAsrResponse {
   transcript: string;
   source: string;
   provider: string;
+  mode?: AiCapabilityMode;
   fallback: boolean;
+  fallbackReason?: string | null;
+  providerTrace?: AiProviderTrace;
   status: VoiceProviderCapabilityStatus;
   warnings: string[];
 }

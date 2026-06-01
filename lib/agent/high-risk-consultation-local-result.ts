@@ -7,6 +7,7 @@ import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/inp
 import { buildLocalHighRiskConsultationFallback } from "@/lib/agent/high-risk-consultation-fallback";
 import { buildInterventionCardFromConsultation } from "@/lib/agent/intervention-card";
 import { buildTeacherChildSuggestionSnapshotWithMemory } from "@/lib/agent/teacher-agent";
+import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import { normalizeHighRiskConsultationResult } from "@/lib/consultation/normalize-result";
 
 export type HighRiskConsultationLocalTransport = "next-json-fallback" | "next-stream-fallback";
@@ -29,6 +30,22 @@ function asString(value: unknown) {
 
 function isRecordArray(value: unknown) {
   return Array.isArray(value);
+}
+
+function buildScriptOnlyTtsTrace() {
+  return {
+    providerName: "text-only-tts-fallback",
+    capability: "tts",
+    state: "fallback",
+    configured: false,
+    live: false,
+    fallback: true,
+    mock: false,
+    status: "provider-unavailable",
+    reason: "High-risk consultation returns narration script only; no TTS audio is generated in this response.",
+    requiredEnv: [],
+    warnings: ["Use a dedicated TTS endpoint when audio output is required."],
+  };
 }
 
 export function isValidHighRiskConsultationPayload(
@@ -88,19 +105,28 @@ export function buildLocalHighRiskConsultationResult({
     autoContext,
     fallbackReason,
   });
-  const providerTrace = {
+  const providerTrace = buildAiProviderTrace({
     source: "local-rules-fallback",
     provider: "local-rules-llm",
     model: "local-social-emotional-rules",
     requestId: "",
+    mode: "fallback",
+    capability: "llm",
     transport,
     transportSource: "next-server",
-    consultationSource,
     fallbackReason,
-    brainProvider: "next-fallback",
     fallback: true,
     realProvider: false,
-  };
+    extra: {
+      consultationSource,
+      brainProvider: "next-fallback",
+      tts: buildScriptOnlyTtsTrace(),
+      modes: {
+        llm: "fallback",
+        tts: "fallback",
+      },
+    },
+  });
   const interventionCard = buildInterventionCardFromConsultation({
     targetChildId: childContext.child.id,
     childName: childContext.child.name,

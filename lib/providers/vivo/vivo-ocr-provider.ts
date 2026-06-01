@@ -3,7 +3,7 @@ import "server-only";
 import { createRequestId, vivoJsonRequest } from "./vivo-client";
 import { VivoProviderError } from "./vivo-errors";
 import { getVivoEnv, getVivoProviderStatus } from "./vivo-provider-status";
-import type { VivoOcrInput, VivoOcrResult } from "./types";
+import type { VivoOcrInput, VivoOcrResult, VivoProviderStatus } from "./types";
 
 type VivoOcrWord = { words?: string };
 type VivoOcrResponse = {
@@ -30,30 +30,57 @@ function extractText(raw: VivoOcrResponse) {
   return words.map((item) => item.words?.trim()).filter(Boolean).join("\n");
 }
 
+function withRequestState(
+  status: VivoProviderStatus<"ocr">,
+  state: "live" | "fallback",
+  reason?: string
+): VivoProviderStatus<"ocr"> {
+  return {
+    ...status,
+    state,
+    live: state === "live",
+    fallback: state === "fallback",
+    mock: false,
+    configured: state === "live" ? true : status.configured,
+    isRealProvider: state === "live",
+    status: state === "live" ? "ready" : "provider-unavailable",
+    reason: reason ?? status.reason,
+  };
+}
+
 export async function requestVivoOcr(input: VivoOcrInput): Promise<VivoOcrResult> {
   const fallbackText = input.fallbackText?.trim();
   const providerStatus = getVivoProviderStatus("ocr");
   if (!input.imageBase64 && fallbackText) {
+    const fallbackStatus = withRequestState(
+      providerStatus,
+      "fallback",
+      "OCR request used provided text because no binary image payload was supplied."
+    );
     return {
       extractedText: fallbackText,
       confidence: null,
       providerName: "vivo",
+      state: "fallback",
+      live: false,
+      fallback: true,
+      mock: false,
       isRealProvider: false,
-      warnings: ["使用文本 fallback，未调用真实 vivo OCR。"],
+      warnings: ["Using text fallback; no live vivo OCR request was made."],
       requestId: input.requestId,
-      status: providerStatus,
+      status: fallbackStatus,
     };
   }
 
   if (!input.imageBase64) {
-    throw new VivoProviderError("缺少可识别的图片内容。", {
+    throw new VivoProviderError("Missing image content for OCR.", {
       capability: "ocr",
       status: "provider-unavailable",
     });
   }
 
   if (!isVivoOcrSupportedMimeType(input.mimeType)) {
-    throw new VivoProviderError("vivo OCR 文档仅确认 jpg/png/bmp 图片识别。", {
+    throw new VivoProviderError("vivo OCR currently supports jpg/png/bmp image inputs only.", {
       capability: "ocr",
       status: "unsupported",
       raw: { mimeType: input.mimeType, attachmentName: input.attachmentName },
@@ -97,10 +124,14 @@ export async function requestVivoOcr(input: VivoOcrInput): Promise<VivoOcrResult
     extractedText: extractText(raw),
     confidence: null,
     providerName: "vivo",
+    state: "live",
+    live: true,
+    fallback: false,
+    mock: false,
     isRealProvider: true,
     warnings: providerStatus.warnings,
     rawResponse: raw,
     requestId,
-    status: providerStatus,
+    status: withRequestState(providerStatus, "live"),
   };
 }

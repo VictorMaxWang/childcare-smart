@@ -573,6 +573,8 @@ export function createConsultation(input: ConsultationInput) {
         providerTrace: {
           provider: "d01-local-demo",
           source: "local",
+          mode: "fallback",
+          fallbackReason: "local-demo",
           transport: "local-store",
           transportSource: "demo-data",
           consultationSource: "health-material",

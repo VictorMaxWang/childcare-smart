@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import type { ParentTrendQueryPayload } from "@/lib/ai/types";
+import type { ParentTrendQueryPayload, ParentTrendQueryResponse } from "@/lib/ai/types";
+import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
+  type BrainForwardResult,
 } from "@/lib/server/brain-client";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import {
@@ -34,6 +36,38 @@ function buildFallbackHeaders(input: {
   });
 }
 
+function enrichParentTrendResponse(
+  responseBody: ParentTrendQueryResponse,
+  brainForward: BrainForwardResult
+) {
+  const fallback = Boolean(responseBody.fallback);
+  const fallbackReason = responseBody.fallbackReason ?? null;
+  const provider = responseBody.provider ?? (fallback ? "remote-brain-fallback" : "remote-brain");
+  return {
+    ...responseBody,
+    mode: responseBody.mode ?? (fallback ? "fallback" : "live"),
+    provider,
+    fallbackReason,
+    providerTrace:
+      responseBody.providerTrace ??
+      buildAiProviderTrace({
+        capability: "llm",
+        provider,
+        source: fallback ? "fallback" : "remote-brain",
+        mode: fallback ? "fallback" : "live",
+        fallback,
+        fallbackReason,
+        realProvider: !fallback,
+        transport: "remote-brain-proxy",
+        transportSource: "next-server",
+        extra: {
+          dataSource: responseBody.source,
+          upstreamHost: brainForward.upstreamHost,
+        },
+      }),
+  };
+}
+
 export async function POST(request: Request) {
   const authError = await authorizeAiRoute(request, { requiredRole: "parent" });
   if (authError) return authError;
@@ -58,7 +92,7 @@ export async function POST(request: Request) {
       : null;
 
     if (brainForward.response.ok && isParentTrendQueryResponse(responseBody)) {
-      return NextResponse.json(responseBody, {
+      return NextResponse.json(enrichParentTrendResponse(responseBody, brainForward), {
         status: brainForward.response.status,
         headers: brainForward.response.headers,
       });

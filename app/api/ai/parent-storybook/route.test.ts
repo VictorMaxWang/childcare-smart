@@ -696,6 +696,11 @@ test("parent storybook route returns a next-json-fallback story when brain is un
         assert.equal(typeof body.storyId, "string");
         assert.equal(body.providerMeta.transport, "next-json-fallback");
         assert.equal(body.providerMeta.fallbackReason, "brain-proxy-timeout");
+        assert.equal(body.provider, body.providerMeta.provider);
+        assert.equal(body.providerTrace?.mode, "fallback");
+        assert.equal(body.providerTrace?.fallback, true);
+        assert.equal(body.providerTrace?.fallbackReason, body.providerMeta.fallbackReason);
+        assert.equal(body.providerTrace?.provider, body.providerMeta.provider);
         assert.equal(body.providerMeta.diagnostics?.brain.fallbackReason, "brain-proxy-timeout");
         assert.equal(typeof body.providerMeta.diagnostics?.brain.timeoutMs, "number");
       }

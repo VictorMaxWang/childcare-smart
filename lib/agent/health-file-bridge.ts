@@ -738,6 +738,9 @@ export function buildHealthFileBridgeWriteback(
       fileKind: response.fileKind ?? request.fileKind,
       fileType: response.fileType,
       source: response.source,
+      state: response.state,
+      configured: response.configured,
+      live: response.live,
       fallback: response.fallback,
       mock: response.mock,
       liveReadyButNotVerified: response.liveReadyButNotVerified,
@@ -767,6 +770,9 @@ export function buildHealthFileBridgeResponse(
   request: HealthFileBridgeRequest,
   options: {
     source: HealthFileBridgeSource;
+    state?: "configured" | "live" | "fallback" | "mock";
+    configured?: boolean;
+    live?: boolean;
     fallback: boolean;
     mock: boolean;
     liveReadyButNotVerified: boolean;
@@ -808,6 +814,9 @@ export function buildHealthFileBridgeResponse(
     confidence,
     disclaimer: HEALTH_FILE_BRIDGE_DISCLAIMER,
     source: options.source,
+    state: options.state ?? (options.live ? "live" : options.fallback ? "fallback" : options.mock ? "mock" : "configured"),
+    configured: options.configured ?? false,
+    live: options.live ?? false,
     fallback: options.fallback,
     mock: options.mock,
     liveReadyButNotVerified: options.liveReadyButNotVerified,

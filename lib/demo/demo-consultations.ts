@@ -517,6 +517,9 @@ function buildConsultationResult(seed: DemoConsultationSeed): ConsultationResult
     providerTrace: {
       provider: "demo-seed",
       source: "demo-fallback",
+      mode: "fallback",
+      fallback: true,
+      fallbackReason: "demo-seed",
       realProvider: false,
     },
     traceMeta: {

@@ -1,11 +1,19 @@
 import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
+import type { StorageObject } from "@/lib/api/types";
 import type { ParentStructuredFeedbackLite } from "@/lib/feedback/types";
+import type { AiCapabilityMode, AiProviderTrace } from "@/lib/ai/provider-trace";
 import type {
   CanonicalTask,
   FollowUpTask,
   TaskEscalationSuggestion,
   TaskSourceType,
 } from "@/lib/tasks/types";
+
+export type {
+  AiCapabilityMode,
+  AiFallbackReason,
+  AiProviderTrace,
+} from "@/lib/ai/provider-trace";
 
 export type AiRiskLevel = "low" | "medium" | "high";
 export type AiTrendPrediction = "up" | "stable" | "down";
@@ -265,7 +273,7 @@ export interface HighRiskConsultationResult {
   source: ConsultationResultSource;
   provider?: string;
   model?: string;
-  providerTrace?: Record<string, unknown>;
+  providerTrace?: AiProviderTrace;
   traceMeta?: Record<string, unknown>;
   realProvider?: boolean;
   fallback?: boolean;
@@ -294,6 +302,7 @@ export interface ReminderItem {
   reminderType: ReminderType;
   targetRole: "teacher" | "parent" | "admin";
   targetId: string;
+  assigneeRole?: "teacher" | "parent" | "admin";
   childId?: string;
   title: string;
   description: string;
@@ -303,6 +312,8 @@ export interface ReminderItem {
   taskId?: string;
   sourceType?: TaskSourceType;
   relatedTaskIds?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface RuleFallbackItem {
@@ -742,10 +753,12 @@ export interface ParentStoryBookScene {
   imagePrompt: string;
   imageUrl?: string | null;
   assetRef?: string | null;
+  imageStorageObject?: StorageObject;
   imageSourceKind?: ParentStoryBookSceneImageSourceKind;
   imageStatus: ParentStoryBookMediaStatus;
   audioUrl?: string | null;
   audioRef?: string | null;
+  audioStorageObject?: StorageObject;
   audioScript: string;
   audioStatus: ParentStoryBookMediaStatus;
   captionTiming?: ParentStoryBookCaptionTiming;
@@ -791,6 +804,8 @@ export interface ParentStoryBookResponse {
   source: ParentStoryBookResultSource;
   fallback: boolean;
   fallbackReason?: string | null;
+  provider?: string;
+  providerTrace?: AiProviderTrace;
   generatedAt: string;
   stylePreset?: ParentStoryBookStylePreset;
   providerMeta: ParentStoryBookProviderMeta;
@@ -902,8 +917,11 @@ export interface ParentTrendQueryResponse {
   warnings: string[];
   memoryMeta?: Record<string, unknown> | null;
   source: string;
+  mode?: AiCapabilityMode;
+  provider?: string;
   fallback: boolean;
   fallbackReason?: string | null;
+  providerTrace?: AiProviderTrace;
 }
 
 export interface WeeklyReportSnapshot {
@@ -1003,6 +1021,7 @@ export type HealthFileBridgeSource =
   | "next-local-extractor"
   | "local-text-fallback"
   | "vivo-ocr-provider";
+export type ProviderCapabilityState = "configured" | "live" | "fallback" | "mock";
 export type HealthFileBridgeRiskLevel = "low" | "medium" | "high";
 export type HealthFileBridgeFileType =
   | "report-screenshot"
@@ -1131,6 +1150,9 @@ export interface HealthFileBridgeProvenance {
   fileKind?: string;
   fileType: HealthFileBridgeFileType;
   source: HealthFileBridgeSource;
+  state: ProviderCapabilityState;
+  configured: boolean;
+  live: boolean;
   fallback: boolean;
   mock: boolean;
   liveReadyButNotVerified: boolean;
@@ -1172,6 +1194,9 @@ export interface HealthFileBridgeResponse {
   confidence: number;
   disclaimer: string;
   source: HealthFileBridgeSource;
+  state: ProviderCapabilityState;
+  configured: boolean;
+  live: boolean;
   fallback: boolean;
   mock: boolean;
   liveReadyButNotVerified: boolean;

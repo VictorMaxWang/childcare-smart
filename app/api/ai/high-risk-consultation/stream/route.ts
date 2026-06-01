@@ -3,6 +3,7 @@ import {
   buildLocalHighRiskConsultationResult,
   isValidHighRiskConsultationPayload,
 } from "@/lib/agent/high-risk-consultation-local-result";
+import { buildAiProviderTrace, type AiProviderTrace } from "@/lib/ai/provider-trace";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import {
   createBrainTransportHeaders,
@@ -10,20 +11,7 @@ import {
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
 
-type ProviderTrace = {
-  provider?: string;
-  source?: string;
-  model?: string;
-  requestId?: string;
-  transport?: string;
-  transportSource?: string;
-  consultationSource?: string;
-  fallbackReason?: string;
-  brainProvider?: string;
-  realProvider?: boolean;
-  fallback?: boolean;
-  [key: string]: unknown;
-};
+type ProviderTrace = AiProviderTrace;
 
 type StreamEvent =
   | { event: "status"; data: Record<string, unknown> }
@@ -95,6 +83,22 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
+}
+
+function buildScriptOnlyTtsTrace() {
+  return {
+    providerName: "text-only-tts-fallback",
+    capability: "tts",
+    state: "fallback",
+    configured: false,
+    live: false,
+    fallback: true,
+    mock: false,
+    status: "provider-unavailable",
+    reason: "High-risk consultation stream returns narration script only; no TTS audio is generated.",
+    requiredEnv: [],
+    warnings: ["Use a dedicated TTS endpoint when audio output is required."],
+  };
 }
 
 function readPositiveIntEnv(name: string, fallback: number) {
@@ -228,20 +232,31 @@ function buildFallbackStreamEvents(
     consultationSource: "stream-terminal-fallback",
     priorityReason: "AI stream did not finish in time; local fallback generated a complete 48-hour review plan.",
   });
-  const fallbackProviderTrace: ProviderTrace = {
+  const fallbackProviderTrace: ProviderTrace = buildAiProviderTrace({
     source: "local-rules-fallback",
     provider: "local-rules-llm",
     model: "local-social-emotional-rules",
     requestId: "",
+    mode: "fallback",
+    capability: "llm",
     transport: "next-stream-fallback",
     transportSource: "next-server",
-    consultationSource: "stream-terminal-fallback",
     fallbackReason,
-    brainProvider: "next-fallback",
     fallback: true,
     realProvider: false,
-  };
-  const providerTrace = (asRecord(result?.providerTrace) as ProviderTrace | null) ?? fallbackProviderTrace;
+    extra: {
+      consultationSource: "stream-terminal-fallback",
+      brainProvider: "next-fallback",
+      tts: buildScriptOnlyTtsTrace(),
+      modes: {
+        llm: "fallback",
+        tts: "fallback",
+      },
+    },
+  });
+  const resultTrace = asRecord(result?.providerTrace);
+  const providerTrace =
+    Object.keys(resultTrace).length > 0 ? (resultTrace as ProviderTrace) : fallbackProviderTrace;
   const memoryMeta = asRecord(result?.memoryMeta);
 
   if (!result) {

@@ -104,6 +104,12 @@ function assertFallbackContract(body: ParentTrendQueryResponse, reason: string) 
   assert.ok(Array.isArray(body.warnings));
   assert.ok(body.warnings.length > 0);
   assert.ok(body.source);
+  assert.equal(body.mode, "fallback");
+  assert.ok(body.provider);
+  assert.equal(body.providerTrace?.mode, "fallback");
+  assert.equal(body.providerTrace?.fallback, true);
+  assert.equal(body.providerTrace?.fallbackReason, reason);
+  assert.equal(body.providerTrace?.provider, body.provider);
 }
 
 test("parent trend route returns local fallback when provider fetch aborts", async () => {

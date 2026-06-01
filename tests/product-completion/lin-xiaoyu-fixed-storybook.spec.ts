@@ -25,6 +25,7 @@ test("林妈妈打开 c-1 默认显示固定 6 页绘本并支持刷新", async 
   await expect(page.getByText(TITLE).first()).toBeVisible();
   await expect(page.getByText("成长绘本 · 勇敢练习").first()).toBeVisible();
   await expect(page.getByTestId("lin-xiaoyu-fixed-storybook")).toBeVisible();
+  await expect(page.getByTestId("lin-xiaoyu-image-status")).toContainText("本地演示预览");
   await expect(page.getByText("1 / 6").first()).toBeVisible();
   await expect(page.getByTestId("lin-xiaoyu-page-text")).toContainText(PAGE_1_TEXT);
   await expect(page.getByTestId("parent-storybook-generation-panel")).toBeVisible();
@@ -108,8 +109,20 @@ test("c-1 fixed default does not block manual vivo storybook generation", async 
             assetRef: "/demo-media/storybooks/demo-storybook-placeholder.svg",
             imageSourceKind: "real",
             imageStatus: "ready",
-            audioUrl: "/api/storybooks/lin-xiaoyu/tts?childId=c-1&page=1",
-            audioRef: "/api/storybooks/lin-xiaoyu/tts?childId=c-1&page=1",
+            audioUrl: "/api/ai/parent-storybook/media/testcached",
+            audioRef: "testcached",
+            audioStorageObject: {
+              id: "storybook-lock-02-regenerated:scene:1:audio",
+              owner: { ownerType: "child", ownerId: "c-1", childId: "c-1", institutionId: "inst-1" },
+              scope: { institutionId: "inst-1", childId: "c-1", relatedType: "storybook-media", relatedId: "storybook-lock-02-regenerated" },
+              kind: "storybook-audio",
+              storageMode: "cached_media",
+              url: null,
+              localPreviewUrl: "/api/ai/parent-storybook/media/testcached",
+              metadataOnly: false,
+              expiresAt: "2026-05-01T00:20:00.000Z",
+              permissions: { canRead: true, canPreview: true, canDownload: true, canShare: false, reason: "in_memory_cached_media" },
+            },
             audioScript: "manual generated storybook result",
             audioStatus: "ready",
             voiceStyle: "warm narration",
@@ -146,6 +159,7 @@ test("c-1 fixed default does not block manual vivo storybook generation", async 
   ]);
 
   await expect(page.getByText(generatedTitle).first()).toBeVisible();
+  await expect(page.getByText("已缓存媒体").first()).toBeVisible();
   await expect(page.getByTestId("parent-storybook-text-status")).toContainText("文案：真实 AI");
   await expect(page.getByTestId("parent-storybook-image-status")).toContainText("插图：真实插图");
   await expect(page.getByTestId("parent-storybook-audio-status")).toContainText("朗读：真实 TTS");

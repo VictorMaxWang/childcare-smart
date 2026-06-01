@@ -1,6 +1,7 @@
 import { resolveAsrProvider } from "@/lib/ai/providers/asr-provider";
+import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import { VivoProviderError } from "@/lib/providers/vivo/vivo-errors";
-import { apiError, apiOk, withApiErrors } from "@/lib/server/api-errors";
+import { apiOk, withApiErrors } from "@/lib/server/api-errors";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import type { VoiceAsrResponse } from "@/lib/voice-assistant/types";
 
@@ -28,6 +29,7 @@ export function POST(request: Request) {
         : null;
     const audioBytes = audioFile ? Buffer.from(await audioFile.arrayBuffer()) : undefined;
     const provider = resolveAsrProvider();
+    const providerStatus = provider.getStatus();
     const result = await provider
       .transcribe({
         attachmentName: audioFile?.name || readString(formData.get("attachmentName")) || "voice-assistant.webm",
@@ -46,18 +48,90 @@ export function POST(request: Request) {
       });
 
     if (!result) {
-      return apiError("provider_unavailable", "当前 ASR provider 不支持该音频输入。", { status: 503 });
+      const providerTrace = buildAiProviderTrace({
+        provider: providerStatus.providerName,
+        source: "provider_unavailable",
+        mode: "fallback",
+        fallback: true,
+        fallbackReason: "provider-unavailable",
+        realProvider: false,
+        capability: "asr",
+        providerStatus,
+      });
+      return Response.json(
+        {
+          ok: false,
+          code: "provider_unavailable",
+          error: "ASR provider is unavailable for this audio input.",
+          source: providerTrace.source,
+          provider: providerTrace.provider,
+          mode: providerTrace.mode,
+          fallback: providerTrace.fallback,
+          fallbackReason: providerTrace.fallbackReason,
+          providerTrace,
+          status: providerStatus,
+          warnings: providerStatus.warnings ?? [],
+        },
+        { status: 503 }
+      );
     }
 
     if (result.source === "provider_unavailable" && !result.output.transcript) {
-      return apiError("provider_unavailable", "当前 ASR provider 不可用，请使用文字指令 fallback。", { status: 503 });
+      const providerTrace = buildAiProviderTrace({
+        provider: result.provider,
+        source: result.source,
+        mode: "fallback",
+        fallback: true,
+        fallbackReason: "provider-unavailable",
+        realProvider: false,
+        capability: "asr",
+        providerStatus: result.output.providerStatus,
+      });
+      return Response.json(
+        {
+          ok: false,
+          code: "provider_unavailable",
+          error: "ASR provider is unavailable; provide fallback text or a transcript.",
+          source: result.source,
+          provider: result.provider,
+          mode: providerTrace.mode,
+          fallback: providerTrace.fallback,
+          fallbackReason: providerTrace.fallbackReason,
+          providerTrace,
+          status: result.output.providerStatus,
+          warnings: result.output.warnings,
+        },
+        { status: 503 }
+      );
     }
+
+    const fallbackReason = result.output.fallback
+      ? result.output.source === "provided_transcript"
+        ? "provided-transcript"
+        : result.output.source === "text_fallback"
+          ? "text-fallback"
+          : "provider-unavailable"
+      : null;
+    const providerTrace = buildAiProviderTrace({
+      provider: result.provider,
+      source: result.source,
+      mode: result.mode,
+      fallback: result.output.fallback,
+      fallbackReason,
+      realProvider: result.mode === "live" && !result.output.fallback,
+      capability: "asr",
+      model: result.provider,
+      providerStatus: result.output.providerStatus,
+    });
 
     const payload: VoiceAsrResponse = {
       transcript: result.output.transcript,
       source: result.source,
+      mode: providerTrace.mode,
       provider: result.provider,
       fallback: result.output.fallback,
+      fallbackReason: providerTrace.fallbackReason,
+      providerTrace,
       status: result.output.providerStatus,
       warnings: result.output.warnings,
     };

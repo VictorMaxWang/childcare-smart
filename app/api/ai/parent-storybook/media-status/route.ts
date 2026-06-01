@@ -5,6 +5,7 @@ import type {
   ParentStoryBookResponse,
   ParentStoryBookScene,
 } from "@/lib/ai/types";
+import { buildAiProviderTraceFromProviderMeta } from "@/lib/ai/provider-trace";
 import { getVivoEnv, requestVivoTts } from "@/lib/providers/vivo";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import {
@@ -469,6 +470,14 @@ async function completeStoryMediaLocally(input: {
       },
     },
   };
+  story.provider = story.providerMeta.provider;
+  story.providerTrace = buildAiProviderTraceFromProviderMeta({
+    providerMeta: story.providerMeta,
+    source: story.source,
+    fallback: story.fallback,
+    fallbackReason: story.fallbackReason,
+    capability: "storybook-media",
+  });
 
   return prepareParentStoryBookResponseForDelivery(story, {
     cacheState: "bypass",
@@ -566,7 +575,20 @@ export async function POST(request: Request) {
     });
   }
 
-  const preparedStory = prepareParentStoryBookResponseForDelivery(remoteStory, {
+  const preparedRemoteStory = {
+    ...remoteStory,
+    provider: remoteStory.providerMeta.provider,
+    providerTrace:
+      remoteStory.providerTrace ??
+      buildAiProviderTraceFromProviderMeta({
+        providerMeta: remoteStory.providerMeta,
+        source: remoteStory.source,
+        fallback: remoteStory.fallback,
+        fallbackReason: remoteStory.fallbackReason,
+        capability: "storybook-media",
+      }),
+  } satisfies ParentStoryBookResponse;
+  const preparedStory = prepareParentStoryBookResponseForDelivery(preparedRemoteStory, {
     cacheState: "bypass",
   });
 

@@ -1,5 +1,11 @@
 import { apiGet, apiPatch, apiPost, type ApiClientOptions } from "@/lib/api/client";
-import type { ApiWeeklyReport, ArchiveAction, ReportScopeType, WeeklyReportExportFormat } from "@/lib/api/types";
+import type {
+  ApiWeeklyReport,
+  ApiWeeklyReportExportData,
+  ArchiveAction,
+  ReportScopeType,
+  WeeklyReportExportFormat,
+} from "@/lib/api/types";
 
 export interface WeeklyReportCreateInput {
   title?: string;
@@ -11,14 +17,7 @@ export interface WeeklyReportCreateInput {
   payload?: Record<string, unknown>;
 }
 
-export interface WeeklyReportExportData {
-  reportId: string;
-  format: WeeklyReportExportFormat;
-  exportedAt: string;
-  content: string;
-  mimeType: string;
-  filename: string;
-}
+export type WeeklyReportExportData = ApiWeeklyReportExportData;
 
 function reportPath(reportId: string) {
   return `/api/weekly-reports/${encodeURIComponent(reportId)}`;

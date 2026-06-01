@@ -1,4 +1,11 @@
 import { DEMO_ACCOUNTS, type SessionUser } from "@/lib/auth/accounts";
+import type {
+  AdminDispatchCreatePayload,
+  AdminDispatchEvent,
+  AdminDispatchEventStatus,
+  AdminDispatchUpdatePayload,
+  AdminOwnerRole,
+} from "@/lib/agent/admin-types";
 import { normalizeHighRiskConsultationResult } from "@/lib/consultation/normalize-result";
 import type {
   ApiAttachment,
@@ -11,6 +18,7 @@ import type {
   ApiStorybookExportData,
   ApiTeacher,
   ApiWeeklyReport,
+  ApiWeeklyReportExportData,
   ArchiveAction,
   AttachmentKind,
   AttachmentRelatedType,
@@ -47,6 +55,12 @@ import {
   requireRecordModifyAccess,
   requireTeacherAccess,
 } from "@/lib/server/scope";
+import {
+  buildWeeklyReportExportStorageObject,
+  buildWeeklyReportShareStorageObject,
+  decorateAttachmentStorage,
+  isLocalDemoPreviewUrl,
+} from "@/lib/server/storage-contract";
 
 type Archivable<T> = T & {
   archivedAt?: string;
@@ -63,6 +77,17 @@ type SnapshotFeedback = AppStateSnapshot["feedback"][number] & { id?: string; fe
 type SnapshotReminder = AppStateSnapshot["reminders"][number];
 type SnapshotStorybook = AppStateSnapshot["storybooks"][number] & ApiStorybook;
 type SnapshotTask = AppStateSnapshot["tasks"][number];
+type SnapshotAdminDispatchTask = SnapshotTask & {
+  assignedTeacherId?: string;
+  assignedTeacherName?: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  assigneeRole?: AdminOwnerRole;
+  adminDispatchPayload?: AdminDispatchCreatePayload;
+  feedbackId?: string;
+  riskItemId?: string;
+  createdBy?: string;
+};
 type HealthMaterialParseStatus = AppStateSnapshot["healthMaterials"][number]["parseStatus"];
 
 const FEEDBACK_STATUSES: FeedbackStatus[] = ["open", "in-progress", "resolved", "archived"];
@@ -151,8 +176,51 @@ function isAdminDispatchTask(task: SnapshotTask) {
   return task.sourceType === "admin_dispatch" && task.ownerRole === "teacher";
 }
 
+function isAdminDispatchCanonicalTask(task: SnapshotTask) {
+  return task.sourceType === "admin_dispatch";
+}
+
 function assignmentIdOfTask(task: SnapshotTask) {
   return task.legacyRefs?.adminDispatchEventId ?? task.sourceId;
+}
+
+function uniqueStrings(values: Array<string | undefined>) {
+  return values.filter((value, index): value is string => Boolean(value) && values.indexOf(value) === index);
+}
+
+function dispatchStatusFromTaskStatus(status: SnapshotTask["status"]): AdminDispatchEventStatus {
+  if (status === "completed") return "completed";
+  if (status === "in_progress") return "in_progress";
+  return "pending";
+}
+
+function parseDueAt(value: unknown, fallback: string) {
+  if (typeof value === "string" && value.trim()) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+  return new Date(new Date(fallback).getTime() + 24 * 60 * 60 * 1000).toISOString();
+}
+
+function ownerRoleFromTask(task: SnapshotTask): AdminOwnerRole {
+  const role = (task as SnapshotAdminDispatchTask).assigneeRole ?? task.ownerRole;
+  if (role === "parent" || role === "admin" || role === "teacher") return role;
+  return "admin";
+}
+
+function targetIdForOwner(params: {
+  ownerRole: AdminOwnerRole;
+  child: ApiExtendedSnapshot["children"][number];
+  teacher?: ApiExtendedSnapshot["teachers"][number] | null;
+  session: SessionUser;
+}) {
+  if (params.ownerRole === "teacher") {
+    return params.teacher?.userId ?? params.teacher?.teacherId ?? params.session.id;
+  }
+  if (params.ownerRole === "parent") {
+    return params.child.parentUserId ?? params.child.id;
+  }
+  return params.session.id;
 }
 
 function deriveAttachmentKind(mimeType: string, fileName = ""): AttachmentKind {
@@ -642,11 +710,13 @@ export class AppDataService {
   }
 
   private decorateAttachment(attachment: ApiAttachment): ApiAttachment {
-    return {
-      ...attachment,
-      kind: attachment.kind ?? deriveAttachmentKind(attachment.mimeType, attachment.fileName),
-      downloadUrl: `/api/attachments/${attachment.attachmentId}/content`,
-    };
+    return decorateAttachmentStorage(
+      {
+        ...attachment,
+        kind: attachment.kind ?? deriveAttachmentKind(attachment.mimeType, attachment.fileName),
+      },
+      this.session
+    );
   }
 
   private buildFeedbackDetail(snapshot: ApiExtendedSnapshot, feedbackId: string): ApiFeedbackDetail {
@@ -1486,12 +1556,14 @@ export class AppDataService {
         snapshot,
         snapshot.weeklyReports.find((item) => item.reportId === reportId)
       );
+      const shareId = readString(input.shareId) || createApiId("share");
       const share = {
-        shareId: readString(input.shareId, createApiId("share")),
+        shareId,
         sharedBy: this.session.id,
         sharedAt: nowIso(),
         summary: readString(input.summary) || reportShareSummary(report),
         localText: reportShareText(report),
+        storageObject: buildWeeklyReportShareStorageObject(report, shareId, this.session),
       };
       snapshot.weeklyReports = snapshot.weeklyReports.map((item) =>
         item.reportId === reportId
@@ -1507,7 +1579,7 @@ export class AppDataService {
     });
   }
 
-  async exportWeeklyReportData(reportId: string, format: WeeklyReportExportFormat = "json") {
+  async exportWeeklyReportData(reportId: string, format: WeeklyReportExportFormat = "json"): Promise<ApiWeeklyReportExportData> {
     const report = await this.getScopedWeeklyReport(reportId);
     const content = renderWeeklyReportExport(report, format);
     const extension = format === "json" ? "json" : format === "markdown" ? "md" : format === "share-text" ? "txt" : "html";
@@ -1523,6 +1595,7 @@ export class AppDataService {
             ? "text/plain"
             : "text/html",
       filename: `${report.reportId}.${extension}`,
+      storageObject: buildWeeklyReportExportStorageObject(report, format, this.session),
     };
   }
 
@@ -1582,6 +1655,8 @@ export class AppDataService {
       const fileName = readString(input.fileName, "attachment");
       const mimeType = readString(input.mimeType, "application/octet-stream");
       const byteSize = typeof input.byteSize === "number" ? input.byteSize : undefined;
+      const requestedPreviewUrl = readString(input.localPreviewUrl) || undefined;
+      const localPreviewUrl = isLocalDemoPreviewUrl(requestedPreviewUrl) ? requestedPreviewUrl : undefined;
       if (typeof byteSize === "number" && (byteSize < 0 || byteSize > ATTACHMENT_MAX_BYTES)) {
         throw new ApiRouteError("invalid_request", "Attachment must be 5MB or smaller.");
       }
@@ -1606,9 +1681,9 @@ export class AppDataService {
         fileName,
         mimeType,
         byteSize,
-        storageMode: "metadata_only",
+        storageMode: localPreviewUrl ? "local_demo" : "metadata_only",
         uploadStatus: "metadata_saved",
-        localPreviewUrl: readString(input.localPreviewUrl) || undefined,
+        localPreviewUrl,
         durationMs: typeof input.durationMs === "number" ? input.durationMs : undefined,
         createdBy: this.session.id,
         createdAt: nowIso(),
@@ -1643,16 +1718,117 @@ export class AppDataService {
     return this.decorateAttachment(attachment);
   }
 
+  private resolveAdminDispatchChild(snapshot: ApiExtendedSnapshot, payload: AdminDispatchCreatePayload) {
+    const relatedChildId = payload.source?.relatedChildIds?.find(Boolean);
+    const directChildId = payload.targetType === "child" ? payload.targetId : "";
+    const className =
+      payload.source?.relatedClassNames?.find(Boolean) ||
+      (payload.targetType === "class" ? payload.targetName : "");
+    const childId = relatedChildId || directChildId;
+    if (childId) return requireChildAccess(this.session, snapshot, childId);
+
+    const classChild = className
+      ? snapshot.children.find((child) => child.institutionId === this.session.institutionId && child.className === className)
+      : null;
+    if (classChild) return requireChildAccess(this.session, snapshot, classChild.id);
+
+    const fallbackChild = snapshot.children.find((child) => child.institutionId === this.session.institutionId);
+    if (fallbackChild) return requireChildAccess(this.session, snapshot, fallbackChild.id);
+
+    throw new ApiRouteError("invalid_request", "Admin dispatch must resolve to a child anchor.");
+  }
+
+  private resolveAdminDispatchTeacher(
+    snapshot: ApiExtendedSnapshot,
+    child: ApiExtendedSnapshot["children"][number],
+    payload: AdminDispatchCreatePayload
+  ) {
+    const ownerName = readString(payload.recommendedOwnerName);
+    const className =
+      payload.source?.relatedClassNames?.find(Boolean) ||
+      (payload.targetType === "class" ? payload.targetName : child.className);
+    return (
+      snapshot.teachers.find((teacher) => ownerName && teacher.name === ownerName) ??
+      snapshot.teachers.find((teacher) => className && teacher.className === className) ??
+      snapshot.teachers.find((teacher) => child.className && teacher.className === child.className) ??
+      null
+    );
+  }
+
+  private buildAdminDispatchEvent(snapshot: ApiExtendedSnapshot, task: SnapshotTask): AdminDispatchEvent {
+    const taskRecord = task as SnapshotAdminDispatchTask;
+    const payload = taskRecord.adminDispatchPayload;
+    const child = findChild(snapshot, task.childId);
+    const dispatchId = assignmentIdOfTask(task);
+    const reminder =
+      task.legacyRefs?.reminderIds?.length
+        ? snapshot.reminders.find((item) => task.legacyRefs?.reminderIds?.includes(item.reminderId))
+        : snapshot.reminders.find((item) => item.taskId === task.taskId || item.sourceId === dispatchId);
+    const assigneeRole = ownerRoleFromTask(task);
+    const assigneeId = readString(taskRecord.assigneeId) || readString(taskRecord.assignedTeacherId) || reminder?.targetId;
+    const assigneeName =
+      readString(taskRecord.assigneeName) ||
+      readString(taskRecord.assignedTeacherName) ||
+      payload?.recommendedOwnerName ||
+      undefined;
+    const relatedTaskIds = uniqueStrings([
+      task.taskId,
+      ...(task.relatedTaskIds ?? []),
+      ...(payload?.source?.relatedTaskIds ?? []),
+    ]);
+    const relatedChildIds = uniqueStrings([
+      task.childId,
+      ...(payload?.source?.relatedChildIds ?? []),
+    ]);
+
+    return {
+      id: dispatchId,
+      institutionId: this.session.institutionId,
+      eventType: payload?.eventType ?? "admin_action",
+      status: dispatchStatusFromTaskStatus(task.status),
+      priorityItemId: payload?.priorityItemId ?? dispatchId,
+      title: payload?.title ?? task.title,
+      summary: payload?.summary ?? task.description,
+      targetType: payload?.targetType ?? "child",
+      targetId: payload?.targetId ?? task.childId,
+      targetName: payload?.targetName ?? child?.name ?? task.childId,
+      priorityLevel: payload?.priorityLevel ?? "P2",
+      priorityScore: payload?.priorityScore ?? 0,
+      recommendedOwnerRole: payload?.recommendedOwnerRole ?? assigneeRole,
+      recommendedOwnerName: payload?.recommendedOwnerName ?? assigneeName,
+      recommendedAction: payload?.recommendedAction ?? task.description,
+      recommendedDeadline: payload?.recommendedDeadline ?? task.dueAt,
+      reasonText: payload?.reasonText ?? task.description,
+      evidence: payload?.evidence ?? [],
+      source: {
+        ...(payload?.source ?? {}),
+        relatedChildIds: relatedChildIds.length > 0 ? relatedChildIds : undefined,
+        taskId: task.taskId,
+        sourceType: "admin_dispatch",
+        sourceId: dispatchId,
+        relatedTaskIds,
+        consultationId: payload?.source?.consultationId ?? task.legacyRefs?.consultationId,
+      },
+      createdBy: readString(taskRecord.createdBy, this.session.id),
+      updatedBy: readString(taskRecord.createdBy, this.session.id),
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+      completedAt: task.completedAt ?? null,
+      assignmentId: dispatchId,
+      taskId: task.taskId,
+      reminderId: reminder?.reminderId,
+      sourceType: "admin_dispatch",
+      sourceId: dispatchId,
+      assigneeRole,
+      assigneeId,
+      assigneeName,
+    };
+  }
+
   private buildAssignment(snapshot: ApiExtendedSnapshot, task: SnapshotTask): ApiAssignment {
     const child = findChild(snapshot, task.childId);
-    const taskRecord = task as SnapshotTask & {
-      assignedTeacherId?: string;
-      assignedTeacherName?: string;
-      feedbackId?: string;
-      riskItemId?: string;
-      createdBy?: string;
-    };
-    const teacherId = readString(taskRecord.assignedTeacherId);
+    const taskRecord = task as SnapshotAdminDispatchTask;
+    const teacherId = readString(taskRecord.assignedTeacherId) || readString(taskRecord.assigneeId);
     const teacher =
       snapshot.teachers.find((item) => item.teacherId === teacherId || item.userId === teacherId) ??
       snapshot.teachers.find((item) => item.className && child?.className && item.className === child.className);
@@ -1672,6 +1848,9 @@ export class AppDataService {
       title: task.title,
       description: task.description,
       status: readAssignmentStatus(task.status),
+      sourceType: task.sourceType,
+      sourceId: task.sourceId,
+      assigneeRole: "teacher",
       dueAt: task.dueAt,
       reminderId: reminder?.reminderId,
       feedbackId: readString(taskRecord.feedbackId) || undefined,
@@ -1711,6 +1890,139 @@ export class AppDataService {
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
+  async listAdminDispatchEvents() {
+    requireDirector(this.session);
+    const snapshot = await this.load();
+    return snapshot.tasks
+      .filter(isAdminDispatchCanonicalTask)
+      .map((task) => this.buildAdminDispatchEvent(snapshot, task))
+      .sort((left, right) => {
+        const statusOrder: Record<AdminDispatchEventStatus, number> = {
+          pending: 0,
+          in_progress: 1,
+          completed: 2,
+        };
+        const statusDiff = statusOrder[left.status] - statusOrder[right.status];
+        if (statusDiff !== 0) return statusDiff;
+        if (right.priorityScore !== left.priorityScore) return right.priorityScore - left.priorityScore;
+        return right.updatedAt.localeCompare(left.updatedAt);
+      });
+  }
+
+  async createAdminDispatch(payload: AdminDispatchCreatePayload) {
+    requireDirector(this.session);
+    return this.mutate("admin-dispatch", "new", "create", (snapshot) => {
+      const child = this.resolveAdminDispatchChild(snapshot, payload);
+      const ownerRole = payload.recommendedOwnerRole;
+      const teacher =
+        ownerRole === "teacher"
+          ? requireTeacherAccess(this.session, this.resolveAdminDispatchTeacher(snapshot, child, payload))
+          : null;
+      const now = nowIso();
+      const dispatchId = createApiId("assign");
+      const taskId = createApiId("task");
+      const reminderId = createApiId("reminder");
+      const dueAt = parseDueAt(payload.recommendedDeadline, now);
+      const assigneeId = targetIdForOwner({ ownerRole, child, teacher, session: this.session });
+      const assigneeName = teacher?.name ?? payload.recommendedOwnerName;
+      const relatedTaskIds = uniqueStrings([taskId, ...(payload.source?.relatedTaskIds ?? [])]);
+      const dispatchPayload: AdminDispatchCreatePayload = {
+        ...payload,
+        source: {
+          ...payload.source,
+          relatedChildIds: uniqueStrings([child.id, ...(payload.source?.relatedChildIds ?? [])]),
+          taskId,
+          sourceType: "admin_dispatch",
+          sourceId: dispatchId,
+          relatedTaskIds,
+        },
+      };
+      const task = {
+        taskId,
+        taskType: "follow_up",
+        childId: child.id,
+        sourceType: "admin_dispatch",
+        sourceId: dispatchId,
+        ownerRole,
+        assigneeId,
+        assigneeName,
+        title: payload.title,
+        description: payload.recommendedAction || payload.summary,
+        dueWindow: { kind: "deadline", label: "Admin dispatch" },
+        dueAt,
+        status: "pending",
+        evidenceSubmissionMode: "dispatch_status_update",
+        createdAt: now,
+        updatedAt: now,
+        createdBy: this.session.id,
+        assignedTeacherId: teacher?.teacherId,
+        assignedTeacherName: teacher?.name,
+        assigneeRole: ownerRole,
+        adminDispatchPayload: dispatchPayload,
+        legacyRefs: {
+          adminDispatchEventId: dispatchId,
+          reminderIds: [reminderId],
+          consultationId: payload.source?.consultationId,
+        },
+      } as SnapshotTask;
+      const reminder = {
+        reminderId,
+        reminderType: ownerRole === "teacher" ? "review-48h" : ownerRole === "parent" ? "family-task" : "admin-focus",
+        targetRole: ownerRole,
+        targetId: assigneeId,
+        childId: child.id,
+        title: payload.title,
+        description: payload.recommendedAction || payload.summary,
+        scheduledAt: dueAt,
+        status: "pending",
+        sourceId: dispatchId,
+        taskId,
+        sourceType: "admin_dispatch",
+        relatedTaskIds: [taskId],
+        assigneeRole: ownerRole,
+        createdAt: now,
+        updatedAt: now,
+      } as SnapshotReminder;
+      snapshot.tasks = [task, ...snapshot.tasks.filter((item) => item.taskId !== taskId)];
+      snapshot.reminders = [reminder, ...snapshot.reminders.filter((item) => item.reminderId !== reminderId)];
+      return this.buildAdminDispatchEvent(snapshot, task);
+    });
+  }
+
+  async updateAdminDispatchStatus(dispatchId: string, input: AdminDispatchUpdatePayload) {
+    requireDirector(this.session);
+    const nextStatus = readAssignmentStatus(input.status, "in_progress");
+    return this.mutate("admin-dispatch", dispatchId, "update_status", (snapshot) => {
+      const task = snapshot.tasks.find(
+        (item) =>
+          isAdminDispatchCanonicalTask(item) &&
+          (assignmentIdOfTask(item) === dispatchId || item.taskId === dispatchId)
+      );
+      if (!task) throw new ApiRouteError("not_found", "Admin dispatch was not found.");
+      const now = nowIso();
+      snapshot.tasks = snapshot.tasks.map((item) =>
+        item.taskId === task.taskId
+          ? ({
+              ...item,
+              status: nextStatus,
+              statusChangedAt: now,
+              completedAt: nextStatus === "completed" ? now : item.completedAt,
+              completionSummary: readString(input.completionSummary, item.completionSummary),
+              updatedAt: now,
+            } as SnapshotTask)
+          : item
+      );
+      snapshot.reminders = snapshot.reminders.map((item) =>
+        item.taskId === task.taskId || item.sourceId === assignmentIdOfTask(task)
+          ? ({ ...item, status: assignmentReminderStatus(nextStatus), updatedAt: now } as SnapshotReminder)
+          : item
+      );
+      const updatedTask = snapshot.tasks.find((item) => item.taskId === task.taskId);
+      if (!updatedTask) throw new ApiRouteError("not_found", "Updated admin dispatch was not found.");
+      return this.buildAdminDispatchEvent(snapshot, updatedTask);
+    });
+  }
+
   async createAssignment(input: AnyRecord) {
     requireDirector(this.session);
     const childId = readString(input.childId);
@@ -1739,6 +2051,8 @@ export class AppDataService {
         sourceType: "admin_dispatch",
         sourceId: assignmentId,
         ownerRole: "teacher",
+        assigneeId: teacher.teacherId,
+        assigneeName: teacher.name,
         title,
         description,
         dueWindow: { kind: "deadline", label: "园长派单" },
@@ -1750,6 +2064,7 @@ export class AppDataService {
         createdBy: this.session.id,
         assignedTeacherId: teacher.teacherId,
         assignedTeacherName: teacher.name,
+        assigneeRole: "teacher",
         feedbackId: readString(input.feedbackId) || undefined,
         riskItemId: readString(input.riskItemId) || undefined,
         legacyRefs: {
@@ -1772,6 +2087,9 @@ export class AppDataService {
         taskId,
         sourceType: "admin_dispatch",
         relatedTaskIds: [taskId],
+        assigneeRole: "teacher",
+        createdAt: now,
+        updatedAt: now,
       } as SnapshotReminder;
       snapshot.tasks = [task, ...snapshot.tasks.filter((item) => item.taskId !== taskId)];
       snapshot.reminders = [reminder, ...snapshot.reminders.filter((item) => item.reminderId !== reminderId)];

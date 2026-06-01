@@ -12,10 +12,12 @@ import type {
   ParentStoryBookRequest,
   ParentStoryBookResponse,
   ParentStoryBookScene,
+  ParentStoryBookProviderMeta,
   ParentStoryBookStylePreset,
   ParentStoryBookStyleMode,
   ParentStoryBookTransport,
 } from "@/lib/ai/types";
+import { buildAiProviderTraceFromProviderMeta } from "@/lib/ai/provider-trace";
 import {
   buildParentAgentChildContext,
   buildParentChildSuggestionSnapshot,
@@ -2194,6 +2196,34 @@ export function buildParentStoryBookResponse(
     (ingredients.storyMode === "card"
       ? "sparse-parent-context"
       : "mock-storybook-pipeline");
+  const source = options?.source ?? "rule";
+  const fallback = options?.fallback ?? true;
+  const providerMeta: ParentStoryBookProviderMeta = {
+    provider: "parent-storybook-rule",
+    mode: "fallback",
+    transport: options?.transport ?? "next-json-fallback",
+    textProvider: "parent-storybook-rule",
+    textDelivery: "fallback",
+    imageProvider: "storybook-dynamic-fallback",
+    audioProvider: "storybook-mock-preview",
+    imageDelivery: resolveProviderImageDeliveryFromScenes(scenes),
+    audioDelivery: resolveProviderAudioDeliveryFromScenes(scenes),
+    diagnostics: buildLocalDiagnostics(
+      options?.transport ?? "next-json-fallback",
+      fallbackReason,
+      options?.upstreamHost,
+      options?.statusCode,
+      options?.retryStrategy ?? "none"
+    ),
+    stylePreset,
+    requestSource: request.requestSource ?? "parent-storybook-page",
+    fallbackReason,
+    realProvider: false,
+    highlightCount: ingredients.highlightCandidates.length,
+    sceneCount: scenes.length,
+    cacheHitCount: 0,
+    cacheWindowSeconds: 0,
+  };
 
   return {
     storyId,
@@ -2207,37 +2237,20 @@ export function buildParentStoryBookResponse(
       summaryHighlight: ingredients.summaryHighlight,
     }),
     parentNote: ingredients.parentNote,
-    source: options?.source ?? "rule",
-    fallback: options?.fallback ?? true,
+    source,
+    fallback,
     fallbackReason,
+    provider: providerMeta.provider,
+    providerTrace: buildAiProviderTraceFromProviderMeta({
+      providerMeta,
+      source,
+      fallback,
+      fallbackReason,
+      capability: "llm",
+    }),
     generatedAt,
     stylePreset,
-    providerMeta: {
-      provider: "parent-storybook-rule",
-      mode: "fallback",
-      transport: options?.transport ?? "next-json-fallback",
-      textProvider: "parent-storybook-rule",
-      textDelivery: "fallback",
-      imageProvider: "storybook-dynamic-fallback",
-      audioProvider: "storybook-mock-preview",
-      imageDelivery: resolveProviderImageDeliveryFromScenes(scenes),
-      audioDelivery: resolveProviderAudioDeliveryFromScenes(scenes),
-      diagnostics: buildLocalDiagnostics(
-        options?.transport ?? "next-json-fallback",
-        fallbackReason,
-        options?.upstreamHost,
-        options?.statusCode,
-        options?.retryStrategy ?? "none"
-      ),
-      stylePreset,
-      requestSource: request.requestSource ?? "parent-storybook-page",
-      fallbackReason,
-      realProvider: false,
-      highlightCount: ingredients.highlightCandidates.length,
-      sceneCount: scenes.length,
-      cacheHitCount: 0,
-      cacheWindowSeconds: 0,
-    },
+    providerMeta,
     scenes,
   };
 }

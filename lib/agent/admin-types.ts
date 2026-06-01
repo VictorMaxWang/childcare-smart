@@ -147,6 +147,7 @@ export interface AdminDispatchUpdatePayload {
   recommendedOwnerName?: string;
   summary?: string;
   completedAt?: string | null;
+  completionSummary?: string;
 }
 
 export interface AdminDispatchEvent {
@@ -186,6 +187,14 @@ export interface AdminDispatchEvent {
   createdAt: string;
   updatedAt: string;
   completedAt?: string | null;
+  assignmentId?: string;
+  taskId?: string;
+  reminderId?: string;
+  sourceType?: TaskSourceType;
+  sourceId?: string;
+  assigneeRole?: AdminOwnerRole;
+  assigneeId?: string;
+  assigneeName?: string;
 }
 
 export interface InstitutionPriorityEvidence {

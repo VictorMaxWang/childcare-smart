@@ -1,4 +1,5 @@
 import { normalizeTeacherVoiceMimeType } from "@/lib/mobile/teacher-voice-audio";
+import type { AiProviderTrace } from "@/lib/ai/provider-trace";
 
 export type VoiceCaptureStatus =
   | "uploaded"
@@ -24,6 +25,9 @@ export interface VoiceUploadResponse {
   transcript?: string;
   draftContent: string;
   provider?: string;
+  fallback?: boolean;
+  fallbackReason?: string | null;
+  providerTrace?: AiProviderTrace;
   source: "upload-api" | "local-text-fallback" | "mock";
   nextAction?: "none" | "teacher-agent" | "high-risk-consultation";
   raw?: Record<string, unknown>;
@@ -50,6 +54,9 @@ export function buildMockVoiceUploadResponse(params: {
   attachmentName: string;
   fallbackText?: string;
   provider?: string;
+  fallback?: boolean;
+  fallbackReason?: string | null;
+  providerTrace?: AiProviderTrace;
   raw?: Record<string, unknown>;
 }): VoiceUploadResponse {
   const transcript = buildFallbackTranscript(params.fallbackText);
@@ -64,6 +71,9 @@ export function buildMockVoiceUploadResponse(params: {
     transcript,
     draftContent: transcript,
     provider: params.provider ?? "text-input-asr-fallback",
+    fallback: params.fallback ?? true,
+    fallbackReason: params.fallbackReason ?? "mock-provider",
+    providerTrace: params.providerTrace,
     source: "mock",
     nextAction: inferNextAction(transcript),
     raw: params.raw,
@@ -74,6 +84,9 @@ export function buildVoiceUploadResponse(params: {
   attachmentName: string;
   transcript?: string;
   provider?: string;
+  fallback?: boolean;
+  fallbackReason?: string | null;
+  providerTrace?: AiProviderTrace;
   source?: VoiceUploadResponse["source"];
   status?: VoiceCaptureStatus;
   raw?: Record<string, unknown>;
@@ -90,6 +103,9 @@ export function buildVoiceUploadResponse(params: {
     transcript,
     draftContent: transcript,
     provider: params.provider ?? "upload-api",
+    fallback: params.fallback,
+    fallbackReason: params.fallbackReason,
+    providerTrace: params.providerTrace,
     source: params.source ?? "upload-api",
     nextAction: inferNextAction(transcript),
     raw: params.raw,
@@ -161,6 +177,8 @@ export async function uploadTeacherVoiceCapture(
         attachmentName,
         transcript: request.fallbackText,
         provider: "text-input-asr-fallback",
+        fallback: true,
+        fallbackReason: "text-fallback",
         source: "local-text-fallback",
         status: "local_fallback",
         raw: {
@@ -180,6 +198,8 @@ export async function uploadTeacherVoiceCapture(
       attachmentName,
       draftContent: "",
       provider: "provider-unavailable",
+      fallback: true,
+      fallbackReason: "provider-unavailable",
       source: "local-text-fallback",
       nextAction: "none",
       raw: {

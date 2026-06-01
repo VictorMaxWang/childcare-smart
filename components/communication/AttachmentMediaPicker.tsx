@@ -79,7 +79,16 @@ function itemKey(item: ApiAttachment | AttachmentDraft) {
 }
 
 function itemUrl(item: ApiAttachment | AttachmentDraft) {
-  return isSavedAttachment(item) ? item.downloadUrl ?? item.localPreviewUrl : item.localPreviewUrl;
+  return isSavedAttachment(item)
+    ? item.downloadUrl ?? item.storageObject?.localPreviewUrl ?? item.localPreviewUrl
+    : item.localPreviewUrl;
+}
+
+function savedAttachmentStorageLabel(item: ApiAttachment) {
+  const mode = item.storageObject?.storageMode ?? item.storageMode;
+  if (mode === "local_demo" || mode === "cached_media") return "本地演示预览";
+  if (item.metadataOnly || mode === "metadata_only") return "仅保存元数据，待接入对象存储";
+  return "待接入对象存储";
 }
 
 export function AttachmentPreviewList({
@@ -115,7 +124,7 @@ export function AttachmentPreviewList({
                 {item.kind === "audio" && item.durationMs ? ` · ${formatDuration(item.durationMs)}` : ""}
               </p>
               {isSavedAttachment(item) ? (
-                <p className="mt-1 text-xs text-slate-400">metadata_only · scope checked</p>
+                <p className="mt-1 text-xs text-slate-400">{savedAttachmentStorageLabel(item)}</p>
               ) : null}
               {url ? (
                 <div className="mt-2 flex gap-2">
@@ -126,7 +135,7 @@ export function AttachmentPreviewList({
                     className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600"
                   >
                     <Paperclip className="h-3 w-3" />
-                    预览
+                    本地演示预览
                   </a>
                   <a
                     href={isSavedAttachment(item) ? `${url}?download=1` : url}
@@ -134,7 +143,7 @@ export function AttachmentPreviewList({
                     className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600"
                   >
                     <Download className="h-3 w-3" />
-                    保存
+                    保存本地副本
                   </a>
                 </div>
               ) : null}

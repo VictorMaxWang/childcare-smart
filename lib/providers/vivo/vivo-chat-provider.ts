@@ -65,10 +65,21 @@ export async function requestVivoChat(input: VivoChatInput): Promise<VivoChatRes
     text,
     providerName: "vivo",
     model: raw.model ?? model,
+    state: "live",
+    live: true,
+    fallback: false,
+    mock: false,
     isRealProvider: true,
     warnings: status.warnings,
     rawResponse: raw,
     requestId,
-    status,
+    status: {
+      ...status,
+      state: "live",
+      live: true,
+      fallback: false,
+      mock: false,
+      status: "ready",
+    },
   };
 }

@@ -34,6 +34,8 @@ export async function GET(
       headers: {
         "content-type": cachedMedia.contentType,
         "cache-control": "private, max-age=900, immutable",
+        "x-smartchildcare-storage-mode": "cached_media",
+        "x-smartchildcare-storage-expires-at": cachedMedia.expiresAt,
         ...(cachedMedia.contentType.startsWith("audio/")
           ? { "accept-ranges": "bytes" }
           : {}),

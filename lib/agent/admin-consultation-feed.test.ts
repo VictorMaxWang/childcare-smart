@@ -137,6 +137,10 @@ function buildLocalConsultation(
     model: "BlueLM",
     providerTrace: {
       provider: "vivo",
+      source: "vivo",
+      mode: "live",
+      fallback: false,
+      fallbackReason: null,
       model: "BlueLM",
       realProvider: true,
       transport: "fastapi-brain",

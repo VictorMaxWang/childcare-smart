@@ -1,5 +1,6 @@
 import type { InterventionCard } from "@/lib/agent/intervention-card";
 import type {
+  AiProviderTrace,
   ConsultationEvidenceItem,
   ExplainabilityItem,
   HighRiskConsultationResult,
@@ -45,20 +46,9 @@ export type ConsultationTraceCase =
   | "partial"
   | "invalid-result";
 
-export interface ConsultationProviderTrace {
-  provider?: string;
-  source?: string;
-  model?: string;
-  requestId?: string;
-  transport?: string;
-  transportSource?: string;
-  consultationSource?: string;
-  fallbackReason?: string;
-  brainProvider?: string;
-  realProvider?: boolean;
-  fallback?: boolean;
+export type ConsultationProviderTrace = Partial<AiProviderTrace> & {
   [key: string]: unknown;
-}
+};
 
 export type ConsultationApiResult = HighRiskConsultationResult & {
   interventionCard: InterventionCard;

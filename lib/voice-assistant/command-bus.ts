@@ -8,6 +8,7 @@ import { DefaultAppDataRepository } from "@/lib/server/app-data-repository";
 import { requireSession } from "@/lib/server/session";
 import { canAccessChild } from "@/lib/server/scope";
 import { getVivoProviderStatus } from "@/lib/providers/vivo";
+import { getUnifiedAiProviderStatus } from "@/lib/server/ai-provider-status";
 import { accountRoleToAssistantRole } from "@/lib/voice-assistant/intents";
 import { parseAssistantCommand } from "@/lib/voice-assistant/parser";
 import { intentNeedsConfirmation, validateAssistantCommandPermission } from "@/lib/voice-assistant/permissions";
@@ -81,21 +82,7 @@ export function getAssistantProviderStatusLegacy(): AssistantProviderStatus {
 }
 
 export function getAssistantProviderStatus(): AssistantProviderStatus {
-  const chat = getVivoProviderStatus("chat");
-  const ocr = getVivoProviderStatus("ocr");
-  const asr = getVivoProviderStatus("asr");
-  const tts = getVivoProviderStatus("tts");
-  const allConfigured = [chat, ocr, asr, tts].every((capability) => capability.configured);
-
-  return {
-    chat,
-    ocr,
-    asr,
-    tts,
-    fallbackText: allConfigured
-      ? "vivo provider ready"
-      : "vivo provider missing-env; text fallback is available and writes still require confirmation.",
-  };
+  return getUnifiedAiProviderStatus();
 }
 
 function confirmationSecret() {

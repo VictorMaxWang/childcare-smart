@@ -586,10 +586,14 @@ test("demo defense preflight main chain", async ({ page }, testInfo) => {
           await admin.get("/api/ai/provider-status"),
           "/api/ai/provider-status"
         );
-        const missing = ["chat", "ocr", "asr", "tts"].filter((capability) => {
+        const missing = ["chat", "llm", "ocr", "asr", "tts", "storybookImage", "storybookAudio"].filter((capability) => {
           const capabilityStatus = asRecord(status[capability]);
           return !stringValue(capabilityStatus.status);
         });
+        const capabilities = asRecord(status.capabilities);
+        for (const capability of ["llm", "ocr", "asr", "tts", "storybookImage", "storybookAudio"]) {
+          if (!asRecord(capabilities[capability]).providerName) missing.push(`capabilities.${capability}`);
+        }
         if (!stringValue(status.fallbackText)) missing.push("fallbackText");
         ensure(missing.length === 0, `Provider status is missing readable fields: ${missing.join(", ")}`);
         return {
@@ -599,7 +603,35 @@ test("demo defense preflight main chain", async ({ page }, testInfo) => {
             ocr: asRecord(status.ocr).status ?? null,
             asr: asRecord(status.asr).status ?? null,
             tts: asRecord(status.tts).status ?? null,
+            storybookImage: asRecord(status.storybookImage).status ?? null,
+            storybookAudio: asRecord(status.storybookAudio).status ?? null,
             fallbackText: status.fallbackText,
+          },
+        };
+      }
+    );
+
+    await runCheck(
+      {
+        id: "admin-ai-provider-status-page",
+        title: "Admin AI provider status page renders six capability cards",
+        accountId: "u-admin",
+        route: "/admin/ai-provider-status",
+      },
+      async () => {
+        await loginAs(page, "u-admin", "/admin/ai-provider-status");
+        await page.getByTestId("admin-ai-provider-status-page").waitFor({ state: "visible", timeout: 30_000 });
+        await waitForCondition(
+          async () => {
+            const count = await page.locator("[data-testid^='admin-ai-provider-status-card-']").count();
+            return count === 6;
+          },
+          30_000,
+          "Admin provider-status page did not render six capability cards"
+        );
+        return {
+          counts: {
+            capabilityCards: await page.locator("[data-testid^='admin-ai-provider-status-card-']").count(),
           },
         };
       }

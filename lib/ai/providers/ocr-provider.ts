@@ -16,6 +16,10 @@ export interface OcrProviderOutput {
   extractedText: string;
   confidence: number | null;
   providerName: string;
+  state: "configured" | "live" | "fallback" | "mock";
+  live: boolean;
+  fallback: boolean;
+  mock: boolean;
   isRealProvider: boolean;
   warnings: string[];
   rawResponse?: Record<string, unknown>;
@@ -24,7 +28,7 @@ export interface OcrProviderOutput {
 
 export interface OcrProviderResult<T> {
   provider: string;
-  mode: "fallback" | "mock" | "real";
+  mode: "fallback" | "mock" | "live";
   source: "provider" | "provided_text" | "provider_unavailable";
   output: T;
 }
@@ -45,6 +49,10 @@ function buildFallbackOutput(input: OcrProviderInput, status: VivoProviderStatus
     extractedText: text,
     confidence: text ? null : 0,
     providerName: "local-text-fallback",
+    state: "fallback",
+    live: false,
+    fallback: true,
+    mock: false,
     isRealProvider: false,
     warnings: [
       text
@@ -61,7 +69,11 @@ class LocalTextOcrFallbackProvider implements OcrProvider {
     return {
       ...getVivoProviderStatus("ocr"),
       status: "missing-env" as const,
+      state: "fallback" as const,
       configured: false,
+      live: false,
+      fallback: true,
+      mock: false,
       isRealProvider: false,
       warnings: ["当前未配置 vivo OCR，只有文本材料可走本地规则解析。"],
     };
@@ -93,13 +105,17 @@ class VivoOcrProvider implements OcrProvider {
 
     return {
       provider: result.providerName,
-      mode: result.isRealProvider ? ("real" as const) : ("fallback" as const),
+      mode: result.isRealProvider ? ("live" as const) : ("fallback" as const),
       source: result.isRealProvider ? ("provider" as const) : ("provided_text" as const),
       output: {
         text: result.extractedText,
         extractedText: result.extractedText,
         confidence: result.confidence,
         providerName: result.providerName,
+        state: result.state,
+        live: result.live,
+        fallback: result.fallback,
+        mock: result.mock,
         isRealProvider: result.isRealProvider,
         warnings: result.warnings,
         rawResponse: result.rawResponse as Record<string, unknown> | undefined,

@@ -62,7 +62,7 @@
     "app/parent/storybook/page.tsx",
     "backend/app/api/v1/endpoints/teacher_voice.py",
     "backend/app/providers/vivo_asr.py",
-    "backend/app/providers/vivo_ocr.py",
+    "backend/app/providers/text_ocr_fallback.py",
     "components/Navbar.tsx",
     "components/parent/ParentStructuredFeedbackComposer.tsx",
     "components/parent/StoryBookViewer.tsx",

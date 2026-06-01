@@ -53,6 +53,7 @@ import {
   formatStoryBookResponseCache,
   formatStoryBookSceneImageDelivery,
   formatStoryBookVoiceStyle,
+  formatStorageObjectLabel,
   getStoryBookPresetCopy,
 } from "@/lib/parent/storybook-viewer-copy";
 import { cn } from "@/lib/utils";
@@ -808,6 +809,10 @@ function getSceneImageFallbackKeyHotfix(storyId: string, sceneIndex: number) {
   return `${storyId}:${sceneIndex}`;
 }
 
+function isLocalDemoMediaUrl(value?: string | null) {
+  return typeof value === "string" && (value.startsWith("/storybook/") || value.startsWith("/demo-media/"));
+}
+
 function normalizeImageDeliveryHotfix(
   value?: StoryBookRuntimeImageDelivery | "mixed" | "real"
 ): Exclude<StoryBookPublicImageDelivery, "mixed"> {
@@ -1217,6 +1222,16 @@ function getSceneImageDeliveryLabelHotfix(
   scene: StoryBookRuntimeScene,
   options?: { useAssetFallback?: boolean }
 ) {
+  const activeImageUrl = options?.useAssetFallback ? scene.assetRef : scene.imageUrl ?? scene.assetRef;
+  if (typeof activeImageUrl === "string" && activeImageUrl.startsWith("/api/ai/parent-storybook/media/")) {
+    return formatStorageObjectLabel("cached_media", false);
+  }
+  if (isLocalDemoMediaUrl(activeImageUrl)) {
+    return formatStorageObjectLabel("local_demo", false);
+  }
+  if (scene.imageStorageObject) {
+    return formatStorageObjectLabel(scene.imageStorageObject.storageMode, scene.imageStorageObject.metadataOnly);
+  }
   return formatStoryBookSceneImageDelivery(
     resolveRuntimeSceneImageDeliveryHotfix(scene, options)
   );
@@ -1246,6 +1261,15 @@ function getRuntimeSceneAudioBadgeLabelHotfix(
   isSceneActive: boolean,
   canUseLocalSpeech: boolean
 ) {
+  if (scene.audioStorageObject) {
+    return formatStorageObjectLabel(scene.audioStorageObject.storageMode, scene.audioStorageObject.metadataOnly);
+  }
+  if (typeof scene.audioUrl === "string" && scene.audioUrl.startsWith("/api/ai/parent-storybook/media/")) {
+    return formatStorageObjectLabel("cached_media", false);
+  }
+  if (isLocalDemoMediaUrl(scene.audioUrl)) {
+    return formatStorageObjectLabel("local_demo", false);
+  }
   const audioDelivery = resolveRuntimeSceneAudioDeliveryHotfix(scene, {
     playbackSource,
     isSceneActive,
@@ -2783,7 +2807,7 @@ function StoryBookSceneStream({
               }
               data-testid="lin-xiaoyu-image-status"
             >
-              {useAssetFallback ? "安全占位图" : "静态图片"}
+              {getSceneImageDeliveryLabelHotfix(sceneRuntime, { useAssetFallback })}
             </Badge>
           </div>
           <div className="flex flex-wrap items-center gap-2">

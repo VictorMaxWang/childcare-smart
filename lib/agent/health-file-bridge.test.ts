@@ -27,16 +27,22 @@ test("health-file-bridge helper returns extraction-only output for metadata-heav
 
   const result = buildHealthFileBridgeResponse(request, {
     source: "next-local-extractor",
+    state: "fallback",
+    configured: false,
+    live: false,
     fallback: true,
-    mock: true,
-    liveReadyButNotVerified: true,
+    mock: false,
+    liveReadyButNotVerified: false,
   });
 
   assert.equal(result.source, "next-local-extractor");
   assert.equal(result.fileType, "pdf");
+  assert.equal(result.state, "fallback");
+  assert.equal(result.configured, false);
+  assert.equal(result.live, false);
   assert.equal(result.fallback, true);
-  assert.equal(result.mock, true);
-  assert.equal(result.liveReadyButNotVerified, true);
+  assert.equal(result.mock, false);
+  assert.equal(result.liveReadyButNotVerified, false);
   assert.ok(result.disclaimer.includes("T9 bridge"));
   assert.ok(result.extractedFacts.length >= 3);
   assert.ok(result.riskItems.length > 0);
@@ -67,9 +73,12 @@ test("health-file-bridge helper promotes fever and medication cues into extracti
 
   const result = buildHealthFileBridgeResponse(request, {
     source: "next-local-extractor",
+    state: "fallback",
+    configured: false,
+    live: false,
     fallback: true,
-    mock: true,
-    liveReadyButNotVerified: true,
+    mock: false,
+    liveReadyButNotVerified: false,
   });
 
   const riskTitles = result.riskItems.map((item) => item.title);
@@ -117,9 +126,12 @@ test("health-file-bridge helper keeps contraindications from turning into risky 
 
   const result = buildHealthFileBridgeResponse(request, {
     source: "next-local-extractor",
+    state: "fallback",
+    configured: false,
+    live: false,
     fallback: true,
-    mock: true,
-    liveReadyButNotVerified: true,
+    mock: false,
+    liveReadyButNotVerified: false,
   });
 
   const flattenedActionText = [
@@ -154,16 +166,22 @@ test("health-file-bridge helper builds writeback contract with provenance and fo
 
   const response = buildHealthFileBridgeResponse(request, {
     source: "next-local-extractor",
+    state: "fallback",
+    configured: false,
+    live: false,
     fallback: true,
-    mock: true,
-    liveReadyButNotVerified: true,
+    mock: false,
+    liveReadyButNotVerified: false,
   });
   const writeback = buildHealthFileBridgeWriteback(request, response);
 
   assert.equal(writeback.provenance.bridgeOrigin, "health-file-bridge");
   assert.equal(writeback.provenance.source, "next-local-extractor");
+  assert.equal(writeback.provenance.state, "fallback");
+  assert.equal(writeback.provenance.configured, false);
+  assert.equal(writeback.provenance.live, false);
   assert.equal(writeback.provenance.fallback, true);
-  assert.equal(writeback.provenance.liveReadyButNotVerified, true);
+  assert.equal(writeback.provenance.liveReadyButNotVerified, false);
   assert.equal(writeback.provenance.traceId, "trace-health-4");
   assert.equal(writeback.childScopedArtifacts[0]?.childId, "child-4");
   assert.equal(writeback.childScopedArtifacts[0]?.artifactType, "health-file-bridge");

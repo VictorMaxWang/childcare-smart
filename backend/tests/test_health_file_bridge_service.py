@@ -25,9 +25,17 @@ def test_health_file_bridge_service_returns_extraction_only_output_for_metadata_
     )
 
     assert result["source"] == "backend-text-fallback"
+    assert result["state"] == "fallback"
+    assert result["configured"] is False
+    assert result["live"] is False
     assert result["fallback"] is True
-    assert result["mock"] is True
-    assert result["liveReadyButNotVerified"] is True
+    assert result["mock"] is False
+    assert result["liveReadyButNotVerified"] is False
+    assert result["provider"] == "text-ocr-fallback"
+    assert result["providerStatus"]["ocr"]["providerName"] == "text-ocr-fallback"
+    assert result["providerStatus"]["ocr"]["state"] == "fallback"
+    assert result["providerStatus"]["ocr"]["live"] is False
+    assert result["providerStatus"]["ocr"]["mock"] is False
     assert result["fileType"] == "pdf"
     assert "T9 bridge" in result["disclaimer"]
     assert result["extractedFacts"]

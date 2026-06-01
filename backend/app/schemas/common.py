@@ -21,6 +21,29 @@ class ApiError(BaseModel):
     details: str | None = None
 
 
+ProviderCapability = Literal["llm", "ocr", "asr", "tts"]
+ProviderCapabilityState = Literal["configured", "live", "fallback", "mock"]
+ProviderRuntimeStatus = Literal["ready", "missing-env", "provider-unavailable", "unsupported", "error"]
+
+
+class ProviderCapabilityStatus(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    providerName: str
+    capability: ProviderCapability
+    state: ProviderCapabilityState
+    configured: bool = False
+    live: bool = False
+    fallback: bool = False
+    mock: bool = False
+    supported: bool = True
+    isRealProvider: bool = False
+    status: ProviderRuntimeStatus
+    reason: str | None = None
+    requiredEnv: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class HealthResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -29,6 +52,7 @@ class HealthResponse(BaseModel):
     version: str
     environment: str
     providers: dict[str, str] = Field(default_factory=dict)
+    provider_status: dict[ProviderCapability, ProviderCapabilityStatus] = Field(default_factory=dict)
     brain_provider: str | None = None
     llm_provider_selected: str | None = None
     provider_assertion_scope: Literal["configuration_only"] = "configuration_only"

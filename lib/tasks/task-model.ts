@@ -529,7 +529,8 @@ function hydrateTask(task: CanonicalTask, input: MaterializeTasksInput, existing
 }
 
 export function materializeTasksFromLegacy(input: MaterializeTasksInput): CanonicalTask[] {
-  const existingTaskMap = new Map((input.existingTasks ?? []).map((task) => [task.taskId, task]));
+  const existingTasks = input.existingTasks ?? [];
+  const existingTaskMap = new Map(existingTasks.map((task) => [task.taskId, task]));
   const taskMap = new Map<string, CanonicalTask>();
 
   for (const card of input.interventionCards ?? []) {
@@ -546,7 +547,9 @@ export function materializeTasksFromLegacy(input: MaterializeTasksInput): Canoni
   }
 
   for (const reminder of input.reminders ?? []) {
-    const matchingTask = Array.from(taskMap.values()).find((task) => findMatchingReminder(task, reminder));
+    const matchingTask =
+      Array.from(taskMap.values()).find((task) => findMatchingReminder(task, reminder)) ??
+      existingTasks.find((task) => findMatchingReminder(task, reminder));
     if (matchingTask) {
       continue;
     }
@@ -556,7 +559,9 @@ export function materializeTasksFromLegacy(input: MaterializeTasksInput): Canoni
   }
 
   for (const record of input.taskCheckIns ?? []) {
-    const matchingTask = Array.from(taskMap.values()).find((task) => findMatchingCheckIn(task, record));
+    const matchingTask =
+      Array.from(taskMap.values()).find((task) => findMatchingCheckIn(task, record)) ??
+      existingTasks.find((task) => findMatchingCheckIn(task, record));
     if (matchingTask) {
       continue;
     }
@@ -565,7 +570,7 @@ export function materializeTasksFromLegacy(input: MaterializeTasksInput): Canoni
     taskMap.set(recoveredTask.taskId, recoveredTask);
   }
 
-  for (const existingTask of input.existingTasks ?? []) {
+  for (const existingTask of existingTasks) {
     if (!taskMap.has(existingTask.taskId)) {
       taskMap.set(existingTask.taskId, existingTask);
     }
@@ -594,6 +599,9 @@ export function buildReminderFromTask(task: CanonicalTask, options?: ReminderPro
     taskId: task.taskId,
     sourceType: task.sourceType,
     relatedTaskIds: task.relatedTaskIds,
+    assigneeRole: task.ownerRole,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
   };
 }
 
