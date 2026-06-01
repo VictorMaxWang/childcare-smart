@@ -8,6 +8,7 @@ export type {
   VivoChatResult,
   VivoOcrInput,
   VivoOcrResult,
+  VivoProviderState,
   VivoProviderStatus,
   VivoTtsInput,
   VivoTtsResult,

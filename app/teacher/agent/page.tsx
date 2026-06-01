@@ -61,7 +61,7 @@ import {
   type TeacherAgentWorkflowType,
 } from "@/lib/agent/teacher-agent";
 import { fetchWeeklyReport } from "@/lib/agent/weekly-report-client";
-import type { MobileDraft, WeeklyReportResponse } from "@/lib/ai/types";
+import type { MobileDraft, ReminderItem, WeeklyReportResponse } from "@/lib/ai/types";
 import { buildTeacherVoiceUnderstandFallback } from "@/lib/ai/teacher-voice-understand";
 import {
   createMobileDraft,
@@ -122,6 +122,26 @@ type HistoryItem = TeacherAgentHistoryListItem & {
 };
 
 type TeacherAgentRequestStatus = "idle" | "pending" | "success" | "error";
+
+function formatDispatchMetaDate(value?: string) {
+  if (!value) return "unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function reminderSourceLabel(item: ReminderItem) {
+  return item.sourceType ?? item.reminderType;
+}
+
+function reminderAssigneeRole(item: ReminderItem) {
+  return item.assigneeRole ?? item.targetRole;
+}
 
 type TeacherAgentRunDiagnostics = {
   provider: string;
@@ -2480,6 +2500,9 @@ export default function TeacherAgentPage() {
                         <span className="text-xs text-slate-500">{getReminderStatusLabel(item.status)}</span>
                       </div>
                       <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+                      <p className="mt-2 text-xs leading-5 text-slate-500" data-testid="teacher-assignment-meta">
+                        source: {reminderSourceLabel(item)} · status: {item.status} · createdAt: {formatDispatchMetaDate(item.createdAt ?? item.scheduledAt)} · assigneeRole: {reminderAssigneeRole(item)}
+                      </p>
                       {item.sourceType === "admin_dispatch" && item.sourceId ? (
                         <div className="mt-3 flex flex-wrap gap-2" data-testid="teacher-assignment-actions">
                           <Button

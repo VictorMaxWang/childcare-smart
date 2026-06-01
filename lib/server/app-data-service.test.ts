@@ -99,17 +99,17 @@ test("parent and cross-class teacher are denied before data mutation", async () 
 
   await assert.rejects(() => parent.getChild("c-3"), assertApiError("forbidden_scope"));
   await assert.rejects(
-    () => teacher2.createRecord("health", { childId: "c-1", remark: deniedToken }),
+    () => teacher.createRecord("health", { childId: "c-1", remark: deniedToken }),
     assertApiError("forbidden_scope")
   );
 
-  const visibleRecords = await teacher.listRecords("health", { childId: "c-1", includeArchived: true });
+  const visibleRecords = await teacher2.listRecords("health", { childId: "c-1", includeArchived: true });
   assert.equal(visibleRecords.some((record) => asTestRecord(record).remark === deniedToken), false);
 });
 
 test("record create/read/update/archive persists through the repository", async () => {
   const repo = new MemoryRepository();
-  const service = new AppDataService(demoUser("u-teacher"), repo);
+  const service = new AppDataService(demoUser("u-teacher2"), repo);
   const token = `e01-crud-${Date.now()}`;
 
   const created = asTestRecord(await service.createRecord("health", {
@@ -406,10 +406,16 @@ test("E03 weekly reports persist, export, share, archive, and enforce scope", as
   const exported = await director.exportWeeklyReportData(created.reportId, "markdown");
   assert.equal(exported.format, "markdown");
   assert.match(exported.content, /E03 weekly report/);
+  assert.equal(exported.storageObject.storageMode, "metadata_only");
+  assert.equal(exported.storageObject.url, null);
+  assert.equal(exported.storageObject.permissions.canDownload, true);
 
   const shared = await director.shareWeeklyReport(created.reportId);
   assert.equal(shared?.status, "shared");
   assert.ok(shared?.share?.shareId);
+  assert.equal(shared?.share?.storageObject?.storageMode, "metadata_only");
+  assert.equal(shared?.share?.storageObject?.url, null);
+  assert.equal(shared?.share?.storageObject?.permissions.canShare, true);
 
   const archived = await director.setWeeklyReportArchived(created.reportId, "archive");
   assert.equal(archived?.status, "archived");
@@ -418,6 +424,51 @@ test("E03 weekly reports persist, export, share, archive, and enforce scope", as
   assert.equal((await director.listWeeklyReports({ includeArchived: true })).some((report) => report.reportId === created.reportId), true);
 
   await assert.rejects(() => parent.getScopedWeeklyReport(created.reportId), assertApiError("forbidden_scope"));
+  await assert.rejects(() => parent.exportWeeklyReportData(created.reportId, "json"), assertApiError("forbidden_scope"));
+  await assert.rejects(() => parent.shareWeeklyReport(created.reportId), assertApiError("forbidden_scope"));
+});
+
+test("E03 attachments expose honest local demo, metadata-only, and permission-denied storage contracts", async () => {
+  const repo = new MemoryRepository();
+  const parent = new AppDataService(demoUser("u-parent"), repo);
+  const teacher = new AppDataService(demoUser("u-teacher"), repo);
+  const token = `storage-contract-${Date.now()}`;
+
+  const localDemo = await parent.createAttachment({
+    childId: "c-1",
+    kind: "image",
+    fileName: `${token}.png`,
+    mimeType: "image/png",
+    byteSize: 68,
+    localPreviewUrl: "data:image/png;base64,iVBORw0KGgo=",
+  });
+  assert.equal(localDemo.storageMode, "local_demo");
+  assert.equal(localDemo.metadataOnly, false);
+  assert.equal(localDemo.storageObject?.storageMode, "local_demo");
+  assert.equal(localDemo.storageObject?.url, null);
+  assert.equal(localDemo.storageObject?.permissions.canPreview, true);
+  assert.equal(localDemo.storageObject?.permissions.canDownload, true);
+  assert.match(localDemo.downloadUrl ?? "", /^\/api\/attachments\/.+\/content$/);
+
+  const metadataOnly = await parent.createAttachment({
+    childId: "c-1",
+    kind: "pdf",
+    fileName: `${token}.pdf`,
+    mimeType: "application/pdf",
+    byteSize: 128,
+  });
+  assert.equal(metadataOnly.storageMode, "metadata_only");
+  assert.equal(metadataOnly.metadataOnly, true);
+  assert.equal(metadataOnly.downloadUrl, undefined);
+  assert.equal(metadataOnly.storageObject?.url, null);
+  assert.equal(metadataOnly.storageObject?.permissions.canPreview, false);
+  assert.equal(metadataOnly.storageObject?.permissions.canDownload, false);
+
+  const listed = await parent.listAttachments({ childId: "c-1" });
+  const listedLocalDemo = listed.find((item) => item.attachmentId === localDemo.attachmentId);
+  assert.equal(listedLocalDemo?.storageObject?.storageMode, "local_demo");
+
+  await assert.rejects(() => teacher.getAttachment(localDemo.attachmentId), assertApiError("forbidden_scope"));
 });
 
 test("E03 weekly report keeps scoped provenance when selected period is empty", async () => {

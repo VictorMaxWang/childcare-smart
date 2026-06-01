@@ -4,6 +4,7 @@ import {
   buildLocalHighRiskConsultationResult,
   isValidHighRiskConsultationPayload,
 } from "@/lib/agent/high-risk-consultation-local-result";
+import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
@@ -46,6 +47,65 @@ function buildForcedFallbackHeaders(fallbackReason: string) {
 
 function isForcedFallbackRequest(request: Request) {
   return request.headers.get("x-ai-force-fallback") === "1";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function maybeEnrichRemoteResponse(brainForward: BrainForwardResult): Promise<Response> {
+  const response = brainForward.response;
+  if (!response) {
+    return NextResponse.json(
+      { error: "Missing remote brain response" },
+      { status: 502, headers: buildLocalFallbackHeaders(brainForward) }
+    );
+  }
+  if (!response?.ok) return response;
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) return response;
+
+  const body = (await response.clone().json().catch(() => null)) as unknown;
+  if (!isRecord(body)) return response;
+
+  const fallback = typeof body.fallback === "boolean" ? body.fallback : false;
+  const provider = typeof body.provider === "string" && body.provider.trim() ? body.provider : "remote-brain";
+  const fallbackReason =
+    typeof body.fallbackReason === "string" && body.fallbackReason.trim()
+      ? body.fallbackReason
+      : null;
+  const enriched = {
+    ...body,
+    provider,
+    fallback,
+    fallbackReason,
+    providerTrace:
+      isRecord(body.providerTrace) && Object.keys(body.providerTrace).length > 0
+        ? body.providerTrace
+        : buildAiProviderTrace({
+            capability: "llm",
+            provider,
+            source: typeof body.source === "string" ? body.source : "remote-brain",
+            mode: fallback ? "fallback" : "live",
+            fallback,
+            fallbackReason,
+            realProvider: !fallback,
+            model: body.model,
+            transport: "remote-brain-proxy",
+            transportSource: "next-server",
+            extra: {
+              consultationSource: "remote-brain-proxy",
+              brainProvider: "remote-brain",
+              upstreamHost: brainForward.upstreamHost,
+            },
+          }),
+  };
+
+  return NextResponse.json(enriched, {
+    status: response.status,
+    headers: response.headers,
+  });
 }
 
 function localFallbackResponse(
@@ -101,7 +161,7 @@ export async function POST(request: Request) {
   const brainForward = await forwardBrainRequest(request, HIGH_RISK_CONSULTATION_TARGET_PATH, {
     timeoutMs: getHighRiskConsultationBrainTimeoutMs(),
   });
-  if (brainForward.response) return brainForward.response;
+  if (brainForward.response) return maybeEnrichRemoteResponse(brainForward);
 
   const fallbackReason = brainForward.fallbackReason ?? "brain-proxy-unavailable";
   return localFallbackResponse(payload, buildLocalFallbackHeaders(brainForward), fallbackReason);

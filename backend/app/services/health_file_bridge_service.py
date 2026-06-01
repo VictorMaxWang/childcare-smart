@@ -4,8 +4,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from app.core.config import get_settings
-from app.providers.vivo_ocr import VivoOcrProvider
+from app.providers.text_ocr_fallback import TextOcrFallbackProvider
 
 
 DISCLAIMER = (
@@ -734,11 +733,13 @@ async def run_health_file_bridge(payload: dict[str, Any]) -> dict[str, Any]:
     if not request_source:
         raise ValueError("requestSource cannot be empty")
 
-    provider = VivoOcrProvider(get_settings())
+    provider = TextOcrFallbackProvider()
     provider_result = provider.extract(
         files=files,
         optional_notes=_coerce_string(payload.get("optionalNotes") or payload.get("optional_notes")),
     )
+    provider_status = provider_result.get("providerStatus")
+    provider_status_map = {"ocr": provider_status} if isinstance(provider_status, dict) else {}
     signals = _collect_signals(payload, provider_result)
     file_type = _detect_file_type(payload, signals)
     facts = _dedupe(
@@ -772,10 +773,14 @@ async def run_health_file_bridge(payload: dict[str, Any]) -> dict[str, Any]:
         "confidence": confidence,
         "disclaimer": DISCLAIMER,
         "source": "backend-text-fallback",
+        "state": "fallback",
+        "configured": False,
+        "live": False,
         "fallback": True,
-        "mock": True,
-        "liveReadyButNotVerified": bool(provider_result.get("liveReadyButNotVerified")),
+        "mock": False,
+        "liveReadyButNotVerified": False,
         "generatedAt": _iso_now(),
         "provider": str(provider_result.get("provider") or provider.provider_name),
         "model": str(provider_result.get("model") or provider.model_name),
+        "providerStatus": provider_status_map,
     }

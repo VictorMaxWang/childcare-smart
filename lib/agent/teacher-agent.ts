@@ -1,4 +1,5 @@
 import type {
+  AiProviderTrace,
   AiFollowUpPayload,
   AiFollowUpResponse,
   AiSuggestionResponse,
@@ -163,6 +164,8 @@ export interface TeacherAgentResult {
   model?: string;
   provider?: string;
   providerStatus?: Record<string, unknown>;
+  fallback?: boolean;
+  providerTrace?: AiProviderTrace;
   transport?: string;
   fallbackReason?: string | null;
   dataQuality?: TeacherAgentDataQuality;

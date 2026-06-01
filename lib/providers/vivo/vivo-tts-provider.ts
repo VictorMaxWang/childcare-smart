@@ -372,11 +372,22 @@ export async function requestVivoTts(input: VivoTtsInput): Promise<VivoTtsResult
         audioBytes,
         audioContentType: "audio/wav",
         providerName: "vivo",
+        state: "live",
+        live: true,
+        fallback: false,
+        mock: false,
         engineId: profile.engineId,
         voiceName: profile.voiceName,
         requestId,
         isRealProvider: true,
-        status,
+        status: {
+          ...status,
+          state: "live",
+          live: true,
+          fallback: false,
+          mock: false,
+          status: "ready",
+        },
         warnings: status.warnings,
       };
     } catch (error) {

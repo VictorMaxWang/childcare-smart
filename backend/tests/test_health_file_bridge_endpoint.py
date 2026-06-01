@@ -31,8 +31,14 @@ def test_health_file_bridge_endpoint_accepts_camel_case_payload():
     assert response.status_code == 200
     body = response.json()
     assert body["source"] == "backend-text-fallback"
-    assert body["mock"] is True
-    assert body["liveReadyButNotVerified"] is True
+    assert body["state"] == "fallback"
+    assert body["configured"] is False
+    assert body["live"] is False
+    assert body["mock"] is False
+    assert body["liveReadyButNotVerified"] is False
+    assert body["provider"] == "text-ocr-fallback"
+    assert body["providerStatus"]["ocr"]["providerName"] == "text-ocr-fallback"
+    assert body["providerStatus"]["ocr"]["state"] == "fallback"
     assert body["fileType"] in {"pdf", "mixed"}
     assert body["contraindications"] is not None
     assert body["followUpHints"]

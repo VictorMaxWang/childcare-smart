@@ -27,7 +27,11 @@ export interface HighRiskConsultationLlmOutput {
 
 export interface LlmProviderResult<T> {
   provider: string;
-  mode: "fallback" | "mock" | "real";
+  mode: "fallback" | "mock" | "live";
+  state: "configured" | "live" | "fallback" | "mock";
+  live: boolean;
+  fallback: boolean;
+  mock: boolean;
   model?: string;
   warnings?: string[];
   providerStatus?: VivoProviderStatus;
@@ -97,7 +101,11 @@ class LocalRulesLlmProvider implements LlmProvider {
   getStatus() {
     return {
       ...getVivoProviderStatus("chat"),
+      state: "fallback" as const,
       configured: false,
+      live: false,
+      fallback: true,
+      mock: false,
       isRealProvider: false,
       warnings: ["未配置 vivo AIGC，当前使用本地规则建议。"],
     };
@@ -108,6 +116,10 @@ class LocalRulesLlmProvider implements LlmProvider {
     return {
       provider: "local-rules-llm",
       mode: "fallback" as const,
+      state: "fallback" as const,
+      live: false,
+      fallback: true,
+      mock: false,
       model: "local-health-rules",
       warnings: status.warnings,
       providerStatus: status,
@@ -153,7 +165,11 @@ class VivoLlmProvider implements LlmProvider {
       if (parsed) {
         return {
           provider: result.providerName,
-          mode: "real" as const,
+          mode: "live" as const,
+          state: "live" as const,
+          live: true,
+          fallback: false,
+          mock: false,
           model: result.model,
           warnings: result.warnings,
           providerStatus: result.status,
@@ -164,6 +180,10 @@ class VivoLlmProvider implements LlmProvider {
       return {
         provider: result.providerName,
         mode: "fallback" as const,
+        state: "fallback" as const,
+        live: false,
+        fallback: true,
+        mock: false,
         model: result.model,
         warnings: [...result.warnings, "vivo chat 返回内容不是预期 JSON，已降级为本地规则建议。"],
         providerStatus: result.status,
@@ -173,6 +193,10 @@ class VivoLlmProvider implements LlmProvider {
       return {
         provider: "vivo-chat",
         mode: "fallback" as const,
+        state: "fallback" as const,
+        live: false,
+        fallback: true,
+        mock: false,
         model: "vivo-chat",
         warnings: [
           error instanceof Error ? error.message : "vivo chat provider 调用失败。",
@@ -181,6 +205,10 @@ class VivoLlmProvider implements LlmProvider {
         providerStatus: {
           ...status,
           status: "provider-unavailable" as const,
+          state: "fallback" as const,
+          live: false,
+          fallback: true,
+          mock: false,
           isRealProvider: false,
         },
         output: buildMockNarrative(input),

@@ -4,6 +4,7 @@ import type {
   ParentStoryBookResponse,
   ParentStoryBookTransport,
 } from "@/lib/ai/types";
+import { buildAiProviderTrace, buildAiProviderTraceFromProviderMeta } from "@/lib/ai/provider-trace";
 import { buildParentStoryBookResponse } from "@/lib/agent/parent-storybook";
 import {
   buildParentStoryBookRequestCacheKey,
@@ -140,64 +141,73 @@ function attachTransportMetadata(
   }
 ) {
   const storyBrainDiagnostics = story.providerMeta.diagnostics?.brain;
+  const providerMeta = {
+    ...story.providerMeta,
+    transport: normalizeStoryBookTransport(meta.transport),
+    fallbackReason: story.providerMeta.fallbackReason ?? meta.fallbackReason,
+    diagnostics: {
+      brain: {
+        reachable: storyBrainDiagnostics?.reachable ?? meta.transport === "remote-brain-proxy",
+        fallbackReason: storyBrainDiagnostics?.fallbackReason ?? meta.fallbackReason,
+        upstreamHost: storyBrainDiagnostics?.upstreamHost ?? meta.upstreamHost,
+        statusCode: storyBrainDiagnostics?.statusCode ?? meta.statusCode ?? null,
+        retryStrategy:
+          storyBrainDiagnostics?.retryStrategy ??
+          meta.retryStrategy ??
+          "none",
+        elapsedMs:
+          storyBrainDiagnostics?.elapsedMs ??
+          meta.elapsedMs ??
+          null,
+        timeoutMs:
+          storyBrainDiagnostics?.timeoutMs ??
+          meta.timeoutMs ??
+          null,
+      },
+      image: story.providerMeta.diagnostics?.image ?? {
+        requestedProvider: story.providerMeta.imageProvider,
+        resolvedProvider: story.providerMeta.imageProvider,
+        liveEnabled:
+          story.providerMeta.imageDelivery === "real" ||
+          story.providerMeta.imageDelivery === "mixed",
+        missingConfig: [],
+        jobStatus: "idle",
+        pendingSceneCount: 0,
+        readySceneCount: 0,
+        errorSceneCount: 0,
+        lastErrorStage: null,
+        lastErrorReason: null,
+        elapsedMs: null,
+      },
+      audio: story.providerMeta.diagnostics?.audio ?? {
+        requestedProvider: story.providerMeta.audioProvider,
+        resolvedProvider: story.providerMeta.audioProvider,
+        liveEnabled:
+          story.providerMeta.audioDelivery === "real" ||
+          story.providerMeta.audioDelivery === "mixed",
+        missingConfig: [],
+        jobStatus: "idle",
+        pendingSceneCount: 0,
+        readySceneCount: 0,
+        errorSceneCount: 0,
+        lastErrorStage: null,
+        lastErrorReason: null,
+        elapsedMs: null,
+      },
+    },
+  };
   return {
     ...story,
     fallbackReason: story.fallbackReason ?? meta.fallbackReason,
-    providerMeta: {
-      ...story.providerMeta,
-      transport: normalizeStoryBookTransport(meta.transport),
-      fallbackReason: story.providerMeta.fallbackReason ?? meta.fallbackReason,
-      diagnostics: {
-        brain: {
-          reachable: storyBrainDiagnostics?.reachable ?? meta.transport === "remote-brain-proxy",
-          fallbackReason: storyBrainDiagnostics?.fallbackReason ?? meta.fallbackReason,
-          upstreamHost: storyBrainDiagnostics?.upstreamHost ?? meta.upstreamHost,
-          statusCode: storyBrainDiagnostics?.statusCode ?? meta.statusCode ?? null,
-          retryStrategy:
-            storyBrainDiagnostics?.retryStrategy ??
-            meta.retryStrategy ??
-            "none",
-          elapsedMs:
-            storyBrainDiagnostics?.elapsedMs ??
-            meta.elapsedMs ??
-            null,
-          timeoutMs:
-            storyBrainDiagnostics?.timeoutMs ??
-            meta.timeoutMs ??
-            null,
-        },
-        image: story.providerMeta.diagnostics?.image ?? {
-          requestedProvider: story.providerMeta.imageProvider,
-          resolvedProvider: story.providerMeta.imageProvider,
-          liveEnabled:
-            story.providerMeta.imageDelivery === "real" ||
-            story.providerMeta.imageDelivery === "mixed",
-          missingConfig: [],
-          jobStatus: "idle",
-          pendingSceneCount: 0,
-          readySceneCount: 0,
-          errorSceneCount: 0,
-          lastErrorStage: null,
-          lastErrorReason: null,
-          elapsedMs: null,
-        },
-        audio: story.providerMeta.diagnostics?.audio ?? {
-          requestedProvider: story.providerMeta.audioProvider,
-          resolvedProvider: story.providerMeta.audioProvider,
-          liveEnabled:
-            story.providerMeta.audioDelivery === "real" ||
-            story.providerMeta.audioDelivery === "mixed",
-          missingConfig: [],
-          jobStatus: "idle",
-          pendingSceneCount: 0,
-          readySceneCount: 0,
-          errorSceneCount: 0,
-          lastErrorStage: null,
-          lastErrorReason: null,
-          elapsedMs: null,
-        },
-      },
-    },
+    provider: providerMeta.provider,
+    providerTrace: buildAiProviderTraceFromProviderMeta({
+      providerMeta,
+      source: story.source,
+      fallback: story.fallback,
+      fallbackReason: story.fallbackReason ?? meta.fallbackReason,
+      capability: "llm",
+    }),
+    providerMeta,
   } satisfies ParentStoryBookResponse;
 }
 
@@ -283,11 +293,29 @@ function buildProviderUnavailableResponse(input: {
   fallbackReason: string;
   statusCode?: number;
 }) {
+  const providerTrace = buildAiProviderTrace({
+    capability: "llm",
+    provider: "remote-brain",
+    source: "fallback",
+    mode: "fallback",
+    fallback: true,
+    fallbackReason: input.fallbackReason,
+    realProvider: false,
+    transport: "brain-proxy-error",
+    transportSource: "next-server",
+    extra: {
+      upstreamHost: input.brainForward.upstreamHost,
+    },
+  });
   return NextResponse.json(
     {
       code: "brain-proxy-unavailable",
+      source: "fallback",
+      provider: providerTrace.provider,
+      fallback: true,
       error: "真实绘本生成暂不可用，请稍后重试。",
       fallbackReason: input.fallbackReason,
+      providerTrace,
       diagnostics: {
         transport: "brain-proxy-error",
         targetPath: input.brainForward.targetPath,
@@ -323,11 +351,29 @@ function buildTextProviderUnavailableResponse(input: {
   fallbackReason: string;
   statusCode?: number;
 }) {
+  const providerTrace = buildAiProviderTrace({
+    capability: "llm",
+    provider: "vivo-chat",
+    source: "fallback",
+    mode: "fallback",
+    fallback: true,
+    fallbackReason: input.fallbackReason,
+    realProvider: false,
+    transport: input.brainForward ? "remote-brain-proxy" : "next-json-fallback",
+    transportSource: "next-server",
+    extra: {
+      upstreamHost: input.brainForward?.upstreamHost ?? null,
+    },
+  });
   return NextResponse.json(
     {
       code: "storybook-text-provider-unavailable",
+      source: "fallback",
+      provider: providerTrace.provider,
+      fallback: true,
       error: "AI 生成失败，请检查服务配置。",
       fallbackReason: input.fallbackReason,
+      providerTrace,
       diagnostics: {
         transport: input.brainForward ? "remote-brain-proxy" : "next-json-fallback",
         targetPath: input.brainForward?.targetPath ?? "/api/v1/agents/parent/storybook",
@@ -362,11 +408,23 @@ async function requireVivoStoryTextResponse(input: {
   brainForward?: BrainForwardResult;
 }) {
   try {
-    return prepareParentStoryBookResponseForDelivery(
-      await enhanceParentStoryBookWithVivoText({
-        payload: input.payload,
-        story: input.story,
+    const enhanced = await enhanceParentStoryBookWithVivoText({
+      payload: input.payload,
+      story: input.story,
+    });
+    const tracedEnhanced = {
+      ...enhanced,
+      provider: enhanced.providerMeta.provider,
+      providerTrace: buildAiProviderTraceFromProviderMeta({
+        providerMeta: enhanced.providerMeta,
+        source: enhanced.source,
+        fallback: enhanced.fallback,
+        fallbackReason: enhanced.fallbackReason,
+        capability: "llm",
       }),
+    } satisfies ParentStoryBookResponse;
+    return prepareParentStoryBookResponseForDelivery(
+      tracedEnhanced,
       { cacheState: input.cacheState }
     );
   } catch (error) {

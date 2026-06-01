@@ -1,6 +1,12 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import {
+  SMARTCHILDCARE_PROVIDER_TRACE_HEADER,
+  buildAiProviderTrace,
+  buildAiProviderTraceHeader,
+  type AiProviderTrace,
+} from "@/lib/ai/provider-trace";
 import { DefaultAppDataRepository } from "@/lib/server/app-data-repository";
 import { resolveRequestSession } from "@/lib/server/session";
 import { requireChildAccess } from "@/lib/server/scope";
@@ -25,12 +31,23 @@ type TtsPayload = {
 const MAX_BODY_BYTES = 2048;
 const MAX_TEXT_CHARS = 300;
 
-function jsonError(errorKind: VivoTtsErrorKind, message: string, status = 503) {
+function jsonError(
+  errorKind: VivoTtsErrorKind,
+  message: string,
+  status = 503,
+  providerTrace?: AiProviderTrace
+) {
   return NextResponse.json(
     {
       ok: false,
       error: message,
       errorKind,
+      source: providerTrace?.source ?? "fallback",
+      provider: providerTrace?.provider ?? "vivo-story-tts",
+      mode: providerTrace?.mode ?? "fallback",
+      fallback: true,
+      fallbackReason: providerTrace?.fallbackReason ?? errorKind,
+      providerTrace,
     },
     {
       status,
@@ -94,6 +111,16 @@ async function readStaticAudio(page: { audioSrc: string }) {
   if (!resolvedFilePath.startsWith(resolvedPublicRoot)) return null;
   try {
     const audio = await fs.readFile(resolvedFilePath);
+    const providerTrace = buildAiProviderTrace({
+      provider: "storybook-static-audio",
+      source: "static",
+      mode: "mock",
+      fallback: false,
+      fallbackReason: null,
+      realProvider: false,
+      capability: "tts",
+      model: "lin-xiaoyu-fixed-audio",
+    });
     return new Response(new Uint8Array(audio), {
       status: 200,
       headers: {
@@ -101,6 +128,7 @@ async function readStaticAudio(page: { audioSrc: string }) {
         "content-length": String(audio.byteLength),
         "cache-control": "public, max-age=31536000, immutable",
         "x-smartchildcare-tts-source": "static",
+        [SMARTCHILDCARE_PROVIDER_TRACE_HEADER]: buildAiProviderTraceHeader(providerTrace),
       },
     });
   } catch {
@@ -145,6 +173,18 @@ async function handleTts(request: Request) {
       page: resolved.page.page,
       voiceStyle: "gentle child storybook narration",
     });
+    const providerTrace = buildAiProviderTrace({
+      provider: result.providerName,
+      source: "vivo-runtime",
+      mode: result.state,
+      fallback: result.fallback,
+      fallbackReason: result.fallback ? "provider-unavailable" : null,
+      realProvider: result.isRealProvider,
+      capability: "tts",
+      model: `${result.engineId}/${result.voiceName}`,
+      requestId: result.requestId,
+      providerStatus: result.status,
+    });
     return new Response(new Uint8Array(result.audioBytes), {
       status: 200,
       headers: {
@@ -152,12 +192,23 @@ async function handleTts(request: Request) {
         "content-length": String(result.audioBytes.byteLength),
         "cache-control": "no-store",
         "x-smartchildcare-tts-source": "vivo-runtime",
+        [SMARTCHILDCARE_PROVIDER_TRACE_HEADER]: buildAiProviderTraceHeader(providerTrace),
       },
     });
   } catch (error) {
     const errorKind = classifyVivoTtsError(error);
     const status = errorKind === "missing-env" ? 503 : errorKind === "auth/signature" ? 502 : 503;
-    return jsonError(errorKind, "vivo TTS is unavailable for this page.", status);
+    const providerTrace = buildAiProviderTrace({
+      provider: "vivo-story-tts",
+      source: "fallback",
+      mode: "fallback",
+      fallback: true,
+      fallbackReason: errorKind,
+      realProvider: false,
+      capability: "tts",
+      model: "vivo-tts",
+    });
+    return jsonError(errorKind, "vivo TTS is unavailable for this page.", status, providerTrace);
   }
 }
 

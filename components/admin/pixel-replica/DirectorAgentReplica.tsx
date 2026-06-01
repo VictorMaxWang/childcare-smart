@@ -42,6 +42,26 @@ function statusTone(status: AdminDispatchEvent["status"] | AdminAgentActionItem[
   return "orange" as const;
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) return "unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function eventSourceLabel(event: AdminDispatchEvent) {
+  return event.sourceType ?? event.source?.sourceType ?? "legacy_notification_event";
+}
+
+function eventAssigneeRole(event: AdminDispatchEvent) {
+  return event.assigneeRole ?? event.recommendedOwnerRole;
+}
+
 export default function DirectorAgentReplica({
   institutionName,
   result,
@@ -492,7 +512,7 @@ export default function DirectorAgentReplica({
             <div className="space-y-3">
               {notificationEvents.length > 0 ? (
                 notificationEvents.slice(0, 4).map((event) => (
-                  <div key={event.id} className="rounded-[14px] border border-[#E8ECF7] bg-white p-4">
+                  <div key={event.id} className="rounded-[14px] border border-[#E8ECF7] bg-white p-4" data-testid="admin-notification-event-card">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-bold text-[#172554]">{event.title}</p>
@@ -500,6 +520,9 @@ export default function DirectorAgentReplica({
                       </div>
                       <ReplicaPill tone={statusTone(event.status)}>{statusLabel(event.status)}</ReplicaPill>
                     </div>
+                    <p className="mt-2 text-[11px] leading-5 text-[#7A86A6]" data-testid="admin-notification-event-meta">
+                      source: {eventSourceLabel(event)} 路 status: {event.status} 路 createdAt: {formatDateTime(event.createdAt)} 路 assigneeRole: {eventAssigneeRole(event)}
+                    </p>
                     {dispatchAvailable ? (
                       <div className="mt-3 flex gap-2">
                         <ReplicaButton

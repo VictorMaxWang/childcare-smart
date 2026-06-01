@@ -9,6 +9,13 @@ const PLACEHOLDER_VALUES = new Set([
   "na",
   "null",
   "undefined",
+  "mock",
+  "demo",
+  "example",
+  "placeholder",
+  "changeme",
+  "change_me",
+  "todo",
   "your_appkey",
   "your_appid",
   "your_vivo_app_key",
@@ -27,15 +34,14 @@ const PLACEHOLDER_VALUES = new Set([
   "your_storybook_tts_system_version",
   "your_storybook_tts_sdk_version",
   "your_storybook_tts_android_version",
-  "placeholder",
-  "changeme",
-  "change_me",
 ]);
 
 function readEnv(name: string) {
   const value = process.env[name]?.trim() ?? "";
-  if (value.startsWith("填入")) return "";
-  return PLACEHOLDER_VALUES.has(value.toLowerCase()) ? "" : value;
+  const compact = value.toLowerCase().replace(/[-_\s]/g, "");
+  if (value.startsWith("填入") || value.startsWith("濉叆")) return "";
+  if (PLACEHOLDER_VALUES.has(value.toLowerCase()) || compact.startsWith("your")) return "";
+  return value;
 }
 
 function readNumberEnv(name: string, fallback: number) {
@@ -74,16 +80,29 @@ export function getVivoEnv() {
 function requiredEnvForCapability(capability: VivoCapability) {
   if (capability === "chat") return ["VIVO_APP_KEY", "VIVO_APP_ID", "VIVO_BASE_URL", "VIVO_LLM_MODEL"];
   if (capability === "ocr") return ["VIVO_APP_KEY", "VIVO_APP_ID", "VIVO_BASE_URL", "VIVO_OCR_PATH"];
-  if (capability === "asr") return [
+  if (capability === "asr") {
+    return [
+      "VIVO_APP_KEY",
+      "VIVO_APP_ID",
+      "VIVO_BASE_URL",
+      "VIVO_ASR_PACKAGE",
+      "VIVO_ASR_CLIENT_VERSION",
+      "VIVO_ASR_USER_ID",
+      "VIVO_ASR_ENGINE_ID",
+    ];
+  }
+  return [
     "VIVO_APP_KEY",
     "VIVO_APP_ID",
     "VIVO_BASE_URL",
-    "VIVO_ASR_PACKAGE",
-    "VIVO_ASR_CLIENT_VERSION",
-    "VIVO_ASR_USER_ID",
-    "VIVO_ASR_ENGINE_ID",
+    "STORYBOOK_TTS_MODEL",
+    "STORYBOOK_TTS_PRODUCT",
+    "STORYBOOK_TTS_PACKAGE",
+    "STORYBOOK_TTS_CLIENT_VERSION",
+    "STORYBOOK_TTS_SYSTEM_VERSION",
+    "STORYBOOK_TTS_SDK_VERSION",
+    "STORYBOOK_TTS_ANDROID_VERSION",
   ];
-  return ["VIVO_APP_KEY", "VIVO_APP_ID", "VIVO_BASE_URL"];
 }
 
 function hasRequiredEnv(capability: VivoCapability) {
@@ -97,27 +116,31 @@ export function getVivoProviderStatus<TCapability extends VivoCapability>(
   const warnings: string[] = [];
 
   if (capability === "asr") {
-    warnings.push("vivo ASR HTTP 长语音转写仅确认支持 wav/pcm/m4a/mp3/aac/ogg/ogg_opus。");
-    warnings.push("vivo 实时 ASR WebSocket 已确认支持，但当前 E05 只落地服务端 HTTP 文件转写接口，E06 可继续复用扩展。");
+    warnings.push("vivo ASR HTTP is configured only when package/client/user/engine metadata is present.");
+    warnings.push("Health/status reports configuration only; live ASR is claimed only by request results.");
   }
 
   if (capability === "ocr") {
-    warnings.push("vivo 通用 OCR 文档仅确认 jpg/png/bmp 图片识别，未确认 PDF。");
+    warnings.push("vivo OCR supports image input only; PDF or text-only inputs must remain fallback.");
   }
 
   if (capability === "tts") {
-    warnings.push("vivo TTS 使用服务端 WebSocket 签名调用；前端只播放静态音频或受控服务端 endpoint。");
+    warnings.push("vivo TTS uses the server WebSocket adapter; high-risk consultation remains script-only.");
   }
 
   if (!configured) {
     return {
       providerName: "vivo",
       capability,
+      state: "fallback",
       configured: false,
+      live: false,
+      fallback: true,
+      mock: false,
       supported: true,
       isRealProvider: false,
       status: "missing-env",
-      reason: "缺少 vivo AIGC provider 必需环境变量。",
+      reason: "Missing or placeholder vivo provider environment variables.",
       warnings,
       requiredEnv: requiredEnvForCapability(capability),
     };
@@ -126,10 +149,15 @@ export function getVivoProviderStatus<TCapability extends VivoCapability>(
   return {
     providerName: "vivo",
     capability,
+    state: "configured",
     configured: true,
+    live: false,
+    fallback: false,
+    mock: false,
     supported: true,
     isRealProvider: true,
     status: "ready",
+    reason: "Configuration is sufficient to attempt vivo provider calls; live is only set by request results.",
     warnings,
     requiredEnv: requiredEnvForCapability(capability),
   };

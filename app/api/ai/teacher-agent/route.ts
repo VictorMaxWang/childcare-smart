@@ -25,6 +25,7 @@ import {
 import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
 import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
 import { attachConsultationToInterventionCard } from "@/lib/agent/intervention-card";
+import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import { toFollowUpFeedbackLite } from "@/lib/feedback/normalize";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import {
@@ -149,6 +150,15 @@ function enrichTeacherAgentResult(params: {
   fallbackReason?: string | null;
 }) {
   const source = normalizeResultSource(params.result.source);
+  const provider = providerFromResult({ ...params.result, source });
+  const fallback =
+    typeof params.result.fallback === "boolean"
+      ? params.result.fallback
+      : source !== "ai";
+  const fallbackReason =
+    params.result.fallbackReason ??
+    params.fallbackReason ??
+    (fallback ? "provider-unavailable" : null);
   const fieldCoverage = {
     summary: params.result.summary.trim().length > 0,
     targetLabel: params.result.targetLabel.trim().length > 0,
@@ -167,12 +177,29 @@ function enrichTeacherAgentResult(params: {
   return {
     ...params.result,
     source,
-    provider: providerFromResult({ ...params.result, source }),
+    provider,
+    fallback,
     transport: params.result.transport ?? params.transport,
-    fallbackReason: params.result.fallbackReason ?? params.fallbackReason ?? null,
+    fallbackReason,
+    providerTrace: params.result.providerTrace ?? buildAiProviderTrace({
+      capability: "llm",
+      provider,
+      source,
+      mode: source === "mock" ? "mock" : fallback ? "fallback" : "live",
+      fallback,
+      fallbackReason,
+      realProvider: !fallback && provider === "vivo",
+      model: params.result.model,
+      transport: params.result.transport ?? params.transport,
+      providerStatus: params.result.providerStatus,
+      extra: {
+        workflow: params.result.workflow,
+        objectScope: params.result.mode,
+      },
+    }),
     dataQuality: params.result.dataQuality ?? {
       source,
-      isFallback: source === "fallback",
+      isFallback: fallback,
       isMock: source === "mock",
       fieldCoverage,
       inputCounts: buildInputCounts(params.payload),

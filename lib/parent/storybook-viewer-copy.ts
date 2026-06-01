@@ -2,6 +2,7 @@ import type {
   ParentStoryBookMediaStatus,
   ParentStoryBookStylePreset,
 } from "@/lib/ai/types";
+import type { StorageObjectMode } from "@/lib/api/types";
 
 const PRESET_COPY: Record<
   ParentStoryBookStylePreset,
@@ -128,6 +129,13 @@ export function formatStoryBookSceneImageDelivery(
   if (value === "dynamic-fallback" || value === "fallback") return "插图兜底";
   if (value === "demo-art" || value === "mock") return "演示插图兜底";
   return "基础插图兜底";
+}
+
+export function formatStorageObjectLabel(mode?: StorageObjectMode | null, metadataOnly?: boolean) {
+  if (mode === "cached_media") return "已缓存媒体";
+  if (mode === "local_demo") return "本地演示预览";
+  if (metadataOnly || mode === "metadata_only") return "仅保存元数据，待接入对象存储";
+  return "待接入对象存储";
 }
 
 export function formatStoryBookTransport(value?: StoryBookRuntimeTransport | string | null) {

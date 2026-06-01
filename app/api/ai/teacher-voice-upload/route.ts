@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveAsrProvider } from "@/lib/ai/providers";
+import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import { apiError } from "@/lib/server/api-errors";
 import { VivoProviderError } from "@/lib/providers/vivo";
@@ -32,9 +33,11 @@ export async function POST(request: Request) {
     typeof formData.get("fallbackText") === "string"
       ? String(formData.get("fallbackText")).trim()
       : undefined;
+  const asrProvider = resolveAsrProvider();
+  const providerStatus = asrProvider.getStatus();
 
   try {
-    const asrResult = await resolveAsrProvider().transcribe({
+    const asrResult = await asrProvider.transcribe({
       attachmentName,
       audioBytes: Buffer.from(await audio.arrayBuffer()),
       fallbackText,
@@ -50,18 +53,68 @@ export async function POST(request: Request) {
     });
 
     if (asrResult.source === "provider_unavailable" && !asrResult.output.transcript.trim()) {
-      return apiError(
-        "provider_unavailable",
-        "当前未接入真实 ASR provider，音频文件不会被伪造转写成功；请使用浏览器语音识别或文本输入 fallback。",
+      const providerTrace = buildAiProviderTrace({
+        provider: asrResult.provider,
+        source: asrResult.source,
+        mode: "fallback",
+        fallback: true,
+        fallbackReason: "provider-unavailable",
+        realProvider: false,
+        capability: "asr",
+        providerStatus: asrResult.output.providerStatus,
+        extra: {
+          workflow: "teacher-voice-upload",
+        },
+      });
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "provider_unavailable",
+          error:
+            "ASR provider is unavailable; use browser speech recognition or text fallback.",
+          source: asrResult.source,
+          provider: asrResult.provider,
+          mode: providerTrace.mode,
+          fallback: providerTrace.fallback,
+          fallbackReason: providerTrace.fallbackReason,
+          providerTrace,
+          status: asrResult.output.providerStatus,
+          warnings: asrResult.output.warnings,
+        },
         { status: 503 }
       );
     }
+
+    const fallbackReason = asrResult.output.fallback
+      ? asrResult.output.source === "provided_transcript"
+        ? "provided-transcript"
+        : asrResult.output.source === "text_fallback"
+          ? "text-fallback"
+          : "provider-unavailable"
+      : null;
+    const providerTrace = buildAiProviderTrace({
+      provider: asrResult.provider,
+      source: asrResult.source,
+      mode: asrResult.mode,
+      fallback: asrResult.output.fallback,
+      fallbackReason,
+      realProvider: asrResult.mode === "live" && !asrResult.output.fallback,
+      capability: "asr",
+      model: asrResult.provider,
+      providerStatus: asrResult.output.providerStatus,
+      extra: {
+        workflow: "teacher-voice-upload",
+      },
+    });
 
     return NextResponse.json(
       buildVoiceUploadResponse({
         attachmentName,
         transcript: asrResult.output.transcript,
         provider: asrResult.provider,
+        fallback: asrResult.output.fallback,
+        fallbackReason,
+        providerTrace,
         source: "upload-api",
         status: "uploaded",
         raw: {
@@ -90,7 +143,35 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     if (error instanceof VivoProviderError) {
-      return apiError("provider_unavailable", error.message, { status: 503 });
+      const providerTrace = buildAiProviderTrace({
+        provider: providerStatus.providerName,
+        source: "provider_unavailable",
+        mode: "fallback",
+        fallback: true,
+        fallbackReason: "provider-unavailable",
+        realProvider: false,
+        capability: "asr",
+        providerStatus,
+        extra: {
+          workflow: "teacher-voice-upload",
+        },
+      });
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "provider_unavailable",
+          error: error.message,
+          source: providerTrace.source,
+          provider: providerTrace.provider,
+          mode: providerTrace.mode,
+          fallback: providerTrace.fallback,
+          fallbackReason: providerTrace.fallbackReason,
+          providerTrace,
+          status: providerStatus,
+          warnings: providerStatus.warnings ?? [],
+        },
+        { status: 503 }
+      );
     }
     return apiError(
       "server_error",

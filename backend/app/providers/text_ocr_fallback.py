@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.core.config import Settings
-
 
 def _coerce_string(value: Any) -> str | None:
     if value is None:
@@ -12,19 +10,16 @@ def _coerce_string(value: Any) -> str | None:
     return text or None
 
 
-class VivoOcrProvider:
-    """Conservative OCR bridge.
+class TextOcrFallbackProvider:
+    """Text-only OCR fallback.
 
-    T8 only guarantees structured extraction from text that is already available
-    in the request shape, such as preview text, optional notes, file names, and
-    URLs. A verified upstream binary OCR flow is intentionally not claimed here.
+    This provider never performs binary OCR. It only reuses request-supplied
+    preview text and optional notes so downstream parsers can continue without
+    pretending a live OCR provider was called.
     """
 
-    provider_name = "vivo-ocr-text-fallback"
-    model_name = "t8-health-file-bridge-preview"
-
-    def __init__(self, settings: Settings):
-        self.settings = settings
+    provider_name = "text-ocr-fallback"
+    model_name = "health-file-text-fallback"
 
     def extract(
         self,
@@ -58,16 +53,37 @@ class VivoOcrProvider:
         return {
             "provider": self.provider_name,
             "mode": "text-only-fallback",
+            "state": "fallback",
             "text": text,
+            "configured": False,
+            "live": False,
             "fallback": True,
-            "liveReadyButNotVerified": True,
+            "mock": False,
+            "liveReadyButNotVerified": False,
             "model": self.model_name,
+            "providerStatus": {
+                "providerName": self.provider_name,
+                "capability": "ocr",
+                "state": "fallback",
+                "configured": False,
+                "live": False,
+                "fallback": True,
+                "mock": False,
+                "supported": True,
+                "isRealProvider": False,
+                "status": "provider-unavailable",
+                "reason": "FastAPI health-file bridge has no verified binary OCR transport; using request-supplied text only.",
+                "requiredEnv": [],
+                "warnings": [
+                    "Binary OCR is not implemented in FastAPI.",
+                    "File names, URLs, preview text, and notes are not live OCR evidence.",
+                ],
+            },
             "meta": {
-                "configuredPath": self.settings.vivo_ocr_path,
                 "fileNameCount": len(file_names),
                 "previewTextCount": len(preview_texts),
                 "fileUrlCount": len(file_urls),
                 "remoteBinaryOcrImplemented": False,
-                "reason": "T8 uses request-supplied text hints only; upstream OCR transport is not verified.",
+                "reason": "request-supplied-text-only",
             },
         }

@@ -217,11 +217,12 @@ export async function listNotificationEventsByInstitution(institutionId: string)
 }
 
 export async function createNotificationEvent(params: {
+  id?: string;
   institutionId: string;
   actorId: string;
   payload: AdminDispatchCreatePayload;
 }) {
-  const id = createId("evt");
+  const id = params.id ?? createId("evt");
   await ensureNotificationEventsTable();
 
   await withDbTransaction(async (connection) => {

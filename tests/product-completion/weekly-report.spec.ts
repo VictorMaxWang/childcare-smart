@@ -22,17 +22,30 @@ test.describe("E11 weekly report regression", () => {
       expect(detail.title).toBe(token);
       expect(detail.payload).toBeDefined();
 
-      const exported = await expectOk<{ content: string; format: string }>(
+      const exported = await expectOk<{
+        content: string;
+        format: string;
+        storageObject?: { storageMode: string; url: string | null; permissions: { canDownload: boolean } };
+      }>(
         await director.get(`/api/weekly-reports/${created.reportId}/export?format=markdown`)
       );
       expect(exported.format).toBe("markdown");
       expect(exported.content).toContain(token);
+      expect(exported.storageObject?.storageMode).toBe("metadata_only");
+      expect(exported.storageObject?.url).toBeNull();
+      expect(exported.storageObject?.permissions.canDownload).toBe(true);
 
-      const shared = await expectOk<{ status: string; share?: { localText?: string } }>(
+      const shared = await expectOk<{
+        status: string;
+        share?: { localText?: string; storageObject?: { storageMode: string; url: string | null; permissions: { canShare: boolean } } };
+      }>(
         await director.post(`/api/weekly-reports/${created.reportId}/share`, { data: {} })
       );
       expect(shared.status).toBe("shared");
       expect(shared.share?.localText).toContain(created.reportId);
+      expect(shared.share?.storageObject?.storageMode).toBe("metadata_only");
+      expect(shared.share?.storageObject?.url).toBeNull();
+      expect(shared.share?.storageObject?.permissions.canShare).toBe(true);
 
       const patched = await expectOk<{ reportId: string; title: string; scopeId: string }>(
         await director.patch(`/api/weekly-reports/${created.reportId}`, {

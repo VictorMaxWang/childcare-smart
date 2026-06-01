@@ -1,5 +1,11 @@
 import type { TeacherCopilotPayload } from "@/lib/teacher-copilot/types";
 import {
+  buildAiProviderTrace,
+  type AiCapabilityMode,
+  type AiFallbackReason,
+  type AiProviderTrace,
+} from "@/lib/ai/provider-trace";
+import {
   buildTeacherVoiceCopilotCompatPayload,
   buildTeacherVoiceCopilotPayload,
   type TeacherVoiceMicroTrainingSOP,
@@ -67,6 +73,11 @@ export interface TeacherVoiceUnderstandResponse {
   recordCompletionHints?: TeacherCopilotPayload["recordCompletionHints"];
   microTrainingSOP?: TeacherCopilotPayload["microTrainingSOP"];
   parentCommunicationScript?: TeacherCopilotPayload["parentCommunicationScript"];
+  provider?: string;
+  mode?: AiCapabilityMode;
+  fallback?: boolean;
+  fallbackReason?: AiFallbackReason | null;
+  providerTrace?: AiProviderTrace;
   source: {
     asr: string;
     router: string;
@@ -436,6 +447,27 @@ export function buildTeacherVoiceUnderstandFallback(
   });
   const chaining = buildDraftItems(router.router_result);
   const warnings = uniqueItems([...router.warnings, ...chaining.warnings]);
+  const fallbackReason: AiFallbackReason | null = input.asrFallback
+    ? input.asrSource === "provided_transcript"
+      ? "provided-transcript"
+      : input.asrSource === "text_fallback"
+        ? "text-fallback"
+        : "provider-unavailable"
+    : null;
+  const providerTrace = buildAiProviderTrace({
+    provider: input.asrProvider,
+    source: input.asrSource,
+    mode: input.asrMode,
+    fallback: input.asrFallback,
+    fallbackReason,
+    realProvider: input.asrMode === "real" && !input.asrFallback,
+    capability: "asr",
+    model: input.asrProvider,
+    extra: {
+      workflow: "teacher-voice-understand",
+      inputMode: input.inputMode,
+    },
+  });
   const transcriptPayload: TeacherVoiceTranscriptPayload = {
     text: transcript,
     source: input.asrSource,
@@ -466,6 +498,11 @@ export function buildTeacherVoiceUnderstandFallback(
     warnings,
     ...copilotPayload,
     ...compatCopilotPayload,
+    provider: input.asrProvider,
+    mode: providerTrace.mode,
+    fallback: input.asrFallback,
+    fallbackReason,
+    providerTrace,
     source: {
       asr: input.asrSource,
       router: "rule",
@@ -498,6 +535,7 @@ export function buildTeacherVoiceUnderstandFallback(
         confidence: input.asrConfidence,
         raw: input.asrRaw ?? {},
         meta: input.asrMeta ?? {},
+        providerTrace,
       },
     },
   };

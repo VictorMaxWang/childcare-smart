@@ -135,6 +135,7 @@ function normalizeProviderTrace(
   const providerTrace: Record<string, unknown> = {
     provider,
     source,
+    mode: asString(trace.mode) || (source === "vivo" ? "live" : "fallback"),
     model: asString(trace.model) || asString(result.model),
     requestId: asString(trace.requestId) || asString(trace.request_id),
     transport,
@@ -150,6 +151,7 @@ function normalizeProviderTrace(
       options.defaultFallbackReason ||
       "",
     brainProvider: asString(trace.brainProvider) || options.brainProvider || "next-fallback",
+    capability: asString(trace.capability) || "llm",
   };
 
   const fallback =
@@ -164,7 +166,7 @@ function normalizeProviderTrace(
   providerTrace.fallback = fallback;
   providerTrace.realProvider = realProvider;
 
-  ["llm", "ocr", "asr", "tts", "modes", "meta"].forEach((key) => {
+  ["llm", "ocr", "asr", "tts", "modes", "meta", "providerStatus"].forEach((key) => {
     if (key in trace) {
       providerTrace[key] = trace[key];
     }

@@ -246,7 +246,14 @@ test("teacher-agent route returns demo-ready fallback content for three workflow
         assert.equal(response.status, 200);
         assert.equal(body.workflow, item.workflow);
         assert.ok(body.source);
+        assert.equal(body.fallback, true);
         assert.ok(Object.hasOwn(body, "fallbackReason"));
+        const providerTrace = body.providerTrace as Record<string, unknown>;
+        assert.equal(providerTrace.mode, "fallback");
+        assert.equal(providerTrace.fallback, true);
+        assert.equal(providerTrace.fallbackReason, body.fallbackReason);
+        assert.equal(providerTrace.provider, body.provider);
+        assert.equal(providerTrace.source, body.source);
         assert.ok(body.dataQuality);
         assert.ok(Array.isArray(body.reviewItems));
         assert.ok((body.reviewItems as unknown[]).length > 0);

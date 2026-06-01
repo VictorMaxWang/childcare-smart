@@ -574,6 +574,9 @@ export default function DirectorDashboardReplica({
                       <ReplicaPill tone={task.statusLabel === "已闭环" ? "green" : "orange"}>{task.statusLabel}</ReplicaPill>
                     </div>
                     <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#596681]">{task.description}</p>
+                    <p className="mt-2 text-[11px] leading-5 text-[#7A86A6]" data-testid="admin-review-task-meta">
+                      source: {task.rawSource} 路 status: {task.rawStatus} 路 createdAt: {task.createdAtLabel} 路 assigneeRole: {task.assigneeRole}
+                    </p>
                   </article>
                 ))}
               </div>

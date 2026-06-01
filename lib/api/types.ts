@@ -1,5 +1,6 @@
 import type { AccountRole, SessionUser } from "@/lib/auth/accounts";
 import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
+import type { TaskOwnerRole, TaskSourceType } from "@/lib/tasks/types";
 
 export type ApiErrorCode =
   | "invalid_request"
@@ -50,6 +51,55 @@ export type AttachmentRelatedType =
 export type AttachmentKind = "image" | "audio" | "pdf" | "other";
 export type FeedbackStatus = "open" | "in-progress" | "resolved" | "archived";
 export type ApiAssignmentStatus = "pending" | "in_progress" | "completed" | "overdue";
+export type StorageObjectMode = "object_storage" | "local_demo" | "metadata_only" | "cached_media" | "fallback";
+export type StorageObjectKind =
+  | "attachment"
+  | "storybook-image"
+  | "storybook-audio"
+  | "weekly-report-export"
+  | "weekly-report-share"
+  | "storybook-export"
+  | "storybook-share";
+
+export interface StorageObjectOwner {
+  ownerType: "institution" | "child" | "user" | "system";
+  ownerId: string;
+  institutionId?: string;
+  childId?: string;
+  createdBy?: string;
+}
+
+export interface StorageObjectScope {
+  institutionId: string;
+  childId?: string;
+  scopeType?: ReportScopeType;
+  scopeId?: string;
+  relatedType?: AttachmentRelatedType | "storybook-media" | "weekly-report";
+  relatedId?: string;
+}
+
+export interface StorageObjectPermissions {
+  actorId?: string;
+  actorRole?: AccountRole;
+  canRead: boolean;
+  canPreview: boolean;
+  canDownload: boolean;
+  canShare: boolean;
+  reason?: string;
+}
+
+export interface StorageObject {
+  id: string;
+  owner: StorageObjectOwner;
+  scope: StorageObjectScope;
+  kind: StorageObjectKind;
+  storageMode: StorageObjectMode;
+  url: string | null;
+  localPreviewUrl: string | null;
+  metadataOnly: boolean;
+  expiresAt: string | null;
+  permissions: StorageObjectPermissions;
+}
 
 export interface ApiDataQuality {
   source: "app-data-service";
@@ -148,6 +198,7 @@ export interface ApiWeeklyReportShare {
   sharedAt: string;
   summary: string;
   localText: string;
+  storageObject?: StorageObject;
 }
 
 export type StorybookExportFormat = "json" | "markdown" | "html" | "print-html" | "share-text";
@@ -158,6 +209,7 @@ export interface ApiStorybookShare {
   sharedAt: string;
   summary: string;
   localText: string;
+  storageObject?: StorageObject;
 }
 
 export type ApiStorybook = AppStateSnapshot["storybooks"][number] & {
@@ -174,6 +226,17 @@ export interface ApiStorybookExportData {
   content: string;
   mimeType: string;
   filename: string;
+  storageObject?: StorageObject;
+}
+
+export interface ApiWeeklyReportExportData {
+  reportId: string;
+  format: WeeklyReportExportFormat;
+  exportedAt: string;
+  content: string;
+  mimeType: string;
+  filename: string;
+  storageObject: StorageObject;
 }
 
 export interface ApiArchiveMetadata {
@@ -259,6 +322,9 @@ export interface ApiAssignment {
   title: string;
   description: string;
   status: ApiAssignmentStatus;
+  sourceType: TaskSourceType;
+  sourceId: string;
+  assigneeRole: TaskOwnerRole;
   dueAt: string;
   reminderId?: string;
   feedbackId?: string;
@@ -280,10 +346,12 @@ export interface ApiAttachment {
   fileName: string;
   mimeType: string;
   byteSize?: number;
-  storageMode: "metadata_only" | "uploaded";
+  storageMode: StorageObjectMode;
   uploadStatus: "metadata_saved" | "uploaded" | "failed";
   localPreviewUrl?: string;
   downloadUrl?: string;
+  metadataOnly?: boolean;
+  storageObject?: StorageObject;
   durationMs?: number;
   createdBy: string;
   createdAt: string;

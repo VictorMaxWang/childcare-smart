@@ -195,6 +195,16 @@ test("high-risk consultation stream appends local fallback done when brain SSE n
         assert.ok(text.includes("证据链生成完成"));
         assert.equal(done?.fallback, true);
         assert.equal(result.childId, "c-1");
+        const providerTrace = result.providerTrace as Record<string, unknown>;
+        const ttsTrace = providerTrace.tts as Record<string, unknown>;
+        const modes = providerTrace.modes as Record<string, unknown>;
+        assert.equal(providerTrace.mode, "fallback");
+        assert.equal(providerTrace.fallback, true);
+        assert.equal(providerTrace.provider, "local-rules-llm");
+        assert.equal(ttsTrace.state, "fallback");
+        assert.equal(ttsTrace.live, false);
+        assert.equal(ttsTrace.mock, false);
+        assert.equal(modes.tts, "fallback");
         assert.ok((result.evidenceItems as unknown[]).length >= 4);
         assert.ok((result.followUp48h as unknown[]).length > 0);
         assert.equal(result.humanReviewRequired, true);
@@ -230,7 +240,16 @@ test("high-risk consultation stream returns local fallback when brain fetch time
 
         assert.equal(response.status, 200);
         assert.equal(done?.fallback, true);
-        assert.equal((result.providerTrace as Record<string, unknown>).fallbackReason, "brain-proxy-timeout");
+        const providerTrace = result.providerTrace as Record<string, unknown>;
+        const ttsTrace = providerTrace.tts as Record<string, unknown>;
+        const modes = providerTrace.modes as Record<string, unknown>;
+        assert.equal(providerTrace.mode, "fallback");
+        assert.equal(providerTrace.fallback, true);
+        assert.equal(providerTrace.fallbackReason, "brain-proxy-timeout");
+        assert.equal(ttsTrace.state, "fallback");
+        assert.equal(ttsTrace.live, false);
+        assert.equal(ttsTrace.mock, false);
+        assert.equal(modes.tts, "fallback");
         assert.ok((result.evidenceItems as unknown[]).length >= 4);
         assert.equal(result.humanReviewRequired, true);
       }

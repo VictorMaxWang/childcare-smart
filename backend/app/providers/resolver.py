@@ -7,13 +7,44 @@ from app.providers.vivo_asr import MockAsrProvider, VivoAsrProvider
 from app.providers.vivo_llm import VivoLlmProvider
 
 
+_PLACEHOLDER_PROVIDER_VALUES = {
+    "",
+    "mock",
+    "demo",
+    "example",
+    "placeholder",
+    "changeme",
+    "change_me",
+    "todo",
+    "none",
+    "null",
+    "yourappid",
+    "yourappkey",
+    "yourvivoappid",
+    "yourvivoappkey",
+    "yourvivoocrpath",
+}
+
+
+def normalize_provider_env(value: str | None) -> str:
+    text = (value or "").strip()
+    compact = text.lower().replace("-", "").replace("_", "").replace(" ", "")
+    if not compact:
+        return ""
+    if compact in _PLACEHOLDER_PROVIDER_VALUES:
+        return ""
+    if compact.startswith("your") or compact in {"xxx", "xxxx"}:
+        return ""
+    return text
+
+
 def _has_vivo_credentials(settings: Settings) -> bool:
-    app_id = (settings.vivo_app_id or "").strip()
+    app_id = normalize_provider_env(settings.vivo_app_id)
     if not app_id:
         return False
     if not settings.vivo_app_key:
         return False
-    return bool(settings.vivo_app_key.get_secret_value().strip())
+    return bool(normalize_provider_env(settings.vivo_app_key.get_secret_value()))
 
 
 def can_use_vivo_text_provider(settings: Settings, *, prefer_vivo: bool = False) -> bool:

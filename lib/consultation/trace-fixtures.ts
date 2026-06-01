@@ -9,19 +9,24 @@ import type {
   ConsultationTraceMode,
   ConsultationTraceState,
 } from "@/lib/consultation/trace-types";
+import type { AiProviderTrace } from "@/lib/ai/provider-trace";
 
-const BASE_PROVIDER_TRACE: ConsultationProviderTrace = {
+const BASE_PROVIDER_TRACE: AiProviderTrace = {
   source: "vivo",
   provider: "vivo-llm",
+  mode: "live",
+  fallbackReason: null,
   model: "Volc-DeepSeek-V3.2",
   requestId: "trace-demo-001",
   realProvider: true,
   fallback: false,
 };
 
-const FALLBACK_PROVIDER_TRACE: ConsultationProviderTrace = {
+const FALLBACK_PROVIDER_TRACE: AiProviderTrace = {
   source: "mock",
   provider: "mock-brain",
+  mode: "fallback",
+  fallbackReason: "mock-provider",
   model: "fallback-demo",
   requestId: "trace-fallback-001",
   realProvider: false,

@@ -116,6 +116,7 @@ async function enrichPayloadWithOcr(payload: HealthFileBridgeRequest) {
   const warnings = new Set<string>(providerStatus.warnings);
   const fileStatuses: Array<Record<string, unknown>> = [];
   let usedRealProvider = false;
+  let effectiveOcrStatus = providerStatus;
 
   const files = await Promise.all(
     payload.files.map(async (file) => {
@@ -129,12 +130,21 @@ async function enrichPayloadWithOcr(payload: HealthFileBridgeRequest) {
       });
 
       for (const warning of result.output.warnings) warnings.add(warning);
-      if (result.output.isRealProvider) usedRealProvider = true;
+      if (result.output.isRealProvider) {
+        usedRealProvider = true;
+        effectiveOcrStatus = result.output.providerStatus;
+      } else if (!usedRealProvider) {
+        effectiveOcrStatus = result.output.providerStatus;
+      }
       if (result.output.extractedText.trim()) extractedTextParts.push(result.output.extractedText.trim());
       fileStatuses.push({
         fileName: file.name,
         provider: result.provider,
         mode: result.mode,
+        state: result.output.state,
+        live: result.output.live,
+        fallback: result.output.fallback,
+        mock: result.output.mock,
         source: result.source,
         isRealProvider: result.output.isRealProvider,
         status: result.output.providerStatus.status,
@@ -168,7 +178,7 @@ async function enrichPayloadWithOcr(payload: HealthFileBridgeRequest) {
   return {
     payload: enrichedPayload,
     providerStatus: {
-      ocr: providerStatus,
+      ocr: effectiveOcrStatus,
       files: fileStatuses,
     },
     extractedText,
@@ -193,7 +203,12 @@ function mergeOcrProvenance(
   return {
     ...bridgeResponse,
     source: "vivo-ocr-provider",
+    state: "live",
+    configured: true,
+    live: true,
     fallback: false,
+    mock: false,
+    liveReadyButNotVerified: false,
     provider: "vivo",
     model: bridgeResponse.model ?? "vivo-general-ocr",
     extractedText: enriched.extractedText || bridgeResponse.extractedText,
@@ -359,9 +374,12 @@ export async function POST(request: Request) {
 
   const bridgeResponse = buildHealthFileBridgeResponse(enriched.payload, {
     source: enriched.usedRealProvider ? "vivo-ocr-provider" : "local-text-fallback",
+    state: enriched.usedRealProvider ? "live" : "fallback",
+    configured: enriched.usedRealProvider,
+    live: enriched.usedRealProvider,
     fallback: !enriched.usedRealProvider,
     mock: false,
-    liveReadyButNotVerified: true,
+    liveReadyButNotVerified: false,
     provider: enriched.usedRealProvider ? "vivo" : "local-text-fallback",
     model: enriched.usedRealProvider ? "vivo-general-ocr" : "local-health-rule-parser",
     extractedText: enriched.extractedText,

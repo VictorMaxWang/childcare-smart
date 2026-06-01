@@ -176,8 +176,21 @@ def _build_narrative_prompt(payload: dict[str, Any], scaffold: dict[str, Any], s
 
 def _build_provider_trace(scaffold: dict[str, Any], provider_result: ProviderTextResult, settings: Settings) -> dict[str, Any]:
     existing = safe_dict(scaffold.get("providerTrace"))
-    llm_mode = "real" if provider_result.source == "vivo" and not provider_result.fallback else "mock"
+    llm_mode = "live" if provider_result.source == "vivo" and not provider_result.fallback else "mock"
     model = provider_result.model or _coerce_text(safe_dict(provider_result.meta).get("attempted_model")) or settings.vivo_llm_model
+    script_only_tts = {
+        "providerName": "text-only-tts-fallback",
+        "capability": "tts",
+        "state": "fallback",
+        "configured": False,
+        "live": False,
+        "fallback": True,
+        "mock": False,
+        "status": "provider-unavailable",
+        "reason": "High-risk consultation returns narration script only; no FastAPI TTS audio is generated.",
+        "requiredEnv": [],
+        "warnings": ["Use the dedicated TTS route for audio generation."],
+    }
     consultation_source = first_non_empty(
         [
             _coerce_text(existing.get("consultationSource")),
@@ -206,11 +219,11 @@ def _build_provider_trace(scaffold: dict[str, Any], provider_result: ProviderTex
             "llm": llm_mode,
             "ocr": _coerce_text(safe_dict(existing.get("modes")).get("ocr")) or "unused",
             "asr": _coerce_text(safe_dict(existing.get("modes")).get("asr")) or "unused",
-            "tts": _coerce_text(safe_dict(existing.get("modes")).get("tts")) or "unused",
+            "tts": "fallback",
         },
         "ocr": _coerce_text(existing.get("ocr")) or "unused",
         "asr": _coerce_text(existing.get("asr")) or "unused",
-        "tts": _coerce_text(existing.get("tts")) or "unused",
+        "tts": script_only_tts,
     }
 
 

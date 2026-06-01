@@ -101,6 +101,10 @@ export interface AdminGovernanceReviewTask {
   statusLabel: string;
   ownerLabel: string;
   sourceLabel: string;
+  createdAtLabel: string;
+  assigneeRole: TaskOwnerRole;
+  rawStatus: TaskStatus | string;
+  rawSource: string;
 }
 
 export interface AdminGovernanceFeedbackItem {
@@ -430,6 +434,10 @@ function buildReviewTasks48h(
       dueLabel: task.dueWindow.label || formatDateTimeLabel(task.dueAt),
       statusLabel: TASK_STATUS_LABEL[task.status],
       ownerLabel: OWNER_LABEL[task.ownerRole],
+      createdAtLabel: formatDateTimeLabel(task.createdAt),
+      assigneeRole: task.ownerRole,
+      rawStatus: task.status,
+      rawSource: task.sourceType,
       sourceLabel: task.sourceType === "consultation" ? "会诊派生任务" : "任务中心",
     }));
 
@@ -446,6 +454,10 @@ function buildReviewTasks48h(
       dueLabel: "48 小时内",
       statusLabel: item.decision.statusLabel,
       ownerLabel: item.decision.recommendedOwnerName || OWNER_LABEL[item.recommendedOwnerRole],
+      createdAtLabel: formatDateTimeLabel(item.generatedAt),
+      assigneeRole: item.recommendedOwnerRole,
+      rawStatus: item.decision.status,
+      rawSource: "consultation",
       sourceLabel: "高风险会诊承接",
     }));
 

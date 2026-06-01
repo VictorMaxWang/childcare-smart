@@ -1,6 +1,7 @@
 import "server-only";
 
 export type VivoCapability = "chat" | "ocr" | "asr" | "tts";
+export type VivoProviderState = "configured" | "live" | "fallback" | "mock";
 
 export type VivoProviderRuntimeStatus =
   | "ready"
@@ -10,9 +11,14 @@ export type VivoProviderRuntimeStatus =
   | "error";
 
 export interface VivoProviderStatus<TCapability extends VivoCapability = VivoCapability> {
-  providerName: "vivo";
+  [key: string]: unknown;
+  providerName: string;
   capability: TCapability;
+  state: VivoProviderState;
   configured: boolean;
+  live: boolean;
+  fallback: boolean;
+  mock: boolean;
   supported: boolean;
   isRealProvider: boolean;
   status: VivoProviderRuntimeStatus;
@@ -40,6 +46,10 @@ export interface VivoChatResult {
   text: string;
   providerName: "vivo";
   model: string;
+  state: VivoProviderState;
+  live: boolean;
+  fallback: boolean;
+  mock: boolean;
   isRealProvider: boolean;
   warnings: string[];
   rawResponse?: Record<string, unknown>;
@@ -59,6 +69,10 @@ export interface VivoOcrResult {
   extractedText: string;
   confidence: number | null;
   providerName: "vivo";
+  state: VivoProviderState;
+  live: boolean;
+  fallback: boolean;
+  mock: boolean;
   isRealProvider: boolean;
   warnings: string[];
   rawResponse?: Record<string, unknown>;
@@ -88,6 +102,10 @@ export interface VivoAsrResult {
   transcript: string;
   confidence: number | null;
   providerName: "vivo";
+  state: VivoProviderState;
+  live: boolean;
+  fallback: boolean;
+  mock: boolean;
   isRealProvider: boolean;
   warnings: string[];
   rawResponse?: Record<string, unknown>;
@@ -110,6 +128,10 @@ export interface VivoTtsResult {
   audioBytes: Buffer;
   audioContentType: "audio/wav";
   providerName: "vivo";
+  state: VivoProviderState;
+  live: boolean;
+  fallback: boolean;
+  mock: boolean;
   engineId: string;
   voiceName: string;
   requestId: string;

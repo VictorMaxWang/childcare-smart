@@ -6,10 +6,15 @@ import type {
   ApiTeacher,
   ApiWeeklyReport,
   AttachmentKind,
+  StorageObjectMode,
 } from "@/lib/api/types";
 import { createDemoSeedSnapshot } from "@/lib/demo-data/seed";
 import { emptyInstitutionSnapshot } from "@/lib/persistence/bootstrap";
 import { normalizeAppStateSnapshot, type AppStateSnapshot } from "@/lib/persistence/snapshot";
+import {
+  buildWeeklyReportShareStorageObject,
+  normalizeAttachmentStorageForSnapshot,
+} from "@/lib/server/storage-contract";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -92,14 +97,14 @@ function normalizeTeachers(value: unknown, session: SessionUser) {
   return teachers.length > 0 ? teachers : seedTeachersForSession(session);
 }
 
-function normalizeWeeklyReports(value: unknown) {
+function normalizeWeeklyReports(value: unknown, session: SessionUser) {
   return readArray(value)
     .filter(isRecord)
     .map((item): ApiWeeklyReport | null => {
       const reportId = readString(item.reportId);
       const scopeType = readString(item.scopeType);
       if (!reportId || (scopeType !== "institution" && scopeType !== "class" && scopeType !== "child")) return null;
-      return {
+      const report: ApiWeeklyReport = {
         reportId,
         title: readString(item.title) || "周报",
         scopeType,
@@ -126,6 +131,10 @@ function normalizeWeeklyReports(value: unknown) {
             }
           : undefined,
       };
+      if (report.share?.shareId) {
+        report.share.storageObject = buildWeeklyReportShareStorageObject(report, report.share.shareId, session);
+      }
+      return report;
     })
     .filter((item): item is ApiWeeklyReport => Boolean(item));
 }
@@ -139,14 +148,28 @@ function deriveAttachmentKind(mimeType: string, fileName = ""): AttachmentKind {
   return "other";
 }
 
-function normalizeAttachments(value: unknown) {
+function readStorageObjectMode(value: unknown): StorageObjectMode {
+  if (
+    value === "object_storage" ||
+    value === "local_demo" ||
+    value === "metadata_only" ||
+    value === "cached_media" ||
+    value === "fallback"
+  ) {
+    return value;
+  }
+  if (value === "uploaded") return "object_storage";
+  return "metadata_only";
+}
+
+function normalizeAttachments(value: unknown, session: SessionUser) {
   return readArray(value)
     .filter(isRecord)
     .map((item): ApiAttachment | null => {
       const attachmentId = readString(item.attachmentId);
       const fileName = readString(item.fileName);
       if (!attachmentId || !fileName) return null;
-      return {
+      return normalizeAttachmentStorageForSnapshot({
         attachmentId,
         institutionId: readString(item.institutionId),
         childId: readString(item.childId) || undefined,
@@ -167,15 +190,15 @@ function normalizeAttachments(value: unknown) {
         fileName,
         mimeType: readString(item.mimeType) || "application/octet-stream",
         byteSize: typeof item.byteSize === "number" ? item.byteSize : undefined,
-        storageMode: item.storageMode === "uploaded" ? "uploaded" : "metadata_only",
+        storageMode: readStorageObjectMode(item.storageMode),
         uploadStatus: item.uploadStatus === "uploaded" || item.uploadStatus === "failed" ? item.uploadStatus : "metadata_saved",
         localPreviewUrl: readString(item.localPreviewUrl) || undefined,
-        downloadUrl: readString(item.downloadUrl) || undefined,
+        downloadUrl: undefined,
         durationMs: typeof item.durationMs === "number" ? item.durationMs : undefined,
         createdBy: readString(item.createdBy),
         createdAt: readString(item.createdAt) || new Date().toISOString(),
         updatedAt: readString(item.updatedAt) || new Date().toISOString(),
-      };
+      }, session);
     })
     .filter((item): item is ApiAttachment => Boolean(item));
 }
@@ -212,8 +235,8 @@ export function normalizeExtendedSnapshot(value: unknown, session: SessionUser):
   return {
     ...core,
     teachers: normalizeTeachers(data.teachers, session),
-    weeklyReports: normalizeWeeklyReports(data.weeklyReports),
-    attachments: normalizeAttachments(data.attachments),
+    weeklyReports: normalizeWeeklyReports(data.weeklyReports, session),
+    attachments: normalizeAttachments(data.attachments, session),
     auditLogs: normalizeAuditLogs(data.auditLogs),
   };
 }

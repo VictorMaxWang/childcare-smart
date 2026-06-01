@@ -459,10 +459,10 @@ export default function AdminAgentPage() {
       const data = await exportWeeklyReport(selectedWeeklyReport.reportId, format);
       if (format === "share-text") {
         await copyText(data.content);
-        toast.success("分享文本已复制");
+        toast.success("本地分享文本已复制");
       } else {
         downloadTextFile(data.filename, data.mimeType, data.content);
-        toast.success("周报已导出");
+        toast.success("已生成本地周报导出文件");
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "周报导出失败";
@@ -480,7 +480,7 @@ export default function AdminAgentPage() {
       const report = await shareWeeklyReport(selectedWeeklyReport.reportId);
       upsertWeeklyReport(report);
       await copyText(report.share?.localText ?? report.share?.summary ?? report.title);
-      toast.success("周报分享文本已复制");
+      toast.success("本地周报分享文本已复制");
     } catch (error) {
       const message = error instanceof Error ? error.message : "周报分享失败";
       setRequestError(message);

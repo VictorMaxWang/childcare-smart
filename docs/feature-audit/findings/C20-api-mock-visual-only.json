@@ -421,7 +421,7 @@
       "codeSignals": [
         "buildMockVoiceDraft creates local voice content",
         "buildMockOcrDraft creates local OCR text and fields",
-        "RealPlaceholderOcrProvider and RealPlaceholderTtsProvider return fallback text/script",
+        "Legacy placeholder OCR/TTS providers returned fallback text/script",
         "VivoAsrStubProvider mode remains mock"
       ]
     },

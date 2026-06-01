@@ -136,7 +136,9 @@ def test_health_file_bridge_smoke_with_preview_text():
     assert response.status_code == 200
     body = response.json()
     assert body["source"] == "backend-text-fallback"
-    assert body["mock"] is True
+    assert body["state"] == "fallback"
+    assert body["live"] is False
+    assert body["mock"] is False
     assert body["extractedFacts"]
     assert body["followUpHints"]
     assert body["actionMapping"]["schoolTodayActions"]
@@ -210,7 +212,9 @@ def test_health_file_bridge():
     assert response.status_code == 200
     body = response.json()
     assert body["source"] == "backend-text-fallback"
-    assert body["mock"] is True
+    assert body["state"] == "fallback"
+    assert body["live"] is False
+    assert body["mock"] is False
     assert body["riskItems"]
     assert body["contraindications"] is not None
     assert body["actionMapping"]["schoolTodayActions"]

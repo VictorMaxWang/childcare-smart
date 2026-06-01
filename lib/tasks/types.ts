@@ -39,6 +39,8 @@ export interface BaseTask {
   sourceType: TaskSourceType;
   sourceId: string;
   ownerRole: TaskOwnerRole;
+  assigneeId?: string;
+  assigneeName?: string;
   title: string;
   description: string;
   dueWindow: TaskDueWindow;
@@ -46,6 +48,7 @@ export interface BaseTask {
   status: TaskStatus;
   evidenceSubmissionMode: TaskEvidenceSubmissionMode;
   completionSummary?: string;
+  createdBy?: string;
   createdAt: string;
   updatedAt: string;
   statusChangedAt?: string;

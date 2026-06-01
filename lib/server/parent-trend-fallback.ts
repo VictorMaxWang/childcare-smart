@@ -1,4 +1,5 @@
 import type {
+  AiProviderTrace,
   ParentTrendComparison,
   ParentTrendDirection,
   ParentTrendIntent,
@@ -8,6 +9,7 @@ import type {
   ParentTrendSeriesPoint,
   ParentTrendLabel,
 } from "@/lib/ai/types";
+import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import { createDemoSeedSnapshot } from "@/lib/demo-data/seed";
 import {
   normalizeAppStateSnapshot,
@@ -660,6 +662,22 @@ export function buildParentTrendFallbackResponse(input: {
     sparse ? `当前有效记录覆盖 ${observedDays}/${windowDays} 天，趋势判断会保守展示。` : "",
     ...feedback.warnings,
   ].filter(Boolean);
+  const provider = "next-local-trend-fallback";
+  const providerTrace: AiProviderTrace = buildAiProviderTrace({
+    capability: "llm",
+    provider,
+    source: "fallback",
+    mode: "fallback",
+    fallback: true,
+    fallbackReason: input.fallbackReason,
+    realProvider: false,
+    model: "local-trend-rules",
+    transport: "next-json-fallback",
+    transportSource: "next-server",
+    extra: {
+      dataSource: selected.source,
+    },
+  });
   const childName = readString(child.name) || "孩子";
   const explanation = [
     `基于当前记录的本地趋势解释：最近 ${windowDays} 天，${childName}的${INTENT_LABELS[intent]}显示为“${trendLabel}”。`,
@@ -717,7 +735,10 @@ export function buildParentTrendFallbackResponse(input: {
       fallbackReason: input.fallbackReason,
     },
     source: selected.source,
+    mode: "fallback",
+    provider,
     fallback: true,
     fallbackReason: input.fallbackReason,
+    providerTrace,
   };
 }

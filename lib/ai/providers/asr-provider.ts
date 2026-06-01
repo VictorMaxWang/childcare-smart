@@ -22,6 +22,9 @@ export interface AsrProviderOutput {
   meta?: Record<string, unknown>;
   fallback: boolean;
   providerName: string;
+  state: "configured" | "live" | "fallback" | "mock";
+  live: boolean;
+  mock: boolean;
   isRealProvider: boolean;
   warnings: string[];
   providerStatus: VivoProviderStatus<"asr">;
@@ -29,7 +32,7 @@ export interface AsrProviderOutput {
 
 export interface AsrProviderResult<T> {
   provider: string;
-  mode: "fallback" | "mock" | "real";
+  mode: "fallback" | "mock" | "live";
   source: "provider" | "provided_transcript" | "text_fallback" | "provider_unavailable";
   model?: string;
   output: T;
@@ -58,13 +61,17 @@ class LocalTextAsrFallbackProvider implements AsrProvider {
   getStatus() {
     return {
       ...getVivoProviderStatus("asr"),
+      state: "fallback" as const,
       configured: false,
+      live: false,
+      fallback: true,
+      mock: false,
       isRealProvider: false,
       warnings: ["当前未配置 vivo ASR，音频文件不会被伪造转写；可使用浏览器语音识别或文本输入 fallback。"],
     };
   }
 
-  async transcribe(input: AsrProviderInput) {
+  async transcribe(input: AsrProviderInput): Promise<AsrProviderResult<AsrProviderOutput>> {
     const transcript = normalizeText(input.transcript) || normalizeText(input.fallbackText);
     const status = this.getStatus();
     const source: AsrProviderResult<AsrProviderOutput>["source"] = transcript
@@ -84,6 +91,9 @@ class LocalTextAsrFallbackProvider implements AsrProvider {
         meta: buildMeta(input, transcript ? "provided-transcript" : "provider-unavailable"),
         fallback: true,
         providerName: "local-text-asr-fallback",
+        state: "fallback" as const,
+        live: false,
+        mock: false,
         isRealProvider: false,
         warnings: [
           transcript
@@ -102,7 +112,7 @@ class VivoAsrProvider implements AsrProvider {
     return getVivoProviderStatus("asr");
   }
 
-  async transcribe(input: AsrProviderInput) {
+  async transcribe(input: AsrProviderInput): Promise<AsrProviderResult<AsrProviderOutput>> {
     const result = await requestVivoAsr({
       attachmentName: input.attachmentName,
       audioBytes: input.audioBytes,
@@ -114,7 +124,7 @@ class VivoAsrProvider implements AsrProvider {
 
     return {
       provider: result.providerName,
-      mode: result.isRealProvider ? ("real" as const) : ("fallback" as const),
+      mode: result.isRealProvider ? ("live" as const) : ("fallback" as const),
       source: result.isRealProvider
         ? ("provider" as const)
         : result.transcript
@@ -129,6 +139,9 @@ class VivoAsrProvider implements AsrProvider {
         meta: buildMeta(input, result.isRealProvider ? "vivo-asr-http" : "provided-transcript"),
         fallback: !result.isRealProvider,
         providerName: result.providerName,
+        state: result.state,
+        live: result.live,
+        mock: result.mock,
         isRealProvider: result.isRealProvider,
         warnings: result.warnings,
         providerStatus: result.status,

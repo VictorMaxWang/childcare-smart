@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { resolveAsrProvider } from "@/lib/ai/providers";
+import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import { buildTeacherVoiceUnderstandFallback } from "@/lib/ai/teacher-voice-understand";
 import { createBrainTransportHeaders } from "@/lib/server/brain-client";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
-import { apiError } from "@/lib/server/api-errors";
 
 const TEACHER_VOICE_UNDERSTAND_TARGET = "/api/v1/agents/teacher/voice-understand";
 
@@ -70,9 +70,35 @@ export async function POST(request: Request) {
     });
 
     if (asrResult.source === "provider_unavailable" && !asrResult.output.transcript.trim()) {
-      return apiError(
-        "provider_unavailable",
-        "当前未接入真实 ASR provider，音频文件不会被伪造成识别成功；请提供文本转写或配置 provider。",
+      const providerTrace = buildAiProviderTrace({
+        provider: asrResult.provider,
+        source: asrResult.source,
+        mode: "fallback",
+        fallback: true,
+        fallbackReason: "provider-unavailable",
+        realProvider: false,
+        capability: "asr",
+        providerStatus: asrResult.output.providerStatus,
+        extra: {
+          workflow: "teacher-voice-understand",
+          inputMode: "multipart",
+        },
+      });
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "provider_unavailable",
+          error:
+            "ASR provider is unavailable; provide a text transcript or configure a provider.",
+          source: asrResult.source,
+          provider: asrResult.provider,
+          mode: providerTrace.mode,
+          fallback: providerTrace.fallback,
+          fallbackReason: providerTrace.fallbackReason,
+          providerTrace,
+          status: asrResult.output.providerStatus,
+          warnings: asrResult.output.warnings,
+        },
         { status: 503, headers }
       );
     }

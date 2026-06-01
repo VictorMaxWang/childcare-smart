@@ -13,6 +13,7 @@ def _to_camel(value: str) -> str:
 JsonDict = dict[str, Any]
 HealthFileBridgeSourceRole = Literal["parent", "teacher"]
 HealthFileBridgeSource = Literal["backend-text-fallback", "next-local-extractor"]
+HealthFileBridgeProviderState = Literal["configured", "live", "fallback", "mock"]
 HealthFileBridgeRiskLevel = Literal["low", "medium", "high"]
 HealthFileBridgeFileType = Literal[
     "report-screenshot",
@@ -224,10 +225,17 @@ class HealthFileBridgeProvenance(HealthFileBridgeModel):
         validation_alias=AliasChoices("fileType", "file_type")
     )
     source: HealthFileBridgeSource
+    state: HealthFileBridgeProviderState = "fallback"
+    configured: bool = False
+    live: bool = False
     fallback: bool = False
-    mock: bool = True
+    mock: bool = False
     live_ready_but_not_verified: bool = Field(
         validation_alias=AliasChoices("liveReadyButNotVerified", "live_ready_but_not_verified")
+    )
+    provider_status: JsonDict = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("providerStatus", "provider_status"),
     )
     provider: str | None = None
     model: str | None = None
@@ -282,10 +290,17 @@ class HealthFileBridgeResponse(HealthFileBridgeModel):
     confidence: float
     disclaimer: str
     source: HealthFileBridgeSource
+    state: HealthFileBridgeProviderState = "fallback"
+    configured: bool = False
+    live: bool = False
     fallback: bool = False
-    mock: bool = True
+    mock: bool = False
     live_ready_but_not_verified: bool = Field(
         validation_alias=AliasChoices("liveReadyButNotVerified", "live_ready_but_not_verified")
+    )
+    provider_status: JsonDict = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("providerStatus", "provider_status"),
     )
     generated_at: str = Field(validation_alias=AliasChoices("generatedAt", "generated_at"))
     provider: str | None = None

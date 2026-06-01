@@ -328,7 +328,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
           try {
             await navigator.clipboard.writeText(executed.shareText);
           } catch {
-            setError("分享文案已生成，但浏览器未允许复制到剪贴板。");
+            setError("本地分享文案已生成，但浏览器未允许复制到剪贴板。");
           }
         }
         if (executed.refreshed) {
@@ -518,7 +518,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      setResultActionStatus(`已生成下载文件：${action.filename}`);
+      setResultActionStatus(`已生成本地下载文件：${action.filename}`);
     } catch (downloadError) {
       setResultActionStatus(downloadError instanceof Error ? downloadError.message : "下载文件生成失败。");
     }
@@ -527,7 +527,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
   async function copyResultAction(action: Extract<VoiceResultAction, { kind: "share-text" }>) {
     try {
       await navigator.clipboard.writeText(action.copyText);
-      setResultActionStatus("分享文案已复制。");
+      setResultActionStatus("本地分享文案已复制。");
     } catch (copyError) {
       setResultActionStatus(copyError instanceof Error ? copyError.message : "复制分享文案失败。");
     }
@@ -721,7 +721,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
                       data-testid="voice-orb-download"
                     >
                       <Download className="h-4 w-4" aria-hidden="true" />
-                      下载导出文件
+                      下载本地导出文件
                     </Button>
                     <span className="text-xs text-emerald-700">{resultAction.filename}</span>
                   </div>
@@ -745,7 +745,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
                       data-testid="voice-orb-copy-share"
                     >
                       <Copy className="h-4 w-4" aria-hidden="true" />
-                      复制分享文案
+                      复制本地分享文案
                     </Button>
                   </div>
                 ) : null}

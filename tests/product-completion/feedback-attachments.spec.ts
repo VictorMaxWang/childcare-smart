@@ -7,8 +7,8 @@ test.describe.configure({ mode: "serial" });
 test.describe("E11 feedback and attachment regression", () => {
   test("feedback details include scoped image/audio attachments and enforce metadata limits", async ({}, testInfo) => {
     const parent = await demoContext(testInfo, "u-parent");
-    const teacher = await demoContext(testInfo, "u-teacher");
-    const teacher2 = await demoContext(testInfo, "u-teacher2");
+    const teacher = await demoContext(testInfo, "u-teacher2");
+    const teacher2 = await demoContext(testInfo, "u-teacher");
     const director = await demoContext(testInfo, "u-admin");
     const token = `e11-feedback-${Date.now()}`;
 
@@ -26,7 +26,14 @@ test.describe("E11 feedback and attachment regression", () => {
       );
       const feedbackId = feedback.feedback.feedbackId;
 
-      const image = await expectOk<{ attachmentId: string; kind: string }>(
+      const image = await expectOk<{
+        attachmentId: string;
+        kind: string;
+        storageMode?: string;
+        metadataOnly?: boolean;
+        downloadUrl?: string;
+        storageObject?: { storageMode: string; url: string | null; permissions: { canPreview: boolean; canDownload: boolean } };
+      }>(
         await parent.post("/api/attachments", {
           data: {
             childId: CHILD_PARENT,
@@ -42,8 +49,19 @@ test.describe("E11 feedback and attachment regression", () => {
         201
       );
       expect(image.kind).toBe("image");
+      expect(image.storageMode).toBe("local_demo");
+      expect(image.metadataOnly).toBe(false);
+      expect(image.downloadUrl).toContain(`/api/attachments/${image.attachmentId}/content`);
+      expect(image.storageObject?.storageMode).toBe("local_demo");
+      expect(image.storageObject?.url).toBeNull();
+      expect(image.storageObject?.permissions.canPreview).toBe(true);
+      expect(image.storageObject?.permissions.canDownload).toBe(true);
 
-      const audio = await expectOk<{ attachmentId: string; kind: string }>(
+      const audio = await expectOk<{
+        attachmentId: string;
+        kind: string;
+        storageObject?: { storageMode: string; permissions: { canPreview: boolean; canDownload: boolean } };
+      }>(
         await teacher.post("/api/attachments", {
           data: {
             childId: CHILD_PARENT,
@@ -60,13 +78,20 @@ test.describe("E11 feedback and attachment regression", () => {
         201
       );
       expect(audio.kind).toBe("audio");
+      expect(audio.storageObject?.storageMode).toBe("local_demo");
+      expect(audio.storageObject?.permissions.canPreview).toBe(true);
+      expect(audio.storageObject?.permissions.canDownload).toBe(true);
 
-      const detail = await expectOk<{ feedback: { feedbackId: string }; attachments: Array<{ attachmentId: string }> }>(
+      const detail = await expectOk<{
+        feedback: { feedbackId: string };
+        attachments: Array<{ attachmentId: string; storageObject?: { storageMode: string } }>;
+      }>(
         await director.get(`/api/feedback/${feedbackId}`)
       );
       expect(detail.feedback.feedbackId).toBe(feedbackId);
       expect(detail.attachments.some((item) => item.attachmentId === image.attachmentId)).toBe(true);
       expect(detail.attachments.some((item) => item.attachmentId === audio.attachmentId)).toBe(true);
+      expect(detail.attachments.find((item) => item.attachmentId === image.attachmentId)?.storageObject?.storageMode).toBe("local_demo");
 
       const content = await parent.get(`/api/attachments/${image.attachmentId}/content`);
       expect(content.status()).toBe(200);
@@ -75,7 +100,13 @@ test.describe("E11 feedback and attachment regression", () => {
       await expectFailure(await teacher2.get(`/api/feedback/${feedbackId}`), 403, "forbidden_scope");
       await expectFailure(await teacher2.get(`/api/attachments/${image.attachmentId}/content`), 403, "forbidden_scope");
 
-      await expectOk(
+      const metadataOnly = await expectOk<{
+        attachmentId: string;
+        storageMode?: string;
+        metadataOnly?: boolean;
+        downloadUrl?: string;
+        storageObject?: { storageMode: string; url: string | null; permissions: { canPreview: boolean; canDownload: boolean } };
+      }>(
         await parent.post("/api/attachments", {
           data: {
             childId: CHILD_PARENT,
@@ -89,6 +120,12 @@ test.describe("E11 feedback and attachment regression", () => {
         }),
         201
       );
+      expect(metadataOnly.storageMode).toBe("metadata_only");
+      expect(metadataOnly.metadataOnly).toBe(true);
+      expect(metadataOnly.downloadUrl).toBeUndefined();
+      expect(metadataOnly.storageObject?.url).toBeNull();
+      expect(metadataOnly.storageObject?.permissions.canPreview).toBe(false);
+      expect(metadataOnly.storageObject?.permissions.canDownload).toBe(false);
       await expectFailure(
         await parent.post("/api/attachments", {
           data: {

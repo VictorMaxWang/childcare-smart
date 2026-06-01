@@ -9,6 +9,7 @@ import type {
   ParentStoryBookResponse,
   ParentStoryBookScene,
 } from "@/lib/ai/types";
+import { buildStorybookMediaStorageObject } from "@/lib/server/storage-contract";
 
 const STORYBOOK_CACHE_NAMESPACE = "storybook-v2-dual-track-2";
 const STORYBOOK_RESPONSE_TTL_SECONDS = 12 * 60;
@@ -41,6 +42,10 @@ function now() {
   return Date.now();
 }
 
+function expiresAtIso(expiresAt: number) {
+  return new Date(expiresAt).toISOString();
+}
+
 function cleanupExpired() {
   const current = now();
 
@@ -59,6 +64,15 @@ function cleanupExpired() {
 
 function resolveMediaIdFromUrl(url: string) {
   return url.split("/").pop() || null;
+}
+
+function resolveCachedMediaExpiresAtFromUrl(url?: string | null) {
+  if (!url || !url.startsWith("/api/ai/parent-storybook/media/")) return null;
+  cleanupExpired();
+  const mediaId = resolveMediaIdFromUrl(url);
+  if (!mediaId) return null;
+  const entry = mediaAssetCache.get(mediaId);
+  return entry ? expiresAtIso(entry.expiresAt) : null;
 }
 
 function cloneStory(story: ParentStoryBookResponse) {
@@ -239,6 +253,7 @@ export function readCachedParentStoryBookMedia(mediaId: string) {
   return {
     contentType: entry.contentType,
     bytes: entry.bytes,
+    expiresAt: expiresAtIso(entry.expiresAt),
     ownerChildId: entry.ownerChildId,
     ownerStorybookId: entry.ownerStorybookId,
   };
@@ -336,7 +351,37 @@ export function prepareParentStoryBookResponseForDelivery(
       }
     }
 
-    return nextScene;
+    const imageSourceUrl =
+      typeof nextScene.imageUrl === "string"
+        ? nextScene.imageUrl
+        : typeof nextScene.assetRef === "string"
+          ? nextScene.assetRef
+          : null;
+    const imageExpiresAt = resolveCachedMediaExpiresAtFromUrl(imageSourceUrl);
+    const audioSourceUrl = typeof nextScene.audioUrl === "string" ? nextScene.audioUrl : null;
+    const audioExpiresAt = resolveCachedMediaExpiresAtFromUrl(audioSourceUrl);
+
+    return {
+      ...nextScene,
+      imageStorageObject: buildStorybookMediaStorageObject({
+        id: `${nextStory.storyId}:scene:${nextScene.sceneIndex}:image`,
+        kind: "storybook-image",
+        childId: nextStory.childId,
+        storybookId: nextStory.storyId,
+        sourceUrl: imageSourceUrl,
+        storageMode: imageExpiresAt ? "cached_media" : undefined,
+        expiresAt: imageExpiresAt,
+      }),
+      audioStorageObject: buildStorybookMediaStorageObject({
+        id: `${nextStory.storyId}:scene:${nextScene.sceneIndex}:audio`,
+        kind: "storybook-audio",
+        childId: nextStory.childId,
+        storybookId: nextStory.storyId,
+        sourceUrl: audioSourceUrl,
+        storageMode: audioExpiresAt ? "cached_media" : undefined,
+        expiresAt: audioExpiresAt,
+      }),
+    };
   });
 
   nextStory.providerMeta = {
