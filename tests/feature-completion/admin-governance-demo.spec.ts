@@ -46,3 +46,40 @@ test("admin governance first screen connects risk signals to institution actions
 
   await capture(page, "admin-governance-first-screen.png");
 });
+
+test("admin feed and workflow fall back locally without admin console errors", async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      consoleErrors.push(message.text());
+    }
+  });
+
+  await resetDemoStorage(page);
+  await page.route("**/api/ai/high-risk-consultation/feed**", (route) => route.abort("failed"));
+  await page.route("**/api/ai/weekly-report", (route) => route.abort("failed"));
+
+  await loginAs(page, "u-admin", "/admin");
+
+  const compactRiskBoard = page.getByTestId("admin-risk-priority-compact");
+  await expect(compactRiskBoard).toBeVisible({ timeout: 20_000 });
+  await expect(compactRiskBoard).toContainText("P1");
+  await expect(page.getByTestId("admin-family-feedback-flow")).toBeVisible();
+  await expect(page.getByTestId("admin-family-feedback-flow")).not.toBeEmpty();
+  await expect(page.getByTestId("admin-weekly-governance-summary")).toBeVisible();
+  await expect(page.getByTestId("admin-weekly-governance-summary")).not.toBeEmpty();
+  await expect(page.locator("body")).toContainText(/本地演示数据|最近缓存数据|远端 feed 暂不可用/);
+
+  await page.route("**/api/ai/admin-agent", (route) => route.abort("failed"));
+  await page.goto("/admin/agent");
+
+  await expect(page.getByTestId("r05-director-replica-page")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("admin-agent-fallback-notice")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("admin-agent-fallback-notice")).toContainText(/本地演示数据|远端 workflow 暂不可用/);
+  await expect(page.locator("body")).toContainText(/AI 工作台|重点会诊/);
+  await expect(page.locator("body")).toContainText("P1");
+
+  await page.waitForTimeout(500);
+  expect(consoleErrors.filter((text) => text.includes("[ADMIN_FEED]") || text.includes("[ADMIN_AGENT]"))).toEqual([]);
+  await capture(page, "admin-governance-feed-workflow-fallback.png");
+});

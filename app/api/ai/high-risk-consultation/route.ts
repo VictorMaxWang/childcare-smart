@@ -1,65 +1,30 @@
 import { NextResponse } from "next/server";
+import type { HighRiskConsultationRequestPayload } from "@/lib/agent/high-risk-consultation";
 import {
-  buildHighRiskConsultationAutoContext,
-  resolveHighRiskConsultationContexts,
-  type HighRiskConsultationRequestPayload,
-} from "@/lib/agent/high-risk-consultation";
-import { buildInterventionCardFromConsultation } from "@/lib/agent/intervention-card";
-import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
-import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
-import {
-  buildLocalHighRiskConsultationFallback,
-  isLinXiaoyuHighRiskConsultationCase,
-} from "@/lib/agent/high-risk-consultation-fallback";
-import { buildTeacherChildSuggestionSnapshotWithMemory } from "@/lib/agent/teacher-agent";
-import {
-  resolveAsrProvider,
-  resolveLlmProvider,
-  resolveOcrProvider,
-  resolveTtsProvider,
-} from "@/lib/ai/providers";
+  buildLocalHighRiskConsultationResult,
+  isValidHighRiskConsultationPayload,
+} from "@/lib/agent/high-risk-consultation-local-result";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
-import { normalizeHighRiskConsultationResult } from "@/lib/consultation/normalize-result";
-import { toFollowUpFeedbackLite } from "@/lib/feedback/normalize";
-import { buildMemoryContextForPrompt } from "@/lib/server/memory-context";
 
-function isRecordArray(value: unknown) {
-  return Array.isArray(value);
+const HIGH_RISK_CONSULTATION_TARGET_PATH = "/api/v1/agents/consultations/high-risk";
+const DEFAULT_HIGH_RISK_CONSULTATION_BRAIN_TIMEOUT_MS = 8_000;
+
+function readPositiveIntEnv(name: string, fallback: number) {
+  const raw = process.env[name]?.trim();
+  const parsed = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function isValidPayload(payload: unknown): payload is HighRiskConsultationRequestPayload {
-  if (!payload || typeof payload !== "object") return false;
-  const obj = payload as Record<string, unknown>;
-
-  return (
-    typeof obj.targetChildId === "string" &&
-    obj.currentUser !== null &&
-    typeof obj.currentUser === "object" &&
-    isRecordArray(obj.visibleChildren) &&
-    isRecordArray(obj.presentChildren) &&
-    isRecordArray(obj.healthCheckRecords) &&
-    isRecordArray(obj.growthRecords) &&
-    isRecordArray(obj.guardianFeedbacks)
+function getHighRiskConsultationBrainTimeoutMs() {
+  return readPositiveIntEnv(
+    "HIGH_RISK_CONSULTATION_BRAIN_TIMEOUT_MS",
+    DEFAULT_HIGH_RISK_CONSULTATION_BRAIN_TIMEOUT_MS
   );
-}
-
-function resolveNextLlmSource(provider: string, mode: "fallback" | "mock" | "real") {
-  if (mode === "fallback") return "local-rules-fallback";
-  if (provider === "mock-llm" || mode === "mock") return "mock";
-  if (provider === "vivo") return "vivo";
-  return provider.replace(/-llm$/u, "") || "unknown";
-}
-
-function resolveNextLlmModel(provider: string, mode: "fallback" | "mock" | "real") {
-  if (mode === "fallback") return "local-health-rules";
-  if (provider === "mock-llm" || mode === "mock") return "mock-local-llm";
-  if (provider === "vivo") return process.env.VIVO_LLM_MODEL || "Volc-DeepSeek-V3.2";
-  return provider;
 }
 
 function buildLocalFallbackHeaders(brainForward: BrainForwardResult) {
@@ -71,13 +36,43 @@ function buildLocalFallbackHeaders(brainForward: BrainForwardResult) {
   });
 }
 
+function buildForcedFallbackHeaders(fallbackReason: string) {
+  return createBrainTransportHeaders({
+    transport: "next-json-fallback",
+    targetPath: HIGH_RISK_CONSULTATION_TARGET_PATH,
+    fallbackReason,
+  });
+}
+
+function isForcedFallbackRequest(request: Request) {
+  return request.headers.get("x-ai-force-fallback") === "1";
+}
+
+function localFallbackResponse(
+  payload: HighRiskConsultationRequestPayload,
+  headers: Headers,
+  fallbackReason: string
+) {
+  const result = buildLocalHighRiskConsultationResult({
+    payload,
+    fallbackReason,
+    transport: "next-json-fallback",
+    consultationSource: "next-json-local-fallback",
+  });
+
+  if (!result) {
+    return NextResponse.json(
+      { error: "No visible child available for consultation" },
+      { status: 400, headers }
+    );
+  }
+
+  return NextResponse.json(result, { status: 200, headers });
+}
+
 export async function POST(request: Request) {
   const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
   if (authError) return authError;
-
-  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/consultations/high-risk");
-  if (brainForward.response) return brainForward.response;
-  const localFallbackHeaders = buildLocalFallbackHeaders(brainForward);
 
   let payload: HighRiskConsultationRequestPayload | null = null;
 
@@ -85,190 +80,29 @@ export async function POST(request: Request) {
     payload = (await request.json()) as HighRiskConsultationRequestPayload;
   } catch (error) {
     console.error("[AI] Invalid high-risk consultation payload", error);
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400, headers: localFallbackHeaders });
+    return NextResponse.json(
+      { error: "Invalid JSON body" },
+      { status: 400, headers: buildForcedFallbackHeaders("invalid-json-body") }
+    );
   }
 
-  if (!isValidPayload(payload)) {
+  if (!isValidHighRiskConsultationPayload(payload)) {
     return NextResponse.json(
       { error: "Invalid high-risk consultation payload" },
-      { status: 400, headers: localFallbackHeaders }
+      { status: 400, headers: buildForcedFallbackHeaders("invalid-high-risk-consultation-payload") }
     );
   }
 
-  const { classContext, childContext } = resolveHighRiskConsultationContexts(payload);
-  if (!childContext) {
-    return NextResponse.json(
-      { error: "No visible child available for consultation" },
-      { status: 400, headers: localFallbackHeaders }
-    );
+  if (isForcedFallbackRequest(request)) {
+    const fallbackReason = "forced-local-fallback";
+    return localFallbackResponse(payload, buildForcedFallbackHeaders(fallbackReason), fallbackReason);
   }
 
-  const autoContext = buildHighRiskConsultationAutoContext({
-    classContext,
-    childContext,
+  const brainForward = await forwardBrainRequest(request, HIGH_RISK_CONSULTATION_TARGET_PATH, {
+    timeoutMs: getHighRiskConsultationBrainTimeoutMs(),
   });
-  const ocrProvider = resolveOcrProvider();
-  const asrProvider = resolveAsrProvider();
-  const llmProvider = resolveLlmProvider();
-  const ttsProvider = resolveTtsProvider();
+  if (brainForward.response) return brainForward.response;
 
-  const [ocrResult, asrResult] = await Promise.all([
-    payload.imageInput
-      ? ocrProvider.extract({
-          attachmentName: payload.imageInput.attachmentName,
-          fallbackText: payload.imageInput.content,
-        })
-      : null,
-    payload.voiceInput
-      ? asrProvider.transcribe({
-          attachmentName: payload.voiceInput.attachmentName,
-          fallbackText: payload.voiceInput.content,
-        })
-      : null,
-  ]);
-
-  const teacherSignals = [
-    payload.teacherNote?.trim(),
-    ocrResult?.output.text,
-    asrResult?.output.transcript,
-  ].filter((item): item is string => Boolean(item));
-
-  const memoryContext = await buildMemoryContextForPrompt({
-    childId: childContext.child.id,
-    workflowType: "high-risk-consultation",
-    query: [...autoContext.focusReasons, ...teacherSignals].join(" "),
-    request,
-  });
-
-  const suggestionSnapshot = buildTeacherChildSuggestionSnapshotWithMemory(childContext, memoryContext);
-  const consultationInput = buildConsultationInputFromSnapshot({
-    snapshot: suggestionSnapshot,
-    latestFeedback: childContext.latestFeedback
-      ? (toFollowUpFeedbackLite(childContext.latestFeedback) ?? undefined)
-      : undefined,
-    focusReasons: [...autoContext.focusReasons, ...teacherSignals],
-    source: "teacher",
-    priorityHint: {
-      level: "P1",
-      score: 92,
-      reason: "老师主动发起高风险会诊，需要进入闭环评估。",
-    },
-    memoryContext,
-  });
-
-  const localFallbackConsultation = buildLocalHighRiskConsultationFallback({
-    input: consultationInput,
-    autoContext,
-    fallbackReason: brainForward.fallbackReason ?? "brain-proxy-unavailable",
-  });
-  const useDefensePrimaryCase = isLinXiaoyuHighRiskConsultationCase({
-    input: consultationInput,
-    autoContext,
-  });
-  const consultation = useDefensePrimaryCase
-    ? localFallbackConsultation
-    : ((await maybeRunHighRiskConsultation(consultationInput)) ?? localFallbackConsultation);
-
-  const llmResult = await llmProvider.generateHighRiskConsultationNarrative({
-    childName: childContext.child.name,
-    className: classContext.className,
-    riskLevel: consultation.riskLevel,
-    triggerReasons: consultation.triggerReasons,
-    keyFindings: consultation.keyFindings,
-    todayInSchoolActions: consultation.todayInSchoolActions,
-    tonightAtHomeActions: consultation.tonightAtHomeActions,
-    nextCheckpoints: consultation.nextCheckpoints,
-    longTermTraits: memoryContext.promptContext.longTermTraits,
-    recentContinuitySignals: memoryContext.promptContext.recentContinuitySignals,
-    lastConsultationTakeaways: memoryContext.promptContext.lastConsultationTakeaways,
-    openLoops: memoryContext.promptContext.openLoops,
-  });
-  const ttsResult = await ttsProvider.synthesize({
-    text: llmResult.output.summary,
-  });
-
-  const nextConsultation = {
-    ...consultation,
-    summary: llmResult.output.summary,
-    parentMessageDraft: llmResult.output.parentMessageDraft,
-    continuityNotes: consultation.continuityNotes ?? suggestionSnapshot.continuityNotes,
-    memoryMeta: consultation.memoryMeta ?? memoryContext.meta,
-    directorDecisionCard: {
-      ...consultation.directorDecisionCard,
-      reason: llmResult.output.directorReason,
-    },
-    explainability: [
-      ...consultation.explainability,
-      {
-        label: "教师补充",
-        detail: teacherSignals.join("；") || "本次主要使用系统自动上下文发起会诊。",
-      },
-    ],
-  };
-
-  const interventionCard = buildInterventionCardFromConsultation({
-    targetChildId: childContext.child.id,
-    childName: childContext.child.name,
-    consultation: nextConsultation,
-    generatedAt: nextConsultation.generatedAt,
-  });
-
-  const llmSource = resolveNextLlmSource(llmResult.provider, llmResult.mode);
-  const llmModel = resolveNextLlmModel(llmResult.provider, llmResult.mode);
-  const isRealLlmProvider = llmResult.mode === "real";
-  const usedProviderFallback = !isRealLlmProvider;
-  const providerTrace = {
-    llm: llmResult.provider,
-    provider: llmResult.provider,
-    source: llmSource,
-    model: llmModel,
-    requestId: "",
-    transport: "next-json-fallback",
-    transportSource: "next-server",
-    consultationSource: String(nextConsultation.source ?? ""),
-    fallbackReason: brainForward.fallbackReason ?? "brain-proxy-unavailable",
-    brainProvider: "next-fallback",
-    realProvider: isRealLlmProvider,
-    fallback: usedProviderFallback,
-    ocr: ocrResult?.provider ?? "unused",
-    asr: asrResult?.provider ?? "unused",
-    tts: ttsResult.provider,
-    modes: {
-      llm: llmResult.mode,
-      ocr: ocrResult?.mode ?? "mock",
-      asr: asrResult?.mode ?? "mock",
-      tts: ttsResult.mode,
-    },
-  };
-
-  const normalizedResult = normalizeHighRiskConsultationResult(
-    {
-      ...nextConsultation,
-      interventionCard,
-      autoContext,
-      provider: providerTrace.provider,
-      model: providerTrace.model,
-      realProvider: isRealLlmProvider,
-      fallback: usedProviderFallback,
-      providerTrace,
-      audioNarrationScript: ttsResult.output.script,
-      multimodalNotes: {
-        imageText: ocrResult?.output.text,
-        voiceText: asrResult?.output.transcript,
-        teacherNote: payload.teacherNote?.trim() || "",
-      },
-    },
-    {
-      brainProvider: "next-fallback",
-      defaultTransport: "next-json-fallback",
-      defaultTransportSource: "next-server",
-      defaultConsultationSource: String(nextConsultation.source ?? ""),
-      defaultFallbackReason: brainForward.fallbackReason ?? "brain-proxy-unavailable",
-    }
-  );
-
-  return NextResponse.json(
-    normalizedResult,
-    { status: 200, headers: localFallbackHeaders }
-  );
+  const fallbackReason = brainForward.fallbackReason ?? "brain-proxy-unavailable";
+  return localFallbackResponse(payload, buildLocalFallbackHeaders(brainForward), fallbackReason);
 }

@@ -1021,6 +1021,7 @@ async def run_parent_trend_query(payload: dict[str, Any]) -> dict[str, Any]:
         "warnings": deduped_warnings,
         "source": repository.source,
         "fallback": repository.fallback,
+        "fallbackReason": "demo-snapshot" if repository.fallback else None,
     }
     if payload.get("debugMemory") and memory_meta is not None:
         response["memoryMeta"] = {

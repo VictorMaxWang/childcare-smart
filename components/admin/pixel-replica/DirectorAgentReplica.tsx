@@ -48,6 +48,7 @@ export default function DirectorAgentReplica({
   quickQuestions,
   loading,
   requestError,
+  statusNotice,
   dispatchAvailable,
   dispatchStatusMessage,
   notificationEvents,
@@ -67,6 +68,7 @@ export default function DirectorAgentReplica({
   quickQuestions: string[];
   loading: boolean;
   requestError: string | null;
+  statusNotice: string | null;
   dispatchAvailable: boolean;
   dispatchStatusMessage: string;
   notificationEvents: AdminDispatchEvent[];
@@ -128,6 +130,18 @@ export default function DirectorAgentReplica({
         </>
       }
     >
+      {statusNotice ? (
+        <div
+          data-testid="admin-agent-fallback-notice"
+          className="rounded-[16px] border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+        >
+          <span className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            {statusNotice}
+          </span>
+        </div>
+      ) : null}
+
       {requestError ? (
         <div className="rounded-[16px] border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
           <span className="flex items-center gap-2">

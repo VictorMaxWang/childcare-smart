@@ -194,6 +194,11 @@ export default function ParentAgentPage() {
   const [trendError, setTrendError] = useState<string | null>(null);
   const [latestTrendQuery, setLatestTrendQuery] = useState<string | null>(null);
   const [latestTrendResult, setLatestTrendResult] = useState<ParentTrendQueryResponse | null>(null);
+  const [pendingFeedbackTrendRefresh, setPendingFeedbackTrendRefresh] = useState<{
+    childId: string;
+    question: string;
+    feedbackId: string;
+  } | null>(null);
   const [homeSchoolMessageDraft, setHomeSchoolMessageDraft] = useState("");
   const [homeSchoolMessageStatus, setHomeSchoolMessageStatus] = useState<string | null>(null);
   const [homeSchoolMessageSending, setHomeSchoolMessageSending] = useState(false);
@@ -866,6 +871,16 @@ export default function ParentAgentPage() {
     taskCheckInRecords,
   ]);
 
+  useEffect(() => {
+    if (!pendingFeedbackTrendRefresh || selectedFeed?.child.id !== pendingFeedbackTrendRefresh.childId) {
+      return;
+    }
+
+    const refresh = pendingFeedbackTrendRefresh;
+    setPendingFeedbackTrendRefresh(null);
+    void submitTrendQuery(refresh.question);
+  }, [pendingFeedbackTrendRefresh, selectedFeed?.child.id, submitTrendQuery]);
+
   async function submitFollowUp(prefilledQuestion?: string) {
     if (!activeContext || !currentResult) return;
     const nextQuestion = (prefilledQuestion ?? question).trim();
@@ -1143,9 +1158,20 @@ export default function ParentAgentPage() {
       }
     }
 
-    setFeedbackStatus(
-      `${formatHomeSchoolPersistStatus(messageResult.status)}：今晚反馈已提交，并已写入家园沟通和演示快照；下一轮建议已更新。`
-    );
+    if (latestTrendQuery) {
+      setPendingFeedbackTrendRefresh({
+        childId: input.childId,
+        question: latestTrendQuery,
+        feedbackId: savedFeedbackId,
+      });
+      setFeedbackStatus(
+        `${formatHomeSchoolPersistStatus(messageResult.status)}：今晚反馈已提交，并已写入家园沟通和演示快照；已纳入反馈，正在刷新趋势解释。`
+      );
+    } else {
+      setFeedbackStatus(
+        `${formatHomeSchoolPersistStatus(messageResult.status)}：今晚反馈已提交，并已写入家园沟通和演示快照；已纳入反馈，下一次趋势解释会基于最新反馈生成。`
+      );
+    }
     return true;
   }
 

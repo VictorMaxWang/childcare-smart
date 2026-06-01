@@ -5,6 +5,7 @@ import {
   buildAdminDailyPriorityResult,
   buildAdminQuestionFollowUpPayload,
   buildAdminFollowUpResult,
+  buildAdminLocalFallbackResult,
   buildAdminWeeklyReportResult,
   buildAdminWeeklyReportResultWithMemory,
   buildAdminWeeklyReportSnapshotWithMemory,
@@ -269,7 +270,12 @@ export async function POST(request: Request) {
   return NextResponse.json(sanitizeAdminWeeklyResult(result), { status: 200 });
   } catch (error) {
     const response = providerErrorResponse(error);
-    if (response) return response;
+    if (response) {
+      return NextResponse.json(
+        buildAdminLocalFallbackResult(payload, "admin-agent-provider-unavailable"),
+        { status: 200 }
+      );
+    }
     throw error;
   }
 }

@@ -66,6 +66,7 @@ export default function DirectorWeeklyReportReplica({
   result,
   loading,
   requestError,
+  statusNotice,
   dispatchAvailable,
   dispatchStatusMessage,
   trendLabels,
@@ -91,6 +92,7 @@ export default function DirectorWeeklyReportReplica({
   result: AdminAgentResult | null;
   loading: boolean;
   requestError: string | null;
+  statusNotice: string | null;
   dispatchAvailable: boolean;
   dispatchStatusMessage: string;
   trendLabels: string[];
@@ -255,6 +257,18 @@ export default function DirectorWeeklyReportReplica({
         </>
       }
     >
+      {statusNotice ? (
+        <div
+          data-testid="admin-weekly-fallback-notice"
+          className="rounded-[16px] border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+        >
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            {statusNotice}
+          </span>
+        </div>
+      ) : null}
+
       {requestError ? (
         <div className="rounded-[16px] border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
           {requestError}

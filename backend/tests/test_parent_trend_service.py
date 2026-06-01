@@ -361,6 +361,7 @@ def test_parent_trend_service_demo_snapshot_supports_key_demo_children():
         assert result["intent"] == intent
         assert result["source"] == "demo_snapshot"
         assert result["fallback"] is True
+        assert result["fallbackReason"] == "demo-snapshot"
         assert result["dataQuality"]["fallbackUsed"] is True
         assert result["series"]
 

@@ -238,6 +238,7 @@ test("admin agent weekly route falls back to local AdminAgentResult when proxy b
           method: "POST",
           headers: {
             "content-type": "application/json",
+            "x-demo-account-id": "u-admin",
             "x-ai-force-fallback": "1",
           },
           body: JSON.stringify(buildPayload()),
@@ -284,6 +285,7 @@ test("admin agent weekly route falls back to local AdminAgentResult when proxy b
           method: "POST",
           headers: {
             "content-type": "application/json",
+            "x-demo-account-id": "u-admin",
             "x-ai-force-fallback": "1",
           },
           body: JSON.stringify(buildPayload()),
@@ -322,6 +324,7 @@ test("admin agent weekly route sanitizes dirty proxied AdminAgentResult before r
           method: "POST",
           headers: {
             "content-type": "application/json",
+            "x-demo-account-id": "u-admin",
           },
           body: JSON.stringify(buildPayload()),
         })
@@ -363,6 +366,7 @@ test("admin agent weekly route sanitizes dirty proxied WeeklyReportResponse befo
           method: "POST",
           headers: {
             "content-type": "application/json",
+            "x-demo-account-id": "u-admin",
           },
           body: JSON.stringify(buildPayload()),
         })
@@ -438,6 +442,7 @@ test("admin agent weekly route sanitizes dirty local continuity memory before re
             method: "POST",
             headers: {
               "content-type": "application/json",
+              "x-demo-account-id": "u-admin",
             },
             body: JSON.stringify(buildPayload()),
           })
@@ -448,6 +453,56 @@ test("admin agent weekly route sanitizes dirty local continuity memory before re
         assertIsAdminAgentResult(body);
         assertNoRawWeeklyPayload(body.summary);
         body.continuityNotes?.forEach((item) => assertNoRawWeeklyPayload(item));
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("admin agent daily route returns local fallback result when provider is unavailable", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+
+    if (url.endsWith("/api/v1/agents/admin/run")) {
+      return new Response(JSON.stringify({ error: "brain unavailable" }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    throw new Error(`Unexpected fetch url: ${url}`);
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        DASHSCOPE_API_KEY: undefined,
+      },
+      async () => {
+        const payload = {
+          ...buildPayload(),
+          workflow: "daily-priority" as const,
+        };
+        const response = await POST(
+          new Request("http://localhost:3000/api/ai/admin-agent", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-demo-account-id": "u-admin",
+            },
+            body: JSON.stringify(payload),
+          })
+        );
+        const body = (await response.json()) as AdminAgentResult;
+
+        assert.equal(response.status, 200);
+        assertIsAdminAgentResult(body);
+        assert.equal(body.source, "fallback");
+        assert.equal(body.model, "admin-local-daily-fallback");
       }
     );
   } finally {

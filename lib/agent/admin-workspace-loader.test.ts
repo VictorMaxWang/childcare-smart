@@ -3,6 +3,8 @@ import test from "node:test";
 
 import { shouldEnableAdminConsultationFeed } from "./use-admin-workspace-loader";
 import { buildAdminConsultationWorkspaceView, getAdminConsultationFeedBadge } from "./use-admin-consultation-workspace";
+import { buildAdminD01HighRiskConsultation } from "./admin-local-consultation-fallback";
+import type { AdminConsultationFeedItem } from "./admin-consultation";
 import { normalizeAdminNotificationSource } from "@/lib/db/notification-event-source";
 
 test("shouldEnableAdminConsultationFeed depends on visible children and not notification readiness", () => {
@@ -74,6 +76,11 @@ test("buildAdminConsultationWorkspaceView keeps board-ready fallback state stabl
       items: [],
       status: "unavailable",
       error: "feed unavailable",
+      source: "local-demo",
+      fallback: true,
+      fallbackReason: "test-feed-unavailable",
+      message: "feed unavailable",
+      lastUpdatedAt: null,
     },
     localConsultations: [
       {
@@ -162,9 +169,76 @@ test("buildAdminConsultationWorkspaceView keeps board-ready fallback state stabl
   });
 
   assert.equal(view.feedStatus, "unavailable");
+  assert.equal(view.feedStatusMessage, "feed unavailable");
+  assert.equal(view.feedFallbackUsed, true);
+  assert.equal(view.feedFallbackReason, "test-feed-unavailable");
   assert.equal(view.feedBadge.label, "本地兜底");
   assert.equal(view.priorityItems.length, 1);
   assert.equal(view.priorityItems[0]?.notificationPayload?.priorityItemId, "consult-1");
+});
+
+test("buildAdminConsultationWorkspaceView keeps D01 local high risk item ahead of fallback feed items", () => {
+  const remoteFeedItem: AdminConsultationFeedItem = {
+    consultationId: "remote-c-2",
+    childId: "c-2",
+    generatedAt: "2026-04-07T09:00:00.000Z",
+    riskLevel: "medium",
+    triggerReason: "remote feed item",
+    triggerReasons: ["remote feed item"],
+    summary: "remote feed item",
+    directorDecisionCard: {
+      title: "Remote consultation",
+      status: "pending",
+      recommendedOwnerRole: "admin",
+      recommendedOwnerName: "Director",
+      recommendedAt: "2026-04-07T12:00:00.000Z",
+    },
+    status: "pending",
+    ownerName: "Director",
+    ownerRole: "admin",
+    dueAt: "2026-04-07T12:00:00.000Z",
+    whyHighPriority: "remote feed priority",
+    todayInSchoolActions: ["remote school action"],
+    tonightAtHomeActions: ["remote home action"],
+    followUp48h: ["remote 48h action"],
+    syncTargets: ["admin"],
+    shouldEscalateToAdmin: true,
+    evidenceItems: [],
+  };
+
+  const view = buildAdminConsultationWorkspaceView({
+    institutionName: "SmartChildcare",
+    children: [
+      { id: "c-1", name: "D01", className: "Sun Class" },
+      { id: "c-2", name: "D02", className: "Sun Class" },
+    ],
+    consultationFeed: {
+      items: [remoteFeedItem],
+      status: "ready",
+      error: null,
+      source: "local-demo",
+      fallback: true,
+      fallbackReason: "brain-status-500",
+      message: "remote feed unavailable",
+      lastUpdatedAt: "2026-04-07T10:00:00.000Z",
+    },
+    localConsultations: [
+      buildAdminD01HighRiskConsultation({
+        childName: "D01",
+        className: "Sun Class",
+        generatedAt: "2026-04-07T11:00:00.000Z",
+      }),
+    ],
+    notificationEvents: [],
+    limit: 4,
+  });
+
+  assert.equal(view.feedFallbackUsed, true);
+  assert.equal(view.feedStatusMessage, "remote feed unavailable");
+  assert.equal(view.priorityItems[0]?.childId, "c-1");
+  assert.equal(view.priorityItems[0]?.riskLevel, "high");
+  assert.equal(view.priorityItems[0]?.decision.priorityLabel, "P1");
+  assert.ok(view.priorityItems.some((item) => item.consultationId === "remote-c-2"));
 });
 
 test("normalizeAdminNotificationSource drops malformed source payloads", () => {
@@ -189,6 +263,11 @@ test("normalizeAdminNotificationSource drops malformed source payloads", () => {
       relatedClassNames: ["向日葵班"],
       consultationId: "consult-1",
       relatedConsultationIds: ["consult-1"],
+      sourceType: undefined,
+      sourceId: undefined,
+      taskId: undefined,
+      relatedTaskIds: undefined,
+      escalation: undefined,
     }
   );
 });

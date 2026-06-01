@@ -14,6 +14,7 @@ import {
   buildAdminConsultationPriorityItems,
   type AdminConsultationPriorityItem,
 } from "@/lib/agent/admin-consultation";
+import { buildAdminD01HighRiskConsultation } from "@/lib/agent/admin-local-consultation-fallback";
 import { buildAdminGovernanceDemoViewModel } from "@/lib/agent/admin-governance-demo";
 import type { ConsultationInput } from "@/lib/agent/consultation/input";
 import { buildLocalHighRiskConsultationFallback } from "@/lib/agent/high-risk-consultation-fallback";
@@ -212,7 +213,7 @@ export default function AdminHomePage() {
   const adminBoardConsultations = useMemo(() => {
     const child = visibleChildren.find((item) => item.id === "c-1");
     const existing = latestConsultations.find((item) => item.childId === "c-1");
-    const defenseConsultation = buildLinXiaoyuDefenseFallback({
+    const defenseConsultation = buildAdminD01HighRiskConsultation({
       childName: child?.name,
       className: child?.className,
       generatedAt: existing?.generatedAt ?? new Date().toISOString(),
@@ -223,7 +224,12 @@ export default function AdminHomePage() {
       ...latestConsultations.filter((item) => item.childId !== "c-1"),
     ];
   }, [latestConsultations, visibleChildren]);
-  const { priorityItems: consultationPriorityItems, notificationEvents } = useAdminConsultationWorkspace({
+  const {
+    priorityItems: consultationPriorityItems,
+    notificationEvents,
+    feedBadge,
+    feedStatusMessage,
+  } = useAdminConsultationWorkspace({
     institutionName: INSTITUTION_NAME,
     visibleChildren,
     localConsultations: adminBoardConsultations,
@@ -563,13 +569,18 @@ export default function AdminHomePage() {
               <p className="text-sm font-semibold text-slate-950">风险优先级板 · 高风险会诊承接</p>
               <p className="mt-1 text-xs text-slate-500">教师端生成的会诊会在这里形成园长决策卡、trace 证据和 48 小时复查承接。</p>
             </div>
-            <p className="text-xs font-semibold text-amber-700">管理端可见 {priorityBoardItems.length} 条</p>
+            <div className="text-right">
+              <p className="text-xs font-semibold text-amber-700">管理端可见 {priorityBoardItems.length} 条</p>
+              {feedStatusMessage ? (
+                <p className="mt-1 text-xs text-slate-500">{feedStatusMessage}</p>
+              ) : null}
+            </div>
           </div>
           <RiskPriorityBoard
             items={priorityBoardItems}
             layoutVariant="stacked"
-            sourceBadgeLabel="教师会诊同步"
-            sourceBadgeVariant="success"
+            sourceBadgeLabel={feedBadge.label}
+            sourceBadgeVariant={feedBadge.variant}
             dispatchAvailable={false}
             dispatchStatusMessage="答辩展示模式，保留只读承接"
             emptyTitle="风险优先级板已就绪"

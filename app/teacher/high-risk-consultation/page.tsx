@@ -26,7 +26,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { buildConsultationResultBadge, buildHighRiskConsultationAutoContext, buildHighRiskConsultationDraft } from "@/lib/agent/high-risk-consultation";
+import {
+  buildConsultationResultBadge,
+  buildHighRiskConsultationAutoContext,
+  buildHighRiskConsultationDraft,
+  type HighRiskConsultationRequestPayload,
+} from "@/lib/agent/high-risk-consultation";
 import { buildTeacherAgentChildContext, buildTeacherAgentClassContext } from "@/lib/agent/teacher-agent";
 import { type AgentStreamEvent, useAgentStream } from "@/lib/bridge/use-agent-stream";
 import type { MemoryContextMeta } from "@/lib/ai/types";
@@ -94,6 +99,8 @@ type StreamDoneEvent = {
 };
 
 type ConsultationFilter = "all" | "pending" | "active" | "completed";
+
+const CONSULTATION_CLIENT_FALLBACK_TIMEOUT_MS = 28_000;
 
 type DraftPayload = {
   teacherNote?: string;
@@ -476,6 +483,7 @@ export default function TeacherHighRiskConsultationPage() {
   const receivedAnyEventRef = useRef(false);
   const receivedDoneRef = useRef(false);
   const streamErroredRef = useRef(false);
+  const resultMountedRef = useRef(false);
   const consultationStartGuardRef = useRef(false);
   const consultationSetupRef = useRef<HTMLDivElement | null>(null);
   const consultationStartButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -637,6 +645,111 @@ export default function TeacherHighRiskConsultationPage() {
     });
   }
 
+  function applyConsultationResult(rawResult: unknown, successMessagePrefix = "证据链生成完成") {
+    if (!selectedChild) return false;
+
+    if (!isRenderableConsultationApiResult(rawResult)) {
+      const reason = describeConsultationResultIssues(rawResult);
+      setInvalidResultReason(reason);
+      setStreamMessage(reason || "会诊已结束，但返回结果还不完整。");
+      return false;
+    }
+
+    const saveResult = saveConsultationRecord({
+      childId: selectedChild.id,
+      consultation: rawResult,
+      workflowStatus: "pending",
+    });
+    if (saveResult.status === "failed") {
+      const message = saveResult.error ?? saveResult.message ?? "会诊结果保存失败。";
+      setStreamError(message);
+      setStreamMessage(message);
+      return false;
+    }
+
+    const completedResult = (saveResult.data as ConsultationApiResult | undefined) ?? rawResult;
+    resultMountedRef.current = true;
+    setResult(completedResult);
+    setShowSetupSections(false);
+    upsertInterventionCard(rawResult.interventionCard);
+    const reminderResults = [
+      ...buildReminderItems({
+        childId: selectedChild.id,
+        targetRole: "teacher",
+        targetId: selectedChild.id,
+        childName: selectedChild.name,
+        interventionCard: rawResult.interventionCard,
+        consultation: rawResult,
+      }),
+      ...buildReminderItems({
+        childId: selectedChild.id,
+        targetRole: "parent",
+        targetId: selectedChild.id,
+        childName: selectedChild.name,
+        interventionCard: rawResult.interventionCard,
+        consultation: rawResult,
+      }),
+    ].map((item) => saveReminderRecord(item));
+    const failedReminder = reminderResults.find((item) => item.status === "failed");
+    if (failedReminder) {
+      const message = failedReminder.error ?? failedReminder.message ?? "后续提醒保存失败。";
+      setStreamError(message);
+      setStreamMessage(`会诊结果已保存，但后续提醒未保存：${message}`);
+      return true;
+    }
+    markMobileDraftSyncStatus(draftId, "synced");
+    const reminderPersistenceText =
+      reminderResults.length === 0
+        ? "本次复查计划已保留在会诊结果中。"
+        : reminderResults.some((item) => item.status === "local_only")
+          ? "后续提醒已写入共享演示数据，刷新后保留。"
+          : "后续提醒已写入当前数据层，刷新后保留。";
+    setStreamMessage(
+      `${successMessagePrefix}：会诊结果已保存到 D01 演示数据，教师端、家长端和园长端可从同一记录读取。${reminderPersistenceText}`
+    );
+    return true;
+  }
+
+  async function runForcedLocalFallback(
+    payload: HighRiskConsultationRequestPayload,
+    fallbackReason: string
+  ) {
+    setStreamMessage("已切换本地会诊兜底：远端 AI 会诊暂不可用，正在生成可解释结果。");
+    const response = await fetch("/api/ai/high-risk-consultation", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-ai-force-fallback": "1",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`local fallback failed with status ${response.status}`);
+    }
+
+    const rawResult = await response.json();
+    const resultObject = rawResult && typeof rawResult === "object" ? (rawResult as Record<string, unknown>) : null;
+    const nextProviderTrace =
+      resultObject?.providerTrace && typeof resultObject.providerTrace === "object"
+        ? (resultObject.providerTrace as ConsultationProviderTrace)
+        : {
+            realProvider: false,
+            fallback: true,
+            fallbackReason,
+          };
+    const nextMemoryMeta =
+      (resultObject?.memoryMeta as MemoryContextMeta | Record<string, unknown> | null | undefined) ?? null;
+
+    receivedDoneRef.current = true;
+    setReceivedDone(true);
+    setTraceId(String(resultObject?.consultationId ?? `local-fallback-${Date.now()}`));
+    setProviderTrace(nextProviderTrace);
+    setMemoryMeta(nextMemoryMeta);
+    setStreamError(null);
+    applyConsultationResult(rawResult, "证据链生成完成");
+  }
+
   async function runConsultation(form: {
     teacherNote: string;
     imageInput?: { attachmentName?: string; content?: string };
@@ -646,7 +759,7 @@ export default function TeacherHighRiskConsultationPage() {
     consultationStartGuardRef.current = true;
     setSetupFocusMessage(null);
     setStreamError(null);
-    setStreamMessage("正在连接会诊流...");
+    setStreamMessage("AI 辅助会诊进行中：正在连接会诊流。");
     setResult(null);
     setStageStatuses({});
     setStageUi({});
@@ -661,6 +774,7 @@ export default function TeacherHighRiskConsultationPage() {
     setInvalidResultReason(null);
     receivedAnyEventRef.current = false;
     receivedDoneRef.current = false;
+    resultMountedRef.current = false;
     streamErroredRef.current = false;
 
     let workflowFeedbacks = mergedGuardianFeedbacks;
@@ -672,7 +786,7 @@ export default function TeacherHighRiskConsultationPage() {
       // Keep local feedback available if the communication API is unavailable.
     }
 
-    const payload = {
+    const payload: HighRiskConsultationRequestPayload = {
       currentUser,
       visibleChildren,
       presentChildren,
@@ -685,7 +799,18 @@ export default function TeacherHighRiskConsultationPage() {
       voiceInput: form.voiceInput,
     };
 
+    let streamTimedOut = false;
+    let streamFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
     try {
+      streamFallbackTimer = setTimeout(() => {
+        if (resultMountedRef.current || receivedDoneRef.current) return;
+        streamTimedOut = true;
+        setStreamEndedUnexpectedly(true);
+        setStreamMessage("已切换本地会诊兜底：远端 AI 会诊超过 28 秒仍未返回完整结果。");
+        stop();
+      }, CONSULTATION_CLIENT_FALLBACK_TIMEOUT_MS);
+
       await start({ url: "/api/ai/high-risk-consultation/stream", body: payload }, (event: AgentStreamEvent) => {
         if (!receivedAnyEventRef.current) {
           receivedAnyEventRef.current = true;
@@ -781,64 +906,19 @@ export default function TeacherHighRiskConsultationPage() {
           setTraceId(data.traceId);
           setProviderTrace(nextProviderTrace);
           setMemoryMeta(nextMemoryMeta);
-
-          if (!isRenderableConsultationApiResult(rawResult)) {
-            const reason = describeConsultationResultIssues(rawResult);
-            setInvalidResultReason(reason);
-            setStreamMessage(reason || "会诊已结束，但返回结果还不完整。");
-            return;
-          }
-
-          const saveResult = saveConsultationRecord({
-            childId: selectedChild.id,
-            consultation: rawResult,
-            workflowStatus: "pending",
-          });
-          if (saveResult.status === "failed") {
-            const message = saveResult.error ?? saveResult.message ?? "会诊结果保存失败。";
-            setStreamError(message);
-            setStreamMessage(message);
-            return;
-          }
-
-          setResult((saveResult.data as ConsultationApiResult | undefined) ?? rawResult);
-          setShowSetupSections(false);
-          upsertInterventionCard(rawResult.interventionCard);
-          const reminderResults = [
-            ...buildReminderItems({
-              childId: selectedChild.id,
-              targetRole: "teacher",
-              targetId: selectedChild.id,
-              childName: selectedChild.name,
-              interventionCard: rawResult.interventionCard,
-              consultation: rawResult,
-            }),
-            ...buildReminderItems({
-              childId: selectedChild.id,
-              targetRole: "parent",
-              targetId: selectedChild.id,
-              childName: selectedChild.name,
-              interventionCard: rawResult.interventionCard,
-              consultation: rawResult,
-            }),
-          ].map((item) => saveReminderRecord(item));
-          const failedReminder = reminderResults.find((item) => item.status === "failed");
-          if (failedReminder) {
-            const message = failedReminder.error ?? failedReminder.message ?? "后续提醒保存失败。";
-            setStreamError(message);
-            setStreamMessage(`会诊结果已保存，但后续提醒未保存：${message}`);
-            return;
-          }
-          markMobileDraftSyncStatus(draftId, "synced");
-          const reminderPersistenceText =
-            reminderResults.length === 0
-              ? "本次复查计划已保留在会诊结果中。"
-              : reminderResults.some((item) => item.status === "local_only")
-                ? "后续提醒已写入共享演示数据，刷新后保留。"
-                : "后续提醒已写入当前数据层，刷新后保留。";
-          setStreamMessage(`会诊完成，已保存到 D01 演示数据，教师端、家长端和园长端可从同一记录读取。${reminderPersistenceText}`);
+          applyConsultationResult(rawResult);
+          return;
         }
       });
+
+      if (!resultMountedRef.current) {
+        setStreamEndedUnexpectedly(true);
+        await runForcedLocalFallback(
+          payload,
+          receivedDoneRef.current ? "client-stream-invalid-result" : "client-stream-ended-without-result"
+        );
+        return;
+      }
 
       if (!receivedDoneRef.current && !streamErroredRef.current) {
         setStreamEndedUnexpectedly(true);
@@ -849,6 +929,20 @@ export default function TeacherHighRiskConsultationPage() {
         );
       }
     } catch (error) {
+      if (!resultMountedRef.current) {
+        try {
+          await runForcedLocalFallback(
+            payload,
+            streamTimedOut ? "client-stream-timeout" : "client-stream-error"
+          );
+          return;
+        } catch (fallbackError) {
+          const fallbackMessage =
+            fallbackError instanceof Error ? fallbackError.message : "本地会诊兜底请求失败";
+          setStreamError(fallbackMessage);
+          setStreamMessage(fallbackMessage);
+        }
+      }
       if (error instanceof DOMException && error.name === "AbortError") {
         return;
       }
@@ -863,6 +957,7 @@ export default function TeacherHighRiskConsultationPage() {
       setStreamError(message);
       setStreamMessage(message);
     } finally {
+      if (streamFallbackTimer) clearTimeout(streamFallbackTimer);
       consultationStartGuardRef.current = false;
     }
   }
