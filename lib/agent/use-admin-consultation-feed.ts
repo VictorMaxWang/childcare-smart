@@ -3,11 +3,17 @@
 import { useEffect, useState } from "react";
 
 export type AdminConsultationFeedStatus = "loading" | "ready" | "unavailable";
+export type AdminConsultationFeedSource = "remote-brain" | "local-demo" | "cache" | "unknown";
 
 export interface AdminConsultationFeedState {
   items: unknown[];
   status: AdminConsultationFeedStatus;
   error: string | null;
+  source: AdminConsultationFeedSource;
+  fallback: boolean;
+  fallbackReason: string | null;
+  message: string | null;
+  lastUpdatedAt: string | null;
 }
 
 export interface UseAdminConsultationFeedOptions {
@@ -20,7 +26,50 @@ const INITIAL_STATE: AdminConsultationFeedState = {
   items: [],
   status: "loading",
   error: null,
+  source: "unknown",
+  fallback: false,
+  fallbackReason: null,
+  message: null,
+  lastUpdatedAt: null,
 };
+
+type FeedPayload = {
+  items?: unknown[];
+  error?: string;
+  message?: string;
+  source?: AdminConsultationFeedSource;
+  fallback?: boolean;
+  fallbackReason?: string | null;
+};
+
+function buildUnavailableFeedState(
+  previous: AdminConsultationFeedState,
+  error: string,
+  fallbackReason: string | null
+): AdminConsultationFeedState {
+  if (previous.items.length > 0) {
+    return {
+      ...previous,
+      status: "ready",
+      error: null,
+      source: "cache",
+      fallback: true,
+      fallbackReason,
+      message: "远端 feed 暂不可用，当前使用最近缓存数据。",
+    };
+  }
+
+  return {
+    items: [],
+    status: "unavailable",
+    error,
+    source: "local-demo",
+    fallback: true,
+    fallbackReason,
+    message: "当前使用本地演示数据；远端 feed 暂不可用。",
+    lastUpdatedAt: null,
+  };
+}
 
 export function useAdminConsultationFeed(
   options: UseAdminConsultationFeedOptions = {}
@@ -58,29 +107,29 @@ export function useAdminConsultationFeed(
           }
         );
 
-        const payload = (await response.json().catch(() => null)) as
-          | { items?: unknown[]; error?: string }
-          | null;
+        const payload = (await response.json().catch(() => null)) as FeedPayload | null;
 
         if (cancelled) return;
 
         if (!response.ok) {
-          setState({
-            items: [],
-            status: "unavailable",
-            error:
-              payload?.error ??
-              "high-risk consultation feed is unavailable",
-          });
+          setState((previous) =>
+            buildUnavailableFeedState(
+              previous,
+              payload?.error ?? "high-risk consultation feed is unavailable",
+              payload?.fallbackReason ?? `http-${response.status}`
+            )
+          );
           return;
         }
 
         if (!payload || !Array.isArray(payload.items)) {
-          setState({
-            items: [],
-            status: "unavailable",
-            error: "malformed high-risk consultation feed payload",
-          });
+          setState((previous) =>
+            buildUnavailableFeedState(
+              previous,
+              "malformed high-risk consultation feed payload",
+              "malformed-feed-payload"
+            )
+          );
           return;
         }
 
@@ -88,15 +137,23 @@ export function useAdminConsultationFeed(
           items: payload.items,
           status: "ready",
           error: null,
+          source: payload.source ?? (payload.fallback ? "local-demo" : "remote-brain"),
+          fallback: Boolean(payload.fallback),
+          fallbackReason: payload.fallbackReason ?? null,
+          message:
+            payload.message ??
+            (payload.fallback ? "当前使用本地演示数据；远端 feed 暂不可用。" : null),
+          lastUpdatedAt: new Date().toISOString(),
         });
-      } catch (error) {
+      } catch {
         if (cancelled || controller.signal.aborted) return;
-        console.error("[ADMIN_FEED] Failed to load consultation feed", error);
-        setState({
-          items: [],
-          status: "unavailable",
-          error: "high-risk consultation feed is unavailable",
-        });
+        setState((previous) =>
+          buildUnavailableFeedState(
+            previous,
+            "high-risk consultation feed is unavailable",
+            "fetch-failed"
+          )
+        );
       }
     }
 

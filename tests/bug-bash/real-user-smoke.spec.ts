@@ -746,7 +746,6 @@ function isAllowedConsoleNoise(text: string) {
     text.includes("/api/auth/session") ||
     text.includes("401") ||
     text.includes("ERR_ABORTED") ||
-    (text.includes("[ADMIN_AGENT] Failed to run workflow") && text.includes("Failed to fetch")) ||
     text.includes("va.vercel-scripts.com") ||
     text.includes("net::ERR_BLOCKED_BY_ORB")
   );

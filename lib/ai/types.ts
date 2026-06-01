@@ -903,6 +903,7 @@ export interface ParentTrendQueryResponse {
   memoryMeta?: Record<string, unknown> | null;
   source: string;
   fallback: boolean;
+  fallbackReason?: string | null;
 }
 
 export interface WeeklyReportSnapshot {

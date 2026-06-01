@@ -1,4 +1,8 @@
-import { buildFallbackWeeklyReport } from "@/lib/ai/fallback";
+import {
+  buildFallbackFollowUp,
+  buildFallbackInstitutionSuggestion,
+  buildFallbackWeeklyReport,
+} from "@/lib/ai/fallback";
 import type {
   AiFollowUpPayload,
   AiFollowUpResponse,
@@ -899,6 +903,55 @@ export function buildAdminWeeklyReportResult(params: {
     source: report.source,
     model: report.model,
     generatedAt: new Date().toISOString(),
+  });
+}
+
+export function buildAdminLocalFallbackResult(
+  payload: AdminAgentRequestPayload,
+  fallbackReason = "admin-agent-local-fallback"
+): AdminAgentResult {
+  const context = buildAdminAgentContext(payload);
+
+  if (payload.workflow === "weekly-ops-report") {
+    return buildAdminWeeklyReportResult({
+      context,
+      report: {
+        ...buildWeeklyPreview(payload, context),
+        model: "admin-local-weekly-fallback",
+        provider: "local-rule-fallback",
+        fallbackReason,
+      },
+    });
+  }
+
+  if (payload.workflow === "question-follow-up") {
+    const question = payload.question?.trim() || "今天最应该优先处理的 3 件事是什么？";
+    return buildAdminFollowUpResult({
+      context,
+      question,
+      response: {
+        ...buildFallbackFollowUp(
+          buildAdminQuestionFollowUpPayload({
+            context,
+            question,
+            history: payload.history,
+          })
+        ),
+        model: "admin-local-follow-up-fallback",
+        provider: "local-rule-fallback",
+        fallbackReason,
+      },
+    });
+  }
+
+  return buildAdminDailyPriorityResult({
+    context,
+    suggestion: {
+      ...buildFallbackInstitutionSuggestion(context.suggestionSnapshot),
+      model: "admin-local-daily-fallback",
+      provider: "local-rule-fallback",
+      fallbackReason,
+    },
   });
 }
 

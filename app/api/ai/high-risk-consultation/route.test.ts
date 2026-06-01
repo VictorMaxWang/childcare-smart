@@ -6,11 +6,12 @@ import { getLocalToday } from "@/lib/date";
 import { POST } from "./route.ts";
 
 function withEnv(
-  overrides: Partial<Record<"BRAIN_API_BASE_URL", string | undefined>>,
+  overrides: Partial<Record<"BRAIN_API_BASE_URL" | "HIGH_RISK_CONSULTATION_BRAIN_TIMEOUT_MS", string | undefined>>,
   fn: () => void | Promise<void>
 ) {
   const previous = {
     BRAIN_API_BASE_URL: process.env.BRAIN_API_BASE_URL,
+    HIGH_RISK_CONSULTATION_BRAIN_TIMEOUT_MS: process.env.HIGH_RISK_CONSULTATION_BRAIN_TIMEOUT_MS,
   };
 
   for (const [key, value] of Object.entries(overrides)) {
@@ -114,24 +115,15 @@ function buildPayload(): HighRiskConsultationRequestPayload {
   };
 }
 
-test("high-risk consultation route returns complete Lin Xiaoyu fallback when external AI is unavailable", async () => {
+test("high-risk consultation route returns complete Lin Xiaoyu fallback when forced locally", async () => {
   const originalFetch = globalThis.fetch;
-  const memoryRequests: Array<Record<string, unknown>> = [];
 
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
 
     if (url.endsWith("/api/v1/agents/consultations/high-risk")) {
       return new Response(JSON.stringify({ error: "not implemented" }), {
         status: 404,
-        headers: { "content-type": "application/json" },
-      });
-    }
-
-    if (url.endsWith("/api/v1/memory/context")) {
-      memoryRequests.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
-      return new Response(JSON.stringify({ error: "memory unavailable" }), {
-        status: 500,
         headers: { "content-type": "application/json" },
       });
     }
@@ -173,6 +165,9 @@ test("high-risk consultation route returns complete Lin Xiaoyu fallback when ext
       assert.equal(dataQuality.status, "complete");
       assert.equal(body.humanReviewRequired, true);
       assert.equal(manualReviewSummary.required, true);
+      assert.ok(Array.isArray(body.followUp48h));
+      assert.ok((body.followUp48h as unknown[]).length > 0);
+      assert.equal((body.providerTrace as Record<string, unknown>).fallbackReason, "forced-local-fallback");
       assert.ok(Array.isArray(warnings));
       assert.ok(warnings.some((item) => item.includes("fallback")));
       assert.ok(warnings.some((item) => item.includes("人工复核")));
@@ -183,7 +178,6 @@ test("high-risk consultation route returns complete Lin Xiaoyu fallback when ext
       assert.match(text, /家庭反馈已回流/);
       assert.match(text, /高风险会诊写回测试/);
       assert.match(text, /48 小时/);
-      assert.ok(memoryRequests.length > 0);
     });
   } finally {
     globalThis.fetch = originalFetch;

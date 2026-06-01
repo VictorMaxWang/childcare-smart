@@ -1,20 +1,14 @@
+import type { HighRiskConsultationRequestPayload } from "@/lib/agent/high-risk-consultation";
+import {
+  buildLocalHighRiskConsultationResult,
+  isValidHighRiskConsultationPayload,
+} from "@/lib/agent/high-risk-consultation-local-result";
+import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
-  readBrainTransportHeaders,
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
-import { normalizeHighRiskConsultationResult } from "@/lib/consultation/normalize-result";
-import {
-  buildHighRiskConsultationAutoContext,
-  resolveHighRiskConsultationContexts,
-  type HighRiskConsultationRequestPayload,
-} from "@/lib/agent/high-risk-consultation";
-import { buildLocalHighRiskConsultationFallback } from "@/lib/agent/high-risk-consultation-fallback";
-import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
-import { buildTeacherChildSuggestionSnapshotWithMemory } from "@/lib/agent/teacher-agent";
-import { buildInterventionCardFromConsultation } from "@/lib/agent/intervention-card";
 
 type ProviderTrace = {
   provider?: string;
@@ -38,6 +32,11 @@ type StreamEvent =
   | { event: "error"; data: Record<string, unknown> }
   | { event: "done"; data: Record<string, unknown> };
 
+const HIGH_RISK_CONSULTATION_STREAM_TARGET_PATH = "/api/v1/agents/consultations/high-risk/stream";
+const DEFAULT_HIGH_RISK_CONSULTATION_BRAIN_TIMEOUT_MS = 8_000;
+const DEFAULT_HIGH_RISK_CONSULTATION_STREAM_DONE_TIMEOUT_MS = 24_000;
+const HIGH_RISK_CONSULTATION_BROWSER_BUDGET_MS = 28_000;
+
 function encodeEvent(event: StreamEvent) {
   return `event: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`;
 }
@@ -51,6 +50,18 @@ function mergeHeaders(base: HeadersInit, extra?: HeadersInit) {
   });
 
   return headers;
+}
+
+function sseHeaders(extraHeaders?: HeadersInit) {
+  return mergeHeaders(
+    {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+    extraHeaders
+  );
 }
 
 function streamResponse(events: StreamEvent[], status = 200, extraHeaders?: HeadersInit) {
@@ -73,50 +84,48 @@ function streamResponse(events: StreamEvent[], status = 200, extraHeaders?: Head
     }),
     {
       status,
-      headers: mergeHeaders(
-        {
-          "Content-Type": "text/event-stream; charset=utf-8",
-          "Cache-Control": "no-cache, no-transform",
-          Connection: "keep-alive",
-          "X-Accel-Buffering": "no",
-        },
-        extraHeaders
-      ),
+      headers: sseHeaders(extraHeaders),
     }
   );
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function asString(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : "";
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
 }
 
-function isRecordArray(value: unknown) {
-  return Array.isArray(value);
+function readPositiveIntEnv(name: string, fallback: number) {
+  const raw = process.env[name]?.trim();
+  const parsed = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function isValidFallbackPayload(payload: unknown): payload is HighRiskConsultationRequestPayload {
-  const obj = asRecord(payload);
-
-  return (
-    typeof obj.targetChildId === "string" &&
-    obj.currentUser !== null &&
-    typeof obj.currentUser === "object" &&
-    isRecordArray(obj.visibleChildren) &&
-    isRecordArray(obj.presentChildren) &&
-    isRecordArray(obj.healthCheckRecords) &&
-    isRecordArray(obj.growthRecords) &&
-    isRecordArray(obj.guardianFeedbacks)
+function getHighRiskConsultationBrainTimeoutMs() {
+  return readPositiveIntEnv(
+    "HIGH_RISK_CONSULTATION_BRAIN_TIMEOUT_MS",
+    DEFAULT_HIGH_RISK_CONSULTATION_BRAIN_TIMEOUT_MS
   );
+}
+
+function getHighRiskConsultationStreamDoneTimeoutMs(brainForward: BrainForwardResult) {
+  const configured = readPositiveIntEnv(
+    "HIGH_RISK_CONSULTATION_STREAM_DONE_TIMEOUT_MS",
+    DEFAULT_HIGH_RISK_CONSULTATION_STREAM_DONE_TIMEOUT_MS
+  );
+  const elapsedBeforeRemoteStream = brainForward.elapsedMs ?? 0;
+  const remainingBrowserBudget = Math.max(
+    1_000,
+    HIGH_RISK_CONSULTATION_BROWSER_BUDGET_MS - elapsedBeforeRemoteStream
+  );
+  return Math.min(configured, remainingBrowserBudget);
+}
+
+function sanitizeReasonToken(value: string) {
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return normalized.replace(/^-+|-+$/g, "") || "unknown";
 }
 
 function getTraceId(value: unknown) {
@@ -136,7 +145,7 @@ function buildSummaryCard(
 
   return {
     stage: "long_term_profile",
-    title: String(result.summary ? "\u4f1a\u8bca\u603b\u89c8" : "\u4f1a\u8bca\u6458\u8981"),
+    title: String(result.summary ? "会诊总览" : "会诊摘要"),
     summary: String(result.summary ?? coordinatorSummary.finalConclusion ?? ""),
     content: String(coordinatorSummary.finalConclusion ?? result.parentMessageDraft ?? ""),
     items: [...continuityNotes.slice(0, 2), ...triggerReasons.slice(0, 2), ...keyFindings.slice(0, 2)].filter(Boolean),
@@ -170,7 +179,7 @@ function buildRecentItems(result: Record<string, unknown>) {
 function buildFollowUpCard(result: Record<string, unknown>, providerTrace: ProviderTrace) {
   const interventionCard = asRecord(result.interventionCard);
   return {
-    title: String(interventionCard.title ?? "48 \u5c0f\u65f6\u590d\u67e5"),
+    title: String(interventionCard.title ?? "48 小时复查"),
     items: [
       String(interventionCard.todayInSchoolAction ?? ""),
       String(interventionCard.tonightHomeAction ?? ""),
@@ -181,102 +190,45 @@ function buildFollowUpCard(result: Record<string, unknown>, providerTrace: Provi
   };
 }
 
-function buildLocalStreamHeaders(brainForward: BrainForwardResult) {
+function buildLocalStreamHeaders(brainForward: BrainForwardResult, fallbackReason?: string) {
   return createBrainTransportHeaders({
     transport: "next-stream-fallback",
     targetPath: brainForward.targetPath,
     upstreamHost: brainForward.upstreamHost,
-    fallbackReason: brainForward.fallbackReason ?? "brain-proxy-unavailable",
+    fallbackReason: fallbackReason ?? brainForward.fallbackReason ?? "brain-proxy-unavailable",
   });
 }
 
-function buildTerminalResult(payload: Record<string, unknown>, fallbackReason: string) {
-  if (!isValidFallbackPayload(payload)) return null;
-
-  const { classContext, childContext } = resolveHighRiskConsultationContexts(payload);
-  if (!childContext) return null;
-
-  const autoContext = buildHighRiskConsultationAutoContext({
-    classContext,
-    childContext,
-  });
-  const teacherSignals = [
-    payload.teacherNote,
-    asRecord(payload.imageInput).content,
-    asRecord(payload.voiceInput).content,
-  ]
-    .map((item) => asString(item))
-    .filter(Boolean);
-  const suggestionSnapshot = buildTeacherChildSuggestionSnapshotWithMemory(childContext, null);
-  const consultationInput = buildConsultationInputFromSnapshot({
-    snapshot: suggestionSnapshot,
-    focusReasons: [...autoContext.focusReasons, ...teacherSignals],
-    source: "teacher",
-    priorityHint: {
-      level: "P1",
-      score: 92,
-      reason: "流式会诊已切换本地完整兜底，需要进入管理端承接。",
-    },
-    memoryContext: null,
-  });
-  const consultation = buildLocalHighRiskConsultationFallback({
-    input: consultationInput,
-    autoContext,
-    fallbackReason,
-  });
-  const providerTrace: ProviderTrace = {
-    source: "local-rules-fallback",
-    provider: "local-rules-llm",
-    model: "local-social-emotional-rules",
-    requestId: "",
+function buildForcedStreamHeaders(fallbackReason: string) {
+  return createBrainTransportHeaders({
     transport: "next-stream-fallback",
-    transportSource: "next-server",
-    consultationSource: "stream-terminal-fallback",
+    targetPath: HIGH_RISK_CONSULTATION_STREAM_TARGET_PATH,
     fallbackReason,
-    brainProvider: "next-fallback",
-    fallback: true,
-    realProvider: false,
-  };
-  const interventionCard = buildInterventionCardFromConsultation({
-    targetChildId: childContext.child.id,
-    childName: childContext.child.name,
-    consultation,
-    generatedAt: consultation.generatedAt,
   });
-
-  return normalizeHighRiskConsultationResult(
-    {
-      ...consultation,
-      interventionCard,
-      autoContext,
-      provider: providerTrace.provider,
-      model: providerTrace.model,
-      realProvider: false,
-      fallback: true,
-      providerTrace,
-      multimodalNotes: {
-        teacherNote: asString(payload.teacherNote),
-        imageText: asString(asRecord(payload.imageInput).content),
-        voiceText: asString(asRecord(payload.voiceInput).content),
-      },
-    },
-    {
-      brainProvider: "next-fallback",
-      defaultTransport: "next-stream-fallback",
-      defaultTransportSource: "next-server",
-      defaultConsultationSource: "stream-terminal-fallback",
-      defaultFallbackReason: fallbackReason,
-    }
-  );
 }
 
-function buildTerminalFallback(
+function buildRemoteStreamHeaders(brainForward: BrainForwardResult) {
+  return createBrainTransportHeaders({
+    transport: "remote-brain-proxy",
+    targetPath: brainForward.targetPath,
+    upstreamHost: brainForward.upstreamHost,
+  });
+}
+
+function buildFallbackStreamEvents(
+  payload: HighRiskConsultationRequestPayload,
   traceId: string,
   fallbackReason: string,
-  message: string,
-  result?: Record<string, unknown> | null
+  message = "已切换本地会诊兜底：远端 AI 会诊暂不可用，正在生成可解释本地方案。"
 ): StreamEvent[] {
-  const fallbackProviderTrace = {
+  const result = buildLocalHighRiskConsultationResult({
+    payload,
+    fallbackReason,
+    transport: "next-stream-fallback",
+    consultationSource: "stream-terminal-fallback",
+    priorityReason: "AI stream did not finish in time; local fallback generated a complete 48-hour review plan.",
+  });
+  const fallbackProviderTrace: ProviderTrace = {
     source: "local-rules-fallback",
     provider: "local-rules-llm",
     model: "local-social-emotional-rules",
@@ -292,24 +244,22 @@ function buildTerminalFallback(
   const providerTrace = (asRecord(result?.providerTrace) as ProviderTrace | null) ?? fallbackProviderTrace;
   const memoryMeta = asRecord(result?.memoryMeta);
 
-  if (result) {
+  if (!result) {
     return [
       {
-        event: "status",
+        event: "error",
         data: {
           stage: "current_recommendation",
-          title: "本地完整会诊方案",
+          title: "会诊兜底未完成",
           message,
           traceId,
-          providerTrace,
-          memory: memoryMeta,
         },
       },
       {
         event: "done",
         data: {
           traceId,
-          result,
+          result: {},
           providerTrace,
           memoryMeta,
           realProvider: false,
@@ -319,97 +269,21 @@ function buildTerminalFallback(
     ];
   }
 
-  return [
-    {
-      event: "error",
-      data: {
-        stage: "current_recommendation",
-        title: "会诊兜底未完成",
-        message,
-        traceId,
-      },
-    },
-    {
-      event: "done",
-      data: {
-        traceId,
-        result: {},
-        providerTrace: fallbackProviderTrace,
-        memoryMeta: {},
-        realProvider: false,
-        fallback: true,
-      },
-    },
-  ];
-}
-
-async function buildFallbackEvents(
-  payload: Record<string, unknown>,
-  origin: string,
-  brainForward: BrainForwardResult,
-  requestHeaders?: Headers
-): Promise<StreamEvent[]> {
-  const traceId = getTraceId(payload.traceId);
-  const cookie = requestHeaders?.get("cookie");
-
-  let response: Response;
-  try {
-    response = await fetch(new URL("/api/ai/high-risk-consultation", origin), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-debug-memory": "1",
-        ...(cookie ? { cookie } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch (error) {
-    const fallbackReason =
-      error instanceof Error ? `local-json-fetch-${error.name.toLowerCase()}` : "local-json-fetch-error";
-    const terminalResult = buildTerminalResult(payload, fallbackReason);
-    return buildTerminalFallback(
-      traceId,
-      fallbackReason,
-      "本地 JSON 会诊不可达，已切换流式本地完整方案。",
-      terminalResult
-    );
-  }
-
-  if (!response.ok) {
-    const fallbackReason = `local-json-status-${response.status}`;
-    const terminalResult = buildTerminalResult(payload, fallbackReason);
-    return buildTerminalFallback(
-      traceId,
-      fallbackReason,
-      `本地 JSON 会诊返回 ${response.status}，已切换流式本地完整方案。`,
-      terminalResult
-    );
-  }
-
-  const rawResult = (await response.json()) as Record<string, unknown>;
-  const responseTransport = readBrainTransportHeaders(response.headers);
-  const result = normalizeHighRiskConsultationResult(rawResult, {
-    brainProvider: "next-fallback",
-    defaultTransport: "next-stream-fallback",
-    defaultTransportSource: "next-server",
-    defaultConsultationSource:
-      responseTransport.transport || asString(rawResult.source) || "next-json-fallback",
-    defaultFallbackReason:
-      brainForward.fallbackReason ||
-      responseTransport.fallbackReason ||
-      "brain-proxy-unavailable",
-  });
-  const providerTrace = asRecord(result.providerTrace) as ProviderTrace;
-  const memoryMeta = asRecord(result.memoryMeta);
-  const childName = String(asRecord(result.interventionCard).title ?? "\u9ad8\u98ce\u9669\u4f1a\u8bca");
+  const longTermItems = buildLongTermItems(result, memoryMeta);
+  const recentItems = buildRecentItems(result);
+  const currentItems = [
+    ...asStringArray(result.todayInSchoolActions).slice(0, 2),
+    ...asStringArray(result.tonightAtHomeActions).slice(0, 2),
+    ...asStringArray(result.followUp48h).slice(0, 2),
+  ].filter(Boolean);
 
   return [
     {
       event: "status",
       data: {
         stage: "long_term_profile",
-        title: "\u957f\u671f\u753b\u50cf",
-        message: `\u6b63\u5728\u8bfb\u53d6 ${childName} \u7684\u957f\u671f\u753b\u50cf\u548c\u8bb0\u5fc6\u4e0a\u4e0b\u6587`,
+        title: "AI 辅助会诊进行中",
+        message: "AI 辅助会诊进行中：正在读取长期画像和历史线索。",
         traceId,
         providerTrace,
         memory: memoryMeta,
@@ -419,11 +293,11 @@ async function buildFallbackEvents(
       event: "text",
       data: {
         stage: "long_term_profile",
-        title: "\u957f\u671f\u753b\u50cf",
-        text: buildLongTermItems(result, memoryMeta).join("\u3001") || String(result.summary ?? ""),
-        items: buildLongTermItems(result, memoryMeta),
+        title: "长期画像",
+        text: longTermItems.join("、") || String(result.summary ?? ""),
+        items: longTermItems,
         append: false,
-        source: providerTrace.source ?? "unknown",
+        source: providerTrace.source ?? "local-rules-fallback",
       },
     },
     {
@@ -438,8 +312,8 @@ async function buildFallbackEvents(
       event: "status",
       data: {
         stage: "recent_context",
-        title: "\u6700\u8fd1\u4f1a\u8bca",
-        message: "\u6b63\u5728\u6574\u5408\u6700\u8fd1\u4f1a\u8bca\u3001\u8fd1\u671f\u5feb\u7167\u548c\u8fde\u7eed\u4fe1\u53f7",
+        title: "已切换本地会诊兜底",
+        message,
         traceId,
         providerTrace,
         memory: memoryMeta,
@@ -449,22 +323,19 @@ async function buildFallbackEvents(
       event: "text",
       data: {
         stage: "recent_context",
-        title: "\u6700\u8fd1\u4f1a\u8bca",
-        text:
-          buildRecentItems(result).join("\u3001") ||
-          String(asRecord(result.coordinatorSummary).finalConclusion ?? ""),
-        items: buildRecentItems(result),
+        title: "最近会诊",
+        text: recentItems.join("、") || String(asRecord(result.coordinatorSummary).finalConclusion ?? ""),
+        items: recentItems,
         append: false,
-        source: providerTrace.source ?? "unknown",
+        source: providerTrace.source ?? "local-rules-fallback",
       },
     },
     {
       event: "status",
       data: {
         stage: "current_recommendation",
-        title: "\u5f53\u524d\u5efa\u8bae",
-        message:
-          "\u6b63\u5728\u751f\u6210\u4eca\u5929\u56ed\u5185\u3001\u4eca\u665a\u5bb6\u5ead\u548c 48 \u5c0f\u65f6\u590d\u67e5\u5efa\u8bae",
+        title: "证据链生成完成",
+        message: "证据链生成完成：已生成园内行动、家庭任务和 48 小时复查建议。",
         traceId,
         providerTrace,
         memory: memoryMeta,
@@ -474,15 +345,11 @@ async function buildFallbackEvents(
       event: "text",
       data: {
         stage: "current_recommendation",
-        title: "\u5f53\u524d\u5efa\u8bae",
+        title: "当前建议",
         text: String(result.summary ?? asRecord(result.coordinatorSummary).finalConclusion ?? ""),
-        items: [
-          ...asStringArray(result.todayInSchoolActions).slice(0, 2),
-          ...asStringArray(result.tonightAtHomeActions).slice(0, 2),
-          ...asStringArray(result.followUp48h).slice(0, 2),
-        ].filter(Boolean),
+        items: currentItems,
         append: false,
-        source: providerTrace.source ?? "unknown",
+        source: providerTrace.source ?? "local-rules-fallback",
       },
     },
     {
@@ -500,33 +367,192 @@ async function buildFallbackEvents(
         result,
         providerTrace,
         memoryMeta,
-        realProvider: Boolean(providerTrace.realProvider),
-        fallback: Boolean(providerTrace.fallback),
+        realProvider: false,
+        fallback: true,
       },
     },
   ];
+}
+
+function parseSseEventName(block: string) {
+  return block
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.startsWith("event:"))
+    ?.slice(6)
+    .trim();
+}
+
+function isSseResponse(response: Response) {
+  return (response.headers.get("content-type") ?? "").toLowerCase().includes("text/event-stream");
+}
+
+function createRemoteStreamWithDoneFallback(params: {
+  response: Response;
+  payload: HighRiskConsultationRequestPayload;
+  traceId: string;
+  brainForward: BrainForwardResult;
+}) {
+  const { response, payload, traceId, brainForward } = params;
+  const remoteBody = response.body;
+  const watchdogMs = getHighRiskConsultationStreamDoneTimeoutMs(brainForward);
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  if (!remoteBody) {
+    return streamResponse(
+      buildFallbackStreamEvents(payload, traceId, "brain-stream-empty-body"),
+      200,
+      buildLocalStreamHeaders(brainForward, "brain-stream-empty-body")
+    );
+  }
+
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const reader = remoteBody.getReader();
+        let buffer = "";
+        let closed = false;
+        let doneSeen = false;
+        let fallbackStarted = false;
+
+        const close = () => {
+          if (closed) return;
+          closed = true;
+          controller.close();
+        };
+
+        const appendFallback = async (fallbackReason: string, message?: string) => {
+          if (closed || doneSeen || fallbackStarted) return;
+          fallbackStarted = true;
+          await reader.cancel().catch(() => undefined);
+          if (buffer.trim()) {
+            controller.enqueue(encoder.encode("\n\n"));
+            buffer = "";
+          }
+          for (const event of buildFallbackStreamEvents(payload, traceId, fallbackReason, message)) {
+            controller.enqueue(encoder.encode(encodeEvent(event)));
+          }
+          close();
+        };
+
+        const watchdog = setTimeout(() => {
+          void appendFallback(
+            "brain-stream-done-timeout",
+            "已切换本地会诊兜底：远端 AI 会诊流超过时限仍未返回完成事件。"
+          );
+        }, watchdogMs);
+
+        try {
+          while (!closed) {
+            const { done, value } = await reader.read();
+            if (closed) return;
+            if (done) break;
+
+            controller.enqueue(value);
+            buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+            const chunks = buffer.split("\n\n");
+            buffer = chunks.pop() ?? "";
+
+            for (const chunk of chunks) {
+              if (parseSseEventName(chunk) !== "done") continue;
+              doneSeen = true;
+              clearTimeout(watchdog);
+              await reader.cancel().catch(() => undefined);
+              close();
+              return;
+            }
+          }
+
+          clearTimeout(watchdog);
+          if (!doneSeen) {
+            await appendFallback(
+              "brain-stream-ended-without-done",
+              "已切换本地会诊兜底：远端 AI 会诊流提前结束但未返回完成结果。"
+            );
+            return;
+          }
+          close();
+        } catch (error) {
+          clearTimeout(watchdog);
+          if (fallbackStarted || closed) return;
+          const fallbackReason =
+            error instanceof Error
+              ? `brain-stream-read-${sanitizeReasonToken(error.name || "error")}`
+              : "brain-stream-read-error";
+          await appendFallback(
+            fallbackReason,
+            "已切换本地会诊兜底：远端 AI 会诊流读取失败，正在生成本地结果。"
+          );
+        } finally {
+          clearTimeout(watchdog);
+        }
+      },
+    }),
+    {
+      status: 200,
+      headers: sseHeaders(buildRemoteStreamHeaders(brainForward)),
+    }
+  );
 }
 
 export async function POST(request: Request) {
   const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
   if (authError) return authError;
 
-  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/consultations/high-risk/stream");
-  if (brainForward.response) return brainForward.response;
-
-  let payload: Record<string, unknown>;
+  let payload: unknown;
   try {
-    payload = (await request.clone().json()) as Record<string, unknown>;
+    payload = await request.clone().json();
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
       headers: mergeHeaders(
         { "Content-Type": "application/json" },
-        buildLocalStreamHeaders(brainForward)
+        buildForcedStreamHeaders("invalid-json-body")
       ),
     });
   }
 
-  const events = await buildFallbackEvents(payload, new URL(request.url).origin, brainForward, request.headers);
-  return streamResponse(events, 200, buildLocalStreamHeaders(brainForward));
+  if (!isValidHighRiskConsultationPayload(payload)) {
+    return new Response(JSON.stringify({ error: "Invalid high-risk consultation payload" }), {
+      status: 400,
+      headers: mergeHeaders(
+        { "Content-Type": "application/json" },
+        buildForcedStreamHeaders("invalid-high-risk-consultation-payload")
+      ),
+    });
+  }
+
+  const traceId = getTraceId(asRecord(payload).traceId);
+  const forcedFallback = request.headers.get("x-ai-force-fallback") === "1";
+  if (forcedFallback) {
+    const fallbackReason = "forced-local-fallback";
+    return streamResponse(
+      buildFallbackStreamEvents(payload, traceId, fallbackReason),
+      200,
+      buildForcedStreamHeaders(fallbackReason)
+    );
+  }
+
+  const brainForward = await forwardBrainRequest(request, HIGH_RISK_CONSULTATION_STREAM_TARGET_PATH, {
+    timeoutMs: getHighRiskConsultationBrainTimeoutMs(),
+  });
+
+  if (brainForward.response && isSseResponse(brainForward.response)) {
+    return createRemoteStreamWithDoneFallback({
+      response: brainForward.response,
+      payload,
+      traceId,
+      brainForward,
+    });
+  }
+
+  const fallbackReason = brainForward.response
+    ? "brain-stream-non-sse-response"
+    : brainForward.fallbackReason ?? "brain-proxy-unavailable";
+  return streamResponse(
+    buildFallbackStreamEvents(payload, traceId, fallbackReason),
+    200,
+    buildLocalStreamHeaders(brainForward, fallbackReason)
+  );
 }

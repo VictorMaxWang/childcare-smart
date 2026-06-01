@@ -50,6 +50,14 @@ function getSourceLabel(source: string) {
   return source;
 }
 
+function getFallbackNotice(result: ParentTrendQueryResponse) {
+  const reason = result.fallbackReason ? `（${result.fallbackReason}）` : "";
+  if (result.source === "demo_snapshot") {
+    return `远端趋势服务暂时不可用，当前为演示快照的本地趋势解释${reason}，不会阻断家长端查看。`;
+  }
+  return `远端趋势服务暂时不可用，当前为基于当前记录的本地趋势解释${reason}，已保留数据质量提示。`;
+}
+
 function formatTrendErrorMessage(error: string | null) {
   if (!error) return null;
 
@@ -108,7 +116,7 @@ export default function ParentTrendResponseCard({
               <Badge variant={getTrendBadgeVariant(result.trendLabel)}>{result.trendLabel}</Badge>
               <Badge variant="secondary">{result.windowDays} 天</Badge>
               <Badge variant="secondary">{getSourceLabel(result.source)}</Badge>
-              {fallbackUsed ? <Badge variant="warning">演示快照</Badge> : null}
+              {fallbackUsed ? <Badge variant="warning">本地趋势解释</Badge> : null}
             </>
           ) : loading ? (
             <Badge variant="info">查询中</Badge>
@@ -160,7 +168,7 @@ export default function ParentTrendResponseCard({
         <div className="mt-4 space-y-4">
           {fallbackUsed ? (
             <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm leading-6 text-emerald-900">
-              当前结果来自演示快照，已明确标记为非实时机构数据，适合演示趋势结构。
+              {getFallbackNotice(result)}
             </div>
           ) : null}
 

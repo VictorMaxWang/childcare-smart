@@ -28,6 +28,9 @@ export interface AdminConsultationWorkspaceView {
   priorityItems: AdminConsultationPriorityItem[];
   feedStatus: AdminConsultationFeedStatus;
   feedBadge: AdminConsultationFeedBadge;
+  feedStatusMessage: string | null;
+  feedFallbackUsed: boolean;
+  feedFallbackReason: string | null;
 }
 
 export interface UseAdminConsultationWorkspaceOptions {
@@ -42,6 +45,48 @@ function createDefaultFeedBadge(): AdminConsultationFeedBadge {
     label: "载入中",
     variant: "outline",
   };
+}
+
+const RISK_RANK: Record<AdminConsultationPriorityItem["riskLevel"], number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
+function mergeAdminConsultationPriorityItems(params: {
+  feedItems: AdminConsultationPriorityItem[];
+  localItems: AdminConsultationPriorityItem[];
+  limit: number;
+}) {
+  const preferredD01 = params.localItems.filter((item) => item.childId === "c-1");
+  const otherLocal = params.localItems.filter((item) => item.childId !== "c-1");
+  const bestByChildId = new Map<string, AdminConsultationPriorityItem>();
+
+  for (const item of [...preferredD01, ...params.feedItems, ...otherLocal]) {
+    const existing = bestByChildId.get(item.childId);
+    if (!existing) {
+      bestByChildId.set(item.childId, item);
+      continue;
+    }
+
+    const nextRisk = RISK_RANK[item.riskLevel];
+    const existingRisk = RISK_RANK[existing.riskLevel];
+    if (
+      nextRisk < existingRisk ||
+      (nextRisk === existingRisk && item.generatedAt > existing.generatedAt)
+    ) {
+      bestByChildId.set(item.childId, item);
+    }
+  }
+
+  const seenConsultationIds = new Set<string>();
+  return Array.from(bestByChildId.values())
+    .filter((item) => {
+      if (seenConsultationIds.has(item.consultationId)) return false;
+      seenConsultationIds.add(item.consultationId);
+      return true;
+    })
+    .slice(0, params.limit);
 }
 
 export function getAdminConsultationFeedBadge(params: {
@@ -91,18 +136,35 @@ export function buildAdminConsultationWorkspaceView(params: {
   const localConsultations = params.localConsultations ?? [];
   const hasBackendItems = params.consultationFeed.items.length > 0;
   const fallbackUsed =
+    params.consultationFeed.fallback ||
     params.consultationFeed.status === "unavailable" ||
     (params.consultationFeed.status === "ready" && !hasBackendItems);
+  const limit = params.limit ?? 4;
+  const feedItems = hasBackendItems
+    ? buildAdminConsultationPriorityItems({
+        institutionName: params.institutionName,
+        feedItems: params.consultationFeed.items,
+        localConsultations,
+        children: params.children,
+        notificationEvents: params.notificationEvents,
+        limit,
+        useLocalFallback: false,
+      })
+    : [];
+  const localItems = buildAdminConsultationPriorityItems({
+    institutionName: params.institutionName,
+    localConsultations,
+    children: params.children,
+    notificationEvents: params.notificationEvents,
+    limit,
+    useLocalFallback: true,
+  });
 
   return {
-    priorityItems: buildAdminConsultationPriorityItems({
-      institutionName: params.institutionName,
-      feedItems: hasBackendItems ? params.consultationFeed.items : undefined,
-      localConsultations,
-      children: params.children,
-      notificationEvents: params.notificationEvents,
-      limit: params.limit ?? 4,
-      useLocalFallback: fallbackUsed,
+    priorityItems: mergeAdminConsultationPriorityItems({
+      feedItems,
+      localItems,
+      limit,
     }),
     feedStatus: params.consultationFeed.status,
     feedBadge: getAdminConsultationFeedBadge({
@@ -110,6 +172,13 @@ export function buildAdminConsultationWorkspaceView(params: {
       localConsultationCount: localConsultations.length,
       fallbackUsed,
     }),
+    feedStatusMessage:
+      params.consultationFeed.message ??
+      (fallbackUsed && localConsultations.length > 0
+        ? "当前使用本地演示数据；远端 feed 暂不可用。"
+        : null),
+    feedFallbackUsed: fallbackUsed,
+    feedFallbackReason: params.consultationFeed.fallbackReason,
   };
 }
 
@@ -306,6 +375,9 @@ export function useAdminConsultationWorkspace(
     priorityItems: view.priorityItems,
     feedStatus: view.feedStatus,
     feedBadge: view.feedBadge,
+    feedStatusMessage: view.feedStatusMessage,
+    feedFallbackUsed: view.feedFallbackUsed,
+    feedFallbackReason: view.feedFallbackReason,
     notificationEvents,
     notificationError: mutationError ?? loaderNotificationError,
     notificationReady,

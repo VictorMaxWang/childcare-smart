@@ -721,7 +721,7 @@ async function tryRunHighRiskConsultation(page: Page, report: OnlineSmokeReport,
   }
   await startButton.click();
   const result = page.locator("#consultation-result");
-  const shown = await result.isVisible({ timeout: 75_000 }).catch(() => false);
+  const shown = await result.isVisible({ timeout: 30_000 }).catch(() => false);
   if (!shown) {
     const screenshot = await capture(page, report, "desktop-teacher-high-risk-result-timeout");
     addIssue(report, active, {
@@ -732,7 +732,7 @@ async function tryRunHighRiskConsultation(page: Page, report: OnlineSmokeReport,
       accountName: "teacher",
       route: "/teacher/high-risk-consultation",
       screenshot,
-      message: "点击开始会诊后，结果区在 75 秒内未出现。",
+      message: "点击开始会诊后，30 秒内未出现 #consultation-result。",
       reproSteps: [`打开 /teacher/high-risk-consultation?childId=${CHILD_ID}`, "点击开始会诊", "等待 #consultation-result"],
       suggestedFixPriority: "P1：修复会诊 API、stream fallback 或页面结果态。",
     });

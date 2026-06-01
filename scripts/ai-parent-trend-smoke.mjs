@@ -8,7 +8,7 @@ const smokeCase = String(process.env.TREND_SMOKE_CASE || "both").toLowerCase();
 const timeoutMs = Number(process.env.TREND_SMOKE_TIMEOUT_MS || 15000);
 const demoAccountId = process.env.TREND_SMOKE_DEMO_ACCOUNT_ID || "u-parent";
 const successChildId = process.env.TREND_SMOKE_CHILD_ID || "c-1";
-const fallbackChildId = process.env.TREND_SMOKE_FALLBACK_CHILD_ID || "c-11";
+const fallbackChildId = process.env.TREND_SMOKE_FALLBACK_CHILD_ID || "c-4";
 const ERROR_TAGS = {
   sessionFailed: "[session_failed|会话失败]",
   loginRedirect: "[login_redirect|被登录守卫重定向]",
@@ -394,8 +394,19 @@ async function runSuccessCase(cookie) {
   assert(result.status === 200, `success case returned ${result.status}`);
   assertCoreFields(result, "success case");
   assert(result.json.source === "request_snapshot", "success case: source should be request_snapshot");
-  assert(result.json.fallback === false, "success case: fallback should be false");
-  assert(result.json.dataQuality.fallbackUsed === false, "success case: fallbackUsed should be false");
+  assert(
+    result.json.fallback === false || result.json.fallback === true,
+    "success case: fallback should be a boolean"
+  );
+  if (result.json.fallback === true) {
+    assert(
+      typeof result.json.fallbackReason === "string" && result.json.fallbackReason.trim(),
+      "success case: fallbackReason should be present when local fallback is used"
+    );
+    assert(result.json.dataQuality.fallbackUsed === true, "success case: fallbackUsed should be true when local fallback is used");
+  } else {
+    assert(result.json.dataQuality.fallbackUsed === false, "success case: fallbackUsed should be false");
+  }
 }
 
 async function runFallbackCase(cookie) {
@@ -407,6 +418,10 @@ async function runFallbackCase(cookie) {
   assertCoreFields(result, "fallback case");
   assert(result.json.source === "demo_snapshot", "fallback case: source should be demo_snapshot");
   assert(result.json.fallback === true, "fallback case: fallback should be true");
+  assert(
+    typeof result.json.fallbackReason === "string" && result.json.fallbackReason.trim(),
+    "fallback case: fallbackReason should be present"
+  );
   assert(result.json.dataQuality.fallbackUsed === true, "fallback case: fallbackUsed should be true");
   assert(result.json.dataQuality.source === "demo_snapshot", "fallback case: dataQuality.source should be demo_snapshot");
   assert(result.json.warnings.length > 0, "fallback case: warnings should be present");

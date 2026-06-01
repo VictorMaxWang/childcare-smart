@@ -113,3 +113,4 @@ class ParentTrendQueryResponse(ParentTrendModel):
     memory_meta: JsonDict | None = None
     source: str
     fallback: bool = False
+    fallback_reason: str | None = None

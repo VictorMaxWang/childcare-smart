@@ -12,9 +12,11 @@ import {
   attachNotificationEventToResult,
   attachNotificationEventsToResult,
   buildAdminHomeViewModel,
+  buildAdminLocalFallbackResult,
 } from "@/lib/agent/admin-agent";
 import type { AdminConsultationPriorityItem } from "@/lib/agent/admin-consultation";
 import { dedupeAdminAgentResultExposure } from "@/lib/agent/admin-home-dedupe";
+import { buildAdminD01HighRiskConsultation } from "@/lib/agent/admin-local-consultation-fallback";
 import { useAdminConsultationWorkspace } from "@/lib/agent/use-admin-consultation-workspace";
 import type {
   AdminAgentActionItem,
@@ -160,10 +162,24 @@ export default function AdminAgentPage() {
     getSmartInsights,
     getLatestConsultations,
   } = useApp();
+  const latestConsultations = getLatestConsultations();
+  const adminAgentConsultations = useMemo(() => {
+    const child = visibleChildren.find((item) => item.id === "c-1");
+    const existing = latestConsultations.find((item) => item.childId === "c-1");
+    return [
+      buildAdminD01HighRiskConsultation({
+        childName: child?.name,
+        className: child?.className,
+        generatedAt: existing?.generatedAt ?? new Date().toISOString(),
+      }),
+      ...latestConsultations.filter((item) => item.childId !== "c-1"),
+    ];
+  }, [latestConsultations, visibleChildren]);
   const {
     priorityItems: consultationPriorityItems,
     notificationEvents,
     notificationReady,
+    feedStatusMessage,
     createNotification,
     createConsultationScopedNotification,
     updateNotificationStatus,
@@ -174,7 +190,7 @@ export default function AdminAgentPage() {
   } = useAdminConsultationWorkspace({
     institutionName: INSTITUTION_NAME,
     visibleChildren,
-    localConsultations: getLatestConsultations(),
+    localConsultations: adminAgentConsultations,
     consultationFeedOptions: {
       limit: 4,
       escalatedOnly: true,
@@ -184,6 +200,7 @@ export default function AdminAgentPage() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [workflowNotice, setWorkflowNotice] = useState<string | null>(null);
   const [weeklyReports, setWeeklyReports] = useState<ApiWeeklyReport[]>([]);
   const [selectedWeeklyReport, setSelectedWeeklyReport] = useState<ApiWeeklyReport | null>(null);
   const [includeArchivedReports, setIncludeArchivedReports] = useState(false);
@@ -239,6 +256,39 @@ export default function AdminAgentPage() {
     async (workflow: AdminAgentRequestPayload["workflow"], options?: { question?: string; label?: string }) => {
       setLoading(true);
       setRequestError(null);
+      setWorkflowNotice(null);
+
+      function commitFallbackResult(fallbackReason: string) {
+        const fallbackPayload: AdminAgentRequestPayload = {
+          ...payload,
+          workflow,
+          question: options?.question,
+          history: workflow === "question-follow-up" ? buildHistoryMessages(history) : undefined,
+        };
+        const nextResult = attachNotificationEventsToResult(
+          buildAdminLocalFallbackResult(fallbackPayload, fallbackReason),
+          notificationEvents
+        );
+        setResult(nextResult);
+        setRequestError(null);
+        setWorkflowNotice("远端 workflow 暂不可用，当前使用本地演示数据。");
+        setHistory((prev) => [
+          ...prev,
+          {
+            id: `${workflow}-${Date.now()}`,
+            workflow,
+            label:
+              options?.label ??
+              (workflow === "daily-priority"
+                ? "浠婃棩鏈烘瀯浼樺厛浜嬮」"
+                : workflow === "weekly-ops-report"
+                  ? "鏈懆杩愯惀鍛ㄦ姤"
+                  : options?.question ?? "缁х画杩介棶"),
+            prompt: workflow === "question-follow-up" ? options?.question : undefined,
+            result: nextResult,
+          },
+        ]);
+      }
 
       try {
         const requestPayload: AdminAgentRequestPayload = {
@@ -257,6 +307,10 @@ export default function AdminAgentPage() {
         const data = (await response.json()) as unknown;
 
         if (!response.ok) {
+          if (response.status >= 500) {
+            commitFallbackResult(`admin-agent-http-${response.status}`);
+            return;
+          }
           const errorMessage =
             isRecord(data) && typeof data.error === "string" ? data.error : "园长 AI 助手请求失败";
           setRequestError(errorMessage);
@@ -265,12 +319,7 @@ export default function AdminAgentPage() {
         }
 
         if (!isAdminAgentResult(data)) {
-          setResult(null);
-          setRequestError(
-            workflow === "weekly-ops-report"
-              ? "周报模式返回结构不完整，请重试或切回日常模式。"
-              : "园长 AI 助手返回结构异常，请稍后重试。"
-          );
+          commitFallbackResult("admin-agent-malformed-payload");
           return;
         }
 
@@ -292,9 +341,11 @@ export default function AdminAgentPage() {
             result: nextResult,
           },
         ]);
-      } catch (error) {
-        console.error("[ADMIN_AGENT] Failed to run workflow", error);
-        setRequestError("园长 AI 助手请求失败");
+        if (data.source === "fallback") {
+          setWorkflowNotice("远端 workflow 暂不可用，当前使用本地演示数据。");
+        }
+      } catch {
+        commitFallbackResult("admin-agent-fetch-failed");
       } finally {
         setLoading(false);
       }
@@ -532,6 +583,8 @@ export default function AdminAgentPage() {
   const rerunCurrentMode = () => void runWorkflow(modeConfig.workflow, { label: modeConfig.label });
   const safeDispatchStatusMessage = dispatchStatusMessage ?? "通知派单暂不可用";
 
+  const serviceStatusMessage = [workflowNotice, feedStatusMessage].filter(Boolean).join(" ");
+
   if (isWeeklyMode) {
     return (
       <DirectorWeeklyReportReplica
@@ -539,6 +592,7 @@ export default function AdminAgentPage() {
         result={displayResult}
         loading={loading}
         requestError={requestError}
+        statusNotice={serviceStatusMessage || null}
         dispatchAvailable={dispatchAvailable}
         dispatchStatusMessage={safeDispatchStatusMessage}
         trendLabels={directorViewModel.trendLabels}
@@ -570,6 +624,7 @@ export default function AdminAgentPage() {
       quickQuestions={quickQuestions}
       loading={loading}
       requestError={requestError}
+      statusNotice={serviceStatusMessage || null}
       dispatchAvailable={dispatchAvailable}
       dispatchStatusMessage={safeDispatchStatusMessage}
       notificationEvents={notificationEvents}
