@@ -646,6 +646,7 @@
   color: #5a4dff;
   font-size: 18px;
   font-weight: 900;
+  text-decoration: none;
 }
 
 .alert {
@@ -1313,6 +1314,7 @@
     color: #6358ff;
     font-size: 16px;
     font-weight: 900;
+    text-decoration: none;
   }
 
   .trustFooter {

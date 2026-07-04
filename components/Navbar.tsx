@@ -147,7 +147,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const accessDeniedNoticeKeyRef = useRef<string | null>(null);
   const currentLocation = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
 
-  const hideShell = pathname === "/login" || pathname.startsWith("/auth/login");
+  const hideShell =
+    pathname === "/login" ||
+    pathname.startsWith("/auth/login") ||
+    pathname === "/register" ||
+    pathname.startsWith("/auth/register");
 
   useEffect(() => {
     if (hideShell || authLoading) {

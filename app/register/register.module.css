@@ -1,0 +1,385 @@
+.page {
+  min-height: calc(100vh - 64px);
+  background:
+    linear-gradient(180deg, rgba(247, 250, 255, 0.96), rgba(238, 245, 253, 0.94)),
+    #f5f8fc;
+  padding: 18px 16px 28px;
+}
+
+.shell {
+  display: grid;
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  gap: 18px;
+}
+
+.formPanel,
+.sidePanel {
+  border: 1px solid rgba(216, 226, 240, 0.92);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 24px 70px rgba(43, 58, 92, 0.12);
+}
+
+.formPanel {
+  padding: 20px;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #526079;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  color: #4f46e5;
+}
+
+.header {
+  margin-top: 22px;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  border: 1px solid #dbe7f5;
+  border-radius: 999px;
+  background: #f8fbff;
+  padding: 7px 11px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.title {
+  margin: 0;
+  color: #111b35;
+  font-size: 28px;
+  font-weight: 950;
+  line-height: 1.18;
+}
+
+.subtitle {
+  margin: 10px 0 0;
+  max-width: 620px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.75;
+}
+
+.form {
+  display: grid;
+  gap: 18px;
+  margin-top: 26px;
+}
+
+.inputWithIcon {
+  position: relative;
+}
+
+.inputIcon {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  color: #8a98ad;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.input {
+  padding-left: 42px;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.passwordToggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #64748b;
+  transform: translateY(-50%);
+}
+
+.passwordToggle:hover {
+  background: #f1f5f9;
+  color: #4f46e5;
+}
+
+.passwordInput {
+  padding-right: 48px;
+}
+
+.roleField {
+  min-width: 0;
+}
+
+.roleLegend {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.requiredTag {
+  border-radius: 999px;
+  background: #fff1f2;
+  padding: 2px 7px;
+  color: #e11d48;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.roleGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.roleButton {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+  min-height: 78px;
+  border: 1px solid #dbe5f2;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 12px;
+  color: #243149;
+  text-align: left;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.roleButton:hover {
+  border-color: #aab8ff;
+  box-shadow: 0 14px 30px rgba(79, 70, 229, 0.1);
+  transform: translateY(-1px);
+}
+
+.roleButton[data-selected="true"] {
+  border-color: #4f46e5;
+  background: linear-gradient(180deg, #ffffff, #f7f9ff);
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.11);
+}
+
+.roleIcon {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #eef6ff;
+  color: #2563eb;
+}
+
+.roleButton[data-selected="true"] .roleIcon {
+  background: #4f46e5;
+  color: white;
+}
+
+.roleName {
+  display: block;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.35;
+}
+
+.roleDesc {
+  display: block;
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.55;
+}
+
+.fieldError {
+  margin: 8px 0 0;
+  border: 1px solid #fecdd3;
+  border-radius: 12px;
+  background: #fff1f2;
+  padding: 9px 11px;
+  color: #be123c;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.55;
+}
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  background: #fff1f2;
+  padding: 12px 14px;
+  color: #be123c;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.6;
+}
+
+.actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.submitButton {
+  min-height: 50px;
+  border-radius: 13px;
+}
+
+.loginLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  color: #526079;
+  font-size: 13px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.loginLink:hover {
+  color: #4f46e5;
+}
+
+.sidePanel {
+  overflow: hidden;
+}
+
+.sideHeader {
+  border-bottom: 1px solid #e6edf7;
+  background:
+    linear-gradient(135deg, rgba(79, 70, 229, 0.1), rgba(20, 184, 166, 0.1)),
+    #ffffff;
+  padding: 20px;
+}
+
+.sideTitle {
+  margin: 0;
+  color: #111b35;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.sideText {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.7;
+}
+
+.assuranceList {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px 22px;
+}
+
+.assuranceItem {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 11px;
+  align-items: start;
+}
+
+.assuranceIcon {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.assuranceName {
+  margin: 0;
+  color: #243149;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.assuranceDesc {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.6;
+}
+
+@media (min-width: 720px) {
+  .page {
+    padding: 30px 24px 44px;
+  }
+
+  .formPanel {
+    padding: 28px;
+  }
+
+  .roleGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .roleButton {
+    grid-template-columns: 1fr;
+    align-content: start;
+  }
+
+  .actions {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page {
+    display: flex;
+    align-items: center;
+  }
+
+  .shell {
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 24px;
+  }
+
+  .formPanel {
+    padding: 34px 38px 36px;
+  }
+
+  .title {
+    font-size: 34px;
+  }
+
+  .sidePanel {
+    align-self: stretch;
+  }
+}
