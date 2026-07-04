@@ -11,6 +11,7 @@ import {
 } from "@/lib/server/brain-client";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import { apiError } from "@/lib/server/api-errors";
+import { logSecurityEvent } from "@/lib/server/security-log";
 import { resolveOcrProvider } from "@/lib/ai/providers";
 import { VivoProviderError } from "@/lib/providers/vivo";
 import type {
@@ -226,7 +227,9 @@ async function persistHealthFileBridgeWriteback(
 ) {
   const baseUrl = getBrainBaseUrl();
   if (!baseUrl) {
-    console.warn("[AI] Skipping health-file-bridge writeback persistence: missing brain base URL");
+    logSecurityEvent("warn", "ai.health_file_bridge.persistence_skipped", {
+      reason: "missing_brain_base_url",
+    });
     return;
   }
 
@@ -239,15 +242,13 @@ async function persistHealthFileBridgeWriteback(
     });
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      console.error(
-        "[AI] Failed to persist health-file-bridge writeback",
-        response.status,
-        errorText.slice(0, 300)
-      );
+      await response.text().catch(() => "");
+      logSecurityEvent("error", "ai.health_file_bridge.persist_failed", {
+        status: response.status,
+      });
     }
   } catch (error) {
-    console.error("[AI] Failed to persist health-file-bridge writeback", error);
+    logSecurityEvent("error", "ai.health_file_bridge.persist_exception", { error });
   }
 }
 
@@ -289,7 +290,7 @@ async function maybeAugmentRemoteBridgeResponse(
     if (!isHealthFileBridgeResponsePayload(body)) return response;
     bridgeResponse = body;
   } catch (error) {
-    console.error("[AI] Failed to parse remote health-file-bridge response", error);
+    logSecurityEvent("error", "ai.health_file_bridge.remote_parse_failed", { error });
     return response;
   }
 
@@ -299,7 +300,7 @@ async function maybeAugmentRemoteBridgeResponse(
     if (!isValidHealthFileBridgeRequest(body)) return response;
     payload = body;
   } catch (error) {
-    console.error("[AI] Failed to parse health-file-bridge request for writeback", error);
+    logSecurityEvent("error", "ai.health_file_bridge.writeback_parse_failed", { error });
     return response;
   }
 
@@ -330,7 +331,7 @@ export async function POST(request: Request) {
   try {
     payload = (await request.json()) as HealthFileBridgeRequest;
   } catch (error) {
-    console.error("[AI] Invalid health-file-bridge payload", error);
+    logSecurityEvent("error", "ai.health_file_bridge.invalid_payload", { error });
     return apiError("invalid_request", "Invalid JSON body", { status: 400 });
   }
 

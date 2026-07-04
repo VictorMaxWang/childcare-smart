@@ -37,10 +37,10 @@ test("parent cannot access another child", () => {
 });
 
 test("teacher cannot access a child from another class", () => {
-  const teacher2 = demoUser("u-teacher2");
-  const snapshot = buildSnapshot(teacher2);
+  const teacher = demoUser("u-teacher");
+  const snapshot = buildSnapshot(teacher);
 
-  assert.throws(() => requireChildAccess(teacher2, snapshot, "c-1"), assertForbidden);
+  assert.throws(() => requireChildAccess(teacher, snapshot, "c-1"), assertForbidden);
 });
 
 test("director can access institution children and class scope", () => {

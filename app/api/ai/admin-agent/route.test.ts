@@ -43,19 +43,19 @@ function buildPayload(): AdminAgentRequestPayload {
     },
     visibleChildren: [
       {
-        id: "child-1",
+        id: "c-1",
         name: "Ava",
         birthDate: "2021-02-01",
-        className: "Sun Class",
+        className: "",
         allergies: [],
         specialNotes: "",
         parentUserId: "parent-1",
       },
       {
-        id: "child-2",
+        id: "c-2",
         name: "Ben",
         birthDate: "2021-03-01",
-        className: "Sun Class",
+        className: "",
         allergies: [],
         specialNotes: "",
         parentUserId: "parent-2",

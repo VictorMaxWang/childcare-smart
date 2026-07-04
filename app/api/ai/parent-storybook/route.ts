@@ -24,8 +24,8 @@ import {
   ParentStoryBookRealTextError,
   shouldRequireNextVivoStoryText,
 } from "@/lib/server/parent-storybook-real-text";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
-import { requireDemoSession } from "@/lib/server/session";
+import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { logSecurityEvent } from "@/lib/server/security-log";
 
 export const runtime = "nodejs";
 const DEFAULT_PARENT_STORYBOOK_BRAIN_TIMEOUT_MS = 45_000;
@@ -441,11 +441,12 @@ async function requireVivoStoryTextResponse(input: {
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, {
+  const authResult = await authorizeAiRouteSession(request, {
     requiredRole: "parent",
     collectJsonClassNames: false,
+    ignoredChildIds: ["storybook-guest"],
   });
-  if (authError) return authError;
+  if (authResult instanceof Response) return authResult;
 
   let payload: ParentStoryBookRequest;
 
@@ -459,7 +460,7 @@ export async function POST(request: Request) {
     }
     payload = parsed;
   } catch (error) {
-    console.error("[AI] Invalid parent storybook payload", error);
+    logSecurityEvent("error", "ai.parent_storybook.invalid_payload", { error });
     return NextResponse.json(
       { error: "Invalid JSON body" },
       { status: 400, headers: buildCacheHeaders("bypass") }
@@ -468,29 +469,45 @@ export async function POST(request: Request) {
 
   const requestedChildId = resolveRequestChildId(payload);
   const snapshotChildId = resolveSnapshotChildId(payload);
-  const sessionUser = (await requireDemoSession(request)).user;
+  const sessionUser = authResult.session.user;
   if (sessionUser.role !== ROLE_PARENT) {
-    return NextResponse.json(
-      { error: "Parent role required" },
-      { status: 403, headers: buildCacheHeaders("bypass") }
+    return aiRouteLimitedResponse(
+      {
+        reason: "role_mismatch",
+        error: "Parent role required.",
+        requiredRole: "parent",
+      },
+      { headers: buildCacheHeaders("bypass") }
     );
   }
-  if (!requestedChildId || !(sessionUser.childIds ?? []).includes(requestedChildId)) {
-    return NextResponse.json(
-      { error: "Child is not authorized for current parent" },
-      { status: 403, headers: buildCacheHeaders("bypass") }
+  if (!requestedChildId) {
+    return aiRouteLimitedResponse(
+      {
+        reason: "scope_required",
+        error: "Child scope is required for parent storybook generation.",
+        requiredRole: "parent",
+      },
+      { headers: buildCacheHeaders("bypass") }
     );
   }
   if (snapshotChildId && snapshotChildId !== requestedChildId) {
-    return NextResponse.json(
-      { error: "Storybook snapshot child does not match requested child" },
-      { status: 403, headers: buildCacheHeaders("bypass") }
+    return aiRouteLimitedResponse(
+      {
+        reason: "forbidden_child",
+        error: "Storybook snapshot child does not match requested child",
+        requiredRole: "parent",
+      },
+      { headers: buildCacheHeaders("bypass") }
     );
   }
   if (isDemoSeedRequest(payload) && sessionUser.accountKind !== "demo") {
-    return NextResponse.json(
-      { error: "Demo seed storybooks are only available to demo parent accounts" },
-      { status: 403, headers: buildCacheHeaders("bypass") }
+    return aiRouteLimitedResponse(
+      {
+        reason: "demo_seed_only",
+        error: "Demo seed storybooks are only available to demo parent accounts.",
+        requiredRole: "parent",
+      },
+      { headers: buildCacheHeaders("bypass") }
     );
   }
   payload = {

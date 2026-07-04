@@ -3,8 +3,10 @@ import {
   createBrainTransportHeaders,
   forwardBrainRequest,
 } from "@/lib/server/brain-client";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
-import { resolveRequestSession } from "@/lib/server/session";
+import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { DefaultAppDataRepository } from "@/lib/server/app-data-repository";
+import { ApiRouteError, handleApiError } from "@/lib/server/api-errors";
+import { requireChildAccess } from "@/lib/server/scope";
 
 export const runtime = "nodejs";
 
@@ -12,20 +14,33 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ mediaKey: string }> }
 ) {
-  const authError = await authorizeAiRoute(request, { requiredRole: "parent", allowUnscoped: true });
-  if (authError) return authError;
+  const authResult = await authorizeAiRouteSession(request, { requiredRole: "parent", allowUnscoped: true });
+  if (authResult instanceof Response) return authResult;
 
   const { mediaKey } = await context.params;
   const cachedMedia = readCachedParentStoryBookMedia(mediaKey);
 
   if (cachedMedia) {
-    const session = await resolveRequestSession(request);
-    if (
-      !session ||
-      !cachedMedia.ownerChildId ||
-      !(session.user.childIds ?? []).includes(cachedMedia.ownerChildId)
-    ) {
-      return new Response("storybook media forbidden", { status: 403 });
+    if (!cachedMedia.ownerChildId) {
+      return aiRouteLimitedResponse({
+        reason: "scope_required",
+        error: "Storybook media is missing an authorized child scope.",
+        requiredRole: "parent",
+      });
+    }
+
+    try {
+      const snapshot = await new DefaultAppDataRepository().load(authResult.session.user);
+      requireChildAccess(authResult.session.user, snapshot, cachedMedia.ownerChildId);
+    } catch (error) {
+      if (error instanceof ApiRouteError && (error.code === "forbidden_scope" || error.code === "not_found")) {
+        return aiRouteLimitedResponse({
+          reason: "forbidden_child",
+          error: "当前账号无权访问该绘本媒体。",
+          requiredRole: "parent",
+        });
+      }
+      return handleApiError(error);
     }
 
     const body = new Uint8Array(cachedMedia.bytes);

@@ -12,6 +12,7 @@ import { AppDataService } from "@/lib/server/app-data-service";
 import { DefaultAppDataRepository } from "@/lib/server/app-data-repository";
 import { ApiRouteError } from "@/lib/server/api-errors";
 import { resolveRequestSession } from "@/lib/server/session";
+import { logSecurityEvent } from "@/lib/server/security-log";
 import {
   ADMIN_NOTIFICATION_EVENTS_AUTH_UNAVAILABLE_REASON_CODE,
   ADMIN_NOTIFICATION_EVENTS_UNAVAILABLE_MESSAGE,
@@ -63,7 +64,7 @@ async function getAdminContext(request: Request) {
       };
     }
 
-    console.error("[NOTIFICATION_EVENTS] Failed to resolve admin context", error);
+    logSecurityEvent("error", "notification_events.admin_context_failed", { error });
     return { error: NextResponse.json({ error: "failed to load session" }, { status: 500 }) };
   }
 }
@@ -187,7 +188,7 @@ function serviceErrorResponse(error: unknown) {
       ADMIN_NOTIFICATION_EVENTS_UNAVAILABLE_REASON_CODE
     );
   }
-  console.error("[NOTIFICATION_EVENTS] Unexpected canonical dispatch error", error);
+  logSecurityEvent("error", "notification_events.canonical_dispatch_failed", { error });
   return NextResponse.json({ error: "failed to process notification events" }, { status: 500 });
 }
 
@@ -242,7 +243,7 @@ async function mirrorCreatedEvent(params: {
     return true;
   } catch (error) {
     if (error instanceof DatabaseConfigError) return false;
-    console.error("[NOTIFICATION_EVENTS] Failed to mirror canonical dispatch create", error);
+    logSecurityEvent("error", "notification_events.mirror_create_failed", { error });
     return false;
   }
 }
@@ -263,7 +264,7 @@ async function mirrorUpdatedEvent(params: {
     return true;
   } catch (error) {
     if (error instanceof DatabaseConfigError) return false;
-    console.error("[NOTIFICATION_EVENTS] Failed to mirror canonical dispatch update", error);
+    logSecurityEvent("error", "notification_events.mirror_update_failed", { error });
     return false;
   }
 }
@@ -295,7 +296,7 @@ export async function POST(request: Request) {
   try {
     payload = (await request.json()) as AdminDispatchCreatePayload;
   } catch (error) {
-    console.error("[NOTIFICATION_EVENTS] Invalid POST payload", error);
+    logSecurityEvent("error", "notification_events.invalid_post_payload", { error });
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
@@ -331,7 +332,7 @@ export async function PATCH(request: Request) {
   try {
     payload = (await request.json()) as AdminDispatchUpdatePayload;
   } catch (error) {
-    console.error("[NOTIFICATION_EVENTS] Invalid PATCH payload", error);
+    logSecurityEvent("error", "notification_events.invalid_patch_payload", { error });
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
@@ -366,7 +367,7 @@ export async function PATCH(request: Request) {
         if (item) return NextResponse.json({ item: decorateLegacyEvent(item), available: true, source: "legacy_db" }, { status: 200 });
       } catch (legacyError) {
         if (!(legacyError instanceof DatabaseConfigError)) {
-          console.error("[NOTIFICATION_EVENTS] Legacy PATCH fallback failed", legacyError);
+          logSecurityEvent("error", "notification_events.legacy_patch_failed", { error: legacyError });
         }
       }
     }

@@ -10,6 +10,7 @@ import type {
 } from "@/lib/ai/types";
 import type { ConsultationInput } from "@/lib/agent/consultation/input";
 import type { HighRiskConsultationAutoContext } from "@/lib/agent/high-risk-consultation";
+import { getChildcareKnowledgeHints } from "@/lib/knowledge/childcare-knowledge";
 
 const PARTICIPANTS: ConsultationParticipant[] = [
   { id: "health-agent", label: "情绪安全观察 Agent" },
@@ -381,6 +382,28 @@ export function buildLocalHighRiskConsultationFallback(params: {
     buildFinding("coparenting-agent", "家园沟通闭环", parentCommunicationAgentView.summary, parentCommunicationAgentView.signals, parentCommunicationAgentView.actions, parentCommunicationAgentView.observationPoints, parentCommunicationAgentView.evidence),
     buildFinding("execution-agent", "园内行动闭环", inSchoolActionAgentView.summary, inSchoolActionAgentView.signals, inSchoolActionAgentView.actions, inSchoolActionAgentView.observationPoints, inSchoolActionAgentView.evidence),
   ];
+  const knowledgeHints = getChildcareKnowledgeHints({
+    topic: takeUnique([
+      ...keyFindings,
+      ...triggerReasons,
+      ...continuityNotes,
+      ...input.focusReasons,
+      ...(autoContext?.focusReasons ?? []),
+      input.suggestionSummary,
+      input.priorityHint?.reason,
+    ], 24),
+    scenario: takeUnique([
+      ...todayInSchoolActions,
+      ...tonightAtHomeActions,
+      ...followUp48h,
+      ...observationPoints,
+      ...(autoContext?.morningCheckAlerts ?? []),
+      ...(autoContext?.growthObservationNotes ?? []),
+      ...(autoContext?.parentFeedbackNotes ?? []),
+    ], 24),
+    ageRange: input.ageBand ?? null,
+    limit: 3,
+  });
 
   return {
     consultationId,
@@ -413,6 +436,7 @@ export function buildLocalHighRiskConsultationFallback(params: {
     },
     explainability,
     evidenceItems,
+    knowledgeHints,
     nextCheckpoints: takeUnique([...followUp48h, ...observationPoints], 6),
     coordinatorSummary: {
       finalConclusion: `${summary} 当前优先动作是“${schoolAction}”，今晚家庭任务是“${homeAction}”。`,

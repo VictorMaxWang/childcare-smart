@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { API_ERROR_STATUS, buildApiFailure } from "@/lib/api/errors";
 import type { ApiErrorCode, ApiSuccess } from "@/lib/api/types";
+import { logSecurityEvent } from "@/lib/server/security-log";
 
 export class ApiRouteError extends Error {
   code: ApiErrorCode;
@@ -31,7 +32,7 @@ export function handleApiError(error: unknown) {
     return apiError(error.code, error.message, { status: error.status });
   }
 
-  console.error("[API] Unhandled route error", error);
+  logSecurityEvent("error", "api.unhandled_route_error", { error });
   return apiError("server_error", "服务端处理失败。");
 }
 

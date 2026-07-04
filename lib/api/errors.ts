@@ -7,6 +7,7 @@ export const API_ERROR_STATUS: Record<ApiErrorCode, number> = {
   not_found: 404,
   conflict: 409,
   needs_confirmation: 422,
+  limited: 423,
   provider_unavailable: 503,
   server_error: 500,
 };

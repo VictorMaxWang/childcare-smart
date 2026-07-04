@@ -26,11 +26,10 @@ def install_error_handlers(app: FastAPI) -> None:
             response = await call_next(request)
         except Exception:
             logger.exception(
-                "backend.request_failed request_id=%s method=%s path=%s query=%s client=%s",
+                "backend.request_failed request_id=%s method=%s path=%s client=%s",
                 request_id,
                 request.method,
                 request.url.path,
-                request.url.query,
                 request.client.host if request.client else "",
             )
             if _is_sse_request(request):

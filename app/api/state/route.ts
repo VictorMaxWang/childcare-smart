@@ -19,6 +19,7 @@ import {
 } from "@/lib/persistence/state-scope";
 import { normalizeExtendedSnapshot, toCoreSnapshot } from "@/lib/server/app-data-model";
 import { DefaultAppDataRepository } from "@/lib/server/app-data-repository";
+import { logSecurityEvent } from "@/lib/server/security-log";
 
 export const runtime = "nodejs";
 
@@ -76,7 +77,7 @@ export async function GET() {
       return NextResponse.json({ ok: false, error: DATABASE_URL_CONFIG_ERROR_MESSAGE }, { status: 503 });
     }
 
-    console.error("[STATE] Failed to load snapshot", error);
+    logSecurityEvent("error", "state.load_failed", { error });
     return NextResponse.json({ ok: false, error: LOAD_SNAPSHOT_FAILED_ERROR }, { status: 500 });
   }
 }
@@ -162,7 +163,7 @@ export async function PUT(request: Request) {
       return NextResponse.json({ ok: false, error: DATABASE_URL_CONFIG_ERROR_MESSAGE }, { status: 503 });
     }
 
-    console.error("[STATE] Failed to save snapshot", error);
+    logSecurityEvent("error", "state.save_failed", { error });
     return NextResponse.json({ ok: false, error: SAVE_SNAPSHOT_FAILED_ERROR }, { status: 500 });
   }
 }

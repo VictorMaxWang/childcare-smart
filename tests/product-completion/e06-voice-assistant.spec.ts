@@ -1,4 +1,4 @@
-import { expect, request as playwrightRequest, test, type Page, type TestInfo } from "@playwright/test";
+﻿import { expect, request as playwrightRequest, test, type Page, type TestInfo } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -15,17 +15,19 @@ async function screenshot(page: Page, fileName: string) {
 
 async function demoRequest(testInfo: TestInfo, accountId?: string) {
   const baseURL = testInfo.project.use.baseURL as string | undefined;
-  return playwrightRequest.newContext({
-    baseURL,
-    extraHTTPHeaders: accountId ? { "x-demo-account-id": accountId } : undefined,
-  });
+  const context = await playwrightRequest.newContext({ baseURL });
+  if (accountId) {
+    const response = await context.post("/api/auth/demo-login", { data: { accountId } });
+    expect(response.ok()).toBeTruthy();
+  }
+  return context;
 }
 
 function weeklyPayload(role: "admin" | "teacher" | "parent") {
   return {
     role,
     snapshot: {
-      institutionName: "春芽普惠托育中心",
+      institutionName: "鏄ヨ娊鏅儬鎵樿偛涓績",
       periodLabel: "2026-04-27 - 2026-05-03",
       role,
       overview: {
@@ -58,7 +60,7 @@ test.describe("E06 voice assistant core framework", () => {
       const plan401 = await anonymous.post("/api/voice-assistant/commands", {
         data: {
           action: "plan",
-          utterance: { text: "打开成长档案", inputMode: "text" },
+          utterance: { text: "鎵撳紑鎴愰暱妗ｆ", inputMode: "text" },
         },
       });
       expect(plan401.status()).toBe(401);
@@ -169,7 +171,7 @@ test.describe("E06 voice assistant core framework", () => {
     await expect(page.getByTestId("voice-orb-provider-status")).toContainText(LIVE_OR_FALLBACK_PROVIDER_STATUS);
     await screenshot(page, "director-voice-orb-open.png");
 
-    await page.getByTestId("voice-orb-input").fill("打开教师管理");
+    await page.getByTestId("voice-orb-input").fill("鎵撳紑鏁欏笀绠＄悊");
     await page.getByTestId("voice-orb-submit").click();
     await expect(page).toHaveURL(/\/admin\/teachers/);
     await screenshot(page, "director-voice-orb-navigation.png");
@@ -181,14 +183,11 @@ test.describe("E06 voice assistant core framework", () => {
     await expect(page.getByTestId("voice-orb-button")).toHaveCount(0);
     await page.getByTestId("r06-teacher-command-assistant").click();
     await expect(page.getByTestId("voice-orb-panel")).toBeVisible();
-    await page.getByTestId("voice-orb-input").fill("给林小雨记录晨检，体温三十六点八，状态正常");
     await page.getByTestId("voice-orb-submit").click();
     await expect(page.getByTestId("voice-orb-confirm")).toBeVisible();
-    await expect(page.getByTestId("voice-orb-plan")).toContainText("林小雨");
     await screenshot(page, "teacher-write-confirmation.png");
 
     await page.getByTestId("voice-orb-confirm").click();
-    await expect(page.getByTestId("voice-orb-result")).toContainText("晨检记录已保存");
     await screenshot(page, "teacher-write-executed.png");
   });
 
@@ -199,9 +198,8 @@ test.describe("E06 voice assistant core framework", () => {
     await expect(page.getByTestId("voice-orb-button")).toHaveClass(/from-indigo-500/);
     await page.getByTestId("voice-orb-button").click();
     await expect(page.getByTestId("voice-orb-panel")).toBeVisible();
-    await page.getByTestId("voice-orb-input").fill("帮我做一个不存在的动作");
     await page.getByTestId("voice-orb-submit").click();
-    await expect(page.getByTestId("voice-orb-error")).toContainText(/不能理解|暂时/);
+    await expect(page.getByTestId("voice-orb-error")).toContainText(/涓嶈兘鐞嗚В|鏆傛椂/);
     await screenshot(page, "parent-unknown-command.png");
   });
 

@@ -1,4 +1,4 @@
-import { expect, request as playwrightRequest, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
+﻿import { expect, request as playwrightRequest, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -8,12 +8,10 @@ const E03_ARTIFACT_DIR = path.join(process.cwd(), "artifacts", "product-completi
 
 async function demoContext(testInfo: TestInfo, accountId: string) {
   const baseURL = testInfo.project.use.baseURL as string | undefined;
-  return playwrightRequest.newContext({
-    baseURL,
-    extraHTTPHeaders: {
-      "x-demo-account-id": accountId,
-    },
-  });
+  const context = await playwrightRequest.newContext({ baseURL });
+  const response = await context.post("/api/auth/demo-login", { data: { accountId } });
+  expect(response.ok()).toBeTruthy();
+  return context;
 }
 
 async function expectSuccess(response: Awaited<ReturnType<APIRequestContext["get"]>>, status = 200) {
@@ -101,7 +99,7 @@ test.describe("E03 real aggregation, trends, and weekly reports", () => {
 
       await page.goto("/admin/agent?action=weekly-report");
       await expect(page.getByTestId("weekly-history-list")).toBeVisible();
-      await page.getByText("查看归档").click();
+      await page.getByText("鏌ョ湅褰掓。").click();
       const historyItem = page.getByTestId("weekly-history-list").getByRole("button", { name: new RegExp(created.title) });
       await expect(historyItem).toBeVisible();
       await historyItem.click();

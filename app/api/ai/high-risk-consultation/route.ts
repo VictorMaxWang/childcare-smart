@@ -11,6 +11,8 @@ import {
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { logSecurityEvent } from "@/lib/server/security-log";
+import { getChildcareKnowledgeHints } from "@/lib/knowledge/childcare-knowledge";
 
 const HIGH_RISK_CONSULTATION_TARGET_PATH = "/api/v1/agents/consultations/high-risk";
 const DEFAULT_HIGH_RISK_CONSULTATION_BRAIN_TIMEOUT_MS = 8_000;
@@ -53,6 +55,40 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
+function asString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function asStringArray(value: unknown, limit = 8) {
+  return Array.isArray(value) ? value.map((item) => String(item ?? "").trim()).filter(Boolean).slice(0, limit) : [];
+}
+
+function buildKnowledgeHintsForResponse(body: Record<string, unknown>) {
+  return getChildcareKnowledgeHints({
+    topic: [
+      ...asStringArray(body.keyFindings),
+      ...asStringArray(body.triggerReasons),
+      ...asStringArray(body.continuityNotes),
+      asString(body.triggerReason),
+      asString(body.summary),
+    ],
+    scenario: [
+      ...asStringArray(body.todayInSchoolActions),
+      ...asStringArray(body.tonightAtHomeActions),
+      ...asStringArray(body.followUp48h),
+      asString(asRecord(body.coordinatorSummary).problemDefinition),
+      asString(asRecord(body.coordinatorSummary).schoolAction),
+      asString(asRecord(body.coordinatorSummary).homeAction),
+    ],
+    ageRange: asString(body.ageRange) || asString(body.ageBand) || null,
+    limit: 3,
+  });
+}
+
 async function maybeEnrichRemoteResponse(brainForward: BrainForwardResult): Promise<Response> {
   const response = brainForward.response;
   if (!response) {
@@ -80,6 +116,9 @@ async function maybeEnrichRemoteResponse(brainForward: BrainForwardResult): Prom
     provider,
     fallback,
     fallbackReason,
+    knowledgeHints: Array.isArray(body.knowledgeHints) && body.knowledgeHints.length > 0
+      ? body.knowledgeHints
+      : buildKnowledgeHintsForResponse(body),
     providerTrace:
       isRecord(body.providerTrace) && Object.keys(body.providerTrace).length > 0
         ? body.providerTrace
@@ -139,7 +178,7 @@ export async function POST(request: Request) {
   try {
     payload = (await request.json()) as HighRiskConsultationRequestPayload;
   } catch (error) {
-    console.error("[AI] Invalid high-risk consultation payload", error);
+    logSecurityEvent("error", "ai.high_risk_consultation.invalid_payload", { error });
     return NextResponse.json(
       { error: "Invalid JSON body" },
       { status: 400, headers: buildForcedFallbackHeaders("invalid-json-body") }

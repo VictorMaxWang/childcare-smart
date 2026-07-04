@@ -1,4 +1,4 @@
-import {
+﻿import {
   expect,
   request as playwrightRequest,
   type APIRequestContext,
@@ -40,10 +40,12 @@ export async function loginAs(page: Page, accountId: string, route: string) {
 
 export async function demoContext(testInfo: TestInfo, accountId?: string) {
   const baseURL = testInfo.project.use.baseURL as string | undefined;
-  return playwrightRequest.newContext({
-    baseURL,
-    extraHTTPHeaders: accountId ? { "x-demo-account-id": accountId } : undefined,
-  });
+  const context = await playwrightRequest.newContext({ baseURL });
+  if (accountId) {
+    const response = await context.post("/api/auth/demo-login", { data: { accountId } });
+    expect(response.ok()).toBeTruthy();
+  }
+  return context;
 }
 
 export async function expectOk<T = unknown>(response: APIResponse, status = 200): Promise<T> {

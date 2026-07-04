@@ -19,6 +19,7 @@ import {
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { emptyInstitutionSnapshot, parentStarterSnapshot } from "@/lib/persistence/bootstrap";
 import { getSessionUserId } from "@/lib/auth/session";
+import { logSecurityEvent } from "@/lib/server/security-log";
 
 const ROLE_PARENT = "\u5bb6\u957f" as AccountRole;
 const ROLE_TEACHER = "\u6559\u5e08" as AccountRole;
@@ -122,7 +123,7 @@ async function getAppUserById(userId: string) {
 
     return rows[0] ?? null;
   } catch (error) {
-    console.error("[AUTH] Failed to load app user by id", error);
+    logSecurityEvent("error", "auth.account.load_by_id_failed", { error });
     throw error;
   }
 }
@@ -155,7 +156,7 @@ async function getAppUserByUsername(username: string) {
       return { row: null, error: DATABASE_URL_CONFIG_ERROR_MESSAGE } as const;
     }
 
-    console.error("[AUTH] Failed to load app user by username", error);
+    logSecurityEvent("error", "auth.account.load_by_username_failed", { error });
     return { row: null, error: DATABASE_QUERY_FAILED_ERROR } as const;
   }
 }
@@ -329,7 +330,7 @@ export async function registerNormalAccount(input: RegisterAccountInput): Promis
       return { ok: false, status: 409, error: DUPLICATE_USERNAME_ERROR };
     }
 
-    console.error("[AUTH] Failed to create app user", error);
+    logSecurityEvent("error", "auth.account.create_failed", { error });
     return {
       ok: false,
       status: 500,

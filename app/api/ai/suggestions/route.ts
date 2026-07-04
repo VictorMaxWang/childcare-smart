@@ -10,8 +10,8 @@ import type { AiSuggestionPayload, AiSuggestionResponse } from "@/lib/ai/types";
 import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
 import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
-import { requireParentChildAccess } from "@/lib/server/parent-route-guard";
+import { aiRouteLimitedResponse, authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { logSecurityEvent } from "@/lib/server/security-log";
 
 export async function POST(request: Request) {
   const authError = await authorizeAiRoute(request, {
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   try {
     payload = (await request.json()) as AiSuggestionPayload;
   } catch (error) {
-    console.error("[AI] Invalid suggestion payload", error);
+    logSecurityEvent("error", "ai.suggestions.invalid_payload", { error });
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
@@ -40,9 +40,12 @@ export async function POST(request: Request) {
       : null;
   const isChildScoped = childSnapshot !== null;
   const childId = childSnapshot?.child.id ?? null;
-  const access = await requireParentChildAccess(childId);
-  if (access.response) {
-    return access.response;
+  if (!childId) {
+    return aiRouteLimitedResponse({
+      reason: "scope_required",
+      error: "Child scope is required for parent suggestions.",
+      requiredRole: "parent",
+    });
   }
 
   const brainForward = await forwardBrainRequest(brainRequest, "/api/v1/agents/parent/suggestions");
@@ -71,7 +74,7 @@ export async function POST(request: Request) {
         })
       );
     } catch (error) {
-      console.warn("[AI] Parent suggestion consultation fallback", error);
+      logSecurityEvent("warn", "ai.suggestions.consultation_fallback", { error });
     }
   }
 

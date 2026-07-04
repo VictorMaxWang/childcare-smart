@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authenticateNormalAccount } from "@/lib/auth/account-server";
 import { setSessionCookie } from "@/lib/auth/session";
 import { AUTH_SESSION_SECRET_CONFIG_ERROR_MESSAGE, MissingAuthSessionSecretError } from "@/lib/auth/session-config";
+import { logSecurityEvent } from "@/lib/server/security-log";
 
 export const runtime = "nodejs";
 
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: AUTH_SESSION_SECRET_CONFIG_ERROR_MESSAGE }, { status: 503 });
     }
 
-    console.error("[AUTH] Invalid login request", error);
+    logSecurityEvent("error", "auth.login.invalid_request", { error });
     return NextResponse.json({ ok: false, error: INVALID_LOGIN_REQUEST_ERROR }, { status: 400 });
   }
 }

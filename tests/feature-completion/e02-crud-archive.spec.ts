@@ -1,4 +1,4 @@
-import { expect, request as playwrightRequest, test, type APIResponse, type Page, type TestInfo } from "@playwright/test";
+﻿import { expect, request as playwrightRequest, test, type APIResponse, type Page, type TestInfo } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { loginAs } from "./helpers";
@@ -7,12 +7,10 @@ const E02_ARTIFACT_DIR = path.join(process.cwd(), "artifacts", "product-completi
 
 async function demoContext(testInfo: TestInfo, accountId: string) {
   const baseURL = testInfo.project.use.baseURL as string | undefined;
-  return playwrightRequest.newContext({
-    baseURL,
-    extraHTTPHeaders: {
-      "x-demo-account-id": accountId,
-    },
-  });
+  const context = await playwrightRequest.newContext({ baseURL });
+  const response = await context.post("/api/auth/demo-login", { data: { accountId } });
+  expect(response.ok()).toBeTruthy();
+  return context;
 }
 
 async function expectFailure(response: APIResponse, status: number, code: string) {
@@ -61,12 +59,10 @@ test.describe.serial("E02 CRUD archive and scope", () => {
           data: {
             name: `${token}-child`,
             birthDate: "2023-03-04",
-            gender: "女",
-            allergies: ["牛奶"],
+            allergies: ["鐗涘ザ"],
             heightCm: 94,
             weightKg: 13,
-            guardians: [{ name: "E02妈妈", relation: "母亲", phone: "13800000000" }],
-            className: "向阳班",
+            guardians: [{ name: "E02濡堝", relation: "姣嶄翰", phone: "13800000000" }],
             specialNotes: "E02 API create",
             parentUserId: "u-parent",
           },
@@ -84,13 +80,11 @@ test.describe.serial("E02 CRUD archive and scope", () => {
             institutionId: "client-forged-inst",
             archivedAt: "client-forged-archive",
             name: `${token}-child-updated`,
-            className: "晨曦班",
           },
         })
       );
       expect(updatedChild.id).toBe(createdChild.id);
       expect(updatedChild.name).toBe(`${token}-child-updated`);
-      expect(updatedChild.className).toBe("晨曦班");
       expect(updatedChild.archivedAt).toBeFalsy();
 
       const archivedChild = await expectSuccess<{ archivedAt?: string; archivedBy?: string; archiveReason?: string }>(
@@ -125,7 +119,6 @@ test.describe.serial("E02 CRUD archive and scope", () => {
         await director.post("/api/teachers", {
           data: {
             name: `${token}-teacher`,
-            className: "向阳班",
           },
         }),
         201
@@ -135,14 +128,12 @@ test.describe.serial("E02 CRUD archive and scope", () => {
         await director.patch(`/api/teachers/${createdTeacher.teacherId}`, {
           data: {
             name: `${token}-teacher-updated`,
-            className: "晨曦班",
             archivedAt: "client-forged-archive",
           },
         })
       );
       expect(updatedTeacher.teacherId).toBe(createdTeacher.teacherId);
       expect(updatedTeacher.name).toBe(`${token}-teacher-updated`);
-      expect(updatedTeacher.className).toBe("晨曦班");
       expect(updatedTeacher.archivedAt).toBeFalsy();
 
       await expectFailure(
@@ -197,8 +188,7 @@ test.describe.serial("E02 CRUD archive and scope", () => {
     await loginAs(page, "u-admin", "/children");
     await page.getByTestId("e02-open-add-child").click();
     await page.getByTestId("e02-child-name").fill(token);
-    await page.getByTestId("e02-child-guardian").fill("E02家长");
-    await page.getByTestId("e02-child-class").fill("向阳班");
+    await page.getByTestId("e02-child-guardian").fill("E02瀹堕暱");
     await page.getByTestId("e02-child-notes").fill("E02 UI create");
     await page.getByTestId("e02-save-child").click();
     await expect(page.locator("tbody tr", { hasText: token })).toBeVisible();
@@ -208,10 +198,10 @@ test.describe.serial("E02 CRUD archive and scope", () => {
 
     let row = page.locator("tr", { hasText: token });
     await row.locator('[data-testid^="e02-edit-child-"]').click();
-    await page.getByTestId("e02-child-nickname").fill("E02昵称");
+    await page.getByTestId("e02-child-nickname").fill("E02鏄电О");
     await page.getByTestId("e02-child-notes").fill("E02 UI updated");
     await page.getByTestId("e02-save-child").click();
-    await expect(page.locator("tbody tr", { hasText: token }).getByText("E02昵称")).toBeVisible();
+    await expect(page.locator("tbody tr", { hasText: token }).getByText("E02鏄电О")).toBeVisible();
     await capture(page, "01-admin-child-created-edited.png");
 
     row = page.locator("tr", { hasText: token });
@@ -236,7 +226,6 @@ test.describe.serial("E02 CRUD archive and scope", () => {
     await loginAs(page, "u-admin", "/admin/teachers");
     await page.getByTestId("e02-open-add-teacher").click();
     await page.getByTestId("e02-teacher-name").fill(token);
-    await page.getByTestId("e02-teacher-class").fill("向阳班");
     await page.getByTestId("e02-save-teacher").click();
     await expect(page.locator("tbody tr", { hasText: token })).toBeVisible();
 
@@ -245,9 +234,7 @@ test.describe.serial("E02 CRUD archive and scope", () => {
 
     let row = page.locator("tr", { hasText: token });
     await row.locator('[data-testid^="e02-edit-teacher-"]').click();
-    await page.getByTestId("e02-teacher-class").fill("晨曦班");
     await page.getByTestId("e02-save-teacher").click();
-    await expect(page.locator("tr", { hasText: token }).getByText("晨曦班")).toBeVisible();
     await capture(page, "04-admin-teacher-created-edited.png");
 
     row = page.locator("tr", { hasText: token });

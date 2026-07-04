@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requestDashscopeDietEvaluation, type DietEvaluationInput, type DietEvaluationResult } from "@/lib/ai/dashscope";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { logSecurityEvent } from "@/lib/server/security-log";
 
 interface DietEvaluationPayload {
   input: DietEvaluationInput;
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
   try {
     payload = (await request.json()) as DietEvaluationPayload;
   } catch (error) {
-    console.error("[AI] Invalid diet-evaluation payload", error);
+    logSecurityEvent("error", "ai.diet_evaluation.invalid_payload", { error });
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
@@ -143,7 +144,10 @@ export async function POST(request: Request) {
 
   const aiResult = await requestDashscopeDietEvaluation(payload.input);
   if (!aiResult) {
-    console.warn(`[AI] Falling back to diet evaluation rules using model ${configuredModel}.`);
+    logSecurityEvent("warn", "ai.diet_evaluation.fallback", {
+      provider: "dashscope",
+      model: configuredModel,
+    });
     return NextResponse.json(
       {
         evaluation: fallback,

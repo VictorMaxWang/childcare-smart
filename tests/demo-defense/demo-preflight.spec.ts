@@ -1,4 +1,4 @@
-import fs from "node:fs/promises";
+﻿import fs from "node:fs/promises";
 import path from "node:path";
 import { existsSync } from "node:fs";
 
@@ -142,17 +142,31 @@ async function readOkData<T>(response: OkJsonResponseLike, label: string): Promi
 }
 
 async function demoContext(testInfo: TestInfo, accountId: string) {
-  return playwrightRequest.newContext({
-    baseURL: getBaseURL(testInfo),
-    extraHTTPHeaders: {
-      "x-demo-account-id": accountId,
-    },
-  });
+  const context = await playwrightRequest.newContext({ baseURL: getBaseURL(testInfo) });
+  const response = await context.post("/api/auth/demo-login", { data: { accountId } });
+  ensure(response.ok(), `Demo login failed for ${accountId}: HTTP ${response.status()} ${await response.text()}`);
+  return context;
+}
+
+async function clearDemoBrowserState(page: Page) {
+  try {
+    await page.evaluate(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+    });
+  } catch {
+    // The first page-scoped login can run before the page has an app origin.
+  }
+}
+
+async function loginDemoPage(page: Page, accountId: string) {
+  await clearDemoBrowserState(page);
+  const login = await page.request.post("/api/auth/demo-login", { data: { accountId } });
+  ensure(login.ok(), `Demo login failed for ${accountId}: HTTP ${login.status()} ${await login.text()}`);
 }
 
 async function loginAs(page: Page, accountId: string, route: string) {
-  const login = await page.request.post("/api/auth/demo-login", { data: { accountId } });
-  ensure(login.ok(), `Demo login failed for ${accountId}: HTTP ${login.status()} ${await login.text()}`);
+  await loginDemoPage(page, accountId);
   const response = await page.goto(route, { waitUntil: "domcontentloaded" });
   await assertPageHealthy(page, route, response?.status() ?? 0);
 }
@@ -324,8 +338,7 @@ test("demo defense preflight main chain", async ({ page }, testInfo) => {
         api: "/api/ai/teacher-agent",
       },
       async () => {
-        const login = await page.request.post("/api/auth/demo-login", { data: { accountId: "u-teacher" } });
-        ensure(login.ok(), `Demo login failed for u-teacher: HTTP ${login.status()} ${await login.text()}`);
+        await loginDemoPage(page, "u-teacher");
         const responsePromise = page.waitForResponse(
           (response) =>
             response.url().includes("/api/ai/teacher-agent") &&

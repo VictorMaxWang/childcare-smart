@@ -9,8 +9,18 @@ export type ApiErrorCode =
   | "not_found"
   | "conflict"
   | "needs_confirmation"
+  | "limited"
   | "provider_unavailable"
   | "server_error";
+
+export type ApiLimitedReason =
+  | "login_required"
+  | "role_mismatch"
+  | "scope_required"
+  | "forbidden_child"
+  | "forbidden_class"
+  | "demo_seed_only"
+  | "normal_session_not_enabled";
 
 export type ApiSuccess<T> = {
   ok: true;
@@ -21,6 +31,10 @@ export type ApiFailure = {
   ok: false;
   error: string;
   code: ApiErrorCode;
+  limited?: boolean;
+  reason?: ApiLimitedReason | string;
+  requiredRole?: "parent" | "teacher" | "staff" | "admin" | null;
+  demoAvailable?: boolean;
 };
 
 export type ApiEnvelope<T> = ApiSuccess<T> | ApiFailure;

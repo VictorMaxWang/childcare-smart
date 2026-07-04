@@ -1,5 +1,6 @@
-import type { ConsultationEvidenceItem, HighRiskConsultationResult } from "@/lib/ai/types";
+import type { ConsultationEvidenceItem, HighRiskConsultationResult, KnowledgeEntry } from "@/lib/ai/types";
 import { buildConsultationEvidenceItems } from "@/lib/consultation/evidence";
+import { getChildcareKnowledgeHints } from "@/lib/knowledge/childcare-knowledge";
 
 type NormalizationOptions = {
   brainProvider?: string;
@@ -45,6 +46,48 @@ function uniqueStrings(values: unknown[], limit = 24) {
 
 function asStringArray(value: unknown, limit = 24) {
   return Array.isArray(value) ? uniqueStrings(value, limit) : [];
+}
+
+function isKnowledgeEntry(value: unknown): value is KnowledgeEntry {
+  const record = asRecord(value);
+
+  return [
+    "id",
+    "topic",
+    "ageRange",
+    "scenario",
+    "principle",
+    "suggestedAction",
+    "riskBoundary",
+    "sourceNote",
+  ].every((key) => Boolean(asString(record[key])));
+}
+
+function normalizeKnowledgeHints(result: Record<string, unknown>) {
+  if (Array.isArray(result.knowledgeHints)) {
+    const existing = result.knowledgeHints.filter(isKnowledgeEntry).slice(0, 3);
+    if (existing.length > 0) return existing;
+  }
+
+  return getChildcareKnowledgeHints({
+    topic: [
+      ...asStringArray(result.keyFindings, 8),
+      ...asStringArray(result.triggerReasons, 8),
+      ...asStringArray(result.continuityNotes, 8),
+      asString(result.triggerReason),
+      asString(result.summary),
+    ],
+    scenario: [
+      ...asStringArray(result.todayInSchoolActions, 6),
+      ...asStringArray(result.tonightAtHomeActions, 6),
+      ...asStringArray(result.followUp48h, 6),
+      asString(asRecord(result.coordinatorSummary).problemDefinition),
+      asString(asRecord(result.coordinatorSummary).schoolAction),
+      asString(asRecord(result.coordinatorSummary).homeAction),
+    ],
+    ageRange: asString(result.ageRange) || asString(result.ageBand) || null,
+    limit: 3,
+  });
 }
 
 function normalizeMemoryMeta(
@@ -498,6 +541,7 @@ export function normalizeHighRiskConsultationResult(
     providerFallback: Boolean(providerTrace.fallback),
   });
   const manualReviewSummary = buildManualReviewSummary(evidenceItems);
+  const knowledgeHints = normalizeKnowledgeHints(result);
   const warnings = buildSafetyWarnings({
     dataQualityWarnings: asStringArray(dataQuality.warnings, 12),
     providerFallback: Boolean(providerTrace.fallback),
@@ -526,6 +570,7 @@ export function normalizeHighRiskConsultationResult(
     nextCheckpoints,
     continuityNotes,
     evidenceItems,
+    knowledgeHints,
     warnings,
     humanReviewRequired: manualReviewSummary.required,
     manualReviewSummary,
