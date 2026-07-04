@@ -140,7 +140,9 @@ export async function proxy(request: NextRequest) {
     API_ROUTE_HANDLED_AUTH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) ||
     pathname === "/favicon.ico" ||
     pathname === "/login" ||
-    pathname === "/auth/login"
+    pathname === "/auth/login" ||
+    pathname === "/register" ||
+    pathname === "/auth/register"
   ) {
     return NextResponse.next();
   }

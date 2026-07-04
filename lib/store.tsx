@@ -378,7 +378,7 @@ interface AppContextType {
   authLoading: boolean;
   login: (username: string, password: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
   loginWithDemo: (accountId: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
-  register: (input: RegisterAccountInput & { confirmPassword: string }) => Promise<{ ok: boolean; error?: string; user?: User }>;
+  register: (input: RegisterAccountInput & { confirmPassword: string }) => Promise<{ ok: boolean; error?: string; user?: User; redirectPath?: string }>;
   logout: () => Promise<void>;
 
   children: Child[];
@@ -5446,13 +5446,13 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       });
-      const result = (await response.json()) as { ok: boolean; error?: string; user?: User };
+      const result = (await response.json()) as { ok: boolean; error?: string; user?: User; redirectPath?: string };
       if (!response.ok || !result.ok || !result.user) {
         return { ok: false, error: result.error ?? "注册失败，请稍后重试。" };
       }
       lastSyncedSnapshotKeyRef.current = null;
       setCurrentUser(result.user);
-      return { ok: true, user: result.user };
+      return { ok: true, user: result.user, redirectPath: result.redirectPath };
     } catch {
       return { ok: false, error: "网络异常，请稍后重试。" };
     }

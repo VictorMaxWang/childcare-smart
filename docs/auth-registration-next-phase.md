@@ -14,7 +14,7 @@
 - 数据库：`supabase/sql/app_users.sql` 定义 `app_users`，唯一键是 `username_normalized`；`supabase/sql/app_state_snapshots.sql` 按 `institution_id` 保存 snapshot。
 - 注册写入：`lib/auth/account-server.ts` 当前会创建 `app_users`，`is_demo=false`，并用事务 upsert `app_state_snapshots`。手机号注册优先写 `phone_normalized`；如果真实库尚未执行迁移导致字段不存在，则降级为只写 `username_normalized`。家长注册只创建空家庭空间，不再自动创建儿童档案。
 - T5 初始空间：注册 snapshot 会写入 `meta.workspace` 和 `meta.usageLimits`；admin 为真实机构空间，teacher 为个人试用机构空间，parent 为家庭空间，默认使用 `maxChildren=5`、`maxStorybooksPerMonth=20`、`maxAiCallsPerDay=50`。
-- 页面现状：`app/login/page.tsx` 的注册弹窗文案已经写“手机号”，但实际仍把手机号输入值作为 `username` 发送；验证码按钮是禁用的演示控件。
+- 页面现状：`app/register/page.tsx` 已提供独立手机号注册页，提交 `{ phone, username: phone, password, confirmPassword, role, displayName }`；`app/login/page.tsx` 保留登录和示例账号入口，并通过“立即注册”链接进入 `/register`。
 - 权限现状：`scopeSnapshotForSessionUser`、`lib/server/scope.ts`、AI route guard 和 `/api/state` 已经按 `institutionId`、教师班级、家长 `childIds` 做范围控制。
 
 ## 下一阶段目标
@@ -82,9 +82,9 @@
 
 ## 页面改造清单
 
-- 新增或整理 `/register` 页面，表单字段为手机号、密码、确认密码、角色。
+- `/register` 页面表单字段为手机号、密码、确认密码、角色和可选昵称/姓名，提交到 `POST /api/auth/register`。
 - `/login` 登录表单主文案改为手机号 + 密码，保留“旧账号也可登录”的兼容提示。
-- 移除注册弹窗中“验证码为本地演示控件”的误导路径，除非明确保持 disabled 并标注暂未接入短信。
+- 登录页不再保留注册弹窗；未接入短信前注册页不展示验证码路径。
 - 家长角色注册后进入家长首页或儿童建档引导页，但不能自动创建儿童档案。
 - 儿童建档页增加监护人确认与同意记录；第一版只要求最小必要儿童字段。
 - 不改 teacher/admin/parent 现有主链页面结构，不删除 demo 快速体验入口。
