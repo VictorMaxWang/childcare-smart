@@ -39,6 +39,12 @@ export interface RegisterAccountInput {
   child?: ParentRegistrationChildInput;
 }
 
+export interface LoginAccountInput {
+  phone?: string;
+  username?: string;
+  password?: string;
+}
+
 export const DEFAULT_TEACHER_CLASS_NAME = "新注册班";
 export const DEFAULT_PARENT_CHILD_CLASS_NAME = "待分班";
 export const DEMO_INSTITUTION_ID = "inst-1";

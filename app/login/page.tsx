@@ -17,8 +17,8 @@ import {
   Presentation,
   ShieldCheck,
   Sparkles,
+  Smartphone,
   TriangleAlert,
-  UserRound,
   UsersRound,
 } from "lucide-react";
 import { type AccountRole } from "@/lib/auth/accounts";
@@ -116,7 +116,7 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const { demoAccounts, login, loginWithDemo, isAuthenticated, authLoading, currentUser } = useApp();
 
-  const [username, setUsername] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -148,7 +148,7 @@ export default function LoginPage() {
     setLoading(true);
     setMessage("");
 
-    const result = await login(username, password);
+    const result = await login(phone, password);
 
     setLoading(false);
     if (!result.ok || !result.user) {
@@ -350,7 +350,7 @@ export default function LoginPage() {
                   <span className={styles.desktopTitleText}>登录与系统导览入口</span>
                   <span className={styles.mobileTitleText}>账号登录</span>
                 </h2>
-                <p className={styles.authSubtitle}>手机号注册后可直接进入对应端，旧账号仍可继续登录。</p>
+                <p className={styles.authSubtitle}>使用手机号和密码登录，旧账号仍可继续登录。</p>
               </div>
               <span className={styles.mobileSecurityPill}>
                 <ShieldCheck aria-hidden="true" size={13} />
@@ -380,18 +380,18 @@ export default function LoginPage() {
               <p className={styles.formSectionTitle}>账号登录</p>
 
               <div className={styles.formField}>
-                <label className={styles.fieldLabel} htmlFor="username">
-                  手机号 / 旧账号
+                <label className={styles.fieldLabel} htmlFor="phone">
+                  手机号
                 </label>
                 <div className={styles.inputWrap}>
-                  <UserRound className={styles.inputIcon} aria-hidden="true" />
+                  <Smartphone className={styles.inputIcon} aria-hidden="true" />
                   <input
-                    id="username"
-                    data-testid="login-username"
-                    value={username}
-                    onChange={(event) => setUsername(event.target.value)}
-                    placeholder="手机号或旧账号"
-                    autoComplete="username"
+                    id="phone"
+                    data-testid="login-phone"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    placeholder="请输入手机号"
+                    autoComplete="tel"
                     className={styles.textInput}
                     required
                     disabled={loading}

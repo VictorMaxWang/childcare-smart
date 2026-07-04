@@ -66,7 +66,7 @@ test.describe("FRONTEND-REPLICA-R02 design system shell", () => {
     const missingAssets = collectAsset404s(page);
     await page.goto("/login");
 
-    await expect(page.getByTestId("login-username")).toBeVisible();
+    await expect(page.getByTestId("login-phone")).toBeVisible();
     await expect(page.getByTestId("login-password")).toBeVisible();
     await expect(page.getByTestId("demo-account-u-admin")).toBeVisible();
     await expect(page.getByTestId("demo-account-u-teacher")).toBeVisible();
