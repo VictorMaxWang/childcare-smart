@@ -283,6 +283,15 @@ export interface ApiChildInput {
 
 export type ApiChildPatch = Partial<ApiChildInput>;
 
+export interface ApiParentChildOnboardingInput {
+  name?: string;
+  nickname?: string;
+  birthDate?: string;
+  ageMonth?: number;
+  gender?: ApiChildInput["gender"];
+  consentAccepted: boolean;
+}
+
 export interface ApiArchiveInput {
   action: ArchiveAction;
   archiveReason?: string;

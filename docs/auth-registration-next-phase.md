@@ -123,3 +123,11 @@ T6 已落地手机号登录兼容层，请求体支持：
 - 数据库回滚时不要删除 `username_normalized`、`institution_id`、`child_ids` 或已有 `app_state_snapshots`。
 - 如果 `phone_normalized` 唯一索引引发冲突，先暂停新注册，导出冲突手机号，修复标准化逻辑后再恢复。
 - 如果家长建档同意流程未完成，不允许自动创建儿童；保持家庭空间为空并显示引导。
+
+## T7 更新：家长儿童档案创建与监护人同意
+
+- 儿童档案创建已从注册流程后移到 parent 登录后的 `/parent/onboarding/child`。
+- `/parent` 在当前家长没有 child 时展示“创建孩子成长档案”入口；已有 child 的家长不会被重复强制 onboarding。
+- `POST /api/parent/children` 仅允许普通家长账号调用，拒绝 demo、非家长、跨机构和 `consentAccepted=false`。
+- 服务端在同一事务中创建最小必要 child、更新 parent `child_ids`，并写入 `guardian_authorization`、`terms_of_service`、`child_privacy_policy` 三条 `consent_records`。
+- 第一版 child 仅收姓名/昵称、出生日期或月龄、可选性别；不收身份证、详细住址、人脸照片或医疗记录。

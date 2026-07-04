@@ -340,16 +340,33 @@ export default function ParentHomePage() {
   }, [weeklyReportKey, weeklyReportPayload]);
 
   if (!viewModel || !feed || !previewContext) {
+    if (!invalidChildId) {
+      return (
+        <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+          <section className="rounded-[1.5rem] border border-dashed border-indigo-200 bg-white p-6 shadow-sm sm:p-8">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
+              <BrainCircuit className="h-6 w-6" aria-hidden="true" />
+            </div>
+            <h1 className="mt-5 text-2xl font-semibold tracking-normal text-slate-950">
+              创建孩子成长档案
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
+              完成监护人确认与同意记录后，就可以为孩子建立真实成长档案。档案会绑定到当前家长账号和家庭空间，不会进入示例数据。
+            </p>
+            <Button asChild className="mt-6">
+              <Link href="/parent/onboarding/child">创建孩子成长档案</Link>
+            </Button>
+          </section>
+        </div>
+      );
+    }
+
     return (
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
         <EmptyState
           icon={<BrainCircuit className="h-6 w-6" />}
-          title={invalidChildId ? "无权查看该孩子的数据。" : "当前家长账号还没有可展示的孩子数据。"}
-          description={
-            invalidChildId
-              ? "当前家长账号没有该 childId 的授权，系统不会自动回退到其他孩子。"
-              : "请先使用示例家长账号，或完成普通家长账号的孩子建档。"
-          }
+          title="无权查看该孩子的数据。"
+          description="当前家长账号没有该 childId 的授权，系统不会自动回退到其他孩子。"
         />
       </div>
     );
