@@ -8,11 +8,11 @@
 
 - 登录入口：`/login` 是真实登录页，`/auth/login` 重定向到 `/login`；`proxy.ts` 放行 `/login`、`/auth/login` 和 `/api/auth/*`。
 - 普通登录：`app/api/auth/login/route.ts` 接收 `{ username, password }`，调用 `authenticateNormalAccount`，成功后通过 `setSessionCookie` 写 `ccs_session`。
-- 普通注册：`app/api/auth/register/route.ts` 接收 `RegisterAccountInput & { confirmPassword }`，服务端已校验 `confirmPassword === password`，成功后同样写 `ccs_session`。
+- 普通注册：`app/api/auth/register/route.ts` 接收 `{ phone, username, password, confirmPassword, role, displayName }`，服务端已校验 `confirmPassword === password`，成功后同样写 `ccs_session`。
 - session：`lib/auth/session.ts` 使用 HMAC SHA-256 签名 payload，cookie 名称为 `ccs_session`，12 小时有效；`proxy.ts` 有一套 Edge 侧校验逻辑。
-- 账号模型：`lib/auth/accounts.ts` 当前只有 `username`、`password`、`role`、可选 `className` 和可选家长 `child` 输入，没有 `phone` 或 `phone_normalized`。
+- 账号模型：`lib/auth/accounts.ts` 已支持 `phone`、`username`、`password`、`role`、`displayName`、可选 `className` 和兼容期可选 `child` 输入；`role` 可接收 `admin`、`teacher`、`parent` 并映射到现有中文角色。
 - 数据库：`supabase/sql/app_users.sql` 定义 `app_users`，唯一键是 `username_normalized`；`supabase/sql/app_state_snapshots.sql` 按 `institution_id` 保存 snapshot。
-- 注册写入：`lib/auth/account-server.ts` 当前会创建 `app_users`，`is_demo=false`，并用事务 upsert `app_state_snapshots`。家长注册会立即通过 `parentStarterSnapshot` 创建儿童档案。
+- 注册写入：`lib/auth/account-server.ts` 当前会创建 `app_users`，`is_demo=false`，并用事务 upsert `app_state_snapshots`。手机号注册优先写 `phone_normalized`；如果真实库尚未执行迁移导致字段不存在，则降级为只写 `username_normalized`。家长注册只创建空家庭空间，不再自动创建儿童档案。
 - 页面现状：`app/login/page.tsx` 的注册弹窗文案已经写“手机号”，但实际仍把手机号输入值作为 `username` 发送；验证码按钮是禁用的演示控件。
 - 权限现状：`scopeSnapshotForSessionUser`、`lib/server/scope.ts`、AI route guard 和 `/api/state` 已经按 `institutionId`、教师班级、家长 `childIds` 做范围控制。
 
@@ -49,13 +49,17 @@
 
 行为要求：
 
-- 服务端必须校验 `phone`、`password`、`confirmPassword`、`role`。
+- 服务端必须校验 `phone` 或兼容期 `username`、`password`、`confirmPassword`、`role`。
 - `confirmPassword` 不一致返回 `400`。
 - 手机号格式无效返回 `400`。
 - 手机号已注册返回 `409`。
+- `role` 支持 `admin`、`teacher`、`parent` 和现有中文角色，不允许任意字符串写入。
+- 手机号请求优先使用 `normalizePhone(phone)`，并把 `username_normalized` 设置为标准化手机号以兼容旧逻辑；如 `phone_normalized` 字段可用则同步写入。
 - 数据库或 session 配置缺失返回现有 `503` 口径。
 - 成功返回 `{ ok: true, user }`，并设置现有 `ccs_session`。
+- 成功响应不包含 `password_hash`，真实账号写入 `is_demo=false`。
 - 兼容期可接受旧 `{ username, password, confirmPassword, role }`，但新页面必须发送 `phone`。
+- 家长注册本身不创建 child；儿童档案创建留到 T7 的监护人同意 onboarding。
 
 ### `POST /api/auth/login`
 
@@ -95,13 +99,14 @@
 
 ## 测试清单
 
-- 注册缺少手机号返回 `400`。
+- 注册缺少手机号且缺少旧账号名返回 `400`。
 - 注册手机号格式错误返回 `400`。
 - 注册密码短于当前策略返回 `400`。
 - 注册 `confirmPassword` 不一致返回 `400`。
 - 注册重复手机号返回 `409`。
 - 注册成功后 `app_users.is_demo=false`，`phone_normalized` 唯一，`institution_id` 存在。
-- 注册成功后创建对应 `app_state_snapshots`，且不会写入 demo 账号或 demo snapshot。
+- 注册成功后创建对应空 `app_state_snapshots`，且不会写入 demo 账号或 demo snapshot。
+- 家长注册成功后 `childIds=[]`，不会绕过监护人同意自动创建儿童档案。
 - 登录支持手机号 + 密码。
 - 登录兼容旧 `username` + 密码。
 - parent 只能访问自己 `childIds` 或 `parentUserId` 绑定儿童；teacher 只能访问本班；admin 只能访问本机构。

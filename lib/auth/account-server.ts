@@ -18,7 +18,7 @@ import {
 } from "@/lib/auth/accounts";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { normalizePhone } from "@/lib/auth/phone";
-import { emptyInstitutionSnapshot, parentStarterSnapshot } from "@/lib/persistence/bootstrap";
+import { emptyInstitutionSnapshot } from "@/lib/persistence/bootstrap";
 import { getSessionUserId } from "@/lib/auth/session";
 import { logSecurityEvent } from "@/lib/server/security-log";
 
@@ -29,10 +29,12 @@ const ROLE_ADMIN = "\u673a\u6784\u7ba1\u7406\u5458" as AccountRole;
 const REQUIRED_CREDENTIALS_ERROR = "\u8bf7\u8f93\u5165\u8d26\u53f7\u548c\u5bc6\u7801\u3002";
 const INVALID_CREDENTIALS_ERROR = "\u8d26\u53f7\u6216\u5bc6\u7801\u9519\u8bef\u3002";
 const DATABASE_QUERY_FAILED_ERROR = "\u6570\u636e\u5e93\u8bbf\u95ee\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002";
+const REQUIRED_REGISTER_IDENTITY_ERROR = "\u8bf7\u8f93\u5165\u624b\u673a\u53f7\u6216\u8d26\u53f7\u3002";
 const USERNAME_TOO_SHORT_ERROR = "\u8d26\u53f7\u81f3\u5c11\u9700\u8981 2 \u4e2a\u5b57\u7b26\u3002";
 const PASSWORD_TOO_SHORT_ERROR = "\u5bc6\u7801\u81f3\u5c11\u9700\u8981 6 \u4f4d\u3002";
 const INVALID_ROLE_ERROR = "\u7528\u6237\u7c7b\u578b\u65e0\u6548\u3002";
-const PARENT_CHILD_REQUIRED_ERROR = "\u5bb6\u957f\u6ce8\u518c\u9700\u8981\u8865\u5145\u5b69\u5b50\u57fa\u7840\u4fe1\u606f\u3002";
+const INVALID_PHONE_ERROR = "\u624b\u673a\u53f7\u683c\u5f0f\u65e0\u6548\u3002";
+const DUPLICATE_PHONE_ERROR = "\u8be5\u624b\u673a\u53f7\u5df2\u88ab\u6ce8\u518c\u3002";
 const DUPLICATE_USERNAME_ERROR = "\u8be5\u8d26\u53f7\u5df2\u88ab\u6ce8\u518c\u3002";
 const CREATE_ACCOUNT_FAILED_ERROR = "\u521b\u5efa\u8d26\u53f7\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002";
 const MYSQL_DUPLICATE_KEY_ERROR_CODE = "ER_DUP_ENTRY";
@@ -43,6 +45,7 @@ const MYSQL_BAD_FIELD_ERROR_NUMBER = 1054;
 type AppUserRow = {
   id: string;
   username_normalized: string;
+  phone_normalized?: string | null;
   display_name: string;
   password_hash: string;
   role: AccountRole;
@@ -51,6 +54,11 @@ type AppUserRow = {
   class_name: string | null;
   child_ids: unknown;
   is_demo: boolean | null;
+};
+
+type AppUserLookupResult = {
+  row: AppUserRow | null;
+  error: string | null;
 };
 
 export type AccountActionResult<T> =
@@ -86,8 +94,27 @@ function mapDbUserToSessionUser(row: AppUserRow): SessionUser {
   };
 }
 
-function validateRole(role: string): role is AccountRole {
-  return role === ROLE_PARENT || role === ROLE_TEACHER || role === ROLE_ADMIN;
+function normalizeAccountRole(role: unknown): AccountRole | null {
+  if (typeof role !== "string") return null;
+
+  const trimmedRole = role.trim();
+  const normalizedRole = trimmedRole.toLowerCase();
+  if (normalizedRole === "parent" || trimmedRole === ROLE_PARENT) return ROLE_PARENT;
+  if (normalizedRole === "teacher" || trimmedRole === ROLE_TEACHER) return ROLE_TEACHER;
+  if (normalizedRole === "admin" || trimmedRole === ROLE_ADMIN) return ROLE_ADMIN;
+
+  return null;
+}
+
+function maskPhoneForDisplay(phoneNormalized: string) {
+  const nationalNumber = phoneNormalized.startsWith("+86") ? phoneNormalized.slice(3) : phoneNormalized;
+  if (nationalNumber.length !== 11) return "手机号用户";
+
+  return `${nationalNumber.slice(0, 3)}****${nationalNumber.slice(7)}`;
+}
+
+function resolveDisplayName(input: RegisterAccountInput, fallback: string) {
+  return input.displayName?.trim() || fallback;
 }
 
 function isDuplicateKeyError(error: unknown) {
@@ -143,7 +170,7 @@ async function getAppUserById(userId: string) {
   }
 }
 
-async function getAppUserByUsername(username: string) {
+async function getAppUserByUsername(username: string): Promise<AppUserLookupResult> {
   try {
     const { rows } = await dbQuery<AppUserRow>(
       `
@@ -176,7 +203,7 @@ async function getAppUserByUsername(username: string) {
   }
 }
 
-export async function getAppUserByPhoneNormalized(phone: string) {
+export async function getAppUserByPhoneNormalized(phone: string): Promise<AppUserLookupResult> {
   let phoneNormalized: string;
   try {
     phoneNormalized = normalizePhone(phone);
@@ -213,7 +240,7 @@ export async function getAppUserByPhoneNormalized(phone: string) {
 
     if (isUnknownColumnError(error)) {
       logSecurityEvent("warn", "auth.account.phone_lookup_column_missing", { error });
-      return { row: null, error: DATABASE_QUERY_FAILED_ERROR } as const;
+      return { row: null, error: null } as const;
     }
 
     logSecurityEvent("error", "auth.account.load_by_phone_failed", { error });
@@ -221,7 +248,42 @@ export async function getAppUserByPhoneNormalized(phone: string) {
   }
 }
 
-async function insertAppUser(connection: DatabaseConnection, row: AppUserRow) {
+async function insertAppUser(connection: DatabaseConnection, row: AppUserRow, options?: { includePhoneNormalized?: boolean }) {
+  if (options?.includePhoneNormalized) {
+    await connection.execute(
+      `
+        insert into app_users (
+          id,
+          username_normalized,
+          phone_normalized,
+          display_name,
+          password_hash,
+          role,
+          avatar,
+          institution_id,
+          class_name,
+          child_ids,
+          is_demo
+        )
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        row.id,
+        row.username_normalized,
+        row.phone_normalized ?? null,
+        row.display_name,
+        row.password_hash,
+        row.role,
+        row.avatar,
+        row.institution_id,
+        row.class_name,
+        encodeDatabaseJson(row.child_ids),
+        row.is_demo,
+      ]
+    );
+    return;
+  }
+
   await connection.execute(
     `
       insert into app_users (
@@ -251,6 +313,20 @@ async function insertAppUser(connection: DatabaseConnection, row: AppUserRow) {
       row.is_demo,
     ]
   );
+}
+
+export async function insertAppUserWithPhoneFallback(connection: DatabaseConnection, row: AppUserRow) {
+  try {
+    await insertAppUser(connection, row, { includePhoneNormalized: Boolean(row.phone_normalized) });
+  } catch (error) {
+    if (row.phone_normalized && isUnknownColumnError(error)) {
+      logSecurityEvent("warn", "auth.account.phone_insert_column_missing", { error });
+      await insertAppUser(connection, row);
+      return;
+    }
+
+    throw error;
+  }
 }
 
 async function upsertInstitutionSnapshot(
@@ -311,26 +387,122 @@ export async function authenticateNormalAccount(username: string, password: stri
   return { ok: true, data: mapDbUserToSessionUser(row) };
 }
 
-export async function registerNormalAccount(input: RegisterAccountInput): Promise<AccountActionResult<SessionUser>> {
-  const username = normalizeUsername(input.username);
-  const password = input.password ?? "";
-  if (username.length < 2) {
-    return { ok: false, status: 400, error: USERNAME_TOO_SHORT_ERROR };
+export type RegisterNormalAccountDependencies = {
+  createId: typeof createId;
+  getUserByPhoneNormalized: (phone: string) => Promise<AppUserLookupResult>;
+  getUserByUsername: (username: string) => Promise<AppUserLookupResult>;
+  hashPassword: typeof hashPassword;
+  insertAppUser: typeof insertAppUserWithPhoneFallback;
+  runInTransaction: typeof withDbTransaction;
+  upsertInstitutionSnapshot: typeof upsertInstitutionSnapshot;
+};
+
+type NormalizedRegisterInput = {
+  className: string | null;
+  displayName: string;
+  duplicateUsernameCandidates: string[];
+  password: string;
+  phoneNormalized: string | null;
+  role: AccountRole;
+  username: string;
+};
+
+const defaultRegisterNormalAccountDependencies: RegisterNormalAccountDependencies = {
+  createId,
+  getUserByPhoneNormalized: getAppUserByPhoneNormalized,
+  getUserByUsername: getAppUserByUsername,
+  hashPassword,
+  insertAppUser: insertAppUserWithPhoneFallback,
+  runInTransaction: withDbTransaction,
+  upsertInstitutionSnapshot,
+};
+
+function normalizeRegisterInput(input: RegisterAccountInput): AccountActionResult<NormalizedRegisterInput> {
+  const rawPhone = typeof input.phone === "string" ? input.phone.trim() : "";
+  const rawUsername = typeof input.username === "string" ? input.username.trim() : "";
+  if (!rawPhone && !rawUsername) {
+    return { ok: false, status: 400, error: REQUIRED_REGISTER_IDENTITY_ERROR };
   }
-  if (password.length < 6) {
-    return { ok: false, status: 400, error: PASSWORD_TOO_SHORT_ERROR };
-  }
-  if (!validateRole(input.role)) {
+
+  const role = normalizeAccountRole(input.role);
+  if (!role) {
     return { ok: false, status: 400, error: INVALID_ROLE_ERROR };
   }
 
-  if (input.role === ROLE_PARENT) {
-    if (!input.child?.name?.trim() || !input.child.birthDate || !input.child.gender) {
-      return { ok: false, status: 400, error: PARENT_CHILD_REQUIRED_ERROR };
-    }
+  const password = typeof input.password === "string" ? input.password : "";
+  if (!password.trim() || password.length < 6) {
+    return { ok: false, status: 400, error: PASSWORD_TOO_SHORT_ERROR };
   }
 
-  const exists = await getAppUserByUsername(username);
+  if (rawPhone) {
+    let phoneNormalized: string;
+    try {
+      phoneNormalized = normalizePhone(rawPhone);
+    } catch {
+      return { ok: false, status: 400, error: INVALID_PHONE_ERROR };
+    }
+
+    const duplicateUsernameCandidates = [...new Set([phoneNormalized, rawPhone].map(normalizeUsername).filter(Boolean))];
+    return {
+      ok: true,
+      data: {
+        className: role === ROLE_TEACHER ? (input.className?.trim() || DEFAULT_TEACHER_CLASS_NAME) : null,
+        displayName: resolveDisplayName(input, maskPhoneForDisplay(phoneNormalized)),
+        duplicateUsernameCandidates,
+        password,
+        phoneNormalized,
+        role,
+        username: phoneNormalized,
+      },
+    };
+  }
+
+  const username = normalizeUsername(rawUsername);
+  if (username.length < 2) {
+    return { ok: false, status: 400, error: USERNAME_TOO_SHORT_ERROR };
+  }
+
+  return {
+    ok: true,
+    data: {
+      className: role === ROLE_TEACHER ? (input.className?.trim() || DEFAULT_TEACHER_CLASS_NAME) : null,
+      displayName: resolveDisplayName(input, rawUsername),
+      duplicateUsernameCandidates: [username],
+      password,
+      phoneNormalized: null,
+      role,
+      username,
+    },
+  };
+}
+
+async function ensureNoDuplicateRegistration(
+  normalized: NormalizedRegisterInput,
+  dependencies: RegisterNormalAccountDependencies
+): Promise<AccountActionResult<null>> {
+  if (normalized.phoneNormalized) {
+    const phoneExists = await dependencies.getUserByPhoneNormalized(normalized.phoneNormalized);
+    if (phoneExists.row) {
+      return { ok: false, status: 409, error: DUPLICATE_PHONE_ERROR };
+    }
+    if (phoneExists.error) {
+      return { ok: false, status: 503, error: phoneExists.error };
+    }
+
+    for (const candidate of normalized.duplicateUsernameCandidates) {
+      const usernameExists = await dependencies.getUserByUsername(candidate);
+      if (usernameExists.row) {
+        return { ok: false, status: 409, error: DUPLICATE_PHONE_ERROR };
+      }
+      if (usernameExists.error) {
+        return { ok: false, status: 503, error: usernameExists.error };
+      }
+    }
+
+    return { ok: true, data: null };
+  }
+
+  const exists = await dependencies.getUserByUsername(normalized.username);
   if (exists.row) {
     return { ok: false, status: 409, error: DUPLICATE_USERNAME_ERROR };
   }
@@ -338,48 +510,47 @@ export async function registerNormalAccount(input: RegisterAccountInput): Promis
     return { ok: false, status: 503, error: exists.error };
   }
 
-  const userId = createId("u");
-  const institutionId = createId("inst");
-  const displayName = input.username.trim();
-  const avatar = getDefaultAvatarForRole(input.role);
-  const className = input.role === ROLE_TEACHER ? (input.className?.trim() || DEFAULT_TEACHER_CLASS_NAME) : null;
+  return { ok: true, data: null };
+}
 
-  const starter =
-    input.role === ROLE_PARENT && input.child
-      ? parentStarterSnapshot({
-          institutionId,
-          parentUserId: userId,
-          parentName: displayName,
-          guardianPhone: input.child.guardianPhone,
-          childName: input.child.name,
-          childBirthDate: input.child.birthDate,
-          childGender: input.child.gender,
-          childHeightCm: input.child.heightCm,
-          childWeightKg: input.child.weightKg,
-        })
-      : null;
+export async function registerNormalAccountWithDependencies(
+  input: RegisterAccountInput,
+  dependencies: RegisterNormalAccountDependencies
+): Promise<AccountActionResult<SessionUser>> {
+  const normalized = normalizeRegisterInput(input);
+  if (!normalized.ok) {
+    return normalized;
+  }
 
-  const snapshot = starter?.snapshot ?? emptyInstitutionSnapshot();
-  const childIds = starter ? [starter.childId] : [];
-  const passwordHash = await hashPassword(password);
+  const duplicate = await ensureNoDuplicateRegistration(normalized.data, dependencies);
+  if (!duplicate.ok) {
+    return duplicate;
+  }
+
+  const userId = dependencies.createId("u");
+  const institutionId = dependencies.createId("inst");
+  const avatar = getDefaultAvatarForRole(normalized.data.role);
+  const snapshot = emptyInstitutionSnapshot();
+  const passwordHash = await dependencies.hashPassword(normalized.data.password);
 
   const row: AppUserRow = {
     id: userId,
-    username_normalized: username,
-    display_name: displayName,
+    username_normalized: normalized.data.username,
+    phone_normalized: normalized.data.phoneNormalized,
+    display_name: normalized.data.displayName,
     password_hash: passwordHash,
-    role: input.role,
+    role: normalized.data.role,
     avatar,
     institution_id: institutionId,
-    class_name: className,
-    child_ids: childIds,
+    class_name: normalized.data.className,
+    child_ids: [],
     is_demo: false,
   };
 
   try {
-    await withDbTransaction(async (connection) => {
-      await insertAppUser(connection, row);
-      await upsertInstitutionSnapshot(connection, institutionId, snapshot, userId);
+    await dependencies.runInTransaction(async (connection) => {
+      await dependencies.insertAppUser(connection, row);
+      await dependencies.upsertInstitutionSnapshot(connection, institutionId, snapshot, userId);
     });
   } catch (error) {
     if (error instanceof DatabaseConfigError) {
@@ -387,7 +558,7 @@ export async function registerNormalAccount(input: RegisterAccountInput): Promis
     }
 
     if (isDuplicateKeyError(error)) {
-      return { ok: false, status: 409, error: DUPLICATE_USERNAME_ERROR };
+      return { ok: false, status: 409, error: normalized.data.phoneNormalized ? DUPLICATE_PHONE_ERROR : DUPLICATE_USERNAME_ERROR };
     }
 
     logSecurityEvent("error", "auth.account.create_failed", { error });
@@ -402,4 +573,8 @@ export async function registerNormalAccount(input: RegisterAccountInput): Promis
     ok: true,
     data: mapDbUserToSessionUser(row),
   };
+}
+
+export async function registerNormalAccount(input: RegisterAccountInput): Promise<AccountActionResult<SessionUser>> {
+  return registerNormalAccountWithDependencies(input, defaultRegisterNormalAccountDependencies);
 }
