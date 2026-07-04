@@ -29,6 +29,7 @@ const API_ROUTE_HANDLED_AUTH_PREFIXES = [
   "/api/reminders",
   "/api/assignments",
   "/api/admin",
+  "/api/parent",
   "/api/ai",
   "/api/voice-assistant",
 ];

@@ -32,14 +32,10 @@ export function filterChildrenForSessionUser(
   }
 
   const explicitChildIds = readParentChildIdSet(user);
-  if (explicitChildIds.size > 0) {
-    return children.filter(
-      (child) => child.institutionId === user.institutionId && explicitChildIds.has(child.id)
-    );
-  }
-
   return children.filter(
-    (child) => child.institutionId === user.institutionId && child.parentUserId === user.id
+    (child) =>
+      child.institutionId === user.institutionId &&
+      (explicitChildIds.has(child.id) || child.parentUserId === user.id)
   );
 }
 
@@ -53,7 +49,13 @@ export function resolveAuthorizedChildIdSet(
 
   const explicitChildIds = readParentChildIdSet(user);
   if (explicitChildIds.size > 0) {
-    return explicitChildIds;
+    const authorizedChildIds = new Set(explicitChildIds);
+    for (const child of children) {
+      if (child.institutionId === user.institutionId && child.parentUserId === user.id) {
+        authorizedChildIds.add(child.id);
+      }
+    }
+    return authorizedChildIds;
   }
 
   return new Set(

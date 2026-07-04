@@ -169,32 +169,38 @@
 - 不删除 `/auth/login` 重定向兼容。
 - 不改变 demo login 行为。
 
-## T7 儿童信息与监护人同意
+## T7 家长儿童档案创建与监护人同意
 
 **目标**
 
-家长创建儿童档案前增加监护人确认与同意记录，第一版只收最小必要字段。
+把儿童档案创建从注册流程拆出，改为 parent 登录后的 onboarding；创建 child 前必须完成监护人确认与同意记录。
 
 **涉及文件**
 
-- `app/children/page.tsx`
-- `lib/store.tsx`
+- `app/parent/page.tsx`
+- `app/parent/onboarding/child/page.tsx`
+- `app/api/parent/children/route.ts`
+- `lib/server/parent-child-onboarding.ts`
+- `lib/parent/child-onboarding.ts`
+- `lib/api/parent-children.ts`
 - `lib/persistence/snapshot.ts`
-- `lib/server/app-data-service.ts`
-- 相关 children API route
+- `lib/persistence/state-scope.ts`
+- `supabase/sql/20260704_create_consent_records.sql`
 
 **验收标准**
 
-- 新建儿童档案前必须勾选或提交监护人同意。
-- 同意记录包含同意时间、同意人、用途、账号与儿童绑定关系。
-- 第一版必填字段限制为姓名、出生日期、性别、监护人关系和必要联系电话。
-- 无同意记录时服务端拒绝创建。
+- parent 注册后进入 `/parent`，无 child 时展示“创建孩子成长档案”入口。
+- `POST /api/parent/children` 仅允许普通家长账号创建自己的家庭空间 child。
+- 新建 child 前前端必须勾选三项同意，服务端也必须拒绝 `consentAccepted=false`。
+- 同一事务内创建 child、更新 parent `child_ids`、写入三条 `consent_records`。
+- 第一版字段限制为姓名/昵称、出生日期或月龄、可选性别；不采集身份证、详细住址、人脸照片或医疗记录。
 
 **不要做什么**
 
-- 不强制采集非必要健康、身高体重、过敏或特殊关注项。
+- 不强制采集非必要健康、身高体重、过敏、特殊关注项或监护人联系电话。
 - 不只做前端勾选而不落库。
 - 不让家长越权绑定其他机构儿童。
+- 不改 director `/api/children` 主链。
 
 ## T8 权限隔离与防串数据检查
 
