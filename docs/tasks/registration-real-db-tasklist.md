@@ -121,7 +121,9 @@
 
 - `lib/auth/account-server.ts`
 - `lib/persistence/bootstrap.ts`
+- `lib/persistence/snapshot.ts`
 - `lib/server/app-data-repository.ts`
+- `app/api/auth/register/route.ts`
 - `supabase/sql/app_state_snapshots.sql`
 
 **验收标准**
@@ -130,6 +132,8 @@
 - 每个新账号有真实 `institution_id`。
 - admin/teacher 创建空机构 snapshot。
 - parent 创建空家庭 snapshot，不自动创建儿童档案。
+- 初始 snapshot 写入 `meta.workspace` 和默认 `meta.usageLimits`。
+- 注册响应返回按角色计算的 `redirectPath`。
 - 整个创建流程在数据库事务中完成。
 
 **不要做什么**

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { registerNormalAccount } from "@/lib/auth/account-server";
 import { setSessionCookie } from "@/lib/auth/session";
-import type { RegisterAccountInput, SessionUser } from "@/lib/auth/accounts";
+import { getRoleHomePath, type RegisterAccountInput, type SessionUser } from "@/lib/auth/accounts";
 import { AUTH_SESSION_SECRET_CONFIG_ERROR_MESSAGE, MissingAuthSessionSecretError } from "@/lib/auth/session-config";
 import { logSecurityEvent } from "@/lib/server/security-log";
 
@@ -50,7 +50,7 @@ export async function handleRegisterRequest(
 
     const user = sanitizeRegisteredUser(result.data);
     await dependencies.setSession(user.id, user.role);
-    return NextResponse.json({ ok: true, user });
+    return NextResponse.json({ ok: true, user, redirectPath: getRoleHomePath(user.role) });
   } catch (error) {
     if (error instanceof MissingAuthSessionSecretError) {
       return NextResponse.json({ ok: false, error: AUTH_SESSION_SECRET_CONFIG_ERROR_MESSAGE }, { status: 503 });

@@ -46,6 +46,44 @@ test("normalizeAppStateSnapshot accepts legacy guardian feedback records", () =>
   assert.equal(snapshot?.feedback[0]?.notes, "Legacy free note.");
 });
 
+test("normalizeAppStateSnapshot preserves registration workspace meta and usage limits", () => {
+  const snapshot = normalizeAppStateSnapshot({
+    ...buildBaseSnapshot(),
+    meta: {
+      workspace: {
+        kind: "family",
+        institutionId: "inst-real-family",
+        ownerUserId: "u-parent-real",
+        ownerRole: "家长",
+        isDemo: false,
+        createdAt: "2026-07-04T08:00:00.000Z",
+      },
+      usageLimits: {
+        maxChildren: 5,
+        maxStorybooksPerMonth: 20,
+        maxAiCallsPerDay: 50,
+      },
+    },
+  });
+
+  assert.ok(snapshot);
+  assert.deepEqual(snapshot?.meta, {
+    workspace: {
+      kind: "family",
+      institutionId: "inst-real-family",
+      ownerUserId: "u-parent-real",
+      ownerRole: "家长",
+      isDemo: false,
+      createdAt: "2026-07-04T08:00:00.000Z",
+    },
+    usageLimits: {
+      maxChildren: 5,
+      maxStorybooksPerMonth: 20,
+      maxAiCallsPerDay: 50,
+    },
+  });
+});
+
 test("normalizeAppStateSnapshot accepts structured feedback-only records and backfills the legacy mirror", () => {
   const snapshot = normalizeAppStateSnapshot({
     ...buildBaseSnapshot(),
