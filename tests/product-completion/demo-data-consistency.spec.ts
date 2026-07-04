@@ -17,9 +17,9 @@ test("D-SEED login page starts empty and demo account buttons still work", async
   await context.clearCookies();
   await page.goto("/login");
 
-  await expect(page.getByTestId("login-username")).toBeVisible();
+  await expect(page.getByTestId("login-phone")).toBeVisible();
   await expect(page.getByTestId("login-password")).toBeVisible();
-  await expect(page.getByTestId("login-username")).toHaveValue("");
+  await expect(page.getByTestId("login-phone")).toHaveValue("");
   await expect(page.getByTestId("login-password")).toHaveValue("");
   await expect(page.getByTestId("login-password")).toHaveAttribute("type", "password");
 

@@ -13,6 +13,7 @@ import {
   getDemoAccountById,
   normalizeUsername,
   type AccountRole,
+  type LoginAccountInput,
   type RegisterAccountInput,
   type SessionUser,
 } from "@/lib/auth/accounts";
@@ -26,8 +27,10 @@ const ROLE_PARENT = "\u5bb6\u957f" as AccountRole;
 const ROLE_TEACHER = "\u6559\u5e08" as AccountRole;
 const ROLE_ADMIN = "\u673a\u6784\u7ba1\u7406\u5458" as AccountRole;
 
-const REQUIRED_CREDENTIALS_ERROR = "\u8bf7\u8f93\u5165\u8d26\u53f7\u548c\u5bc6\u7801\u3002";
-const INVALID_CREDENTIALS_ERROR = "\u8d26\u53f7\u6216\u5bc6\u7801\u9519\u8bef\u3002";
+const LOGIN_REQUIRED_CREDENTIALS_ERROR = "\u8bf7\u8f93\u5165\u624b\u673a\u53f7\u548c\u5bc6\u7801\u3002";
+const LOGIN_INVALID_CREDENTIALS_ERROR = "\u624b\u673a\u53f7\u6216\u5bc6\u7801\u9519\u8bef";
+const LOGIN_INVALID_PHONE_ERROR = "\u624b\u673a\u53f7\u683c\u5f0f\u9519\u8bef";
+const LOGIN_SERVICE_UNAVAILABLE_ERROR = "\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528";
 const DATABASE_QUERY_FAILED_ERROR = "\u6570\u636e\u5e93\u8bbf\u95ee\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002";
 const REQUIRED_REGISTER_IDENTITY_ERROR = "\u8bf7\u8f93\u5165\u624b\u673a\u53f7\u6216\u8d26\u53f7\u3002";
 const USERNAME_TOO_SHORT_ERROR = "\u8d26\u53f7\u81f3\u5c11\u9700\u8981 2 \u4e2a\u5b57\u7b26\u3002";
@@ -367,26 +370,95 @@ export async function getCurrentSessionUser() {
   return resolveSessionUserById(userId);
 }
 
-export async function authenticateNormalAccount(username: string, password: string): Promise<AccountActionResult<SessionUser>> {
-  const normalized = normalizeUsername(username);
-  if (!normalized || !password) {
-    return { ok: false, status: 400, error: REQUIRED_CREDENTIALS_ERROR };
-  }
+export type LoginNormalAccountDependencies = {
+  getUserByPhoneNormalized: (phone: string) => Promise<AppUserLookupResult>;
+  getUserByUsername: (username: string) => Promise<AppUserLookupResult>;
+  verifyPassword: typeof verifyPassword;
+};
 
-  const { row, error } = await getAppUserByUsername(normalized);
-  if (error) {
-    return { ok: false, status: 503, error };
-  }
-  if (!row) {
-    return { ok: false, status: 401, error: INVALID_CREDENTIALS_ERROR };
-  }
+const defaultLoginNormalAccountDependencies: LoginNormalAccountDependencies = {
+  getUserByPhoneNormalized: getAppUserByPhoneNormalized,
+  getUserByUsername: getAppUserByUsername,
+  verifyPassword,
+};
 
-  const verified = await verifyPassword(password, row.password_hash);
+async function verifyLoginRow(
+  row: AppUserRow | null,
+  password: string,
+  dependencies: LoginNormalAccountDependencies
+): Promise<AccountActionResult<SessionUser> | null> {
+  if (!row) return null;
+
+  const verified = await dependencies.verifyPassword(password, row.password_hash);
   if (!verified) {
-    return { ok: false, status: 401, error: INVALID_CREDENTIALS_ERROR };
+    return { ok: false, status: 401, error: LOGIN_INVALID_CREDENTIALS_ERROR };
   }
 
   return { ok: true, data: mapDbUserToSessionUser(row) };
+}
+
+async function lookupUsernameCandidates(
+  candidates: string[],
+  password: string,
+  dependencies: LoginNormalAccountDependencies
+): Promise<AccountActionResult<SessionUser> | null> {
+  const uniqueCandidates = [...new Set(candidates.map(normalizeUsername).filter(Boolean))];
+
+  for (const candidate of uniqueCandidates) {
+    const { row, error } = await dependencies.getUserByUsername(candidate);
+    if (error) {
+      return { ok: false, status: 503, error: LOGIN_SERVICE_UNAVAILABLE_ERROR };
+    }
+
+    const verified = await verifyLoginRow(row, password, dependencies);
+    if (verified) return verified;
+  }
+
+  return null;
+}
+
+export async function authenticateLoginAccountWithDependencies(
+  input: LoginAccountInput,
+  dependencies: LoginNormalAccountDependencies = defaultLoginNormalAccountDependencies
+): Promise<AccountActionResult<SessionUser>> {
+  const password = typeof input.password === "string" ? input.password : "";
+  const rawPhone = typeof input.phone === "string" ? input.phone.trim() : "";
+  const rawUsername = typeof input.username === "string" ? input.username.trim() : "";
+
+  if (!password || (!rawPhone && !rawUsername)) {
+    return { ok: false, status: 400, error: LOGIN_REQUIRED_CREDENTIALS_ERROR };
+  }
+
+  if (rawPhone) {
+    let phoneNormalized: string;
+    try {
+      phoneNormalized = normalizePhone(rawPhone);
+    } catch {
+      return { ok: false, status: 400, error: LOGIN_INVALID_PHONE_ERROR };
+    }
+
+    const phoneLookup = await dependencies.getUserByPhoneNormalized(phoneNormalized);
+    if (phoneLookup.error) {
+      return { ok: false, status: 503, error: LOGIN_SERVICE_UNAVAILABLE_ERROR };
+    }
+
+    const phoneVerified = await verifyLoginRow(phoneLookup.row, password, dependencies);
+    if (phoneVerified) return phoneVerified;
+
+    const fallbackVerified = await lookupUsernameCandidates([phoneNormalized, rawPhone], password, dependencies);
+    if (fallbackVerified) return fallbackVerified;
+
+    return { ok: false, status: 401, error: LOGIN_INVALID_CREDENTIALS_ERROR };
+  }
+
+  const usernameVerified = await lookupUsernameCandidates([rawUsername], password, dependencies);
+  if (usernameVerified) return usernameVerified;
+
+  return { ok: false, status: 401, error: LOGIN_INVALID_CREDENTIALS_ERROR };
+}
+
+export async function authenticateNormalAccount(username: string, password: string): Promise<AccountActionResult<SessionUser>> {
+  return authenticateLoginAccountWithDependencies({ username, password });
 }
 
 export type RegisterNormalAccountDependencies = {

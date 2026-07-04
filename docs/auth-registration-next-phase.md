@@ -7,7 +7,7 @@
 ## 当前认证系统现状
 
 - 登录入口：`/login` 是真实登录页，`/auth/login` 重定向到 `/login`；`proxy.ts` 放行 `/login`、`/auth/login` 和 `/api/auth/*`。
-- 普通登录：`app/api/auth/login/route.ts` 接收 `{ username, password }`，调用 `authenticateNormalAccount`，成功后通过 `setSessionCookie` 写 `ccs_session`。
+- 普通登录：`app/api/auth/login/route.ts` 接收 `{ phone, username, password }`，手机号请求优先按 `phone_normalized` 查询，字段不可用或无结果时回退 `username_normalized`；旧 `{ username, password }` 仍可登录，成功后通过 `setSessionCookie` 写 `ccs_session`。
 - 普通注册：`app/api/auth/register/route.ts` 接收 `{ phone, username, password, confirmPassword, role, displayName }`，服务端已校验 `confirmPassword === password`，成功后同样写 `ccs_session`。
 - session：`lib/auth/session.ts` 使用 HMAC SHA-256 签名 payload，cookie 名称为 `ccs_session`，12 小时有效；`proxy.ts` 有一套 Edge 侧校验逻辑。
 - 账号模型：`lib/auth/accounts.ts` 已支持 `phone`、`username`、`password`、`role`、`displayName`、可选 `className` 和兼容期可选 `child` 输入；`role` 可接收 `admin`、`institution_admin`、`teacher`、`parent` 并映射到现有中文角色。
@@ -64,7 +64,7 @@
 
 ### `POST /api/auth/login`
 
-下一阶段请求体：
+T6 已落地手机号登录兼容层，请求体支持：
 
 ```json
 {
@@ -77,13 +77,15 @@
 
 - 优先按 `phone_normalized` 查询。
 - 兼容旧 `{ username, password }` 和旧 `username_normalized` 查询。
-- 失败错误仍保持“账号或密码错误”这类不泄露枚举信息的口径。
+- 明确传入 `phone` 且手机号格式错误时返回 `400` 和“手机号格式错误”。
+- 密码错误或账号不存在时返回 `401` 和“手机号或密码错误”，不泄露手机号是否存在。
+- 数据库或 session 配置不可用时返回 `503` 和“服务暂时不可用”。
 - 成功后继续返回 `{ ok: true, user }` 并写 `ccs_session`。
 
 ## 页面改造清单
 
 - `/register` 页面表单字段为手机号、密码、确认密码、角色和可选昵称/姓名，提交到 `POST /api/auth/register`。
-- `/login` 登录表单主文案改为手机号 + 密码，保留“旧账号也可登录”的兼容提示。
+- `/login` 登录表单主文案改为手机号 + 密码，保留“旧账号也可登录”的兼容提示；前端会把手机号样式输入作为 `phone` 提交，其余输入按旧 `username` 兼容提交。
 - 登录页不再保留注册弹窗；未接入短信前注册页不展示验证码路径。
 - 家长角色注册后进入家长首页或儿童建档引导页，但不能自动创建儿童档案。
 - 儿童建档页增加监护人确认与同意记录；第一版只要求最小必要儿童字段。

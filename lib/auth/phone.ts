@@ -15,3 +15,8 @@ export function normalizePhone(input: string): string {
 
   return `+86${nationalNumber}`;
 }
+
+export function isPhoneLikeInput(input: string) {
+  const compact = input.trim().replace(/[\s-]+/g, "");
+  return /^(\+?86)?1\d*$/.test(compact);
+}

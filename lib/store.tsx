@@ -18,9 +18,11 @@ import {
   DEMO_ACCOUNTS,
   type AccountRole,
   type DemoAccount,
+  type LoginAccountInput,
   type RegisterAccountInput,
   type SessionUser,
 } from "@/lib/auth/accounts";
+import { isPhoneLikeInput } from "@/lib/auth/phone";
 import { buildInterventionCardFromConsultation, type InterventionCard } from "@/lib/agent/intervention-card";
 import { getLocalToday, isDateWithinLastDays, normalizeLocalDate, shiftLocalDate, startOfLocalDay } from "@/lib/date";
 import { emptyInstitutionSnapshot } from "@/lib/persistence/bootstrap";
@@ -376,7 +378,7 @@ interface AppContextType {
   currentUser: User;
   isAuthenticated: boolean;
   authLoading: boolean;
-  login: (username: string, password: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
+  login: (phone: string, password: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
   loginWithDemo: (accountId: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
   register: (input: RegisterAccountInput & { confirmPassword: string }) => Promise<{ ok: boolean; error?: string; user?: User; redirectPath?: string }>;
   logout: () => Promise<void>;
@@ -5401,22 +5403,33 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
   const getTodayAttendance = useCallback(() => getAttendanceByDate(TODAY), [getAttendanceByDate]);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (phone: string, password: string) => {
+    const identity = phone.trim();
+    const credentials: LoginAccountInput = isPhoneLikeInput(identity)
+      ? { phone: identity, password }
+      : { username: identity, password };
+
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(credentials),
       });
       const result = (await response.json()) as { ok: boolean; error?: string; user?: User };
       if (!response.ok || !result.ok || !result.user) {
-        return { ok: false, error: result.error ?? "登录失败，请检查账号和密码。" };
+        const fallbackError =
+          response.status === 400
+            ? "手机号格式错误"
+            : response.status === 503
+              ? "服务暂时不可用"
+              : "手机号或密码错误";
+        return { ok: false, error: result.error ?? fallbackError };
       }
       lastSyncedSnapshotKeyRef.current = null;
       setCurrentUser(result.user);
       return { ok: true, user: result.user };
     } catch {
-      return { ok: false, error: "网络异常，请稍后重试。" };
+      return { ok: false, error: "服务暂时不可用" };
     }
   }, []);
 
