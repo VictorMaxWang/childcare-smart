@@ -18,7 +18,7 @@ import {
 } from "@/lib/auth/accounts";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { normalizePhone } from "@/lib/auth/phone";
-import { emptyInstitutionSnapshot } from "@/lib/persistence/bootstrap";
+import { registrationWorkspaceSnapshot } from "@/lib/persistence/bootstrap";
 import { getSessionUserId } from "@/lib/auth/session";
 import { logSecurityEvent } from "@/lib/server/security-log";
 
@@ -101,7 +101,9 @@ function normalizeAccountRole(role: unknown): AccountRole | null {
   const normalizedRole = trimmedRole.toLowerCase();
   if (normalizedRole === "parent" || trimmedRole === ROLE_PARENT) return ROLE_PARENT;
   if (normalizedRole === "teacher" || trimmedRole === ROLE_TEACHER) return ROLE_TEACHER;
-  if (normalizedRole === "admin" || trimmedRole === ROLE_ADMIN) return ROLE_ADMIN;
+  if (normalizedRole === "admin" || normalizedRole === "institution_admin" || trimmedRole === ROLE_ADMIN) {
+    return ROLE_ADMIN;
+  }
 
   return null;
 }
@@ -530,7 +532,11 @@ export async function registerNormalAccountWithDependencies(
   const userId = dependencies.createId("u");
   const institutionId = dependencies.createId("inst");
   const avatar = getDefaultAvatarForRole(normalized.data.role);
-  const snapshot = emptyInstitutionSnapshot();
+  const snapshot = registrationWorkspaceSnapshot({
+    institutionId,
+    ownerUserId: userId,
+    ownerRole: normalized.data.role,
+  });
   const passwordHash = await dependencies.hashPassword(normalized.data.password);
 
   const row: AppUserRow = {

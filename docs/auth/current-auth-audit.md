@@ -2,7 +2,7 @@
 
 更新日期：2026-07-04
 
-本文档是 T1 认证系统审计结论，只记录当前代码事实和后续“手机号 + 密码 + 确认密码注册真实数据库版”的施工边界。T1 不修改业务代码、页面、SQL schema、cookie 机制或 public API。
+本文档最初是 T1 认证系统审计结论；T5 后同步记录当前代码事实和后续“手机号 + 密码 + 确认密码注册真实数据库版”的施工边界。历史 T1 本身不修改业务代码、页面、SQL schema、cookie 机制或 public API。
 
 ## 1. 当前登录流程
 
@@ -51,18 +51,20 @@
   - 服务端在 `app/api/auth/register/route.ts` 中再次校验 `(confirmPassword ?? "") === (password ?? "")`。
   - 不一致返回 `400`，`两次输入的密码不一致。`
 - role 处理方式：
-  - `lib/auth/account-server.ts` 的 `validateRole` 只接受 `家长`、`教师`、`机构管理员`。
+  - `lib/auth/account-server.ts` 的 `normalizeAccountRole` 接受 `家长`、`教师`、`机构管理员`，并兼容 `parent`、`teacher`、`admin`、`institution_admin`。
   - 无效角色返回 `400`，`用户类型无效。`
   - 教师注册时设置 `class_name`，未填则使用 `DEFAULT_TEACHER_CLASS_NAME`。
-  - 家长注册当前要求 `child.name`、`child.birthDate`、`child.gender`，缺失返回 `400`，`家长注册需要补充孩子基础信息。`
+  - 家长服务端注册不再要求或创建 `child`；旧页面弹窗可能仍携带 child 字段，但服务端会创建空家庭空间。
 - 当前是否写 `app_users`：
   - 是。`registerNormalAccount` 生成 `userId` 和 `institutionId`，使用 scrypt 写 `password_hash`，并插入 `app_users`。
   - 写入字段包括 `username_normalized`、`display_name`、`password_hash`、`role`、`avatar`、`institution_id`、`class_name`、`child_ids`、`is_demo`。
   - 当前真实注册写 `is_demo=false`，不会写入 demo account 列表。
 - 当前是否写 `app_state_snapshots`：
   - 是。`registerNormalAccount` 在 `withDbTransaction` 中先插入 `app_users`，再 upsert `app_state_snapshots`。
-  - admin/teacher 使用 `emptyInstitutionSnapshot()`。
-  - parent 当前使用 `parentStarterSnapshot(...)`，会同时创建一个 child 并把 childId 写入新用户 `child_ids`。
+  - admin 使用 `registrationWorkspaceSnapshot(...)` 创建真实机构空间 snapshot。
+  - teacher 使用 `registrationWorkspaceSnapshot(...)` 创建个人试用机构空间 snapshot。
+  - parent 使用 `registrationWorkspaceSnapshot(...)` 创建空家庭空间 snapshot，不创建 child，`child_ids=[]`。
+  - 初始 snapshot 会包含 `meta.workspace` 和默认 `meta.usageLimits`，用于记录空间类型与试用配额。
 - 当前 `is_demo` 行为：
   - 普通注册固定 `is_demo=false`。
   - demo 登录走独立 `POST /api/auth/demo-login`，按 `DEMO_ACCOUNTS` 取内存示例账号，再写同一个 `ccs_session` cookie。
@@ -118,23 +120,23 @@ create table if not exists app_users (
 - `password_hash`：当前为 `scrypt:<salt>:<hash>`，由 `lib/auth/password.ts` 生成和校验。
 - `role`：三种中文角色之一，决定页面和业务访问边界。
 - `institution_id`：真实账号注册时生成新 `inst-*`，也是 `app_state_snapshots` 的主键。
-- `child_ids`：JSON 数组；parent 当前注册时会包含 `parentStarterSnapshot` 生成的 childId。
+- `child_ids`：JSON 数组；parent 当前注册时保持 `[]`，儿童档案创建留到 T7 监护人同意 onboarding。
 - `is_demo`：普通注册写 `false`；demo 账号不来自这张表。
 - 当前没有 `phone_normalized` 字段，也没有手机号唯一索引。
 
 ## 5. 当前 parent 注册边界
 
 - 当前是否直接创建 child：
-  - 是。parent 注册时 `registerNormalAccount` 调用 `parentStarterSnapshot`。
-  - `parentStarterSnapshot` 会创建一个 child，写入 `name`、`birthDate`、`gender`、`heightCm`、`weightKg`、`guardians`、`institutionId`、`className`、`parentUserId` 等字段。
-  - 新 parent 用户的 `child_ids` 会设置为 `[starter.childId]`。
+  - 否。T5 后 parent 注册只创建真实用户、家庭空间 `institution_id` 和空 `app_state_snapshots`。
+  - `child_ids` 保持 `[]`；即使兼容期请求体携带 `child`，注册服务也不会自动写入儿童档案。
+  - `parentStarterSnapshot(...)` 仍作为旧 starter 工厂保留，但不再由注册流程调用。
 - 是否缺少 `consent_records`：
   - 是。当前代码没有 `consent_records` 表，也没有 snapshot 内的同意审计对象。
   - 当前 parent 注册收集的 guardian 信息只是 child profile 的 guardian 字段，不等同于“监护人确认与同意记录”。
-- 为什么 T7 要后置处理儿童档案创建：
+- 为什么 T7 仍要处理儿童档案创建：
   - T0 规则要求儿童建档前必须有监护人确认与同意记录。
-  - 当前注册流程把“创建 parent 账号”和“创建 child 档案”混成一步，会绕过 T0 要求的同意审计边界。
-  - 因此 T5 应先把 parent 注册改为空家庭空间，T7 再引入儿童建档和同意记录的最小合规流程。
+  - 当前注册流程已经把“创建 parent 账号”和“创建 child 档案”拆开。
+  - T7 需要在独立 onboarding 中引入儿童建档和同意记录的最小合规流程。
 
 ## 6. 手机号注册最小变更路径
 
@@ -149,10 +151,11 @@ create table if not exists app_users (
   - 成功后仍调用 `setSessionCookie`，不改变 `ccs_session`。
   - 兼容期明确处理旧 `{ username, password, confirmPassword, role }` 请求。
 - T5 要改什么：
-  - 继续在事务中创建普通账号和初始 `app_state_snapshots`。
-  - admin/teacher 创建真实空机构 snapshot。
+  - 已在事务中创建普通账号和初始 `app_state_snapshots`。
+  - admin 创建真实空机构 snapshot，teacher 创建个人试用机构 snapshot。
   - parent 创建真实空家庭 snapshot，不自动创建 child，不写 demo snapshot。
   - 所有真实账号继续 `is_demo=false`，并拥有真实 `institution_id`。
+  - 初始 snapshot 写入 `meta.workspace` 与默认 `meta.usageLimits`。
 - T2/T6 页面如何配合：
   - T2 新增或整理 `/register` 页面，提交 `{ phone, password, confirmPassword, role }`。
   - T2 不接入第三方短信或 SaaS 鉴权，验证码未接入时保持 disabled 或不展示。
@@ -171,8 +174,8 @@ create table if not exists app_users (
   - 当前 cookie payload 只关心 `userId`、`role`、`exp`，不需要把手机号写进 session。
   - 后续注册和登录应继续使用 `setSessionCookie`，避免引入并行 session 体系。
 - parent 无同意记录：
-  - 当前 parent 注册直接创建儿童档案，是下一阶段最明显的合规边界风险。
-  - T5/T7 必须拆开 parent 注册和儿童建档。
+  - T5 后 parent 注册不再直接创建儿童档案。
+  - T7 必须在儿童建档 onboarding 中补齐监护人同意记录。
 - tenant isolation：
   - 当前 `scopeSnapshotForSessionUser`、`requireChildAccess`、`requireClassAccess`、AI route guard 和 `/api/state` 已按 `institutionId`、`className`、`childIds` 或 `parentUserId` 控制范围。
   - 后续手机号注册不能为了打通注册而放宽这些 scope。
@@ -189,7 +192,8 @@ create table if not exists app_users (
 - 注册成功写真实库：
   - 新用户写 `app_users.is_demo=false`。
   - 新用户有真实 `institution_id`。
-  - 新机构或家庭空间写入 `app_state_snapshots`。
+  - 新机构、教师试用机构或家庭空间写入 `app_state_snapshots`。
+  - 初始 snapshot 保留 `meta.workspace` 和默认 `meta.usageLimits`。
   - 不写 demo account、demo fixture 或 demo snapshot。
 - 旧账号登录兼容：
   - 旧 `{ username, password }` 账号仍可按 `username_normalized` 登录。
@@ -205,7 +209,7 @@ create table if not exists app_users (
 
 ## 9. T1 结论
 
-- 当前代码已经具备服务端 `confirmPassword` 校验、HMAC `ccs_session`、真实 `app_users` 写入、真实 `app_state_snapshots` 写入和基础 scope 隔离。
+- 当前代码已经具备服务端 `confirmPassword` 校验、HMAC `ccs_session`、真实 `app_users` 写入、真实 `app_state_snapshots` 写入、注册空间 meta 和基础 scope 隔离。
 - 当前代码仍缺少 `phone_normalized`、手机号登录、独立 `/register` 页面、手机号注册 API 契约和监护人同意记录。
-- 当前 parent 注册会直接创建 child，和 T0 “儿童建档前必须有监护人确认与同意记录”的下一阶段目标不一致；该行为必须在 T5/T7 拆开处理。
+- 当前 parent 注册只创建空家庭空间；儿童建档与监护人同意记录留到 T7 独立处理。
 - T1 不改变任何 public API、类型、cookie、SQL schema 或页面行为，只为 T2-T7 提供施工事实清单。

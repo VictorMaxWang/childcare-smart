@@ -8,6 +8,7 @@ import type {
 } from "@/lib/store";
 import type { ConsultationResult, MobileDraft, ReminderItem } from "@/lib/ai/types";
 import type { InterventionCard } from "@/lib/agent/intervention-card";
+import type { AccountRole } from "@/lib/auth/accounts";
 import {
   normalizeGuardianFeedbackCollection,
 } from "@/lib/feedback/normalize";
@@ -79,8 +80,31 @@ export interface DemoStorybook {
   };
 }
 
+export type AppStateWorkspaceKind = "institution" | "teacher_trial" | "family";
+
+export interface AppStateWorkspaceMeta {
+  kind: AppStateWorkspaceKind;
+  institutionId: string;
+  ownerUserId: string;
+  ownerRole: AccountRole;
+  isDemo: boolean;
+  createdAt: string;
+}
+
+export interface AppStateUsageLimits {
+  maxChildren: number;
+  maxStorybooksPerMonth: number;
+  maxAiCallsPerDay: number;
+}
+
+export interface AppStateSnapshotMeta {
+  workspace?: AppStateWorkspaceMeta;
+  usageLimits?: AppStateUsageLimits;
+}
+
 export interface AppStateSnapshot {
   demoPersistenceSchemaVersion?: "d01-v1";
+  meta?: AppStateSnapshotMeta;
   children: Child[];
   attendance: AttendanceRecord[];
   meals: MealRecord[];
@@ -359,6 +383,71 @@ function readArrayBucket(data: Record<string, unknown>, key: string) {
   return Array.isArray(value) ? value : null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isWorkspaceKind(value: unknown): value is AppStateWorkspaceKind {
+  return value === "institution" || value === "teacher_trial" || value === "family";
+}
+
+function isAccountRole(value: unknown): value is AccountRole {
+  return value === "家长" || value === "教师" || value === "机构管理员";
+}
+
+function normalizeWorkspaceMeta(value: unknown): AppStateWorkspaceMeta | undefined {
+  if (!isRecord(value)) return undefined;
+  if (
+    !isWorkspaceKind(value.kind) ||
+    typeof value.institutionId !== "string" ||
+    typeof value.ownerUserId !== "string" ||
+    !isAccountRole(value.ownerRole) ||
+    typeof value.isDemo !== "boolean" ||
+    typeof value.createdAt !== "string"
+  ) {
+    return undefined;
+  }
+
+  return {
+    kind: value.kind,
+    institutionId: value.institutionId,
+    ownerUserId: value.ownerUserId,
+    ownerRole: value.ownerRole,
+    isDemo: value.isDemo,
+    createdAt: value.createdAt,
+  };
+}
+
+function normalizeUsageLimits(value: unknown): AppStateUsageLimits | undefined {
+  if (!isRecord(value)) return undefined;
+  const { maxChildren, maxStorybooksPerMonth, maxAiCallsPerDay } = value;
+  if (
+    typeof maxChildren !== "number" ||
+    typeof maxStorybooksPerMonth !== "number" ||
+    typeof maxAiCallsPerDay !== "number"
+  ) {
+    return undefined;
+  }
+
+  return {
+    maxChildren,
+    maxStorybooksPerMonth,
+    maxAiCallsPerDay,
+  };
+}
+
+function normalizeSnapshotMeta(value: unknown): AppStateSnapshotMeta | undefined {
+  if (!isRecord(value)) return undefined;
+
+  const meta: AppStateSnapshotMeta = {};
+  const workspace = normalizeWorkspaceMeta(value.workspace);
+  const usageLimits = normalizeUsageLimits(value.usageLimits);
+  if (workspace) meta.workspace = workspace;
+  if (usageLimits) meta.usageLimits = usageLimits;
+
+  return Object.keys(meta).length > 0 ? meta : undefined;
+}
+
 export function normalizeAppStateSnapshot(value: unknown): AppStateSnapshot | null {
   if (!value || typeof value !== "object") return null;
   const data = value as Record<string, unknown>;
@@ -380,6 +469,7 @@ export function normalizeAppStateSnapshot(value: unknown): AppStateSnapshot | nu
   const nutritionMenus = readArrayBucket(data, "nutritionMenus");
   const storybooks = readArrayBucket(data, "storybooks");
   const updatedAt = typeof data.updatedAt === "string" ? data.updatedAt : new Date().toISOString();
+  const meta = normalizeSnapshotMeta(data.meta);
   const normalizedFeedback = normalizeGuardianFeedbackCollection(feedback ?? [], {
     strict: true,
     allowGenerateId: false,
@@ -426,6 +516,7 @@ export function normalizeAppStateSnapshot(value: unknown): AppStateSnapshot | nu
 
   const snapshot = {
     demoPersistenceSchemaVersion: data.demoPersistenceSchemaVersion === "d01-v1" ? "d01-v1" : undefined,
+    ...(meta ? { meta } : {}),
     children,
     attendance,
     meals,

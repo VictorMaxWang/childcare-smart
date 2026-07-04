@@ -26,7 +26,7 @@ export interface ParentRegistrationChildInput {
   guardianPhone?: string;
 }
 
-export type RegisterAccountRoleInput = AccountRole | "admin" | "teacher" | "parent";
+export type RegisterAccountRoleInput = AccountRole | "admin" | "teacher" | "parent" | "institution_admin";
 
 export interface RegisterAccountInput {
   phone?: string;

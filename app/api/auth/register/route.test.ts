@@ -65,10 +65,11 @@ test("register route sets the existing session cookie path and never returns pas
     jsonRequest({ phone: "13800000000", password: "secret123", confirmPassword: "secret123", role: "parent" }),
     dependencies
   );
-  const body = (await response.json()) as { ok: boolean; user?: Record<string, unknown> };
+  const body = (await response.json()) as { ok: boolean; redirectPath?: string; user?: Record<string, unknown> };
 
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
+  assert.equal(body.redirectPath, "/parent");
   assert.equal(body.user?.id, "u-test");
   assert.equal(body.user?.password_hash, undefined);
   assert.deepEqual(sessionCalls, [{ userId: "u-test", role: "家长" }]);

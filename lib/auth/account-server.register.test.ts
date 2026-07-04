@@ -24,11 +24,12 @@ function existingRow(username: string, role: AccountRole = "家长") {
   };
 }
 
-function createRegisterDeps(options?: { usernames?: string[]; phones?: string[] }) {
+function createRegisterDeps(options?: { usernames?: string[]; phones?: string[]; failInsert?: boolean; failSnapshot?: boolean }) {
   const usernames = new Set(options?.usernames ?? []);
   const phones = new Set(options?.phones ?? []);
   const insertedRows: Array<Record<string, unknown>> = [];
   const snapshots: Array<{ institutionId: string; updatedBy: string; snapshot: unknown }> = [];
+  let stagedTransaction: { insertedRows: Array<Record<string, unknown>>; snapshots: typeof snapshots } | null = null;
   let idCounter = 0;
 
   const dependencies: RegisterNormalAccountDependencies = {
@@ -46,17 +47,60 @@ function createRegisterDeps(options?: { usernames?: string[]; phones?: string[] 
       return `hash:${password}`;
     },
     async insertAppUser(_connection, row) {
-      insertedRows.push(row as unknown as Record<string, unknown>);
+      if (options?.failInsert) {
+        throw new Error("insert failed");
+      }
+
+      const target = stagedTransaction?.insertedRows ?? insertedRows;
+      target.push(row as unknown as Record<string, unknown>);
     },
     async runInTransaction(callback) {
-      return callback({} as DatabaseConnection);
+      const previousTransaction = stagedTransaction;
+      const transaction = { insertedRows: [], snapshots: [] as typeof snapshots };
+      stagedTransaction = transaction;
+
+      try {
+        const result = await callback({} as DatabaseConnection);
+        insertedRows.push(...transaction.insertedRows);
+        snapshots.push(...transaction.snapshots);
+        return result;
+      } finally {
+        stagedTransaction = previousTransaction;
+      }
     },
     async upsertInstitutionSnapshot(_connection, institutionId, snapshot, updatedBy) {
-      snapshots.push({ institutionId, snapshot, updatedBy });
+      if (options?.failSnapshot) {
+        throw new Error("snapshot failed");
+      }
+
+      const target = stagedTransaction?.snapshots ?? snapshots;
+      target.push({ institutionId, snapshot, updatedBy });
     },
   };
 
   return { dependencies, insertedRows, snapshots };
+}
+
+function readSnapshotMeta(snapshot: unknown) {
+  assert.equal(typeof snapshot, "object");
+  assert.ok(snapshot);
+  return (snapshot as {
+    children?: unknown[];
+    meta?: {
+      workspace?: {
+        kind?: string;
+        institutionId?: string;
+        ownerUserId?: string;
+        ownerRole?: string;
+        isDemo?: boolean;
+      };
+      usageLimits?: {
+        maxChildren?: number;
+        maxStorybooksPerMonth?: number;
+        maxAiCallsPerDay?: number;
+      };
+    };
+  }).meta;
 }
 
 test("registerNormalAccount rejects requests without phone or username", async () => {
@@ -164,6 +208,80 @@ test("registerNormalAccount creates phone-first parent accounts without child re
   assert.equal(insertedRows[0].is_demo, false);
   assert.deepEqual(insertedRows[0].child_ids, []);
   assert.equal(snapshots.length, 1);
+  assert.equal(snapshots[0].institutionId, insertedRows[0].institution_id);
+  assert.equal(snapshots[0].updatedBy, result.data.id);
+  assert.deepEqual((snapshots[0].snapshot as { children?: unknown[] }).children, []);
+  const meta = readSnapshotMeta(snapshots[0].snapshot);
+  assert.equal(meta?.workspace?.kind, "family");
+  assert.equal(meta?.workspace?.institutionId, insertedRows[0].institution_id);
+  assert.equal(meta?.workspace?.ownerUserId, result.data.id);
+  assert.equal(meta?.workspace?.ownerRole, "家长");
+  assert.equal(meta?.workspace?.isDemo, false);
+  assert.deepEqual(meta?.usageLimits, {
+    maxChildren: 5,
+    maxStorybooksPerMonth: 20,
+    maxAiCallsPerDay: 50,
+  });
+});
+
+test("registerNormalAccount creates real institution workspaces for admin aliases", async () => {
+  const { dependencies, insertedRows, snapshots } = createRegisterDeps();
+
+  const result = await registerNormalAccountWithDependencies(
+    {
+      phone: "13900000000",
+      password: "secret123",
+      confirmPassword: "secret123",
+      role: "institution_admin",
+      displayName: "测试园长",
+    },
+    dependencies
+  );
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+
+  assert.equal(result.data.role, "机构管理员");
+  assert.equal(result.data.institutionId, insertedRows[0].institution_id);
+  assert.deepEqual(result.data.childIds, []);
+  assert.equal(insertedRows[0].is_demo, false);
+  assert.equal(snapshots.length, 1);
+  assert.equal(snapshots[0].institutionId, result.data.institutionId);
+  assert.deepEqual((snapshots[0].snapshot as { children?: unknown[] }).children, []);
+  const meta = readSnapshotMeta(snapshots[0].snapshot);
+  assert.equal(meta?.workspace?.kind, "institution");
+  assert.equal(meta?.workspace?.ownerRole, "机构管理员");
+  assert.equal(meta?.workspace?.isDemo, false);
+});
+
+test("registerNormalAccount creates personal trial workspaces for teachers", async () => {
+  const { dependencies, insertedRows, snapshots } = createRegisterDeps();
+
+  const result = await registerNormalAccountWithDependencies(
+    {
+      phone: "13700000000",
+      password: "secret123",
+      confirmPassword: "secret123",
+      role: "teacher",
+    },
+    dependencies
+  );
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+
+  assert.equal(result.data.role, "教师");
+  assert.equal(result.data.className, "新注册班");
+  assert.equal(result.data.institutionId, insertedRows[0].institution_id);
+  assert.equal(insertedRows[0].is_demo, false);
+  assert.equal(insertedRows[0].class_name, "新注册班");
+  assert.deepEqual(result.data.childIds, []);
+  assert.equal(snapshots.length, 1);
+  assert.deepEqual((snapshots[0].snapshot as { children?: unknown[] }).children, []);
+  const meta = readSnapshotMeta(snapshots[0].snapshot);
+  assert.equal(meta?.workspace?.kind, "teacher_trial");
+  assert.equal(meta?.workspace?.ownerUserId, result.data.id);
+  assert.equal(meta?.workspace?.ownerRole, "教师");
 });
 
 test("registerNormalAccount preserves legacy username registration", async () => {
@@ -187,6 +305,38 @@ test("registerNormalAccount preserves legacy username registration", async () =>
   assert.equal(result.data.role, "教师");
   assert.equal(result.data.className, "晨曦班");
   assert.equal(insertedRows[0].phone_normalized, null);
+});
+
+test("registerNormalAccount rolls back staged user when snapshot creation fails", async () => {
+  const { dependencies, insertedRows, snapshots } = createRegisterDeps({ failSnapshot: true });
+
+  const result = await registerNormalAccountWithDependencies(
+    { phone: "13600000000", password: "secret123", confirmPassword: "secret123", role: "admin" },
+    dependencies
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.status, 500);
+  }
+  assert.deepEqual(insertedRows, []);
+  assert.deepEqual(snapshots, []);
+});
+
+test("registerNormalAccount does not create snapshots when user insert fails", async () => {
+  const { dependencies, insertedRows, snapshots } = createRegisterDeps({ failInsert: true });
+
+  const result = await registerNormalAccountWithDependencies(
+    { phone: "13500000000", password: "secret123", confirmPassword: "secret123", role: "parent" },
+    dependencies
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.status, 500);
+  }
+  assert.deepEqual(insertedRows, []);
+  assert.deepEqual(snapshots, []);
 });
 
 test("insertAppUserWithPhoneFallback retries legacy insert when phone_normalized column is missing", async () => {
