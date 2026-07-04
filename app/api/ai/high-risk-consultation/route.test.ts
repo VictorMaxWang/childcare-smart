@@ -152,6 +152,7 @@ test("high-risk consultation route returns complete Lin Xiaoyu fallback when for
       const dataQuality = traceMeta.dataQuality as Record<string, unknown>;
       const warnings = body.warnings as string[];
       const manualReviewSummary = body.manualReviewSummary as Record<string, unknown>;
+      const knowledgeHints = body.knowledgeHints as Array<Record<string, unknown>>;
 
       assert.equal(response.status, 200);
       assert.equal(body.childId, "c-1");
@@ -165,6 +166,11 @@ test("high-risk consultation route returns complete Lin Xiaoyu fallback when for
       assert.equal(dataQuality.status, "complete");
       assert.equal(body.humanReviewRequired, true);
       assert.equal(manualReviewSummary.required, true);
+      assert.ok(Array.isArray(knowledgeHints));
+      assert.ok(knowledgeHints.length > 0);
+      assert.ok(knowledgeHints.some((item) => typeof item.riskBoundary === "string" && item.riskBoundary.length > 0));
+      assert.doesNotMatch(JSON.stringify(knowledgeHints), /完整\s*RAG/i);
+      assert.doesNotMatch(text, /完整\s*RAG/i);
       assert.ok(Array.isArray(body.followUp48h));
       assert.ok((body.followUp48h as unknown[]).length > 0);
       const providerTrace = body.providerTrace as Record<string, unknown>;

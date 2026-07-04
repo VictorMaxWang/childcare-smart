@@ -7,7 +7,7 @@ import type {
 } from "@/lib/ai/types";
 import { buildAiProviderTraceFromProviderMeta } from "@/lib/ai/provider-trace";
 import { getVivoEnv, requestVivoTts } from "@/lib/providers/vivo";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
@@ -16,7 +16,6 @@ import {
   cacheParentStoryBookMediaDataUrl,
   prepareParentStoryBookResponseForDelivery,
 } from "@/lib/server/parent-storybook-cache";
-import { requireDemoSession } from "@/lib/server/session";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -493,11 +492,11 @@ async function parseRemoteStoryResponse(response: Response) {
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, {
+  const authResult = await authorizeAiRouteSession(request, {
     requiredRole: "parent",
     collectJsonClassNames: false,
   });
-  if (authError) return authError;
+  if (authResult instanceof Response) return authResult;
 
   let payload: ParentStoryBookMediaStatusRequest;
   try {
@@ -516,17 +515,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const sessionUser = (await requireDemoSession(request)).user;
+  const sessionUser = authResult.session.user;
   if (sessionUser.role !== ROLE_PARENT) {
-    return NextResponse.json(
-      { error: "Parent role required" },
-      { status: 403, headers: { "cache-control": "no-store" } }
+    return aiRouteLimitedResponse(
+      {
+        reason: "role_mismatch",
+        error: "Parent role required.",
+        requiredRole: "parent",
+      },
+      { headers: { "cache-control": "no-store" } }
     );
   }
-  if (!(sessionUser.childIds ?? []).includes(payload.childId)) {
-    return NextResponse.json(
-      { error: "Child is not authorized for current parent" },
-      { status: 403, headers: { "cache-control": "no-store" } }
+  if (!payload.childId) {
+    return aiRouteLimitedResponse(
+      {
+        reason: "scope_required",
+        error: "Child scope is required for parent storybook media.",
+        requiredRole: "parent",
+      },
+      { headers: { "cache-control": "no-store" } }
     );
   }
 

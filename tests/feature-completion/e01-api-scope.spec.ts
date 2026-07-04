@@ -1,13 +1,11 @@
-import { expect, request as playwrightRequest, test, type APIRequestContext, type TestInfo } from "@playwright/test";
+﻿import { expect, request as playwrightRequest, test, type APIRequestContext, type TestInfo } from "@playwright/test";
 
 async function demoContext(testInfo: TestInfo, accountId: string) {
   const baseURL = testInfo.project.use.baseURL as string | undefined;
-  return playwrightRequest.newContext({
-    baseURL,
-    extraHTTPHeaders: {
-      "x-demo-account-id": accountId,
-    },
-  });
+  const context = await playwrightRequest.newContext({ baseURL });
+  const response = await context.post("/api/auth/demo-login", { data: { accountId } });
+  expect(response.ok()).toBeTruthy();
+  return context;
 }
 
 async function expectFailure(response: Awaited<ReturnType<APIRequestContext["get"]>>, status: number, code: string) {

@@ -1,4 +1,4 @@
-import { expect, request as playwrightRequest, type APIRequestContext, type APIResponse, type Page, type TestInfo } from "@playwright/test";
+﻿import { expect, request as playwrightRequest, type APIRequestContext, type APIResponse, type Page, type TestInfo } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -9,10 +9,12 @@ export const CHILD_FORBIDDEN = "c-3";
 
 export async function demoContext(testInfo: TestInfo, accountId?: string) {
   const baseURL = testInfo.project.use.baseURL as string | undefined;
-  return playwrightRequest.newContext({
-    baseURL,
-    extraHTTPHeaders: accountId ? { "x-demo-account-id": accountId } : undefined,
-  });
+  const context = await playwrightRequest.newContext({ baseURL });
+  if (accountId) {
+    const response = await context.post("/api/auth/demo-login", { data: { accountId } });
+    expect(response.ok()).toBeTruthy();
+  }
+  return context;
 }
 
 export async function expectOk<T = unknown>(response: APIResponse, status = 200): Promise<T> {
@@ -30,7 +32,7 @@ export async function expectFailure(response: APIResponse, status: number, code?
   if (code) expect(body.code).toBe(code);
   expect(typeof body.error).toBe("string");
   expect(body.error.length).toBeGreaterThan(0);
-  return body as { ok: false; code: string; error: string };
+  return body as { ok: false; code: string; error: string; limited?: boolean; reason?: string };
 }
 
 export async function captureE11(page: Page, fileName: string) {

@@ -11,9 +11,9 @@ import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/inp
 import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
 import { selectStructuredFeedbackConsumption } from "@/lib/feedback/consumption";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
-import { requireParentChildAccess } from "@/lib/server/parent-route-guard";
+import { aiRouteLimitedResponse, authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import { buildMemoryContextForPrompt } from "@/lib/server/memory-context";
+import { logSecurityEvent } from "@/lib/server/security-log";
 import {
   buildCurrentInterventionCardFromTask,
   buildTasksFromFollowUpCardContext,
@@ -99,15 +99,19 @@ function buildTaskContext(payload: AiFollowUpPayload) {
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, { requiredRole: "parent" });
+  const authError = await authorizeAiRoute(request, {
+    requiredRole: "parent",
+    collectJsonClassNames: false,
+  });
   if (authError) return authError;
 
   let payload: AiFollowUpPayload | null = null;
+  const brainRequest = request.clone();
 
   try {
     payload = (await request.json()) as AiFollowUpPayload;
   } catch (error) {
-    console.error("[AI] Invalid follow-up payload", error);
+    logSecurityEvent("error", "ai.follow_up.invalid_payload", { error });
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
@@ -121,12 +125,15 @@ export async function POST(request: Request) {
       : null;
   const isChildScoped = childSnapshot !== null;
   const childId = childSnapshot?.child.id ?? null;
-  const access = await requireParentChildAccess(childId);
-  if (access.response) {
-    return access.response;
+  if (!childId) {
+    return aiRouteLimitedResponse({
+      reason: "scope_required",
+      error: "Child scope is required for parent follow-up.",
+      requiredRole: "parent",
+    });
   }
 
-  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/parent/follow-up");
+  const brainForward = await forwardBrainRequest(brainRequest, "/api/v1/agents/parent/follow-up");
   if (brainForward.response?.ok || (brainForward.response && !isChildScoped)) {
     return brainForward.response;
   }
@@ -169,7 +176,7 @@ export async function POST(request: Request) {
         request,
       });
     } catch (error) {
-      console.warn("[AI] Parent follow-up memory fallback", error);
+      logSecurityEvent("warn", "ai.follow_up.memory_fallback", { error });
     }
   }
 
@@ -233,7 +240,7 @@ export async function POST(request: Request) {
         })
       );
     } catch (error) {
-      console.warn("[AI] Parent follow-up consultation fallback", error);
+      logSecurityEvent("warn", "ai.follow_up.consultation_fallback", { error });
     }
   }
 

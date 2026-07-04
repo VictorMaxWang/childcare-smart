@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+﻿import { expect, test, type Page } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { loginAs, resetDemoStorage } from "../feature-completion/helpers";
@@ -32,10 +32,10 @@ test("E05 AI routes return auth errors and health parse uses explicit provider f
   expect(unauth.status()).toBe(401);
   await expect.poll(async () => (await unauth.json()).code).toBe("unauthorized");
 
-  const forbidden = await request.post("/api/ai/health-file-bridge", {
-    data: aiPayload,
-    headers: { "x-demo-account-id": "u-teacher2" },
-  });
+  const teacher2Login = await request.post("/api/auth/demo-login", { data: { accountId: "u-teacher2" } });
+  expect(teacher2Login.ok()).toBe(true);
+
+  const forbidden = await request.post("/api/ai/health-file-bridge", { data: aiPayload });
   expect(forbidden.status()).toBe(403);
   await expect.poll(async () => (await forbidden.json()).code).toBe("forbidden_scope");
 
@@ -44,7 +44,7 @@ test("E05 AI routes return auth errors and health parse uses explicit provider f
   const token = `E05-TEXT-${Date.now()}`;
   await page.getByTestId("d05-health-preview-text").fill(`${token} temperature 39.0 high risk follow up tomorrow`);
   await page.getByTestId("d05-start-parse").click();
-  await expect(page.getByTestId("d05-parse-result")).toContainText("本地文本 fallback", { timeout: 30_000 });
+  await expect(page.getByTestId("d05-parse-result")).toContainText("鏈湴鏂囨湰 fallback", { timeout: 30_000 });
   await expect(page.getByTestId("d05-parse-result")).toContainText("extracted text");
   await captureE05(page, "e05-01-text-fallback-provider-status.png");
 
@@ -77,7 +77,7 @@ test("E05 AI routes return auth errors and health parse uses explicit provider f
   expect(invalidImageResult.status()).toBe(503);
   expect((await invalidImageResult.json()).code).toBe("provider_unavailable");
   await expect(page.getByTestId("d05-health-history")).toContainText(imageFailureName, { timeout: 30_000 });
-  await expect(page.getByTestId("d05-health-history")).toContainText("解析失败");
+  await expect(page.getByTestId("d05-health-history")).toContainText("瑙ｆ瀽澶辫触");
   await captureE05(page, "e05-04-provider-unavailable-no-fake-success.png");
 
   const asrMissingEnv = await page.request.post("/api/ai/voice-asr", {

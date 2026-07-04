@@ -11,6 +11,7 @@ import type {
   WeeklyReportSnapshot,
 } from "@/lib/ai/types";
 import { buildActionizedWeeklyReportResponse } from "@/lib/ai/weekly-report";
+import { logSecurityEvent } from "@/lib/server/security-log";
 
 const DASHSCOPE_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = 12000;
@@ -355,7 +356,7 @@ async function requestDashscopeJson(prompt: string) {
   const model = process.env.AI_MODEL || "qwen-turbo";
 
   if (!apiKey) {
-    console.warn("[AI] DASHSCOPE_API_KEY is missing, falling back to rules.");
+    logSecurityEvent("warn", "ai.dashscope.missing_env", { provider: "dashscope" });
     return null;
   }
 
@@ -388,8 +389,11 @@ async function requestDashscopeJson(prompt: string) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      console.error(`[AI] DashScope request failed: ${response.status} ${response.statusText}`, errorText.slice(0, 300));
+      await response.text().catch(() => "");
+      logSecurityEvent("error", "ai.dashscope.request_failed", {
+        provider: "dashscope",
+        status: response.status,
+      });
       return null;
     }
 
@@ -403,7 +407,10 @@ async function requestDashscopeJson(prompt: string) {
 
     return safeJsonParse(content);
   } catch (error) {
-    console.error("[AI] DashScope request threw an exception:", error);
+    logSecurityEvent("error", "ai.dashscope.request_exception", {
+      provider: "dashscope",
+      error,
+    });
     return null;
   } finally {
     clearTimeout(timeout);
@@ -420,7 +427,7 @@ async function requestDashscopeJsonWithMessages({
   const apiKey = process.env.DASHSCOPE_API_KEY || "";
 
   if (!apiKey) {
-    console.warn("[AI] DASHSCOPE_API_KEY is missing, falling back to rules.");
+    logSecurityEvent("warn", "ai.dashscope.missing_env", { provider: "dashscope" });
     return null;
   }
 
@@ -444,8 +451,11 @@ async function requestDashscopeJsonWithMessages({
     });
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      console.error(`[AI] DashScope request failed: ${response.status} ${response.statusText}`, errorText.slice(0, 300));
+      await response.text().catch(() => "");
+      logSecurityEvent("error", "ai.dashscope.request_failed", {
+        provider: "dashscope",
+        status: response.status,
+      });
       return null;
     }
 
@@ -472,7 +482,10 @@ async function requestDashscopeJsonWithMessages({
 
     return null;
   } catch (error) {
-    console.error("[AI] DashScope request threw an exception:", error);
+    logSecurityEvent("error", "ai.dashscope.request_exception", {
+      provider: "dashscope",
+      error,
+    });
     return null;
   } finally {
     clearTimeout(timeout);
@@ -599,7 +612,7 @@ export async function requestDashscopeSuggestion(
     );
     const normalized = normalizeAiOutput(parsed);
     if (!normalized) {
-      console.error("[AI] DashScope returned suggestion content that could not be normalized.");
+      logSecurityEvent("error", "ai.dashscope.suggestion_normalize_failed", { provider: "dashscope" });
     }
     return normalized;
   } catch {
@@ -615,7 +628,7 @@ export async function requestDashscopeWeeklyReport(
     const parsed = await requestDashscopeJson(buildWeeklyReportPrompt(snapshot, role));
     const normalized = normalizeWeeklyReportOutput(parsed, snapshot, role);
     if (!normalized) {
-      console.error("[AI] DashScope returned weekly report content that could not be normalized.");
+      logSecurityEvent("error", "ai.dashscope.weekly_report_normalize_failed", { provider: "dashscope" });
     }
     return normalized;
   } catch {
@@ -630,7 +643,7 @@ export async function requestDashscopeFollowUp(
     const parsed = await requestDashscopeJson(buildFollowUpPrompt(payload));
     const normalized = normalizeFollowUpOutput(parsed);
     if (!normalized) {
-      console.error("[AI] DashScope returned follow-up content that could not be normalized.");
+      logSecurityEvent("error", "ai.dashscope.follow_up_normalize_failed", { provider: "dashscope" });
     }
     return normalized;
   } catch {

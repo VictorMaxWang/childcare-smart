@@ -30,6 +30,7 @@ import {
 import type { WeeklyReportResponse } from "@/lib/ai/types";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
 import { buildMemoryContextForPrompt } from "@/lib/server/memory-context";
+import { logSecurityEvent } from "@/lib/server/security-log";
 
 function isRecordArray(value: unknown) {
   return Array.isArray(value);
@@ -167,7 +168,7 @@ export async function POST(request: Request) {
   try {
     payload = (await request.clone().json()) as AdminAgentRequestPayload;
   } catch (error) {
-    console.error("[AI] Invalid admin-agent payload", error);
+    logSecurityEvent("error", "ai.admin_agent.invalid_payload", { error });
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
@@ -191,7 +192,7 @@ export async function POST(request: Request) {
       }
       shouldFallbackToLocalWeekly = true;
     } catch (error) {
-      console.warn("[AI] Failed to normalize proxied admin weekly-report response", error);
+      logSecurityEvent("warn", "ai.admin_agent.proxy_normalize_failed", { error });
       shouldFallbackToLocalWeekly = true;
     }
 

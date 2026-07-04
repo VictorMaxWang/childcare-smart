@@ -10,6 +10,7 @@ import {
 import type { WeeklyReportPayload } from "@/lib/ai/types";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { logSecurityEvent } from "@/lib/server/security-log";
 
 export async function POST(request: Request) {
   const authError = await authorizeAiRoute(request, { allowUnscoped: true });
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
   try {
     payload = (await request.clone().json()) as WeeklyReportPayload;
   } catch (error) {
-    console.error("[AI] Invalid weekly-report payload", error);
+    logSecurityEvent("error", "ai.weekly_report.invalid_payload", { error });
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
@@ -36,6 +37,7 @@ export async function POST(request: Request) {
   const roleAuthError = await authorizeAiRoute(request, {
     requiredRole: payloadRole === "admin" ? "admin" : payloadRole === "teacher" ? "staff" : "parent",
     allowUnscoped: true,
+    requireScopedNormalSession: true,
   });
   if (roleAuthError) return roleAuthError;
 

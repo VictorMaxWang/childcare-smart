@@ -67,7 +67,11 @@ function localFallbackResponse(params: {
 }
 
 export async function GET(request: Request) {
-  const authError = await authorizeAiRoute(request, { requiredRole: "staff", allowUnscoped: true });
+  const authError = await authorizeAiRoute(request, {
+    requiredRole: "staff",
+    allowUnscoped: true,
+    requireScopedNormalSession: true,
+  });
   if (authError) return authError;
 
   const url = new URL(request.url);

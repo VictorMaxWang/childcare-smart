@@ -1,4 +1,4 @@
-import { expect, request as playwrightRequest, test, type APIRequestContext, type APIResponse, type Page, type TestInfo } from "@playwright/test";
+﻿import { expect, request as playwrightRequest, test, type APIRequestContext, type APIResponse, type Page, type TestInfo } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -14,10 +14,10 @@ async function capture(page: Page, fileName: string) {
 
 async function demoContext(testInfo: TestInfo, accountId: string) {
   const baseURL = testInfo.project.use.baseURL as string | undefined;
-  return playwrightRequest.newContext({
-    baseURL,
-    extraHTTPHeaders: { "x-demo-account-id": accountId },
-  });
+  const context = await playwrightRequest.newContext({ baseURL });
+  const response = await context.post("/api/auth/demo-login", { data: { accountId } });
+  expect(response.ok()).toBeTruthy();
+  return context;
 }
 
 async function expectOk<T = Record<string, unknown>>(response: APIResponse, status = 200): Promise<T> {
@@ -213,17 +213,17 @@ test.describe("E10 cleanup acceptance", () => {
 
     await page.goto(`/parent/agent?child=${CHILD_ID}`);
     await expect(page.getByTestId("parent-communication-panel")).toBeVisible();
-    await expect(page.getByTestId("parent-communication-panel")).toContainText(/metadata|本地|附件|图片|语音/);
+    await expect(page.getByTestId("parent-communication-panel")).toContainText(/metadata|鏈湴|闄勪欢|鍥剧墖|璇煶/);
     await capture(page, "05-feedback-attachments-metadata-only.png");
 
     await page.goto(`/parent/storybook?child=${CHILD_ID}`);
     await expect(page.getByTestId("e10-storybook-export-markdown")).toBeEnabled({ timeout: 30_000 });
     await page.getByTestId("e10-storybook-export-markdown").click();
-    await expect(page.getByTestId("e10-storybook-action-status")).toContainText(/本地|导出|external/i);
+    await expect(page.getByTestId("e10-storybook-action-status")).toContainText(/鏈湴|瀵煎嚭|external/i);
     await capture(page, "14-storybook-export-local.png");
 
     await page.getByTestId("e10-storybook-share-local").click();
-    await expect(page.getByTestId("e10-storybook-action-status")).toContainText(/分享|外部|copy|local/i);
+    await expect(page.getByTestId("e10-storybook-action-status")).toContainText(/鍒嗕韩|澶栭儴|copy|local/i);
     await capture(page, "15-storybook-share-local.png");
   });
 

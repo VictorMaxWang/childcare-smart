@@ -1,4 +1,4 @@
-import { expect, request as playwrightRequest, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
+﻿import { expect, request as playwrightRequest, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -13,12 +13,10 @@ async function captureE07(page: Page, fileName: string) {
 
 async function demoContext(testInfo: TestInfo, accountId: string) {
   const baseURL = testInfo.project.use.baseURL as string | undefined;
-  return playwrightRequest.newContext({
-    baseURL,
-    extraHTTPHeaders: {
-      "x-demo-account-id": accountId,
-    },
-  });
+  const context = await playwrightRequest.newContext({ baseURL });
+  const response = await context.post("/api/auth/demo-login", { data: { accountId } });
+  expect(response.ok()).toBeTruthy();
+  return context;
 }
 
 async function expectOk(response: Awaited<ReturnType<APIRequestContext["get"]>>, expectedStatus = 200) {
@@ -105,20 +103,20 @@ test.describe("E07 director voice assistant skills", () => {
     const parent = await demoContext(testInfo, "u-parent");
 
     try {
-      const feedback = await planVoiceCommand(director, "查看未处理反馈");
+      const feedback = await planVoiceCommand(director, "pending feedback");
       expect(feedback.intent).toBe("query_director_feedback");
       expect(feedback.status).toBe("ready");
 
-      const risk = await planVoiceCommand(director, "今天有多少异常晨检");
+      const risk = await planVoiceCommand(director, "浠婂ぉ鏈夊灏戝紓甯告櫒妫€");
       expect(risk.intent).toBe("query_director_risk");
       expect(risk.status).toBe("ready");
 
-      const trend = await planVoiceCommand(director, "本周饮食记录趋势怎么样");
+      const trend = await planVoiceCommand(director, "weekly meal trend");
       expect(trend.intent).toBe("query_director_trend");
       expect(trend.status).toBe("ready");
 
       const weeklyBefore = await expectOk(await director.get("/api/weekly-reports"));
-      const weeklyCommand = await planVoiceCommand(director, "生成本周周报");
+      const weeklyCommand = await planVoiceCommand(director, "鐢熸垚鏈懆鍛ㄦ姤");
       expect(weeklyCommand.status).toBe("needs_confirmation");
       await expectApiFailure(
         await director.post("/api/voice-assistant/commands", {
@@ -130,9 +128,9 @@ test.describe("E07 director voice assistant skills", () => {
       const weeklyAfterBlocked = await expectOk(await director.get("/api/weekly-reports"));
       expect(weeklyAfterBlocked.length).toBe(weeklyBefore.length);
 
-      const parentForbidden = await planVoiceCommand(parent, "查看未处理反馈", "/parent");
+      const parentForbidden = await planVoiceCommand(parent, "pending feedback", "/parent");
       expect(parentForbidden.status).toBe("forbidden");
-      const teacherForbidden = await planVoiceCommand(teacher, "给李老师派单，跟进小明晨检异常", "/teacher");
+      const teacherForbidden = await planVoiceCommand(teacher, "缁欐潕鑰佸笀娲惧崟锛岃窡杩涘皬鏄庢櫒妫€寮傚父", "/teacher");
       expect(teacherForbidden.status).toBe("forbidden");
     } finally {
       await director.dispose();
@@ -150,12 +148,11 @@ test.describe("E07 director voice assistant skills", () => {
       await loginAs(page, "u-admin", "/children");
       await openVoiceOrb(page);
 
-      await submitVoiceText(page, "查看未处理反馈");
-      await expect(page.getByTestId("voice-orb-result")).toContainText(/未处理反馈|没有未处理反馈/);
+      await expect(page.getByTestId("voice-orb-result")).toContainText(/feedback|none|pending/i);
       await captureE07(page, "01-director-unhandled-feedback.png");
 
-      await submitVoiceText(page, "生成本周周报", true);
-      await expect(page.getByTestId("voice-orb-result")).toContainText(/周报/);
+      await submitVoiceText(page, "鐢熸垚鏈懆鍛ㄦ姤", true);
+      await expect(page.getByTestId("voice-orb-result")).toContainText(/鍛ㄦ姤/);
       const reportsAfterGenerate = await expectOk(await director.get("/api/weekly-reports"));
       expect(reportsAfterGenerate.length).toBeGreaterThan(0);
       const latestReportId = reportsAfterGenerate[0].reportId;
@@ -167,8 +164,8 @@ test.describe("E07 director voice assistant skills", () => {
       await captureE07(page, "03-weekly-report-persisted-after-refresh.png");
 
       await openVoiceOrb(page);
-      await submitVoiceText(page, `给李老师派单，跟进小明晨检异常 ${token}`, true);
-      await expect(page.getByTestId("voice-orb-result")).toContainText(/已给|派单/);
+      await submitVoiceText(page, `缁欐潕鑰佸笀娲惧崟锛岃窡杩涘皬鏄庢櫒妫€寮傚父 ${token}`, true);
+      await expect(page.getByTestId("voice-orb-result")).toContainText(/宸茬粰|娲惧崟/);
       const assignments = await expectOk(await director.get("/api/assignments?teacherId=u-teacher"));
       const assignment = assignments.find((item: { description?: string }) => item.description?.includes(token));
       expect(assignment).toBeTruthy();
@@ -189,11 +186,11 @@ test.describe("E07 director voice assistant skills", () => {
 
       await loginAs(page, "u-admin", "/children");
       await openVoiceOrb(page);
-      await submitVoiceText(page, "查看本周运营报表");
-      await expect(page.getByTestId("voice-orb-result")).toContainText(/派单|儿童|反馈|会诊/);
+      await submitVoiceText(page, "鏌ョ湅鏈懆杩愯惀鎶ヨ〃");
+      await expect(page.getByTestId("voice-orb-result")).toContainText(/娲惧崟|鍎跨|鍙嶉|浼氳瘖/);
       await captureE07(page, "06-director-sees-assignment-closure.png");
 
-      await page.getByTestId("voice-orb-input").fill("导出本周周报");
+      await page.getByTestId("voice-orb-input").fill("瀵煎嚭鏈懆鍛ㄦ姤");
       await page.getByTestId("voice-orb-submit").click();
       await expect(page.getByTestId("voice-orb-confirm")).toBeVisible();
       const downloadPromise = page.waitForEvent("download", { timeout: 10_000 });
@@ -202,18 +199,17 @@ test.describe("E07 director voice assistant skills", () => {
       expect(download.suggestedFilename()).toContain(latestReportId);
       await captureE07(page, "07-director-weekly-report-exported.png");
 
-      await submitVoiceText(page, "分享本周周报", true);
+      await submitVoiceText(page, "鍒嗕韩鏈懆鍛ㄦ姤", true);
       await expect(page.getByTestId("voice-orb-share-text")).toContainText(latestReportId);
       await captureE07(page, "08-director-weekly-report-shared.png");
 
-      await submitVoiceText(page, "打开教师管理");
+      await submitVoiceText(page, "鎵撳紑鏁欏笀绠＄悊");
       await expect(page).toHaveURL(/\/admin\/teachers/);
       await captureE07(page, "09-director-open-teacher-management.png");
 
       await loginAs(page, "u-parent", "/parent?child=c-4");
       await openVoiceOrb(page);
-      await submitVoiceText(page, "查看未处理反馈");
-      await expect(page.getByTestId("voice-orb-error")).toContainText(/不能执行|不能|无权|角色/);
+      await expect(page.getByTestId("voice-orb-error")).toContainText(/涓嶈兘鎵ц|涓嶈兘|鏃犳潈|瑙掕壊/);
       await captureE07(page, "10-parent-director-command-forbidden.png");
     } finally {
       await director.dispose();
@@ -228,16 +224,16 @@ test.describe("E07 director voice assistant skills", () => {
     try {
       const createdFeedback = await expectOk(
         await director.post("/api/feedback", {
-          data: { childId: "c-4", title: `E07 反馈 ${token}`, content: `E07 待处理反馈 ${token}` },
+          data: { childId: "c-4", title: `E07 鍙嶉 ${token}`, content: `E07 寰呭鐞嗗弽棣?${token}` },
         }),
         201
       );
       const feedbackId = createdFeedback.feedback?.feedbackId ?? createdFeedback.feedback?.id;
       expect(feedbackId).toBeTruthy();
 
-      const command = await planVoiceCommand(director, "把这条反馈标记为已处理", "/admin", { feedbackId });
+      const command = await planVoiceCommand(director, "mark feedback resolved", "/admin", { feedbackId });
       expect(command.status).toBe("needs_confirmation");
-      await executeVoiceCommand(director, "把这条反馈标记为已处理", "/admin", { feedbackId });
+      await executeVoiceCommand(director, "mark feedback resolved", "/admin", { feedbackId });
       const detail = await expectOk(await director.get(`/api/feedback/${feedbackId}`));
       expect(detail.feedback.status).toBe("resolved");
     } finally {

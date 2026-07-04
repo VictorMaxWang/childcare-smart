@@ -27,6 +27,18 @@ test("apiOk returns the uniform success envelope", async () => {
   });
 });
 
+test("apiError maps business limited responses to 423", async () => {
+  const response = apiError("limited", "business limited");
+  const body = await response.json();
+
+  assert.equal(response.status, 423);
+  assert.deepEqual(body, {
+    ok: false,
+    code: "limited",
+    error: "business limited",
+  });
+});
+
 test("handleApiError preserves ApiRouteError code and status", async () => {
   const response = handleApiError(new ApiRouteError("unauthorized", "missing session"));
   const body = await response.json();

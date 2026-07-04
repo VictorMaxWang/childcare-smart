@@ -307,6 +307,37 @@ function ResultCorePanel({ result }: { result: ConsultationApiResult }) {
           </div>
         </div>
 
+        {result.knowledgeHints?.length ? (
+          <div
+            className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4"
+            data-testid="childcare-knowledge-hints"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-emerald-950">专业依据提示</p>
+                <p className="mt-1 text-xs leading-5 text-emerald-800">
+                  来自轻量托育知识库，用于提示照护原则、可执行动作和风险边界；后续可接入向量检索和真实机构案例。
+                </p>
+              </div>
+              <Badge variant="success">knowledgeHints</Badge>
+            </div>
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              {result.knowledgeHints.map((hint) => (
+                <div key={hint.id} className="rounded-xl border border-emerald-100 bg-white p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">{hint.topic}</Badge>
+                    <Badge variant="secondary">{hint.ageRange}</Badge>
+                  </div>
+                  <p className="mt-3 text-sm font-semibold leading-6 text-slate-900">{hint.principle}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{hint.suggestedAction}</p>
+                  <p className="mt-2 text-xs leading-5 text-amber-700">边界：{hint.riskBoundary}</p>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">{hint.sourceNote}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
           <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
             <p className="text-sm font-semibold text-slate-950">provider / fallback / dataQuality</p>

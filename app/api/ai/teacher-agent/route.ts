@@ -36,6 +36,7 @@ import {
   type BrainTransport,
 } from "@/lib/server/brain-client";
 import { buildMemoryContextForPrompt } from "@/lib/server/memory-context";
+import { logSecurityEvent } from "@/lib/server/security-log";
 
 const TEACHER_AGENT_TARGET_PATH = "/api/v1/agents/teacher/run";
 const TEACHER_AGENT_BRAIN_TIMEOUT_MS = 3_000;
@@ -394,7 +395,7 @@ export async function POST(request: Request) {
   try {
     payload = (await request.json()) as TeacherAgentRequestPayload;
   } catch (error) {
-    console.error("[AI] Invalid teacher-agent payload", error);
+    logSecurityEvent("error", "ai.teacher_agent.invalid_payload", { error });
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 

@@ -41,6 +41,17 @@ export type ReminderType =
 export type ReminderStatus = "pending" | "acknowledged" | "done" | "snoozed";
 export type AgeBandPolicyId = "0-12m" | "12-24m" | "24-36m";
 
+export interface KnowledgeEntry {
+  id: string;
+  topic: string;
+  ageRange: string;
+  scenario: string;
+  principle: string;
+  suggestedAction: string;
+  riskBoundary: string;
+  sourceNote: string;
+}
+
 export interface AgeBandPolicy {
   ageBand: AgeBandPolicyId;
   careFocus: string[];
@@ -256,6 +267,7 @@ export interface HighRiskConsultationResult {
   directorDecisionCard: DirectorDecisionCard;
   explainability: ExplainabilityItem[];
   evidenceItems: ConsultationEvidenceItem[];
+  knowledgeHints?: KnowledgeEntry[];
   warnings?: string[];
   humanReviewRequired?: boolean;
   manualReviewSummary?: ConsultationManualReviewSummary;
@@ -992,6 +1004,8 @@ export interface WeeklyReportPrimaryAction {
 
 export interface WeeklyReportPayload {
   role?: WeeklyReportRole;
+  scopeType?: "institution" | "class" | "child";
+  scopeId?: string;
   snapshot: WeeklyReportSnapshot;
 }
 

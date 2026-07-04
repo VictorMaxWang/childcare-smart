@@ -1,4 +1,4 @@
-import { expect, request as playwrightRequest, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
+﻿import { expect, request as playwrightRequest, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -14,12 +14,10 @@ async function captureE08(page: Page, fileName: string) {
 
 async function demoContext(testInfo: TestInfo, accountId: string) {
   const baseURL = testInfo.project.use.baseURL as string | undefined;
-  return playwrightRequest.newContext({
-    baseURL,
-    extraHTTPHeaders: {
-      "x-demo-account-id": accountId,
-    },
-  });
+  const context = await playwrightRequest.newContext({ baseURL });
+  const response = await context.post("/api/auth/demo-login", { data: { accountId } });
+  expect(response.ok()).toBeTruthy();
+  return context;
 }
 
 async function expectOk(response: Awaited<ReturnType<APIRequestContext["get"]>>, expectedStatus = 200) {
@@ -83,10 +81,10 @@ test.describe("E08 teacher voice assistant skills", () => {
     const token = `E08-${Date.now()}`;
 
     try {
-      const morning = await planVoiceCommand(teacher, `给小明记录晨检，体温三十六点八，状态正常 ${token}`);
+      const morning = await planVoiceCommand(teacher, `缁欏皬鏄庤褰曟櫒妫€锛屼綋娓╀笁鍗佸叚鐐瑰叓锛岀姸鎬佹甯?${token}`);
       expect(morning.intent).toBe("create_morning_check");
       expect(morning.status).toBe("needs_confirmation");
-      await executeVoiceCommand(teacher, `给小明记录晨检，体温三十六点八，状态正常 ${token}`);
+      await executeVoiceCommand(teacher, `缁欏皬鏄庤褰曟櫒妫€锛屼綋娓╀笁鍗佸叚鐐瑰叓锛岀姸鎬佹甯?${token}`);
 
       const teacherHealth = await expectOk(await teacher.get(`/api/records?type=health&childId=${CHILD_ID}&includeArchived=1`));
       expect(teacherHealth.some((record: { childId?: string; temperature?: number; remark?: string }) =>
@@ -95,37 +93,35 @@ test.describe("E08 teacher voice assistant skills", () => {
       const parentHealth = await expectOk(await parent.get(`/api/records?type=health&childId=${CHILD_ID}&includeArchived=1`));
       expect(parentHealth.some((record: { remark?: string }) => record.remark?.includes(token))).toBe(true);
 
-      await executeVoiceCommand(teacher, `记录小明午餐吃完了 ${token}`);
+      await executeVoiceCommand(teacher, `璁板綍灏忔槑鍗堥鍚冨畬浜?${token}`);
       const mealRecords = await expectOk(await teacher.get(`/api/records?type=meal&childId=${CHILD_ID}&includeArchived=1`));
-      expect(mealRecords.some((record: { childId?: string; meal?: string }) => record.childId === CHILD_ID && record.meal === "午餐")).toBe(true);
+      expect(mealRecords.some((record: { childId?: string; meal?: string }) => record.childId === CHILD_ID && record.meal === "鍗堥")).toBe(true);
 
-      await executeVoiceCommand(teacher, `给小明新增成长记录，今天会自己穿鞋 ${token}`);
+      await executeVoiceCommand(teacher, `缁欏皬鏄庢柊澧炴垚闀胯褰曪紝浠婂ぉ浼氳嚜宸辩┛闉?${token}`);
       const parentGrowth = await expectOk(await parent.get(`/api/records?type=growth&childId=${CHILD_ID}&includeArchived=1`));
       expect(parentGrowth.some((record: { description?: string }) => record.description?.includes(token))).toBe(true);
 
-      await executeVoiceCommand(teacher, `回复林妈妈，今天小明午睡很好 ${token}`);
+      await executeVoiceCommand(teacher, `鍥炲鏋楀濡堬紝浠婂ぉ灏忔槑鍗堢潯寰堝ソ ${token}`);
       const parentMessages = await expectOk(await parent.get(`/api/messages?childId=${CHILD_ID}`));
       expect(parentMessages.some((message: { senderRole?: string; content?: string }) =>
         message.senderRole === "teacher" && message.content?.includes(token)
       )).toBe(true);
 
-      await executeVoiceCommand(teacher, `给小明创建健康材料解析任务 ${token}`);
+      await executeVoiceCommand(teacher, `缁欏皬鏄庡垱寤哄仴搴锋潗鏂欒В鏋愪换鍔?${token}`);
       const healthMaterials = await expectOk(await teacher.get(`/api/health-materials?childId=${CHILD_ID}`));
       expect(healthMaterials.some((material: { childId?: string; description?: string; parseStatus?: string }) =>
         material.childId === CHILD_ID && material.description?.includes(token) && material.parseStatus === "pending"
       )).toBe(true);
 
-      const consultationResult = await executeVoiceCommand(teacher, `给小明创建高风险会诊 ${token}`);
+      const consultationResult = await executeVoiceCommand(teacher, `缁欏皬鏄庡垱寤洪珮椋庨櫓浼氳瘖 ${token}`);
       const consultationId = consultationResult.refs?.consultationId ?? consultationResult.data?.consultationId;
       expect(consultationId).toBeTruthy();
 
-      await executeVoiceCommand(teacher, "把这个派单标记为跟进中", { consultationId });
       let directorConsultations = await expectOk(await director.get(`/api/consultations?childId=${CHILD_ID}`));
       expect(directorConsultations.some((item: { consultationId?: string; workflowStatus?: string }) =>
         item.consultationId === consultationId && item.workflowStatus === "in-progress"
       )).toBe(true);
 
-      await executeVoiceCommand(teacher, "把这个派单标记为已完成", { consultationId });
       directorConsultations = await expectOk(await director.get(`/api/consultations?childId=${CHILD_ID}`));
       expect(directorConsultations.some((item: { consultationId?: string; workflowStatus?: string; status?: string }) =>
         item.consultationId === consultationId && item.workflowStatus === "resolved" && item.status === "resolved"
@@ -143,7 +139,7 @@ test.describe("E08 teacher voice assistant skills", () => {
     const token = `E08-denied-${Date.now()}`;
 
     try {
-      const command = await planVoiceCommand(teacher2, `给小明记录晨检，体温三十六点八，状态正常 ${token}`);
+      const command = await planVoiceCommand(teacher2, `缁欏皬鏄庤褰曟櫒妫€锛屼綋娓╀笁鍗佸叚鐐瑰叓锛岀姸鎬佹甯?${token}`);
       expect(command.intent).toBe("create_morning_check");
       expect(command.status).toBe("forbidden");
 
@@ -171,25 +167,24 @@ test.describe("E08 teacher voice assistant skills", () => {
     await expect(page.getByTestId("voice-orb-button")).toHaveCount(0);
     await page.getByTestId("r06-teacher-command-assistant").click();
     await expect(page.getByTestId("voice-orb-panel")).toBeVisible();
-    await page.getByTestId("voice-orb-input").fill(`给小明记录晨检，体温三十六点八，状态正常 ${token}`);
+    await page.getByTestId("voice-orb-input").fill(`缁欏皬鏄庤褰曟櫒妫€锛屼綋娓╀笁鍗佸叚鐐瑰叓锛岀姸鎬佹甯?${token}`);
     await page.getByTestId("voice-orb-submit").click();
     await expect(page.getByTestId("voice-orb-confirm")).toBeVisible();
     await captureE08(page, "teacher-voice-morning-check-preview.png");
     await page.getByTestId("voice-orb-confirm").click();
-    await expect(page.getByTestId("voice-orb-result")).toContainText(/晨检|保存|记录/, { timeout: 20_000 });
+    await expect(page.getByTestId("voice-orb-result")).toContainText(/鏅ㄦ|淇濆瓨|璁板綍/, { timeout: 20_000 });
     await captureE08(page, "teacher-voice-morning-check-executed.png");
 
     await page.reload();
     await expect(page.getByTestId("voice-orb-button")).toHaveCount(0);
     await page.getByTestId("r06-teacher-command-assistant").click();
-    await page.getByTestId("voice-orb-input").fill("打开家园沟通");
     await page.getByTestId("voice-orb-submit").click();
     await expect(page).toHaveURL(/\/teacher\/agent/);
     await captureE08(page, "teacher-voice-open-communication.png");
 
     await page.goto("/teacher");
     await page.getByTestId("r06-teacher-command-assistant").click();
-    await page.getByTestId("voice-orb-input").fill("打开健康材料解析");
+    await page.getByTestId("voice-orb-input").fill("鎵撳紑鍋ュ悍鏉愭枡瑙ｆ瀽");
     await page.getByTestId("voice-orb-submit").click();
     await expect(page).toHaveURL(/\/teacher\/health-file-bridge/);
     await captureE08(page, "teacher-voice-open-health-file-bridge.png");

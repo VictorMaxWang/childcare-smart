@@ -36,7 +36,7 @@ function buildPayload(): AiFollowUpPayload {
   return {
     snapshot: {
       child: {
-        id: "child-1",
+        id: "c-1",
         name: "Ava",
       },
       summary: {
@@ -83,7 +83,7 @@ function buildPayload(): AiFollowUpPayload {
     latestFeedback: {
       feedbackId: "fb-structured-1",
       id: "fb-structured-1",
-      childId: "child-1",
+      childId: "c-1",
       date: "2026-04-10T20:00:00.000Z",
       status: "partial",
       content: "The child completed the first two steps.",
@@ -151,6 +151,7 @@ test("follow-up route accepts structured latestFeedback and falls back locally w
           method: "POST",
           headers: {
             "content-type": "application/json",
+            "x-demo-account-id": "u-parent",
             "x-ai-force-fallback": "1",
           },
           body: JSON.stringify(buildPayload()),
@@ -182,7 +183,7 @@ test("follow-up route reselects task-aware structured feedback from snapshot rec
   payload.latestFeedback = {
     feedbackId: "fb-unrelated",
     id: "fb-unrelated",
-    childId: "child-1",
+    childId: "c-1",
     date: "2026-04-12T08:00:00.000Z",
     status: "completed",
     content: "A different task went well.",
@@ -211,7 +212,7 @@ test("follow-up route reselects task-aware structured feedback from snapshot rec
     {
       feedbackId: "fb-task-aware",
       id: "fb-task-aware",
-      childId: "child-1",
+      childId: "c-1",
       date: "2026-04-11T20:00:00.000Z",
       status: "unable_to_execute",
       content: "The family could not execute the task tonight.",
@@ -268,6 +269,7 @@ test("follow-up route reselects task-aware structured feedback from snapshot rec
           method: "POST",
           headers: {
             "content-type": "application/json",
+            "x-demo-account-id": "u-parent",
             "x-ai-force-fallback": "1",
           },
           body: JSON.stringify(payload),

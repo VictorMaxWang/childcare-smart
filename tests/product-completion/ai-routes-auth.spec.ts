@@ -1,9 +1,9 @@
-import { expect, test } from "@playwright/test";
+﻿import { expect, test } from "@playwright/test";
 
 import { loginAs } from "../feature-completion/helpers";
 import { CHILD_FORBIDDEN, CHILD_PARENT, CHILD_TEACHER, demoContext, expectFailure, expectOk } from "./e11-helpers";
 
-function buildParentSuggestionPayload(childId: string, className = "向阳班") {
+function buildParentSuggestionPayload(childId: string, className = "Class A") {
   return {
     snapshot: {
       child: {
@@ -56,8 +56,27 @@ function buildParentSuggestionPayload(childId: string, className = "向阳班") 
   };
 }
 
+function buildParentStorybookMissingScopePayload() {
+  return {
+    requestSource: "ai-routes-auth-regression",
+    snapshot: {
+      child: {
+        id: "storybook-guest",
+        name: "Guest child",
+        className: "Class A",
+        allergies: [],
+        specialNotes: "",
+      },
+      summary: {},
+      recentDetails: {},
+      ruleFallback: [],
+    },
+    highlightCandidates: [],
+  };
+}
+
 test.describe("E11 /api/ai auth regression", () => {
-  test("AI routes return uniform 401/403 envelopes for missing session, wrong role and forbidden scope", async ({
+  test("AI routes return uniform 401/403/423 envelopes for missing session, wrong role, forbidden scope and limited business scope", async ({
     request,
   }, testInfo) => {
     const director = await demoContext(testInfo, "u-admin");
@@ -116,6 +135,15 @@ test.describe("E11 /api/ai auth regression", () => {
         "forbidden_scope"
       );
 
+      const limitedScope = await expectFailure(
+        await parent.post("/api/ai/parent-storybook", {
+          data: buildParentStorybookMissingScopePayload(),
+        }),
+        423,
+        "limited"
+      );
+      expect(limitedScope.reason).toBe("scope_required");
+
       await expectFailure(
         await teacher.post("/api/ai/parent-storybook", {
           data: { childId: CHILD_TEACHER, records: [], childProfile: { id: CHILD_TEACHER } },
@@ -160,7 +188,7 @@ test.describe("E11 /api/ai auth regression", () => {
 
     const allowed = await page.request.post("/api/ai/suggestions", {
       data: buildParentSuggestionPayload(CHILD_PARENT),
-      headers: { "x-ai-force-fallback": "1", "x-demo-account-id": "u-parent" },
+      headers: { "x-ai-force-fallback": "1" },
     });
     expect(allowed.status()).toBe(200);
     const allowedBody = await allowed.json();
@@ -171,9 +199,8 @@ test.describe("E11 /api/ai auth regression", () => {
       await page.request.post("/api/ai/suggestions", {
         data: {
           childId: CHILD_FORBIDDEN,
-          ...buildParentSuggestionPayload(CHILD_FORBIDDEN, "晨曦班"),
         },
-        headers: { "x-ai-force-fallback": "1", "x-demo-account-id": "u-parent" },
+        headers: { "x-ai-force-fallback": "1" },
       }),
       403,
       "forbidden_scope"

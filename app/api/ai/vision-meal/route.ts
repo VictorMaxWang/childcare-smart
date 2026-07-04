@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requestDashscopeMealVision, type VisionDetectedFood } from "@/lib/ai/dashscope";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { logSecurityEvent } from "@/lib/server/security-log";
 
 interface VisionMealPayload {
   imageDataUrl: string;
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
   try {
     payload = (await request.json()) as VisionMealPayload;
   } catch (error) {
-    console.error("[AI] Invalid vision-meal payload", error);
+    logSecurityEvent("error", "ai.vision_meal.invalid_payload", { error });
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
@@ -57,7 +58,10 @@ export async function POST(request: Request) {
 
   const aiFoods = await requestDashscopeMealVision(payload.imageDataUrl);
   if (!aiFoods || aiFoods.length === 0) {
-    console.warn(`[AI] Falling back to vision rules using model ${configuredModel}.`);
+    logSecurityEvent("warn", "ai.vision_meal.fallback", {
+      provider: "dashscope",
+      model: configuredModel,
+    });
     return NextResponse.json(
       {
         foods: fallbackFoods,

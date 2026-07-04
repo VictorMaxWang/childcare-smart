@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import type { ParentMessageReflexionRequest, ParentMessageReflexionResponse } from "@/lib/ai/types";
 import { sanitizeParentMessageReflexionResponse } from "@/lib/agent/parent-message-reflexion";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
-import { requireParentChildAccess } from "@/lib/server/parent-route-guard";
+import { aiRouteLimitedResponse, authorizeAiRoute } from "@/lib/server/ai-route-guard";
 
 function readString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -71,9 +70,12 @@ export async function POST(request: Request) {
   if (authError) return authError;
 
   const body = (await request.clone().json().catch(() => null)) as ParentMessageReflexionRequest | null;
-  const access = await requireParentChildAccess(body?.targetChildId ?? body?.childId);
-  if (access.response) {
-    return access.response;
+  if (!(body?.targetChildId ?? body?.childId)) {
+    return aiRouteLimitedResponse({
+      reason: "scope_required",
+      error: "Child scope is required for parent message reflexion.",
+      requiredRole: "parent",
+    });
   }
 
   const brainForward = await forwardBrainRequest(
