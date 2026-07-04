@@ -17,6 +17,7 @@ import {
   type SessionUser,
 } from "@/lib/auth/accounts";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { normalizePhone } from "@/lib/auth/phone";
 import { emptyInstitutionSnapshot, parentStarterSnapshot } from "@/lib/persistence/bootstrap";
 import { getSessionUserId } from "@/lib/auth/session";
 import { logSecurityEvent } from "@/lib/server/security-log";
@@ -36,6 +37,8 @@ const DUPLICATE_USERNAME_ERROR = "\u8be5\u8d26\u53f7\u5df2\u88ab\u6ce8\u518c\u30
 const CREATE_ACCOUNT_FAILED_ERROR = "\u521b\u5efa\u8d26\u53f7\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002";
 const MYSQL_DUPLICATE_KEY_ERROR_CODE = "ER_DUP_ENTRY";
 const MYSQL_DUPLICATE_KEY_ERROR_NUMBER = 1062;
+const MYSQL_BAD_FIELD_ERROR_CODE = "ER_BAD_FIELD_ERROR";
+const MYSQL_BAD_FIELD_ERROR_NUMBER = 1054;
 
 type AppUserRow = {
   id: string;
@@ -99,6 +102,18 @@ function isDuplicateKeyError(error: unknown) {
   return errno === MYSQL_DUPLICATE_KEY_ERROR_NUMBER;
 }
 
+function isUnknownColumnError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+
+  const code = (error as { code?: unknown }).code;
+  if (code === MYSQL_BAD_FIELD_ERROR_CODE) {
+    return true;
+  }
+
+  const errno = (error as { errno?: unknown }).errno;
+  return errno === MYSQL_BAD_FIELD_ERROR_NUMBER;
+}
+
 async function getAppUserById(userId: string) {
   try {
     const { rows } = await dbQuery<AppUserRow>(
@@ -157,6 +172,51 @@ async function getAppUserByUsername(username: string) {
     }
 
     logSecurityEvent("error", "auth.account.load_by_username_failed", { error });
+    return { row: null, error: DATABASE_QUERY_FAILED_ERROR } as const;
+  }
+}
+
+export async function getAppUserByPhoneNormalized(phone: string) {
+  let phoneNormalized: string;
+  try {
+    phoneNormalized = normalizePhone(phone);
+  } catch {
+    return { row: null, error: null } as const;
+  }
+
+  try {
+    const { rows } = await dbQuery<AppUserRow>(
+      `
+        select
+          id,
+          username_normalized,
+          display_name,
+          password_hash,
+          role,
+          avatar,
+          institution_id,
+          class_name,
+          child_ids,
+          is_demo
+        from app_users
+        where phone_normalized = ?
+        limit 1
+      `,
+      [phoneNormalized]
+    );
+
+    return { row: rows[0] ?? null, error: null } as const;
+  } catch (error) {
+    if (error instanceof DatabaseConfigError) {
+      return { row: null, error: DATABASE_URL_CONFIG_ERROR_MESSAGE } as const;
+    }
+
+    if (isUnknownColumnError(error)) {
+      logSecurityEvent("warn", "auth.account.phone_lookup_column_missing", { error });
+      return { row: null, error: DATABASE_QUERY_FAILED_ERROR } as const;
+    }
+
+    logSecurityEvent("error", "auth.account.load_by_phone_failed", { error });
     return { row: null, error: DATABASE_QUERY_FAILED_ERROR } as const;
   }
 }
