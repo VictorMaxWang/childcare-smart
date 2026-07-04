@@ -57,56 +57,6 @@ function skipIfNormalAccountUnavailable(result: RegisterResult) {
   expect(result.ok, result.ok ? undefined : result.error).toBe(true);
 }
 
-function parentTrendPayload(childId: string, snapshot: Record<string, unknown>) {
-  return {
-    childId,
-    question: "最近一周情绪和睡眠趋势怎么样？",
-    appSnapshot: snapshot,
-  };
-}
-
-function storybookPayload(child: Record<string, unknown>) {
-  const childId = String(child.id);
-  return {
-    childId,
-    storyMode: "storybook",
-    generationMode: "child-personalized",
-    requestSource: "normal-session-ai-access",
-    stylePreset: "sunrise-watercolor",
-    styleMode: "preset",
-    pageCount: 4,
-    goalKeywords: ["勇敢表达"],
-    snapshot: {
-      child: {
-        id: childId,
-        name: String(child.name ?? "普通账号儿童"),
-        className: String(child.className ?? "待分班"),
-        allergies: [],
-        specialNotes: "普通账号绘本权限验收。",
-      },
-      summary: {
-        health: { abnormalCount: 0, handMouthEyeAbnormalCount: 0, moodKeywords: [] },
-        meals: { recordCount: 0, hydrationAvg: 0, balancedRate: 0, monotonyDays: 0, allergyRiskCount: 0 },
-        growth: { recordCount: 1, attentionCount: 0, pendingReviewCount: 0, topCategories: [{ category: "情绪表达", count: 1 }] },
-        feedback: { count: 0, statusCounts: {}, keywords: [] },
-      },
-      recentDetails: { health: [], meals: [], growth: [], feedback: [] },
-      ruleFallback: [],
-    },
-    highlightCandidates: [
-      {
-        kind: "todayGrowth",
-        title: "普通账号成长亮点",
-        detail: "孩子愿意主动说出自己的想法。",
-        priority: 1,
-        source: "todayGrowth",
-      },
-    ],
-    latestInterventionCard: null,
-    latestConsultation: null,
-  };
-}
-
 async function expectLimited(
   response: Awaited<ReturnType<APIRequestContext["post"]>>,
   status: number,
@@ -124,7 +74,7 @@ async function expectLimited(
 }
 
 test.describe("normal session AI access", () => {
-  test("normal parent can use scoped trend and storybook routes, while forged child and no session are explicit", async ({}, testInfo) => {
+  test("normal parent starts with empty child scope until consent onboarding, while forged child and no session are explicit", async ({}, testInfo) => {
     const parentApi = await newApiContext(testInfo);
     const anonymousApi = await newApiContext(testInfo);
     try {
@@ -132,30 +82,13 @@ test.describe("normal session AI access", () => {
       skipIfNormalAccountUnavailable(parent);
       if (!parent.ok) return;
 
-      const childId = parent.user.childIds?.[0];
-      expect(childId).toBeTruthy();
+      expect(parent.user.childIds ?? []).toEqual([]);
 
       const stateResponse = await parentApi.get("/api/state");
       expect(stateResponse.status()).toBe(200);
       const stateBody = await stateResponse.json();
       const snapshot = stateBody.snapshot as { children?: Record<string, unknown>[] };
-      const child = snapshot.children?.find((item) => item.id === childId);
-      expect(child).toBeTruthy();
-
-      const trend = await parentApi.post("/api/ai/parent-trend-query", {
-        data: parentTrendPayload(childId!, snapshot as unknown as Record<string, unknown>),
-      });
-      expect(trend.status()).toBe(200);
-      const trendBody = await trend.json();
-      expect(trendBody.child?.childId ?? trendBody.childId ?? childId).toBeTruthy();
-
-      const story = await parentApi.post("/api/ai/parent-storybook", {
-        data: storybookPayload(child!),
-        headers: { "x-smartchildcare-cache-bypass": "1" },
-      });
-      expect(story.status()).toBe(200);
-      const storyBody = await story.json();
-      expect(storyBody.childId).toBe(childId);
+      expect(snapshot.children ?? []).toEqual([]);
 
       await expectLimited(
         await parentApi.post("/api/ai/parent-trend-query", {
@@ -176,7 +109,7 @@ test.describe("normal session AI access", () => {
 
       await expectLimited(
         await anonymousApi.post("/api/ai/parent-trend-query", {
-          data: { childId, question: "无 session 查询" },
+          data: { childId: "forged-child-id", question: "无 session 查询" },
         }),
         401,
         "login_required"

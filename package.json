@@ -13,6 +13,7 @@
     "vivo:configure-vercel": "powershell -ExecutionPolicy Bypass -File ./scripts/configure-vivo-env-vercel.ps1",
     "typecheck": "tsc --noEmit --pretty false --incremental false",
     "test:session-security": "node --import ./scripts/register-test-path-loader.mjs --test ./lib/server/session.test.ts",
+    "test:auth-register": "node --import ./scripts/register-test-path-loader.mjs --test ./app/api/auth/register/route.test.ts ./lib/auth/account-server.register.test.ts",
     "test:auth-phone": "node --import ./scripts/register-test-path-loader.mjs --test ./lib/auth/phone.test.ts",
     "test:security-permission": "node --import ./scripts/register-test-path-loader.mjs --test ./lib/server/session.test.ts ./lib/server/scope.test.ts ./lib/server/ai-route-guard.test.ts ./lib/server/api-errors.test.ts ./lib/server/security-log.test.ts ./app/api/ai/provider-status/route.test.ts && playwright test tests/product-completion/ai-routes-auth.spec.ts --config=playwright.product.config.ts --project=chromium --reporter=line",
     "test:parent-message-mapper": "node --import ./scripts/register-test-path-loader.mjs --test ./lib/agent/parent-message-reflexion.test.ts",
