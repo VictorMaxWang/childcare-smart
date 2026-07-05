@@ -178,6 +178,7 @@
 - `high-risk-consultation/feed` 的 normal account fallback 改为只从当前 session 可见 children/consultations 生成；无可见 child scope 返回 `423 scope_required`，不再给真实账号返回固定 demo feed。
 - `parent-storybook/media/[mediaKey]` 对 cached media 继续校验 `ownerChildId`；真实账号缓存未命中时不再转发到 brain 拉取无 owner scope 的媒体。
 - FastAPI `/api/v1/agents/*` 和 `/api/v1/memory/*` 增加内部服务验签。`/memory/context` 与 `/memory/health-file-bridge-writeback` 校验 payload `child_id` 必须包含在 signed scope claim 的 `childIds` 中。
+- 内部服务验签依赖 `BRAIN_INTERNAL_SHARED_SECRET`。非 `development` 环境缺少该变量时，FastAPI 会拒绝 agents/memory 内部请求，而不是退回到 unsigned dev 模式。
 - `list_recent_snapshots` 禁止无 `child_id/session_id/snapshot_types` 的零过滤调用；兼容 `list_memory` 改为显式 snapshot type 过滤。
 
 剩余 TODO：
@@ -191,3 +192,4 @@
 - `npm run auth:smoke` 覆盖真实注册后的 `app_users.is_demo=false`、`institution_id`、`phone_normalized` 和 `app_state_snapshots` 创建检查。
 - smoke 会验证 admin/teacher/parent 注册后均可使用现有 `ccs_session` 访问对应受保护入口；parent 空 child 状态必须能看到建档入口或进入 onboarding。
 - 该 smoke 是发布前端到端检查，不替代上方 T8B 剩余 TODO。teacher 稳定 `classId` 和 memory 物理 `institution_id` 仍需后续迁移与测试。
+- 当前 smoke 不直接触发 FastAPI `/api/v1/agents/*` 或 `/api/v1/memory/*`；如果发布检查覆盖 AI/brain 链路，`BRAIN_INTERNAL_SHARED_SECRET` 必须作为发布环境配置在 Next.js 和 FastAPI 使用同一个值。真实 shared secret 不得写入仓库。

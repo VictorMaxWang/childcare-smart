@@ -139,3 +139,10 @@ T6 已落地手机号登录兼容层，请求体支持：
 - smoke 会查询真实 MySQL，确认 `app_users.is_demo=false`、`phone_normalized`、`institution_id` 和对应 `app_state_snapshots` 存在；脚本只清理自己创建的测试账号和 snapshot。
 - smoke 依赖 `DATABASE_URL`、`DATABASE_SSL` 和 `AUTH_SESSION_SECRET`。缺少真实数据库或 session secret 时不得记为通过，应在发布报告中明确“因缺少 DATABASE_URL/AUTH_SESSION_SECRET 未执行真实 DB smoke”。
 - 发布前检查固定为 `npm run lint`、`npm run typecheck`、`npm run build`，具备真实 DB 环境时再运行 `npm run auth:smoke`。
+
+## T10 更新：真实环境变量与 service auth 收口
+
+- 真实注册试用的发布前环境口径统一为 `DATABASE_URL`、`AUTH_SESSION_SECRET`、`AUTH_REGISTER_ENABLED`、`BRAIN_API_BASE_URL` 和 `BRAIN_INTERNAL_SHARED_SECRET`。
+- `BRAIN_INTERNAL_SHARED_SECRET` 是 Next.js 调用 FastAPI `/api/v1/agents/*` 与 `/api/v1/memory/*` 的 HMAC service auth 共享密钥；Next.js 和 FastAPI 必须配置同一个非空值，且真实值只能放部署平台或本地私有 env 文件，不能提交到仓库。
+- 非 `development` FastAPI 缺少 `BRAIN_INTERNAL_SHARED_SECRET` 时会拒绝内部 agents/memory 请求，避免生产相似环境退回到无签名内部调用。
+- 当前 `npm run auth:smoke` 仍是注册、登录、受保护入口和 parent onboarding 的真实 DB smoke，不直接触发 FastAPI agents/memory；AI/brain 链路的 shared-secret 配置验证应作为单独发布检查或后续 smoke 扩展。
