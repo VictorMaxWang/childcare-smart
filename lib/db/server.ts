@@ -4,10 +4,19 @@ import { createPool, type Pool, type PoolConnection } from "mysql2/promise";
 
 export const DATABASE_URL_CONFIG_ERROR_MESSAGE = "服务端缺少 DATABASE_URL 配置。";
 
+export type DatabaseConfigErrorCode =
+  | "DATABASE_URL_MISSING"
+  | "DATABASE_URL_INVALID"
+  | "DATABASE_URL_PROTOCOL_INVALID"
+  | "DATABASE_URL_DATABASE_MISSING";
+
 export class DatabaseConfigError extends Error {
-  constructor(message = "DATABASE_URL is required in production") {
+  readonly publicCode: DatabaseConfigErrorCode;
+
+  constructor(message = "DATABASE_URL is required in production", publicCode: DatabaseConfigErrorCode = "DATABASE_URL_MISSING") {
     super(message);
     this.name = "DatabaseConfigError";
+    this.publicCode = publicCode;
   }
 }
 
@@ -50,16 +59,16 @@ function getDatabasePoolConfig() {
   try {
     url = new URL(connectionString);
   } catch {
-    throw new DatabaseConfigError("DATABASE_URL must be a valid MySQL connection string");
+    throw new DatabaseConfigError("DATABASE_URL must be a valid MySQL connection string", "DATABASE_URL_INVALID");
   }
 
   if (url.protocol !== "mysql:" && url.protocol !== "mysqls:") {
-    throw new DatabaseConfigError("DATABASE_URL must use mysql:// or mysqls://");
+    throw new DatabaseConfigError("DATABASE_URL must use mysql:// or mysqls://", "DATABASE_URL_PROTOCOL_INVALID");
   }
 
   const database = url.pathname.replace(/^\/+/, "");
   if (!database) {
-    throw new DatabaseConfigError("DATABASE_URL must include a database name");
+    throw new DatabaseConfigError("DATABASE_URL must include a database name", "DATABASE_URL_DATABASE_MISSING");
   }
 
   const useSsl = isDatabaseSslEnabled() || url.protocol === "mysqls:";

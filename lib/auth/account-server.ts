@@ -6,6 +6,7 @@ import {
   encodeDatabaseJson,
   withDbTransaction,
   type DatabaseConnection,
+  type DatabaseConfigErrorCode,
 } from "@/lib/db/server";
 import {
   DEFAULT_TEACHER_CLASS_NAME,
@@ -62,11 +63,12 @@ type AppUserRow = {
 type AppUserLookupResult = {
   row: AppUserRow | null;
   error: string | null;
+  errorCode?: DatabaseConfigErrorCode;
 };
 
 export type AccountActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; status: number; error: string };
+  | { ok: false; status: number; error: string; errorCode?: DatabaseConfigErrorCode };
 
 function createId(prefix: string) {
   if (typeof globalThis.crypto !== "undefined" && typeof globalThis.crypto.randomUUID === "function") {
@@ -200,7 +202,7 @@ async function getAppUserByUsername(username: string): Promise<AppUserLookupResu
     return { row: rows[0] ?? null, error: null } as const;
   } catch (error) {
     if (error instanceof DatabaseConfigError) {
-      return { row: null, error: DATABASE_URL_CONFIG_ERROR_MESSAGE } as const;
+      return { row: null, error: DATABASE_URL_CONFIG_ERROR_MESSAGE, errorCode: error.publicCode } as const;
     }
 
     logSecurityEvent("error", "auth.account.load_by_username_failed", { error });
@@ -240,7 +242,7 @@ export async function getAppUserByPhoneNormalized(phone: string): Promise<AppUse
     return { row: rows[0] ?? null, error: null } as const;
   } catch (error) {
     if (error instanceof DatabaseConfigError) {
-      return { row: null, error: DATABASE_URL_CONFIG_ERROR_MESSAGE } as const;
+      return { row: null, error: DATABASE_URL_CONFIG_ERROR_MESSAGE, errorCode: error.publicCode } as const;
     }
 
     if (isUnknownColumnError(error)) {
@@ -560,7 +562,7 @@ async function ensureNoDuplicateRegistration(
       return { ok: false, status: 409, error: DUPLICATE_PHONE_ERROR };
     }
     if (phoneExists.error) {
-      return { ok: false, status: 503, error: phoneExists.error };
+      return { ok: false, status: 503, error: phoneExists.error, errorCode: phoneExists.errorCode };
     }
 
     for (const candidate of normalized.duplicateUsernameCandidates) {
@@ -569,7 +571,7 @@ async function ensureNoDuplicateRegistration(
         return { ok: false, status: 409, error: DUPLICATE_PHONE_ERROR };
       }
       if (usernameExists.error) {
-        return { ok: false, status: 503, error: usernameExists.error };
+        return { ok: false, status: 503, error: usernameExists.error, errorCode: usernameExists.errorCode };
       }
     }
 
@@ -581,7 +583,7 @@ async function ensureNoDuplicateRegistration(
     return { ok: false, status: 409, error: DUPLICATE_USERNAME_ERROR };
   }
   if (exists.error) {
-    return { ok: false, status: 503, error: exists.error };
+    return { ok: false, status: 503, error: exists.error, errorCode: exists.errorCode };
   }
 
   return { ok: true, data: null };
@@ -632,7 +634,7 @@ export async function registerNormalAccountWithDependencies(
     });
   } catch (error) {
     if (error instanceof DatabaseConfigError) {
-      return { ok: false, status: 503, error: DATABASE_URL_CONFIG_ERROR_MESSAGE };
+      return { ok: false, status: 503, error: DATABASE_URL_CONFIG_ERROR_MESSAGE, errorCode: error.publicCode };
     }
 
     if (isDuplicateKeyError(error)) {

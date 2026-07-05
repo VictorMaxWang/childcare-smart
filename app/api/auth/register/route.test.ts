@@ -74,3 +74,30 @@ test("register route sets the existing session cookie path and never returns pas
   assert.equal(body.user?.password_hash, undefined);
   assert.deepEqual(sessionCalls, [{ userId: "u-test", role: "家长" }]);
 });
+
+test("register route returns safe database config error codes", async () => {
+  const dependencies: RegisterRouteDependencies = {
+    async registerAccount() {
+      return {
+        ok: false,
+        status: 503,
+        error: "database unavailable",
+        errorCode: "DATABASE_URL_INVALID",
+      } as Awaited<ReturnType<RegisterRouteDependencies["registerAccount"]>>;
+    },
+    async setSession() {
+      throw new Error("setSession should not be called");
+    },
+  };
+
+  const response = await handleRegisterRequest(
+    jsonRequest({ phone: "13800000000", password: "secret123", confirmPassword: "secret123", role: "parent" }),
+    dependencies
+  );
+  const body = (await response.json()) as { ok: boolean; error?: string; errorCode?: string };
+
+  assert.equal(response.status, 503);
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "database unavailable");
+  assert.equal(body.errorCode, "DATABASE_URL_INVALID");
+});

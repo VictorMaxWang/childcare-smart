@@ -45,7 +45,10 @@ export async function handleRegisterRequest(
 
     const result = await dependencies.registerAccount(body);
     if (!result.ok) {
-      return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
+      return NextResponse.json(
+        { ok: false, error: result.error, ...(result.errorCode ? { errorCode: result.errorCode } : {}) },
+        { status: result.status }
+      );
     }
 
     const user = sanitizeRegisteredUser(result.data);
