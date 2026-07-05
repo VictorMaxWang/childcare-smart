@@ -371,3 +371,28 @@ test("insertAppUserWithPhoneFallback retries legacy insert when phone_normalized
   assert.match(executeCalls[0], /phone_normalized/);
   assert.doesNotMatch(executeCalls[1], /phone_normalized/);
 });
+
+test("registerNormalAccount propagates safe database config codes from duplicate lookup", async () => {
+  const { dependencies, insertedRows, snapshots } = createRegisterDeps();
+  dependencies.getUserByPhoneNormalized = async () =>
+    ({
+      row: null,
+      error: "database unavailable",
+      errorCode: "DATABASE_URL_INVALID",
+    }) as Awaited<ReturnType<RegisterNormalAccountDependencies["getUserByPhoneNormalized"]>>;
+
+  const result = await registerNormalAccountWithDependencies(
+    { phone: "13800000000", password: "secret123", confirmPassword: "secret123", role: "parent" },
+    dependencies
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    const failure = result as typeof result & { errorCode?: string };
+    assert.equal(failure.status, 503);
+    assert.equal(failure.error, "database unavailable");
+    assert.equal(failure.errorCode, "DATABASE_URL_INVALID");
+  }
+  assert.deepEqual(insertedRows, []);
+  assert.deepEqual(snapshots, []);
+});
