@@ -46,6 +46,18 @@ const MYSQL_DUPLICATE_KEY_ERROR_NUMBER = 1062;
 const MYSQL_BAD_FIELD_ERROR_CODE = "ER_BAD_FIELD_ERROR";
 const MYSQL_BAD_FIELD_ERROR_NUMBER = 1054;
 
+export type DatabaseRuntimeErrorCode =
+  | "DATABASE_ACCESS_DENIED"
+  | "DATABASE_CONNECT_TIMEOUT"
+  | "DATABASE_CONNECTION_REFUSED"
+  | "DATABASE_CONNECTION_LOST"
+  | "DATABASE_HOST_NOT_FOUND"
+  | "DATABASE_QUERY_FAILED"
+  | "DATABASE_SSL_FAILED"
+  | "DATABASE_UNKNOWN_DATABASE";
+
+type AccountErrorCode = DatabaseConfigErrorCode | DatabaseRuntimeErrorCode;
+
 type AppUserRow = {
   id: string;
   username_normalized: string;
@@ -63,12 +75,12 @@ type AppUserRow = {
 type AppUserLookupResult = {
   row: AppUserRow | null;
   error: string | null;
-  errorCode?: DatabaseConfigErrorCode;
+  errorCode?: AccountErrorCode;
 };
 
 export type AccountActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; status: number; error: string; errorCode?: DatabaseConfigErrorCode };
+  | { ok: false; status: number; error: string; errorCode?: AccountErrorCode };
 
 function createId(prefix: string) {
   if (typeof globalThis.crypto !== "undefined" && typeof globalThis.crypto.randomUUID === "function") {
@@ -148,6 +160,28 @@ function isUnknownColumnError(error: unknown) {
   return errno === MYSQL_BAD_FIELD_ERROR_NUMBER;
 }
 
+export function resolveDatabaseRuntimeErrorCode(error: unknown): DatabaseRuntimeErrorCode {
+  if (!error || typeof error !== "object") return "DATABASE_QUERY_FAILED";
+
+  const code = (error as { code?: unknown }).code;
+  if (code === "ENOTFOUND" || code === "EAI_AGAIN") return "DATABASE_HOST_NOT_FOUND";
+  if (code === "ETIMEDOUT" || code === "PROTOCOL_SEQUENCE_TIMEOUT") return "DATABASE_CONNECT_TIMEOUT";
+  if (code === "ECONNREFUSED") return "DATABASE_CONNECTION_REFUSED";
+  if (code === "ECONNRESET" || code === "PROTOCOL_CONNECTION_LOST") return "DATABASE_CONNECTION_LOST";
+  if (code === "ER_ACCESS_DENIED_ERROR" || code === "ER_DBACCESS_DENIED_ERROR") return "DATABASE_ACCESS_DENIED";
+  if (code === "ER_BAD_DB_ERROR") return "DATABASE_UNKNOWN_DATABASE";
+  if (typeof code === "string" && code.toLowerCase().includes("ssl")) return "DATABASE_SSL_FAILED";
+
+  const errno = (error as { errno?: unknown }).errno;
+  if (errno === 1044 || errno === 1045) return "DATABASE_ACCESS_DENIED";
+  if (errno === 1049) return "DATABASE_UNKNOWN_DATABASE";
+
+  const message = (error as { message?: unknown }).message;
+  if (typeof message === "string" && message.toLowerCase().includes("ssl")) return "DATABASE_SSL_FAILED";
+
+  return "DATABASE_QUERY_FAILED";
+}
+
 async function getAppUserById(userId: string) {
   try {
     const { rows } = await dbQuery<AppUserRow>(
@@ -206,7 +240,7 @@ async function getAppUserByUsername(username: string): Promise<AppUserLookupResu
     }
 
     logSecurityEvent("error", "auth.account.load_by_username_failed", { error });
-    return { row: null, error: DATABASE_QUERY_FAILED_ERROR } as const;
+    return { row: null, error: DATABASE_QUERY_FAILED_ERROR, errorCode: resolveDatabaseRuntimeErrorCode(error) } as const;
   }
 }
 
@@ -251,7 +285,7 @@ export async function getAppUserByPhoneNormalized(phone: string): Promise<AppUse
     }
 
     logSecurityEvent("error", "auth.account.load_by_phone_failed", { error });
-    return { row: null, error: DATABASE_QUERY_FAILED_ERROR } as const;
+    return { row: null, error: DATABASE_QUERY_FAILED_ERROR, errorCode: resolveDatabaseRuntimeErrorCode(error) } as const;
   }
 }
 
