@@ -169,3 +169,19 @@
 8. 为 `parent-storybook/media/[mediaKey]` 的 brain 转发路径补 ownerChildId 校验，禁止真实账号访问无 ownerChildId 的 media。
 9. 补齐权限回归测试：parent 伪造 childId、teacher 跨班、admin 伪造 institutionId、AI payload 夹带他人 child snapshot、FastAPI 直连被拒。
 10. 建立新增 API checklist：所有真实数据 API 必须说明 session 来源、scope 来源、查询过滤条件和 demo fallback 行为后才能合入。
+## T8B 修复状态（2026-07-05）
+
+已完成：
+
+- 新增 `lib/server/session-scope.ts`，AI route 可从当前 `ccs_session` 加载真实 `DefaultAppDataRepository` snapshot，并生成 `scopedSnapshot`、`visibleChildren`、`authorizedChildIds` 和服务端 signed scope claim。
+- `teacher-agent`、`admin-agent`、`high-risk-consultation`、`weekly-report`、`parent-message-reflexion`、`suggestions`、`follow-up`、`parent-trend-query` 改为在 Next 服务端用 session scope 重建或替换业务上下文，不再把前端传入的 `institutionId/currentUser/visibleChildren/appSnapshot` 当作授权数据源。
+- `high-risk-consultation/feed` 的 normal account fallback 改为只从当前 session 可见 children/consultations 生成；无可见 child scope 返回 `423 scope_required`，不再给真实账号返回固定 demo feed。
+- `parent-storybook/media/[mediaKey]` 对 cached media 继续校验 `ownerChildId`；真实账号缓存未命中时不再转发到 brain 拉取无 owner scope 的媒体。
+- FastAPI `/api/v1/agents/*` 和 `/api/v1/memory/*` 增加内部服务验签。`/memory/context` 与 `/memory/health-file-bridge-writeback` 校验 payload `child_id` 必须包含在 signed scope claim 的 `childIds` 中。
+- `list_recent_snapshots` 禁止无 `child_id/session_id/snapshot_types` 的零过滤调用；兼容 `list_memory` 改为显式 snapshot type 过滤。
+
+剩余 TODO：
+
+- teacher 班级隔离仍以 `institutionId + className` 为边界。本轮在代码中保留 `TODO(T8B-classId)`，后续需要迁移到稳定 `classId` 并保留历史 className 映射。
+- memory 物理表仍缺少 `institution_id` 字段。本轮通过 Next signed scope claim 和 FastAPI child scope 校验隔离读写，后续应补数据库字段与迁移脚本，形成物理租户边界。
+- 部分纯 provider/多模态 route 当前不读业务数据；若未来把结果写回真实 child record，必须先接入 `getSessionScope`/`requireScopedChild`。

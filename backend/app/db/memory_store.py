@@ -23,6 +23,14 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _has_snapshot_filter(
+    child_id: str | None,
+    session_id: str | None,
+    snapshot_types: list[str] | None,
+) -> bool:
+    return bool(child_id or session_id or snapshot_types)
+
+
 @dataclass
 class InMemoryRecordStore:
     child_profiles: dict[str, ChildProfileMemoryRecord] = field(default_factory=dict)
@@ -67,6 +75,8 @@ class InMemoryRecordStore:
         session_id: str | None = None,
         snapshot_types: list[str] | None = None,
     ) -> list[AgentStateSnapshotRecord]:
+        if not _has_snapshot_filter(child_id, session_id, snapshot_types):
+            raise ValueError("list_recent_snapshots requires child_id, session_id, or snapshot_types")
         items = self.snapshots
         if child_id:
             items = [item for item in items if item.child_id == child_id]

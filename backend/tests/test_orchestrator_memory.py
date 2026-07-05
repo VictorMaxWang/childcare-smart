@@ -202,7 +202,7 @@ def test_high_risk_consultation_writes_trace_and_snapshot_and_uses_memory(tmp_pa
 
     result = asyncio.run(orchestrator.high_risk_consultation(payload))
     traces = asyncio.run(orchestrator.memory.get_recent_traces(child_id="child-1", limit=10))
-    snapshots = asyncio.run(orchestrator.repositories.list_recent_snapshots(limit=10))
+    snapshots = asyncio.run(orchestrator.repositories.list_recent_snapshots(limit=10, child_id="child-1"))
 
     assert result["consultationId"] == "consultation-child-1"
     assert result["continuityNotes"]
@@ -534,7 +534,7 @@ def test_memory_service_remember_persists_session_message(monkeypatch):
         )
     )
 
-    snapshots = asyncio.run(orchestrator.repositories.list_recent_snapshots(limit=10))
+    snapshots = asyncio.run(orchestrator.repositories.list_recent_snapshots(limit=10, session_id="session-remember"))
 
     assert any(
         item.session_id == "session-remember"

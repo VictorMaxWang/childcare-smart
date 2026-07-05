@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { logSecurityEvent } from "@/lib/server/security-log";
 
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -6,6 +7,10 @@ export const SMARTCHILDCARE_TRANSPORT_HEADER = "x-smartchildcare-transport";
 export const SMARTCHILDCARE_TARGET_HEADER = "x-smartchildcare-target";
 export const SMARTCHILDCARE_FALLBACK_REASON_HEADER = "x-smartchildcare-fallback-reason";
 export const SMARTCHILDCARE_UPSTREAM_HOST_HEADER = "x-smartchildcare-upstream-host";
+export const SMARTCHILDCARE_SERVICE_SCOPE_HEADER = "x-smartchildcare-service-scope";
+export const SMARTCHILDCARE_SERVICE_TIMESTAMP_HEADER = "x-smartchildcare-service-timestamp";
+export const SMARTCHILDCARE_SERVICE_SIGNATURE_HEADER = "x-smartchildcare-service-signature";
+export const SMARTCHILDCARE_SERVICE_PATH_HEADER = "x-smartchildcare-service-path";
 
 export type BrainTransport =
   | "brain-proxy-error"
@@ -13,6 +18,14 @@ export type BrainTransport =
   | "next-json-fallback"
   | "next-stream-fallback";
 export type BrainRetryStrategy = "none" | "normalized-base-retry";
+
+export interface BrainServiceScopeClaim {
+  institutionId?: string | null;
+  role?: string | null;
+  accountKind?: string | null;
+  childIds?: string[];
+  className?: string | null;
+}
 
 export interface BrainForwardResult {
   response: Response | null;
@@ -209,6 +222,60 @@ function buildForwardHeaders(request: Request) {
   return headers;
 }
 
+function getBrainInternalSharedSecret() {
+  return (
+    process.env.BRAIN_INTERNAL_SHARED_SECRET?.trim() ||
+    process.env.SMARTCHILDCARE_BRAIN_INTERNAL_SECRET?.trim() ||
+    null
+  );
+}
+
+function encodeBase64Url(value: string) {
+  return Buffer.from(value, "utf8").toString("base64url");
+}
+
+function signBrainServicePayload(params: {
+  method: string;
+  targetPath: string;
+  timestamp: string;
+  scopeToken: string;
+  secret: string;
+}) {
+  const signed = [
+    params.method.toUpperCase(),
+    params.targetPath,
+    params.timestamp,
+    params.scopeToken,
+  ].join("\n");
+  return createHmac("sha256", params.secret).update(signed).digest("base64url");
+}
+
+export function buildBrainServiceAuthHeaders(params: {
+  method: string;
+  targetPath: string;
+  serviceScope?: BrainServiceScopeClaim | null;
+}) {
+  const secret = getBrainInternalSharedSecret();
+  const headers = new Headers();
+  if (!secret) return headers;
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const scopeToken = encodeBase64Url(JSON.stringify(params.serviceScope ?? {}));
+  const signature = signBrainServicePayload({
+    method: params.method,
+    targetPath: params.targetPath,
+    timestamp,
+    scopeToken,
+    secret,
+  });
+
+  headers.set(SMARTCHILDCARE_SERVICE_SCOPE_HEADER, scopeToken);
+  headers.set(SMARTCHILDCARE_SERVICE_TIMESTAMP_HEADER, timestamp);
+  headers.set(SMARTCHILDCARE_SERVICE_PATH_HEADER, params.targetPath);
+  headers.set(SMARTCHILDCARE_SERVICE_SIGNATURE_HEADER, signature);
+  return headers;
+}
+
 function shouldFallback(response: Response) {
   return (
     response.status === 404 ||
@@ -223,6 +290,7 @@ export async function forwardBrainRequest(
   targetPath: string,
   options?: {
     timeoutMs?: number;
+    serviceScope?: BrainServiceScopeClaim | null;
   }
 ): Promise<BrainForwardResult> {
   const baseUrlDetails = resolveBrainBaseUrlDetails();
@@ -282,7 +350,14 @@ export async function forwardBrainRequest(
       try {
         const proxiedResponse = await fetch(`${attemptBaseUrl}${targetPath}`, {
           method,
-          headers: buildForwardHeaders(request),
+          headers: mergeHeaders(
+            buildForwardHeaders(request),
+            buildBrainServiceAuthHeaders({
+              method,
+              targetPath,
+              serviceScope: options?.serviceScope,
+            })
+          ),
           body: requestBody,
           cache: "no-store",
           signal: controller.signal,

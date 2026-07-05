@@ -4,12 +4,19 @@ import {
   isValidHighRiskConsultationPayload,
 } from "@/lib/agent/high-risk-consultation-local-result";
 import { buildAiProviderTrace, type AiProviderTrace } from "@/lib/ai/provider-trace";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { ApiRouteError } from "@/lib/server/api-errors";
+import { buildHighRiskConsultationPayloadFromScope } from "@/lib/server/ai-scoped-payloads";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
+import {
+  buildServiceScopeClaim,
+  getSessionScope,
+  requireScopedChild,
+} from "@/lib/server/session-scope";
 
 type ProviderTrace = AiProviderTrace;
 
@@ -512,12 +519,12 @@ function createRemoteStreamWithDoneFallback(params: {
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
-  if (authError) return authError;
+  const authResult = await authorizeAiRouteSession(request, { requiredRole: "staff" });
+  if (authResult instanceof Response) return authResult;
 
-  let payload: unknown;
+  let payload: HighRiskConsultationRequestPayload;
   try {
-    payload = await request.clone().json();
+    payload = (await request.clone().json()) as HighRiskConsultationRequestPayload;
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
@@ -538,6 +545,21 @@ export async function POST(request: Request) {
     });
   }
 
+  const sessionScope = await getSessionScope(authResult.session);
+  try {
+    requireScopedChild(sessionScope, payload.targetChildId);
+  } catch (error) {
+    if (error instanceof ApiRouteError && (error.code === "forbidden_scope" || error.code === "not_found")) {
+      return aiRouteLimitedResponse({
+        reason: "forbidden_child",
+        error: "Current account cannot access this child consultation scope.",
+        requiredRole: "staff",
+      });
+    }
+    throw error;
+  }
+  payload = buildHighRiskConsultationPayloadFromScope(payload, sessionScope);
+  const serviceScope = buildServiceScopeClaim(sessionScope);
   const traceId = getTraceId(asRecord(payload).traceId);
   const forcedFallback = request.headers.get("x-ai-force-fallback") === "1";
   if (forcedFallback) {
@@ -549,8 +571,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const brainForward = await forwardBrainRequest(request, HIGH_RISK_CONSULTATION_STREAM_TARGET_PATH, {
+  const brainRequest = new Request(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify(payload),
+  });
+  const brainForward = await forwardBrainRequest(brainRequest, HIGH_RISK_CONSULTATION_STREAM_TARGET_PATH, {
     timeoutMs: getHighRiskConsultationBrainTimeoutMs(),
+    serviceScope,
   });
 
   if (brainForward.response && isSseResponse(brainForward.response)) {

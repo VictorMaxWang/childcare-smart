@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { buildServiceScopeClaim, getSessionScope } from "@/lib/server/session-scope";
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, {
+  const authResult = await authorizeAiRouteSession(request, {
     allowUnscoped: true,
     normalAccountAccess: "demo-only",
     normalAccountLimitedReason: "normal_session_not_enabled",
   });
-  if (authError) return authError;
+  if (authResult instanceof Response) return authResult;
 
-  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/react/run");
+  const sessionScope = await getSessionScope(authResult.session);
+  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/react/run", {
+    serviceScope: buildServiceScopeClaim(sessionScope),
+  });
   if (brainForward.response) return brainForward.response;
 
   return NextResponse.json(

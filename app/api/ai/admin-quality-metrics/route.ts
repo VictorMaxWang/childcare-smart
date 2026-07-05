@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
 } from "@/lib/server/brain-client";
+import { buildServiceScopeClaim, getSessionScope } from "@/lib/server/session-scope";
 
 function buildLocalFallbackHeaders(
   targetPath: string,
@@ -19,11 +20,14 @@ function buildLocalFallbackHeaders(
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, { requiredRole: "admin" });
-  if (authError) return authError;
+  const authResult = await authorizeAiRouteSession(request, { requiredRole: "admin" });
+  if (authResult instanceof Response) return authResult;
 
   const targetPath = "/api/v1/agents/metrics/admin-quality";
-  const brainForward = await forwardBrainRequest(request, targetPath);
+  const sessionScope = await getSessionScope(authResult.session);
+  const brainForward = await forwardBrainRequest(request, targetPath, {
+    serviceScope: buildServiceScopeClaim(sessionScope),
+  });
 
   if (brainForward.response) {
     return brainForward.response;

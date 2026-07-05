@@ -27,16 +27,24 @@ import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinat
 import { attachConsultationToInterventionCard } from "@/lib/agent/intervention-card";
 import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import { toFollowUpFeedbackLite } from "@/lib/feedback/normalize";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { ApiRouteError } from "@/lib/server/api-errors";
+import { buildTeacherAgentPayloadFromScope } from "@/lib/server/ai-scoped-payloads";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
   readBrainTransportHeaders,
+  type BrainServiceScopeClaim,
   type BrainForwardResult,
   type BrainTransport,
 } from "@/lib/server/brain-client";
 import { buildMemoryContextForPrompt } from "@/lib/server/memory-context";
 import { logSecurityEvent } from "@/lib/server/security-log";
+import {
+  buildServiceScopeClaim,
+  getSessionScope,
+  requireScopedChild,
+} from "@/lib/server/session-scope";
 
 const TEACHER_AGENT_TARGET_PATH = "/api/v1/agents/teacher/run";
 const TEACHER_AGENT_BRAIN_TIMEOUT_MS = 3_000;
@@ -249,6 +257,7 @@ async function runLocalTeacherAgent(params: {
   runtimeOptions: AiRuntimeOptions;
   allowConsultation: boolean;
   request: Request;
+  serviceScope?: BrainServiceScopeClaim | null;
 }) {
   const classContext = buildTeacherAgentClassContext(params.payload);
   const workflowTargetChildId = pickTeacherAgentWorkflowTargetChildId(
@@ -264,6 +273,7 @@ async function runLocalTeacherAgent(params: {
           workflowType: "teacher-agent",
           query: childContext.focusReasons.join(" "),
           request: params.request,
+          serviceScope: params.serviceScope,
         })
       : null;
   const weeklyMemoryContexts =
@@ -278,6 +288,7 @@ async function runLocalTeacherAgent(params: {
               workflowType: "teacher-weekly-summary",
               query: "weekly report focus child continuity",
               request: params.request,
+              serviceScope: params.serviceScope,
             })
           )
         )
@@ -388,8 +399,8 @@ function isNextResponse(value: unknown): value is NextResponse {
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
-  if (authError) return authError;
+  const authResult = await authorizeAiRouteSession(request, { requiredRole: "staff" });
+  if (authResult instanceof Response) return authResult;
 
   let payload: TeacherAgentRequestPayload;
   try {
@@ -399,9 +410,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  if (!isRecord(payload) || !isValidWorkflow(payload.workflow) || (payload.scope !== "class" && payload.scope !== "child")) {
+    return NextResponse.json({ error: "Invalid teacher-agent payload" }, { status: 400 });
+  }
+
+  const sessionScope = await getSessionScope(authResult.session);
+  if (payload.targetChildId) {
+    try {
+      requireScopedChild(sessionScope, payload.targetChildId);
+    } catch (error) {
+      if (error instanceof ApiRouteError && (error.code === "forbidden_scope" || error.code === "not_found")) {
+        return aiRouteLimitedResponse({
+          reason: "forbidden_child",
+          error: "Current account cannot access this child teacher-agent scope.",
+          requiredRole: "staff",
+        });
+      }
+      throw error;
+    }
+  }
+  payload = buildTeacherAgentPayloadFromScope(payload, sessionScope);
   if (!isValidPayload(payload)) {
     return NextResponse.json({ error: "Invalid teacher-agent payload" }, { status: 400 });
   }
+  const serviceScope = buildServiceScopeClaim(sessionScope);
 
   const brainRequest = new Request(request.url, {
     method: "POST",
@@ -410,6 +442,7 @@ export async function POST(request: Request) {
   });
   const brainForward = await forwardBrainRequest(brainRequest, TEACHER_AGENT_TARGET_PATH, {
     timeoutMs: TEACHER_AGENT_BRAIN_TIMEOUT_MS,
+    serviceScope,
   });
   const brainResult = await maybeReadBrainResult(brainForward, payload);
 
@@ -432,6 +465,7 @@ export async function POST(request: Request) {
       runtimeOptions: localRuntimeOptions,
       allowConsultation: !localRuntimeOptions.forceFallback && !localRuntimeOptions.forceMock,
       request,
+      serviceScope,
     });
     if (isNextResponse(result)) return result;
 
@@ -465,6 +499,7 @@ export async function POST(request: Request) {
       runtimeOptions: providerRuntimeOptions,
       allowConsultation: false,
       request,
+      serviceScope,
     });
     if (isNextResponse(result)) return result;
 

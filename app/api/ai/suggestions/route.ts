@@ -10,18 +10,27 @@ import type { AiSuggestionPayload, AiSuggestionResponse } from "@/lib/ai/types";
 import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
 import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
-import { aiRouteLimitedResponse, authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { ApiRouteError } from "@/lib/server/api-errors";
+import {
+  buildChildSuggestionSnapshotFromScope,
+  buildParentSuggestionPayloadFromScope,
+} from "@/lib/server/ai-scoped-payloads";
+import {
+  buildServiceScopeClaim,
+  getSessionScope,
+  requireScopedChild,
+} from "@/lib/server/session-scope";
 import { logSecurityEvent } from "@/lib/server/security-log";
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, {
+  const authResult = await authorizeAiRouteSession(request, {
     requiredRole: "parent",
     collectJsonClassNames: false,
   });
-  if (authError) return authError;
+  if (authResult instanceof Response) return authResult;
 
   let payload: AiSuggestionPayload | null = null;
-  const brainRequest = request.clone();
 
   try {
     payload = (await request.json()) as AiSuggestionPayload;
@@ -48,14 +57,44 @@ export async function POST(request: Request) {
     });
   }
 
-  const brainForward = await forwardBrainRequest(brainRequest, "/api/v1/agents/parent/suggestions");
+  const sessionScope = await getSessionScope(authResult.session);
+  try {
+    requireScopedChild(sessionScope, childId);
+  } catch (error) {
+    if (error instanceof ApiRouteError && (error.code === "forbidden_scope" || error.code === "not_found")) {
+      return aiRouteLimitedResponse({
+        reason: "forbidden_child",
+        error: "Current account cannot access this child suggestion scope.",
+        requiredRole: "parent",
+      });
+    }
+    throw error;
+  }
+  const trustedChildSnapshot = buildChildSuggestionSnapshotFromScope(sessionScope, childId);
+  if (!trustedChildSnapshot) {
+    return aiRouteLimitedResponse({
+      reason: "forbidden_child",
+      error: "Current account cannot access this child suggestion scope.",
+      requiredRole: "parent",
+    });
+  }
+  const trustedPayload = buildParentSuggestionPayloadFromScope(payload, trustedChildSnapshot);
+  const brainRequest = new Request(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify(trustedPayload),
+  });
+
+  const brainForward = await forwardBrainRequest(brainRequest, "/api/v1/agents/parent/suggestions", {
+    serviceScope: buildServiceScopeClaim(sessionScope),
+  });
   if (brainForward.response?.ok || (brainForward.response && !isChildScoped)) {
     return brainForward.response;
   }
 
   let result: AiSuggestionResponse;
   try {
-    result = await executeSuggestion(payload, getAiRuntimeOptions(request));
+    result = await executeSuggestion(trustedPayload, getAiRuntimeOptions(request));
   } catch (error) {
     if (isAiProviderUnavailableError(error)) {
       return NextResponse.json(buildAiProviderUnavailableBody(error), { status: error.status });
@@ -64,11 +103,11 @@ export async function POST(request: Request) {
   }
 
   let consultation: Awaited<ReturnType<typeof maybeRunHighRiskConsultation>> | null = null;
-  if (childSnapshot) {
+  if (trustedChildSnapshot) {
     try {
       consultation = await maybeRunHighRiskConsultation(
         buildConsultationInputFromSnapshot({
-          snapshot: childSnapshot,
+          snapshot: trustedChildSnapshot,
           suggestion: result,
           source: "api",
         })

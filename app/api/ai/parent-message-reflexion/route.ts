@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 import type { ParentMessageReflexionRequest, ParentMessageReflexionResponse } from "@/lib/ai/types";
 import { sanitizeParentMessageReflexionResponse } from "@/lib/agent/parent-message-reflexion";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
-import { aiRouteLimitedResponse, authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { ApiRouteError } from "@/lib/server/api-errors";
+import { buildParentMessageRequestFromScope } from "@/lib/server/ai-scoped-payloads";
+import {
+  buildServiceScopeClaim,
+  getSessionScope,
+  requireScopedChild,
+} from "@/lib/server/session-scope";
 
 function readString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -63,14 +70,15 @@ function buildParentMessageFallbackResponse(
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, {
+  const authResult = await authorizeAiRouteSession(request, {
     requiredRole: "parent",
     collectJsonClassNames: false,
   });
-  if (authError) return authError;
+  if (authResult instanceof Response) return authResult;
 
   const body = (await request.clone().json().catch(() => null)) as ParentMessageReflexionRequest | null;
-  if (!(body?.targetChildId ?? body?.childId)) {
+  const childId = body?.targetChildId ?? body?.childId;
+  if (!childId) {
     return aiRouteLimitedResponse({
       reason: "scope_required",
       error: "Child scope is required for parent message reflexion.",
@@ -78,9 +86,30 @@ export async function POST(request: Request) {
     });
   }
 
+  const sessionScope = await getSessionScope(authResult.session);
+  try {
+    requireScopedChild(sessionScope, childId);
+  } catch (error) {
+    if (error instanceof ApiRouteError && (error.code === "forbidden_scope" || error.code === "not_found")) {
+      return aiRouteLimitedResponse({
+        reason: "forbidden_child",
+        error: "Current account cannot access this child message scope.",
+        requiredRole: "parent",
+      });
+    }
+    throw error;
+  }
+  const trustedBody = buildParentMessageRequestFromScope(body ?? {}, sessionScope, childId);
+  const brainRequest = new Request(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify(trustedBody),
+  });
+
   const brainForward = await forwardBrainRequest(
-    request,
-    "/api/v1/agents/parent/message-reflexion"
+    brainRequest,
+    "/api/v1/agents/parent/message-reflexion",
+    { serviceScope: buildServiceScopeClaim(sessionScope) }
   );
   if (brainForward.response) {
     const contentType = brainForward.response.headers.get("content-type") ?? "";
@@ -88,7 +117,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         sanitizeParentMessageReflexionResponse(
           buildParentMessageFallbackResponse(
-            body,
+            trustedBody,
             !brainForward.response.ok ? "brain-proxy-non-ok" : "brain-proxy-invalid-json"
           )
         ),
@@ -100,7 +129,7 @@ export async function POST(request: Request) {
     if (!responseBody) {
       return NextResponse.json(
         sanitizeParentMessageReflexionResponse(
-          buildParentMessageFallbackResponse(body, "brain-proxy-invalid-json")
+          buildParentMessageFallbackResponse(trustedBody, "brain-proxy-invalid-json")
         ),
         { status: 200 }
       );
@@ -116,7 +145,7 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(
-    sanitizeParentMessageReflexionResponse(buildParentMessageFallbackResponse(body)),
+    sanitizeParentMessageReflexionResponse(buildParentMessageFallbackResponse(trustedBody)),
     { status: 200 }
   );
 }

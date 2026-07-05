@@ -8,10 +8,16 @@ import type {
 import { buildAiProviderTraceFromProviderMeta } from "@/lib/ai/provider-trace";
 import { getVivoEnv, requestVivoTts } from "@/lib/providers/vivo";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { ApiRouteError } from "@/lib/server/api-errors";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
 } from "@/lib/server/brain-client";
+import {
+  buildServiceScopeClaim,
+  getSessionScope,
+  requireScopedChild,
+} from "@/lib/server/session-scope";
 import {
   cacheParentStoryBookMediaDataUrl,
   prepareParentStoryBookResponseForDelivery,
@@ -537,9 +543,32 @@ export async function POST(request: Request) {
     );
   }
 
+  const sessionScope = await getSessionScope(authResult.session);
+  try {
+    requireScopedChild(sessionScope, payload.childId);
+  } catch (error) {
+    if (error instanceof ApiRouteError && (error.code === "forbidden_scope" || error.code === "not_found")) {
+      return aiRouteLimitedResponse(
+        {
+          reason: "forbidden_child",
+          error: "Current account cannot access this child storybook media scope.",
+          requiredRole: "parent",
+        },
+        { headers: { "cache-control": "no-store" } }
+      );
+    }
+    throw error;
+  }
+
   const targetPath = "/api/v1/agents/parent/storybook/media-status";
-  const brainForward = await forwardBrainRequest(request, targetPath, {
+  const brainRequest = new Request(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify(payload),
+  });
+  const brainForward = await forwardBrainRequest(brainRequest, targetPath, {
     timeoutMs: resolveMediaStatusTimeoutMs(),
+    serviceScope: buildServiceScopeClaim(sessionScope),
   });
   if (!brainForward.response) {
     const preparedStory = await completeStoryMediaLocally({

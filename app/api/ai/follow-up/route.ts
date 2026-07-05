@@ -11,7 +11,17 @@ import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/inp
 import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
 import { selectStructuredFeedbackConsumption } from "@/lib/feedback/consumption";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
-import { aiRouteLimitedResponse, authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { ApiRouteError } from "@/lib/server/api-errors";
+import {
+  buildChildSuggestionSnapshotFromScope,
+  buildParentFollowUpPayloadFromScope,
+} from "@/lib/server/ai-scoped-payloads";
+import {
+  buildServiceScopeClaim,
+  getSessionScope,
+  requireScopedChild,
+} from "@/lib/server/session-scope";
 import { buildMemoryContextForPrompt } from "@/lib/server/memory-context";
 import { logSecurityEvent } from "@/lib/server/security-log";
 import {
@@ -99,14 +109,13 @@ function buildTaskContext(payload: AiFollowUpPayload) {
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, {
+  const authResult = await authorizeAiRouteSession(request, {
     requiredRole: "parent",
     collectJsonClassNames: false,
   });
-  if (authError) return authError;
+  if (authResult instanceof Response) return authResult;
 
   let payload: AiFollowUpPayload | null = null;
-  const brainRequest = request.clone();
 
   try {
     payload = (await request.json()) as AiFollowUpPayload;
@@ -133,14 +142,45 @@ export async function POST(request: Request) {
     });
   }
 
-  const brainForward = await forwardBrainRequest(brainRequest, "/api/v1/agents/parent/follow-up");
+  const sessionScope = await getSessionScope(authResult.session);
+  try {
+    requireScopedChild(sessionScope, childId);
+  } catch (error) {
+    if (error instanceof ApiRouteError && (error.code === "forbidden_scope" || error.code === "not_found")) {
+      return aiRouteLimitedResponse({
+        reason: "forbidden_child",
+        error: "Current account cannot access this child follow-up scope.",
+        requiredRole: "parent",
+      });
+    }
+    throw error;
+  }
+  const trustedChildSnapshot = buildChildSuggestionSnapshotFromScope(sessionScope, childId);
+  if (!trustedChildSnapshot) {
+    return aiRouteLimitedResponse({
+      reason: "forbidden_child",
+      error: "Current account cannot access this child follow-up scope.",
+      requiredRole: "parent",
+    });
+  }
+  const serviceScope = buildServiceScopeClaim(sessionScope);
+  const trustedPayloadBase = buildParentFollowUpPayloadFromScope(payload, sessionScope, trustedChildSnapshot);
+  const brainRequest = new Request(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify(trustedPayloadBase),
+  });
+
+  const brainForward = await forwardBrainRequest(brainRequest, "/api/v1/agents/parent/follow-up", {
+    serviceScope,
+  });
   if (brainForward.response?.ok || (brainForward.response && !isChildScoped)) {
     return brainForward.response;
   }
 
-  const taskContext = buildTaskContext(payload);
+  const taskContext = buildTaskContext(trustedPayloadBase);
   const feedbackConsumption =
-    !childSnapshot
+    !trustedChildSnapshot
       ? {
           feedback: undefined,
           summary: undefined,
@@ -149,31 +189,32 @@ export async function POST(request: Request) {
           primaryActionSupport: undefined,
         }
       : selectStructuredFeedbackConsumption(
-          [payload.latestFeedback, childSnapshot.recentDetails?.feedback],
+          [trustedPayloadBase.latestFeedback, trustedChildSnapshot.recentDetails?.feedback],
           {
-            childId: childSnapshot.child.id,
+            childId: trustedChildSnapshot.child.id,
             relatedTaskId: taskContext.activeTask?.taskId,
             relatedConsultationId:
               taskContext.currentInterventionCard?.consultationId ??
-              payload.currentInterventionCard?.consultationId ??
-              payload.latestFeedback?.relatedConsultationId,
-            interventionCardId: taskContext.currentInterventionCard?.id ?? payload.currentInterventionCard?.id,
+              trustedPayloadBase.currentInterventionCard?.consultationId ??
+              trustedPayloadBase.latestFeedback?.relatedConsultationId,
+            interventionCardId: taskContext.currentInterventionCard?.id ?? trustedPayloadBase.currentInterventionCard?.id,
           }
         );
 
   const sessionId =
     feedbackConsumption.feedback?.relatedConsultationId ??
     taskContext.currentInterventionCard?.consultationId ??
-    payload.currentInterventionCard?.consultationId;
+    trustedPayloadBase.currentInterventionCard?.consultationId;
   let memoryContext: Awaited<ReturnType<typeof buildMemoryContextForPrompt>> | null = null;
   if (isChildScoped) {
     try {
       memoryContext = await buildMemoryContextForPrompt({
-        childId: childSnapshot.child.id,
+        childId: trustedChildSnapshot.child.id,
         workflowType: "parent-follow-up",
-        query: payload.question,
+        query: trustedPayloadBase.question,
         sessionId,
         request,
+        serviceScope,
       });
     } catch (error) {
       logSecurityEvent("warn", "ai.follow_up.memory_fallback", { error });
@@ -181,17 +222,17 @@ export async function POST(request: Request) {
   }
 
   const nextPayload =
-    !childSnapshot || !memoryContext
-      ? payload
+    !trustedChildSnapshot || !memoryContext
+      ? trustedPayloadBase
       : {
-          ...payload,
+          ...trustedPayloadBase,
           snapshot: {
-            ...childSnapshot,
+            ...trustedChildSnapshot,
             memoryContext: memoryContext.promptContext,
             continuityNotes:
-              childSnapshot.continuityNotes ??
+              trustedChildSnapshot.continuityNotes ??
               uniqueTexts([
-                `参考了${childSnapshot.child.name}的长期与近期连续上下文。`,
+                `参考了${trustedChildSnapshot.child.name}的长期与近期连续上下文。`,
                 feedbackConsumption.summary,
                 ...feedbackConsumption.continuitySignals,
                 ...feedbackConsumption.openLoops,
@@ -199,7 +240,7 @@ export async function POST(request: Request) {
           },
           memoryContext: memoryContext.promptContext,
           continuityNotes: uniqueTexts([
-            ...(payload.continuityNotes ?? []),
+            ...(trustedPayloadBase.continuityNotes ?? []),
             feedbackConsumption.summary,
             ...feedbackConsumption.continuitySignals,
             ...feedbackConsumption.openLoops,
@@ -233,7 +274,7 @@ export async function POST(request: Request) {
           latestFeedback: taskAwarePayload.latestFeedback,
           currentInterventionCard: taskAwarePayload.currentInterventionCard,
           activeTaskId: taskContext.activeTask?.taskId,
-          question: payload.question,
+          question: trustedPayloadBase.question,
           followUp: result,
           source: "api",
           memoryContext,

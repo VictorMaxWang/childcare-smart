@@ -4,13 +4,20 @@ import {
   isValidHealthFileBridgeRequest,
 } from "@/lib/agent/health-file-bridge";
 import {
+  buildBrainServiceAuthHeaders,
   createBrainTransportHeaders,
   forwardBrainRequest,
   getBrainBaseUrl,
+  type BrainServiceScopeClaim,
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
-import { apiError } from "@/lib/server/api-errors";
+import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { ApiRouteError, apiError } from "@/lib/server/api-errors";
+import {
+  buildServiceScopeClaim,
+  getSessionScope,
+  requireScopedChild,
+} from "@/lib/server/session-scope";
 import { logSecurityEvent } from "@/lib/server/security-log";
 import { resolveOcrProvider } from "@/lib/ai/providers";
 import { VivoProviderError } from "@/lib/providers/vivo";
@@ -61,8 +68,13 @@ function buildJsonResponse(body: unknown, init: ResponseInit) {
   });
 }
 
-function buildPersistenceHeaders(request: Request) {
+function buildPersistenceHeaders(request: Request, serviceScope: BrainServiceScopeClaim) {
   const headers = new Headers({ "content-type": "application/json" });
+  buildBrainServiceAuthHeaders({
+    method: "POST",
+    targetPath: "/api/v1/memory/health-file-bridge-writeback",
+    serviceScope,
+  }).forEach((value, key) => headers.set(key, value));
   for (const key of ["x-request-id", "x-correlation-id", "x-trace-id", "x-debug-memory"]) {
     const value = request.headers.get(key);
     if (value) headers.set(key, value);
@@ -223,7 +235,8 @@ function mergeOcrProvenance(
 
 async function persistHealthFileBridgeWriteback(
   request: Request,
-  payload: HealthFileBridgeWritebackRequest
+  payload: HealthFileBridgeWritebackRequest,
+  serviceScope: BrainServiceScopeClaim
 ) {
   const baseUrl = getBrainBaseUrl();
   if (!baseUrl) {
@@ -236,7 +249,7 @@ async function persistHealthFileBridgeWriteback(
   try {
     const response = await fetch(`${baseUrl}/api/v1/memory/health-file-bridge-writeback`, {
       method: "POST",
-      headers: buildPersistenceHeaders(request),
+      headers: buildPersistenceHeaders(request, serviceScope),
       cache: "no-store",
       body: JSON.stringify(payload),
     });
@@ -257,7 +270,8 @@ async function buildAugmentedBridgeResponse(
   payload: HealthFileBridgeRequest,
   bridgeResponse: HealthFileBridgeResponse,
   init: ResponseInit,
-  enriched?: OcrEnrichment | null
+  enriched?: OcrEnrichment | null,
+  serviceScope?: BrainServiceScopeClaim | null
 ) {
   const responseWithProvenance = mergeOcrProvenance(bridgeResponse, enriched);
   const bridgeWriteback = buildHealthFileBridgeWriteback(payload, responseWithProvenance);
@@ -266,12 +280,12 @@ async function buildAugmentedBridgeResponse(
     bridgeWriteback,
   };
 
-  if (payload.childId) {
+  if (payload.childId && serviceScope) {
     await persistHealthFileBridgeWriteback(request, {
       childId: payload.childId,
       traceId: payload.traceId,
       bridgeWriteback,
-    });
+    }, serviceScope);
   }
 
   return buildJsonResponse(enhancedResponse, init);
@@ -280,7 +294,8 @@ async function buildAugmentedBridgeResponse(
 async function maybeAugmentRemoteBridgeResponse(
   request: Request,
   response: Response,
-  enriched?: OcrEnrichment | null
+  enriched?: OcrEnrichment | null,
+  serviceScope?: BrainServiceScopeClaim | null
 ) {
   if (!response.ok) return response;
 
@@ -320,12 +335,12 @@ async function maybeAugmentRemoteBridgeResponse(
     status: response.status,
     statusText: response.statusText,
     headers: response.headers,
-  }, enriched);
+  }, enriched, serviceScope);
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
-  if (authError) return authError;
+  const authResult = await authorizeAiRouteSession(request, { requiredRole: "staff" });
+  if (authResult instanceof Response) return authResult;
 
   let payload: HealthFileBridgeRequest | null = null;
   try {
@@ -338,6 +353,30 @@ export async function POST(request: Request) {
   if (!isValidHealthFileBridgeRequest(payload)) {
     return apiError("invalid_request", "Invalid health-file-bridge payload", { status: 400 });
   }
+
+  const sessionScope = await getSessionScope(authResult.session);
+  if (!payload.childId && authResult.session.user.accountKind !== "demo") {
+    return aiRouteLimitedResponse({
+      reason: "scope_required",
+      error: "Child scope is required for health file bridge.",
+      requiredRole: "staff",
+    });
+  }
+  if (payload.childId) {
+    try {
+      requireScopedChild(sessionScope, payload.childId);
+    } catch (error) {
+      if (error instanceof ApiRouteError && (error.code === "forbidden_scope" || error.code === "not_found")) {
+        return aiRouteLimitedResponse({
+          reason: "forbidden_child",
+          error: "Current account cannot access this child health file scope.",
+          requiredRole: "staff",
+        });
+      }
+      throw error;
+    }
+  }
+  const serviceScope = buildServiceScopeClaim(sessionScope);
 
   let enriched: OcrEnrichment | null = null;
   let forwardedRequest = buildPayloadRequest(request, payload);
@@ -354,9 +393,11 @@ export async function POST(request: Request) {
     throw error;
   }
 
-  const brainForward = await forwardBrainRequest(forwardedRequest, "/api/v1/agents/health-file-bridge");
+  const brainForward = await forwardBrainRequest(forwardedRequest, "/api/v1/agents/health-file-bridge", {
+    serviceScope,
+  });
   if (brainForward.response) {
-    return maybeAugmentRemoteBridgeResponse(forwardedRequest, brainForward.response, enriched);
+    return maybeAugmentRemoteBridgeResponse(forwardedRequest, brainForward.response, enriched, serviceScope);
   }
 
   const headers = buildLocalFallbackHeaders(brainForward);
@@ -391,5 +432,5 @@ export async function POST(request: Request) {
   return buildAugmentedBridgeResponse(request, enriched.payload, bridgeResponse, {
     status: 200,
     headers,
-  }, enriched);
+  }, enriched, serviceScope);
 }

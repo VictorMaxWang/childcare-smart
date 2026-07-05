@@ -10,7 +10,14 @@ import {
   forwardBrainRequest,
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { ApiRouteError } from "@/lib/server/api-errors";
+import { buildHighRiskConsultationPayloadFromScope } from "@/lib/server/ai-scoped-payloads";
+import {
+  buildServiceScopeClaim,
+  getSessionScope,
+  requireScopedChild,
+} from "@/lib/server/session-scope";
 import { logSecurityEvent } from "@/lib/server/security-log";
 import { getChildcareKnowledgeHints } from "@/lib/knowledge/childcare-knowledge";
 
@@ -170,8 +177,8 @@ function localFallbackResponse(
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
-  if (authError) return authError;
+  const authResult = await authorizeAiRouteSession(request, { requiredRole: "staff" });
+  if (authResult instanceof Response) return authResult;
 
   let payload: HighRiskConsultationRequestPayload | null = null;
 
@@ -192,13 +199,35 @@ export async function POST(request: Request) {
     );
   }
 
+  const sessionScope = await getSessionScope(authResult.session);
+  try {
+    requireScopedChild(sessionScope, payload.targetChildId);
+  } catch (error) {
+    if (error instanceof ApiRouteError && (error.code === "forbidden_scope" || error.code === "not_found")) {
+      return aiRouteLimitedResponse({
+        reason: "forbidden_child",
+        error: "Current account cannot access this child consultation scope.",
+        requiredRole: "staff",
+      });
+    }
+    throw error;
+  }
+  payload = buildHighRiskConsultationPayloadFromScope(payload, sessionScope);
+  const serviceScope = buildServiceScopeClaim(sessionScope);
+  const brainRequest = new Request(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify(payload),
+  });
+
   if (isForcedFallbackRequest(request)) {
     const fallbackReason = "forced-local-fallback";
     return localFallbackResponse(payload, buildForcedFallbackHeaders(fallbackReason), fallbackReason);
   }
 
-  const brainForward = await forwardBrainRequest(request, HIGH_RISK_CONSULTATION_TARGET_PATH, {
+  const brainForward = await forwardBrainRequest(brainRequest, HIGH_RISK_CONSULTATION_TARGET_PATH, {
     timeoutMs: getHighRiskConsultationBrainTimeoutMs(),
+    serviceScope,
   });
   if (brainForward.response) return maybeEnrichRemoteResponse(brainForward);
 

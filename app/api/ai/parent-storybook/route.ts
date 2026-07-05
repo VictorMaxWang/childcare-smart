@@ -25,6 +25,12 @@ import {
   shouldRequireNextVivoStoryText,
 } from "@/lib/server/parent-storybook-real-text";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { ApiRouteError } from "@/lib/server/api-errors";
+import {
+  buildServiceScopeClaim,
+  getSessionScope,
+  requireScopedChild,
+} from "@/lib/server/session-scope";
 import { logSecurityEvent } from "@/lib/server/security-log";
 
 export const runtime = "nodejs";
@@ -510,6 +516,24 @@ export async function POST(request: Request) {
       { headers: buildCacheHeaders("bypass") }
     );
   }
+  const sessionScope = await getSessionScope(authResult.session);
+  if (!isDemoSeedRequest(payload)) {
+    try {
+      requireScopedChild(sessionScope, requestedChildId);
+    } catch (error) {
+      if (error instanceof ApiRouteError && (error.code === "forbidden_scope" || error.code === "not_found")) {
+        return aiRouteLimitedResponse(
+          {
+            reason: "forbidden_child",
+            error: "Current account cannot access this child storybook scope.",
+            requiredRole: "parent",
+          },
+          { headers: buildCacheHeaders("bypass") }
+        );
+      }
+      throw error;
+    }
+  }
   payload = {
     ...payload,
     childId: requestedChildId,
@@ -568,13 +592,19 @@ export async function POST(request: Request) {
   }
 
   const requireRealStoryText = shouldRequireRealStoryTextInThisRuntime();
+  const brainRequest = new Request(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify(payload),
+  });
   const brainForward = await forwardBrainRequest(
-    request,
+    brainRequest,
     "/api/v1/agents/parent/storybook",
     {
       timeoutMs: requireRealStoryText
         ? PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS
         : PARENT_STORYBOOK_BRAIN_TIMEOUT_MS,
+      serviceScope: buildServiceScopeClaim(sessionScope),
     }
   );
 

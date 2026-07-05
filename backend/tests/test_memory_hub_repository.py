@@ -1,8 +1,10 @@
 import asyncio
 import time
 
+import pytest
+
 from app.core.config import get_settings
-from app.db.repositories import build_repository_bundle, reset_repository_bundle_cache
+from app.db.repositories import RepositoryOperationError, build_repository_bundle, reset_repository_bundle_cache
 from app.schemas.memory import MemoryContextBuildOptions
 from app.services.orchestrator import build_memory_service, reset_orchestrator_runtime
 
@@ -114,11 +116,22 @@ def test_memory_backend_keeps_shared_state_between_repository_builds(monkeypatch
     )
 
     second_repository = build_repository_bundle()
-    snapshots = asyncio.run(second_repository.list_recent_snapshots(limit=10))
+    snapshots = asyncio.run(second_repository.list_recent_snapshots(limit=10, session_id="session-shared"))
 
     assert second_repository.backend == "memory"
     assert len(snapshots) == 1
     assert snapshots[0].session_id == "session-shared"
+
+
+def test_repository_recent_snapshots_requires_filter(monkeypatch):
+    configure_memory_backend(monkeypatch, backend="memory")
+
+    repository = build_repository_bundle()
+
+    with pytest.raises(RepositoryOperationError) as error:
+        asyncio.run(repository.list_recent_snapshots(limit=10))
+
+    assert error.value.code == "missing_snapshot_filter"
 
 
 def test_repository_recent_snapshots_support_filters(tmp_path, monkeypatch):
