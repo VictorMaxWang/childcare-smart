@@ -4,12 +4,13 @@ import {
   createBrainTransportHeaders,
   forwardBrainRequest,
 } from "@/lib/server/brain-client";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { buildServiceScopeClaim, getSessionScope } from "@/lib/server/session-scope";
 import { logSecurityEvent } from "@/lib/server/security-log";
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, { allowUnscoped: true });
-  if (authError) return authError;
+  const authResult = await authorizeAiRouteSession(request, { allowUnscoped: true });
+  if (authResult instanceof Response) return authResult;
 
   let payload: unknown;
 
@@ -25,14 +26,18 @@ export async function POST(request: Request) {
   }
 
   if (payload.roleHint) {
-    const roleAuthError = await authorizeAiRoute(request, {
+    const roleAuthResult = await authorizeAiRouteSession(request, {
       allowUnscoped: true,
       requiredRole: payload.roleHint,
+      session: authResult.session,
     });
-    if (roleAuthError) return roleAuthError;
+    if (roleAuthResult instanceof Response) return roleAuthResult;
   }
 
-  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/intent-router");
+  const sessionScope = await getSessionScope(authResult.session);
+  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/intent-router", {
+    serviceScope: buildServiceScopeClaim(sessionScope),
+  });
   if (brainForward.response) return brainForward.response;
 
   const headers = createBrainTransportHeaders({

@@ -4,9 +4,8 @@ import {
   forwardBrainRequest,
 } from "@/lib/server/brain-client";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
-import { DefaultAppDataRepository } from "@/lib/server/app-data-repository";
 import { ApiRouteError, handleApiError } from "@/lib/server/api-errors";
-import { requireChildAccess } from "@/lib/server/scope";
+import { buildServiceScopeClaim, getSessionScope, requireScopedChild } from "@/lib/server/session-scope";
 
 export const runtime = "nodejs";
 
@@ -19,6 +18,7 @@ export async function GET(
 
   const { mediaKey } = await context.params;
   const cachedMedia = readCachedParentStoryBookMedia(mediaKey);
+  const sessionScope = await getSessionScope(authResult.session);
 
   if (cachedMedia) {
     if (!cachedMedia.ownerChildId) {
@@ -30,8 +30,7 @@ export async function GET(
     }
 
     try {
-      const snapshot = await new DefaultAppDataRepository().load(authResult.session.user);
-      requireChildAccess(authResult.session.user, snapshot, cachedMedia.ownerChildId);
+      requireScopedChild(sessionScope, cachedMedia.ownerChildId);
     } catch (error) {
       if (error instanceof ApiRouteError && (error.code === "forbidden_scope" || error.code === "not_found")) {
         return aiRouteLimitedResponse({
@@ -59,7 +58,20 @@ export async function GET(
   }
 
   const targetPath = `/api/v1/agents/parent/storybook/media/${encodeURIComponent(mediaKey)}`;
-  const brainForward = await forwardBrainRequest(request, targetPath);
+  if (authResult.session.user.accountKind !== "demo") {
+    return new Response("storybook media unavailable", {
+      status: 404,
+      headers: createBrainTransportHeaders({
+        transport: "next-json-fallback",
+        targetPath,
+        fallbackReason: "storybook-media-owner-scope-required",
+      }),
+    });
+  }
+
+  const brainForward = await forwardBrainRequest(request, targetPath, {
+    serviceScope: buildServiceScopeClaim(sessionScope),
+  });
   if (brainForward.response) return brainForward.response;
 
   return new Response("storybook media unavailable", {

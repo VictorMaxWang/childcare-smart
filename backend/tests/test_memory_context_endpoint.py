@@ -1,4 +1,9 @@
 import asyncio
+import base64
+import hashlib
+import hmac
+import json
+import time
 
 from fastapi.testclient import TestClient
 
@@ -9,6 +14,29 @@ from app.services.orchestrator import build_memory_service, reset_orchestrator_r
 
 
 client = TestClient(app)
+
+
+def b64url(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).decode("utf-8").rstrip("=")
+
+
+def service_headers(
+    *,
+    secret: str,
+    method: str,
+    path: str,
+    scope: dict,
+) -> dict[str, str]:
+    scope_token = b64url(json.dumps(scope, separators=(",", ":")).encode("utf-8"))
+    timestamp = str(int(time.time()))
+    signed = "\n".join([method.upper(), path, timestamp, scope_token]).encode("utf-8")
+    signature = b64url(hmac.new(secret.encode("utf-8"), signed, hashlib.sha256).digest())
+    return {
+        "x-smartchildcare-service-scope": scope_token,
+        "x-smartchildcare-service-timestamp": timestamp,
+        "x-smartchildcare-service-path": path,
+        "x-smartchildcare-service-signature": signature,
+    }
 
 
 def configure_memory_backend(monkeypatch, *, backend: str, sqlite_path: str | None = None):
@@ -71,6 +99,122 @@ def test_memory_context_endpoint_returns_prompt_context(tmp_path, monkeypatch):
     assert body["child_id"] == "child-1"
     assert body["prompt_context"]["long_term_traits"]
     assert body["prompt_context"]["open_loops"]
+
+
+def test_memory_context_endpoint_rejects_child_outside_signed_scope(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "memory-endpoint-scope.db"
+    secret = "pytest-memory-secret"
+    monkeypatch.setenv("BRAIN_INTERNAL_SHARED_SECRET", secret)
+    configure_memory_backend(monkeypatch, backend="sqlite", sqlite_path=str(sqlite_path))
+
+    path = "/api/v1/memory/context"
+    response = client.post(
+        path,
+        headers=service_headers(
+            secret=secret,
+            method="POST",
+            path=path,
+            scope={
+                "institutionId": "inst-a",
+                "role": "家长",
+                "accountKind": "normal",
+                "childIds": ["child-allowed"],
+            },
+        ),
+        json={
+            "child_id": "child-denied",
+            "workflow_type": "parent-follow-up",
+            "options": {"query": "denied", "limit": 5, "top_k": 5},
+        },
+    )
+
+    assert response.status_code == 403
+    assert "outside service scope" in response.json()["detail"]
+
+
+def test_health_file_bridge_writeback_rejects_child_outside_signed_scope(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "memory-writeback-scope.db"
+    secret = "pytest-memory-secret"
+    monkeypatch.setenv("BRAIN_INTERNAL_SHARED_SECRET", secret)
+    configure_memory_backend(monkeypatch, backend="sqlite", sqlite_path=str(sqlite_path))
+
+    path = "/api/v1/memory/health-file-bridge-writeback"
+    response = client.post(
+        path,
+        headers=service_headers(
+            secret=secret,
+            method="POST",
+            path=path,
+            scope={
+                "institutionId": "inst-a",
+                "role": "教师",
+                "accountKind": "normal",
+                "childIds": ["child-allowed"],
+            },
+        ),
+        json={
+            "childId": "child-denied",
+            "traceId": "trace-denied",
+            "bridgeWriteback": {
+                "childScopedArtifacts": [
+                    {
+                        "artifactType": "health-file-bridge",
+                        "childId": "child-denied",
+                        "fileKind": "health-note",
+                        "fileType": "pdf",
+                        "summary": "Bridge artifact summary",
+                        "extractedFacts": [],
+                        "riskItems": [],
+                        "contraindications": [],
+                        "followUpHints": [],
+                        "generatedAt": "2026-04-11T00:00:00Z",
+                    }
+                ],
+                "memoryCandidate": {
+                    "title": "Bridge follow-up seed",
+                    "summary": "Bridge summary for parent follow-up",
+                    "continuitySignals": ["Bridge summary for parent follow-up"],
+                    "openLoops": ["Review the file again within 48 hours"],
+                    "sourceRefs": ["pytest-memory-endpoint"],
+                },
+                "followUpSeed": {
+                    "suggestionTitle": "Bridge follow-up seed",
+                    "suggestionDescription": "Use the bridge output as a follow-up seed.",
+                    "tonightHomeAction": "Share a factual status update tonight.",
+                    "observationPoints": ["Watch temperature tonight"],
+                    "tomorrowObservationPoint": "Check the child's status at the next arrival.",
+                    "reviewIn48h": "Review the bridge signals again within 48 hours.",
+                    "teacherSuggestionSummary": "Carry the bridge wording into the next handoff.",
+                    "familyTask": {
+                        "title": "Share a status update tonight",
+                        "description": "Confirm the latest temperature and sleep status.",
+                    },
+                },
+                "weeklyReportSeed": None,
+                "provenance": {
+                    "bridgeOrigin": "health-file-bridge",
+                    "sourceRole": "teacher",
+                    "requestSource": "pytest-memory-endpoint",
+                    "traceId": "trace-denied",
+                    "fileKind": "health-note",
+                    "fileType": "pdf",
+                    "source": "next-local-extractor",
+                    "state": "fallback",
+                    "configured": False,
+                    "live": False,
+                    "fallback": True,
+                    "mock": False,
+                    "liveReadyButNotVerified": False,
+                    "provider": "pytest-provider",
+                    "model": "pytest-model",
+                    "generatedAt": "2026-04-11T00:00:00Z",
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 403
+    assert "outside service scope" in response.json()["detail"]
 
 
 def test_health_file_bridge_writeback_endpoint_persists_snapshot(tmp_path, monkeypatch):

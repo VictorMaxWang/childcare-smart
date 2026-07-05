@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
+from app.core.service_auth import require_internal_service
 from app.schemas.agent import WeeklyReportRequest, WeeklyReportResponse
 from app.schemas.admin_quality_metrics import AdminQualityMetricsRequest, AdminQualityMetricsResponse
 from app.schemas.demand_insight import DemandInsightRequest, DemandInsightResponse
@@ -23,7 +24,7 @@ from app.services.orchestrator import Orchestrator, build_orchestrator
 from app.services.parent_storybook_llm import ParentStoryBookTextProviderError
 from app.services.storybook_media_cache import get_storybook_media_cache
 
-router = APIRouter(tags=["agents"])
+router = APIRouter(tags=["agents"], dependencies=[Depends(require_internal_service)])
 
 
 def get_orchestrator() -> Orchestrator:

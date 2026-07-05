@@ -6,7 +6,11 @@ import type {
   MemoryContextTraceRecord,
   PromptMemoryContext,
 } from "@/lib/ai/types";
-import { getBrainBaseUrl } from "@/lib/server/brain-client";
+import {
+  buildBrainServiceAuthHeaders,
+  getBrainBaseUrl,
+  type BrainServiceScopeClaim,
+} from "@/lib/server/brain-client";
 import { createEmptyMemoryContextEnvelope, createEmptyMemoryMeta, createEmptyPromptMemoryContext } from "@/lib/memory/prompt-context";
 
 interface BuildMemoryContextParams {
@@ -17,6 +21,7 @@ interface BuildMemoryContextParams {
   topK?: number;
   sessionId?: string;
   request?: Request;
+  serviceScope?: BrainServiceScopeClaim | null;
 }
 
 function asString(value: unknown) {
@@ -106,8 +111,15 @@ function normalizeChildProfile(value: unknown): MemoryContextProfileRecord | und
   };
 }
 
-function buildHeaders(request?: Request) {
+function buildHeaders(request?: Request, serviceScope?: BrainServiceScopeClaim | null) {
   const headers = new Headers({ "content-type": "application/json" });
+  if (serviceScope) {
+    buildBrainServiceAuthHeaders({
+      method: "POST",
+      targetPath: "/api/v1/memory/context",
+      serviceScope,
+    }).forEach((value, key) => headers.set(key, value));
+  }
   if (!request) return headers;
 
   for (const key of ["x-request-id", "x-correlation-id", "x-trace-id", "x-debug-memory"]) {
@@ -174,7 +186,7 @@ export async function buildMemoryContextForPrompt(
   try {
     const response = await fetch(`${baseUrl}/api/v1/memory/context`, {
       method: "POST",
-      headers: buildHeaders(params.request),
+      headers: buildHeaders(params.request, params.serviceScope),
       cache: "no-store",
       body: JSON.stringify({
         child_id: params.childId,

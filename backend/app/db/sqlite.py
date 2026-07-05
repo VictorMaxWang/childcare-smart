@@ -103,6 +103,14 @@ def _normalize_datetime(value: Any) -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _has_snapshot_filter(
+    child_id: str | None,
+    session_id: str | None,
+    snapshot_types: list[str] | None,
+) -> bool:
+    return bool(child_id or session_id or snapshot_types)
+
+
 class SQLiteMemoryHubStore:
     def __init__(self, path: str) -> None:
         self.path = Path(path)
@@ -247,6 +255,8 @@ class SQLiteMemoryHubStore:
         session_id: str | None = None,
         snapshot_types: list[str] | None = None,
     ) -> list[AgentStateSnapshotRecord]:
+        if not _has_snapshot_filter(child_id, session_id, snapshot_types):
+            raise ValueError("list_recent_snapshots requires child_id, session_id, or snapshot_types")
         await self.ensure_schema()
 
         def _query() -> list[sqlite3.Row]:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from app.core.service_auth import ServiceScope, require_child_in_service_scope, require_internal_service
 from app.schemas.health_file_bridge import HealthFileBridgeWritebackRequest
 from app.schemas.memory import MemoryContextBuildRequest
 from app.services.memory_service import MemoryService
@@ -17,8 +18,10 @@ def get_memory_service() -> MemoryService:
 @router.post("/memory/context")
 async def build_memory_context(
     payload: MemoryContextBuildRequest,
+    service_scope: ServiceScope = Depends(require_internal_service),
     memory_service: MemoryService = Depends(get_memory_service),
 ):
+    require_child_in_service_scope(service_scope, payload.child_id)
     return await memory_service.build_memory_context_for_prompt(
         payload.child_id,
         payload.workflow_type,
@@ -29,8 +32,10 @@ async def build_memory_context(
 @router.post("/memory/health-file-bridge-writeback")
 async def save_health_file_bridge_writeback(
     payload: HealthFileBridgeWritebackRequest,
+    service_scope: ServiceScope = Depends(require_internal_service),
     memory_service: MemoryService = Depends(get_memory_service),
 ):
+    require_child_in_service_scope(service_scope, payload.child_id)
     record = await memory_service.save_health_file_bridge_writeback(
         child_id=payload.child_id,
         bridge_writeback=payload.bridge_writeback.model_dump(mode="json", by_alias=True),

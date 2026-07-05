@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import { createBrainTransportHeaders, forwardBrainRequest } from "@/lib/server/brain-client";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import {
+  aiRouteLimitedResponse,
+  authorizeAiRouteSession,
+} from "@/lib/server/ai-route-guard";
+import { ApiRouteError } from "@/lib/server/api-errors";
+import {
+  buildServiceScopeClaim,
+  getSessionScope,
+  requireScopedChild,
+  type SessionScope,
+} from "@/lib/server/session-scope";
 import { buildAdminLocalConsultationFeedItems } from "@/lib/agent/admin-local-consultation-fallback";
 
 type FeedPayload = {
@@ -37,7 +47,7 @@ function readEscalatedOnly(value: string | null) {
   return value === "true" || value === "1";
 }
 
-function buildLocalFallbackBody(url: URL, fallbackReason: string | null) {
+function buildDemoLocalFallbackBody(url: URL, fallbackReason: string | null) {
   const limit = readPositiveInteger(url.searchParams.get("limit"), 4);
   const items = buildAdminLocalConsultationFeedItems({
     limit,
@@ -54,29 +64,136 @@ function buildLocalFallbackBody(url: URL, fallbackReason: string | null) {
   };
 }
 
+function buildScopedConsultationFeedItems(scope: SessionScope, url: URL) {
+  const limit = readPositiveInteger(url.searchParams.get("limit"), 4);
+  const childIdFilter = url.searchParams.get("child_id")?.trim() || null;
+  const riskLevelFilter = url.searchParams.get("risk_level")?.trim() || null;
+  const statusFilter = url.searchParams.get("status")?.trim() || null;
+  const ownerNameFilter = url.searchParams.get("owner_name")?.trim().toLowerCase() || null;
+  const escalatedOnly = readEscalatedOnly(url.searchParams.get("escalated_only"));
+  const childById = new Map(scope.visibleChildren.map((child) => [child.id, child]));
+
+  return scope.scopedSnapshot.consultations
+    .filter((consultation) => {
+      if (!childById.has(consultation.childId)) return false;
+      if (childIdFilter && consultation.childId !== childIdFilter) return false;
+      if (riskLevelFilter && consultation.riskLevel !== riskLevelFilter) return false;
+      const decisionCard = consultation.directorDecisionCard ?? {};
+      if (statusFilter && decisionCard.status !== statusFilter) return false;
+      const ownerName = decisionCard.recommendedOwnerName?.toLowerCase() ?? "";
+      if (ownerNameFilter && !ownerName.includes(ownerNameFilter)) return false;
+      if (escalatedOnly && !consultation.shouldEscalateToAdmin) return false;
+      return true;
+    })
+    .sort((left, right) => Date.parse(right.generatedAt) - Date.parse(left.generatedAt))
+    .slice(0, limit)
+    .map((consultation) => {
+      const child = childById.get(consultation.childId);
+      const decisionCard = consultation.directorDecisionCard ?? {};
+      return {
+        consultationId: consultation.consultationId,
+        childId: consultation.childId,
+        childName: child?.name ?? consultation.childId,
+        className: child?.className ?? "",
+        generatedAt: consultation.generatedAt,
+        riskLevel: consultation.riskLevel,
+        triggerReason: consultation.triggerReason,
+        triggerReasons: consultation.triggerReasons,
+        summary: consultation.summary,
+        directorDecisionCard: decisionCard,
+        status: decisionCard.status ?? "pending",
+        ownerName: decisionCard.recommendedOwnerName ?? "",
+        ownerRole: decisionCard.recommendedOwnerRole ?? "admin",
+        dueAt: decisionCard.recommendedAt ?? consultation.generatedAt,
+        whyHighPriority:
+          decisionCard.reason ??
+          consultation.coordinatorSummary?.finalConclusion ??
+          consultation.triggerReason,
+        todayInSchoolActions: consultation.todayInSchoolActions,
+        tonightAtHomeActions: consultation.tonightAtHomeActions,
+        followUp48h: consultation.followUp48h,
+        syncTargets: [],
+        shouldEscalateToAdmin: consultation.shouldEscalateToAdmin,
+        evidenceItems: consultation.evidenceItems ?? [],
+        explainabilitySummary: {
+          agentParticipants: consultation.participants.map((participant) => participant.label),
+          keyFindings: consultation.keyFindings,
+          coordinationConclusion:
+            consultation.coordinatorSummary?.finalConclusion ?? consultation.summary,
+          evidenceHighlights:
+            consultation.evidenceItems?.map((item) => `${item.sourceLabel}: ${item.summary}`).slice(0, 4) ?? [],
+        },
+        providerTraceSummary: consultation.providerTrace,
+        memoryMetaSummary: consultation.memoryMeta,
+      };
+    });
+}
+
+function buildScopedLocalFallbackBody(scope: SessionScope, url: URL, fallbackReason: string | null) {
+  const items = buildScopedConsultationFeedItems(scope, url);
+  return {
+    items,
+    count: items.length,
+    source: "session-scope",
+    fallback: true,
+    fallbackReason: fallbackReason ?? "brain-proxy-unavailable",
+    message: "Remote feed is unavailable; showing consultations visible to the current session only.",
+  };
+}
+
 function localFallbackResponse(params: {
   url: URL;
   targetPath: string;
   fallbackReason: string | null;
   upstreamHost: string | null;
+  sessionScope: SessionScope;
 }) {
-  return NextResponse.json(buildLocalFallbackBody(params.url, params.fallbackReason), {
+  const body =
+    params.sessionScope.user.accountKind === "demo"
+      ? buildDemoLocalFallbackBody(params.url, params.fallbackReason)
+      : buildScopedLocalFallbackBody(params.sessionScope, params.url, params.fallbackReason);
+  return NextResponse.json(body, {
     status: 200,
     headers: buildLocalFallbackHeaders(params.targetPath, params.fallbackReason, params.upstreamHost),
   });
 }
 
 export async function GET(request: Request) {
-  const authError = await authorizeAiRoute(request, {
+  const authResult = await authorizeAiRouteSession(request, {
     requiredRole: "staff",
     allowUnscoped: true,
     requireScopedNormalSession: true,
   });
-  if (authError) return authError;
+  if (authResult instanceof Response) return authResult;
 
   const url = new URL(request.url);
+  const sessionScope = await getSessionScope(authResult.session);
+  if (authResult.session.user.accountKind !== "demo" && sessionScope.visibleChildren.length === 0) {
+    return aiRouteLimitedResponse({
+      reason: "scope_required",
+      error: "Current staff account does not have a visible child scope for consultation feed.",
+      requiredRole: "staff",
+    });
+  }
+  const queriedChildId = url.searchParams.get("child_id")?.trim();
+  if (queriedChildId) {
+    try {
+      requireScopedChild(sessionScope, queriedChildId);
+    } catch (error) {
+      if (error instanceof ApiRouteError && (error.code === "forbidden_scope" || error.code === "not_found")) {
+        return aiRouteLimitedResponse({
+          reason: "forbidden_child",
+          error: "Current account cannot access this child consultation feed.",
+          requiredRole: "staff",
+        });
+      }
+      throw error;
+    }
+  }
   const targetPath = `/api/v1/agents/consultations/high-risk/feed${url.search}`;
-  const brainForward = await forwardBrainRequest(request, targetPath);
+  const brainForward = await forwardBrainRequest(request, targetPath, {
+    serviceScope: buildServiceScopeClaim(sessionScope),
+  });
   if (brainForward.response) {
     if (!brainForward.response.ok) {
       return localFallbackResponse({
@@ -84,6 +201,7 @@ export async function GET(request: Request) {
         targetPath,
         fallbackReason: `brain-status-${brainForward.response.status}`,
         upstreamHost: brainForward.upstreamHost,
+        sessionScope,
       });
     }
 
@@ -111,6 +229,7 @@ export async function GET(request: Request) {
         targetPath,
         fallbackReason: "brain-feed-invalid-json",
         upstreamHost: brainForward.upstreamHost,
+        sessionScope,
       });
     }
 
@@ -119,6 +238,7 @@ export async function GET(request: Request) {
       targetPath,
       fallbackReason: "brain-feed-empty-real-empty-state",
       upstreamHost: brainForward.upstreamHost,
+      sessionScope,
     });
   }
 
@@ -127,5 +247,6 @@ export async function GET(request: Request) {
     targetPath,
     fallbackReason: brainForward.fallbackReason,
     upstreamHost: brainForward.upstreamHost,
+    sessionScope,
   });
 }

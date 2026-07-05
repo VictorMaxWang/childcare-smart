@@ -20,6 +20,15 @@ from app.schemas.memory import (
     ChildProfileMemoryUpsert,
 )
 
+MEMORY_LIST_SNAPSHOT_TYPES = [
+    "consultation-result",
+    "weekly-report-result",
+    "parent-follow-up-result",
+    "health-file-bridge-writeback",
+    "session-message",
+    "memory-item",
+]
+
 
 class RepositoryError(RuntimeError):
     def __init__(self, message: str, *, backend: str, operation: str, code: str) -> None:
@@ -138,6 +147,14 @@ def _extract_child_id(value: dict[str, Any]) -> str | None:
     )
 
 
+def _has_snapshot_filter(
+    child_id: str | None,
+    session_id: str | None,
+    snapshot_types: list[str] | None,
+) -> bool:
+    return bool(child_id or session_id or snapshot_types)
+
+
 @dataclass
 class RepositoryBundle:
     backend: str
@@ -247,6 +264,13 @@ class RepositoryBundle:
         session_id: str | None = None,
         snapshot_types: list[str] | None = None,
     ) -> list[AgentStateSnapshotRecord]:
+        if not _has_snapshot_filter(child_id, session_id, snapshot_types):
+            raise RepositoryOperationError(
+                "list_recent_snapshots requires child_id, session_id, or snapshot_types",
+                backend=self.backend,
+                operation="list_recent_snapshots",
+                code="missing_snapshot_filter",
+            )
         return await self._run(
             "list_recent_snapshots",
             lambda: self.adapter.list_recent_snapshots(
@@ -292,7 +316,7 @@ class RepositoryBundle:
         return snapshot.model_dump(mode="json")
 
     async def list_memory(self, limit: int = 20) -> list[dict[str, Any]]:
-        snapshots = await self.list_recent_snapshots(limit=limit)
+        snapshots = await self.list_recent_snapshots(limit=limit, snapshot_types=MEMORY_LIST_SNAPSHOT_TYPES)
         return [item.model_dump(mode="json") for item in snapshots]
 
 

@@ -6,7 +6,13 @@ import {
   forwardBrainRequest,
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
+import { ApiRouteError } from "@/lib/server/api-errors";
+import {
+  buildServiceScopeClaim,
+  getSessionScope,
+  requireScopedChild,
+} from "@/lib/server/session-scope";
 import {
   buildParentTrendFallbackResponse,
   isParentTrendQueryResponse,
@@ -69,12 +75,12 @@ function enrichParentTrendResponse(
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, {
+  const authResult = await authorizeAiRouteSession(request, {
     requiredRole: "parent",
     collectJsonClassNames: false,
     requireScopedNormalSession: true,
   });
-  if (authError) return authError;
+  if (authResult instanceof Response) return authResult;
 
   const body = (await request.clone().json().catch(() => null)) as unknown;
   if (!isParentTrendPayload(body)) {
@@ -84,7 +90,40 @@ export async function POST(request: Request) {
     );
   }
 
-  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/parent/trend-query");
+  const childId = (body.childId ?? "").trim();
+  const sessionScope = await getSessionScope(authResult.session);
+  try {
+    requireScopedChild(sessionScope, childId);
+  } catch (error) {
+    if (error instanceof ApiRouteError && (error.code === "forbidden_scope" || error.code === "not_found")) {
+      return aiRouteLimitedResponse({
+        reason: "forbidden_child",
+        error: "Current account cannot access this child trend scope.",
+        requiredRole: "parent",
+      });
+    }
+    throw error;
+  }
+
+  const serviceScope = buildServiceScopeClaim(sessionScope);
+  const trustedPayload: ParentTrendQueryPayload = {
+    question: body.question.trim(),
+    childId,
+    windowDays: body.windowDays,
+    traceId: body.traceId,
+    debugMemory: body.debugMemory,
+    institutionId: sessionScope.institutionId,
+    appSnapshot: sessionScope.scopedSnapshot,
+  };
+  const trustedRequest = new Request(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify(trustedPayload),
+  });
+
+  const brainForward = await forwardBrainRequest(trustedRequest, "/api/v1/agents/parent/trend-query", {
+    serviceScope,
+  });
   if (brainForward.response) {
     if (brainForward.response.status >= 400 && brainForward.response.status < 500) {
       return brainForward.response;
@@ -115,7 +154,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       buildParentTrendFallbackResponse({
-        payload: body,
+        payload: trustedPayload,
         fallbackReason,
       }),
       { status: 200, headers }
@@ -131,7 +170,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json(
     buildParentTrendFallbackResponse({
-      payload: body,
+      payload: trustedPayload,
       fallbackReason,
     }),
     { status: 200, headers }

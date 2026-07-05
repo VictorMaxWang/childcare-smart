@@ -115,6 +115,14 @@ def normalize_datetime(value: Any) -> datetime:
     return datetime.now(timezone.utc)
 
 
+def has_snapshot_filter(
+    child_id: str | None,
+    session_id: str | None,
+    snapshot_types: list[str] | None,
+) -> bool:
+    return bool(child_id or session_id or snapshot_types)
+
+
 @dataclass(slots=True)
 class MySQLSettings:
     url: str
@@ -310,6 +318,8 @@ class MySQLMemoryHubStore:
         session_id: str | None = None,
         snapshot_types: list[str] | None = None,
     ) -> list[AgentStateSnapshotRecord]:
+        if not has_snapshot_filter(child_id, session_id, snapshot_types):
+            raise ValueError("list_recent_snapshots requires child_id, session_id, or snapshot_types")
         clauses: list[str] = []
         params: list[Any] = []
         if child_id:

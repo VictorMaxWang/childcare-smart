@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server.js";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import {
   buildAdminAgentContext,
   buildAdminDailyPriorityResult,
@@ -29,6 +29,8 @@ import {
 } from "@/lib/ai/server";
 import type { WeeklyReportResponse } from "@/lib/ai/types";
 import { forwardBrainRequest } from "@/lib/server/brain-client";
+import { buildAdminAgentPayloadFromScope } from "@/lib/server/ai-scoped-payloads";
+import { buildServiceScopeClaim, getSessionScope } from "@/lib/server/session-scope";
 import { buildMemoryContextForPrompt } from "@/lib/server/memory-context";
 import { logSecurityEvent } from "@/lib/server/security-log";
 
@@ -160,8 +162,8 @@ function providerErrorResponse(error: unknown) {
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, { requiredRole: "admin" });
-  if (authError) return authError;
+  const authResult = await authorizeAiRouteSession(request, { requiredRole: "admin" });
+  if (authResult instanceof Response) return authResult;
 
   let payload: AdminAgentRequestPayload | null = null;
 
@@ -172,11 +174,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!isValidPayload(payload)) {
+  if (!payload || typeof payload !== "object" || !isValidWorkflow(payload.workflow)) {
     return NextResponse.json({ error: "Invalid admin-agent payload" }, { status: 400 });
   }
 
-  const brainForward = await forwardBrainRequest(request, "/api/v1/agents/admin/run");
+  const sessionScope = await getSessionScope(authResult.session);
+  payload = buildAdminAgentPayloadFromScope(payload, sessionScope);
+  if (!isValidPayload(payload)) {
+    return NextResponse.json({ error: "Invalid admin-agent payload" }, { status: 400 });
+  }
+  const serviceScope = buildServiceScopeClaim(sessionScope);
+  const brainRequest = new Request(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify(payload),
+  });
+
+  const brainForward = await forwardBrainRequest(brainRequest, "/api/v1/agents/admin/run", {
+    serviceScope,
+  });
   if (brainForward.response) {
     if (payload.workflow !== "weekly-ops-report" || !brainForward.response.ok) {
       return brainForward.response;
@@ -252,6 +268,7 @@ export async function POST(request: Request) {
         workflowType: "admin-weekly-ops-report",
         query: payload.question?.trim() || "weekly ops report risk child continuity",
         request,
+        serviceScope,
       })
     )
   );

@@ -125,6 +125,10 @@ class Settings(BaseSettings):
     brain_provider: str = "mock"
     brain_timeout_ms: int = 20_000
     request_timeout_seconds: float = 20.0
+    brain_internal_shared_secret: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("BRAIN_INTERNAL_SHARED_SECRET", "SMARTCHILDCARE_BRAIN_INTERNAL_SECRET"),
+    )
 
     vivo_app_id: str | None = None
     vivo_app_key: SecretStr | None = None
