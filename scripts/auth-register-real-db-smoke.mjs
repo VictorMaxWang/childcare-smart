@@ -5,10 +5,65 @@ import net from "node:net";
 import { setTimeout as sleep } from "node:timers/promises";
 import { createPool } from "mysql2/promise";
 
-const REQUIRED_ENV = ["DATABASE_URL", "AUTH_SESSION_SECRET"];
+loadLocalEnvFile(".env.local");
+
+const REQUIRED_ENV = [
+  "DATABASE_URL",
+  "DATABASE_SSL",
+  "AUTH_SESSION_SECRET",
+  "AUTH_REGISTER_ENABLED",
+  "BRAIN_API_BASE_URL",
+  "BRAIN_INTERNAL_SHARED_SECRET",
+];
 const COOKIE_NAME = "ccs_session";
 const KEEP_DATA = truthy(process.env.AUTH_SMOKE_KEEP_DATA);
 const EXPLICIT_BASE_URL = process.env.AUTH_SMOKE_BASE_URL?.trim().replace(/\/$/, "");
+const REQUIRED_DATABASE_OBJECTS = [
+  {
+    sql: "supabase/sql/app_users.sql",
+    table: "app_users",
+    columns: [
+      "id",
+      "username_normalized",
+      "display_name",
+      "password_hash",
+      "role",
+      "avatar",
+      "institution_id",
+      "class_name",
+      "child_ids",
+      "is_demo",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  {
+    sql: "supabase/sql/app_state_snapshots.sql",
+    table: "app_state_snapshots",
+    columns: ["institution_id", "snapshot", "updated_by", "updated_at"],
+  },
+  {
+    sql: "supabase/sql/20260704_add_phone_normalized_to_app_users.sql",
+    table: "app_users",
+    columns: ["phone_normalized", "phone_verified", "created_via"],
+    indexes: [{ table: "app_users", column: "phone_normalized", unique: true }],
+  },
+  {
+    sql: "supabase/sql/20260704_create_consent_records.sql",
+    table: "consent_records",
+    columns: [
+      "id",
+      "institution_id",
+      "user_id",
+      "child_id",
+      "consent_type",
+      "policy_version",
+      "agreed_at",
+      "ip",
+      "user_agent",
+    ],
+  },
+];
 const ROLE_CASES = [
   { inputRole: "admin", expectedRole: "机构管理员", path: "/admin", label: "admin" },
   { inputRole: "teacher", expectedRole: "教师", path: "/teacher", label: "teacher" },
@@ -18,8 +73,46 @@ const ROLE_CASES = [
 let pool;
 let serverProcess;
 let serverLogs = "";
-const createdUsers = [];
-const createdInstitutions = [];
+const createdAccounts = [];
+const createdUserIds = new Set();
+const createdInstitutionIds = new Set();
+const createdPhoneNumbers = new Set();
+
+function loadLocalEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return;
+
+  const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+
+    const normalizedLine = line.startsWith("export ") ? line.slice("export ".length).trim() : line;
+    const match = normalizedLine.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!match) continue;
+
+    const [, key, rawValue] = match;
+    if (process.env[key] !== undefined) continue;
+
+    process.env[key] = parseEnvValue(rawValue);
+  }
+}
+
+function parseEnvValue(rawValue) {
+  let value = rawValue.trim();
+  if (!value) return "";
+
+  const quote = value[0];
+  if (quote === `"` || quote === "'") {
+    const closingQuoteIndex = value.indexOf(quote, 1);
+    if (closingQuoteIndex > 0) {
+      value = value.slice(1, closingQuoteIndex);
+      return quote === `"` ? value.replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\t/g, "\t") : value;
+    }
+  }
+
+  const commentIndex = value.search(/\s#/);
+  return commentIndex >= 0 ? value.slice(0, commentIndex).trim() : value;
+}
 
 function truthy(value) {
   return ["1", "true", "yes", "y", "on"].includes(String(value ?? "").trim().toLowerCase());
@@ -86,6 +179,120 @@ async function db() {
   return pool;
 }
 
+function validateRequiredEnv() {
+  const missing = REQUIRED_ENV.filter((name) => !process.env[name]?.trim());
+  const errors = [];
+
+  if (missing.length > 0) {
+    errors.push(`Missing required environment variable(s): ${missing.join(", ")}.`);
+  }
+
+  const registerEnabled = process.env.AUTH_REGISTER_ENABLED?.trim().toLowerCase();
+  if (!missing.includes("AUTH_REGISTER_ENABLED") && registerEnabled !== "true") {
+    errors.push("AUTH_REGISTER_ENABLED must be set to true for real DB auth smoke.");
+  }
+
+  const databaseSsl = process.env.DATABASE_SSL?.trim().toLowerCase();
+  const allowedSslValues = new Set(["1", "0", "true", "false", "yes", "no", "y", "n", "on", "off"]);
+  if (!missing.includes("DATABASE_SSL") && databaseSsl && !allowedSslValues.has(databaseSsl)) {
+    errors.push("DATABASE_SSL must be one of true/false, 1/0, yes/no, y/n, or on/off.");
+  }
+
+  if (errors.length > 0) {
+    fail(`${errors.join("\n")} Real DB auth smoke was not run.`);
+  }
+}
+
+async function loadTableColumns(connection, databaseName, tableName) {
+  const [tableRows] = await connection.execute(
+    `
+      select table_name as tableName
+      from information_schema.tables
+      where table_schema = ?
+        and table_name = ?
+      limit 1
+    `,
+    [databaseName, tableName]
+  );
+  if (!Array.isArray(tableRows) || tableRows.length === 0) return null;
+
+  const [columnRows] = await connection.execute(
+    `
+      select column_name as columnName
+      from information_schema.columns
+      where table_schema = ?
+        and table_name = ?
+    `,
+    [databaseName, tableName]
+  );
+
+  return new Set((Array.isArray(columnRows) ? columnRows : []).map((row) => row.columnName));
+}
+
+async function hasUniqueIndexOnColumn(connection, databaseName, tableName, columnName) {
+  const [rows] = await connection.execute(
+    `
+      select index_name as indexName, non_unique as nonUnique
+      from information_schema.statistics
+      where table_schema = ?
+        and table_name = ?
+        and column_name = ?
+    `,
+    [databaseName, tableName, columnName]
+  );
+
+  return (Array.isArray(rows) ? rows : []).some((row) => Number(row.nonUnique) === 0);
+}
+
+function formatSchemaFailure(issues) {
+  const sqlFiles = [...new Set(issues.map((issue) => issue.sql))];
+  return [
+    "Database schema preflight failed before any smoke writes.",
+    "Apply the following SQL manually, then rerun npm run auth:smoke:",
+    ...sqlFiles.map((sql) => `- ${sql}`),
+    "Missing details:",
+    ...issues.map((issue) => `- ${issue.detail}`),
+  ].join("\n");
+}
+
+async function requireDatabaseSchema() {
+  const connection = await db();
+  const databaseName = parseDatabaseUrl().database;
+  const issues = [];
+  const columnCache = new Map();
+
+  for (const object of REQUIRED_DATABASE_OBJECTS) {
+    if (!columnCache.has(object.table)) {
+      columnCache.set(object.table, await loadTableColumns(connection, databaseName, object.table));
+    }
+
+    const columns = columnCache.get(object.table);
+    if (!columns) {
+      issues.push({ sql: object.sql, detail: `missing table ${object.table}` });
+      continue;
+    }
+
+    for (const column of object.columns) {
+      if (!columns.has(column)) {
+        issues.push({ sql: object.sql, detail: `missing column ${object.table}.${column}` });
+      }
+    }
+
+    for (const index of object.indexes ?? []) {
+      const hasIndex = await hasUniqueIndexOnColumn(connection, databaseName, index.table, index.column);
+      if (index.unique && !hasIndex) {
+        issues.push({ sql: object.sql, detail: `missing unique index on ${index.table}.${index.column}` });
+      }
+    }
+  }
+
+  if (issues.length > 0) {
+    fail(formatSchemaFailure(issues));
+  }
+
+  log("Database schema preflight passed for app_users, app_state_snapshots, and consent_records");
+}
+
 function decodeJson(value) {
   if (value == null) return null;
   if (Buffer.isBuffer(value)) return decodeJson(value.toString("utf8"));
@@ -131,7 +338,6 @@ async function startServerIfNeeded() {
     cwd: process.cwd(),
     env: {
       ...process.env,
-      AUTH_REGISTER_ENABLED: process.env.AUTH_REGISTER_ENABLED || "true",
       NEXT_TELEMETRY_DISABLED: "1",
       PORT: port,
     },
@@ -198,7 +404,23 @@ async function expectRegisterFailure(baseUrl, label, data, expectedStatus) {
   log(`Passed negative case: ${label}`);
 }
 
-async function verifyDatabaseRecord(user, phoneNormalized, expectedRole) {
+function recordCreatedAccount(label, row, phoneNormalized) {
+  createdUserIds.add(row.id);
+  createdInstitutionIds.add(row.institution_id);
+  createdPhoneNumbers.add(phoneNormalized);
+
+  if (!createdAccounts.some((account) => account.userId === row.id)) {
+    createdAccounts.push({
+      label,
+      userId: row.id,
+      phoneNormalized,
+      role: row.role,
+      institutionId: row.institution_id,
+    });
+  }
+}
+
+async function verifyDatabaseRecord(user, phoneNormalized, expectedRole, label) {
   const connection = await db();
   let rows;
   try {
@@ -220,6 +442,7 @@ async function verifyDatabaseRecord(user, phoneNormalized, expectedRole) {
 
   const row = rows[0];
   assert(row, "Registered user was not found in app_users");
+  recordCreatedAccount(label, row, phoneNormalized);
   assert(row.username_normalized === phoneNormalized, "username_normalized should match normalized phone");
   assert(row.phone_normalized === phoneNormalized, "phone_normalized should match normalized phone");
   assert(row.role === expectedRole, "role should match registered role");
@@ -228,9 +451,6 @@ async function verifyDatabaseRecord(user, phoneNormalized, expectedRole) {
 
   const childIds = decodeJson(row.child_ids) ?? [];
   assert(Array.isArray(childIds), "child_ids should be a JSON array");
-
-  createdUsers.push(row.id);
-  createdInstitutions.push(row.institution_id);
 
   const [snapshotRows] = await connection.execute(
     `
@@ -268,12 +488,14 @@ async function registerRole(baseUrl, roleCase, index) {
   assert(response.status === 200, `${roleCase.label}: register expected 200, got ${response.status}`);
   assert(body?.ok === true, `${roleCase.label}: register expected ok=true`);
   assert(body.user?.id, `${roleCase.label}: register response missing user id`);
+  createdUserIds.add(body.user.id);
+  createdPhoneNumbers.add(phoneNormalized);
   assert(body.user?.role === roleCase.expectedRole, `${roleCase.label}: unexpected role`);
   assert(body.redirectPath === roleCase.path, `${roleCase.label}: unexpected redirectPath`);
   assert(!("password_hash" in body.user) && !("passwordHash" in body.user), `${roleCase.label}: password hash leaked`);
 
   const registrationCookie = sessionCookie(response);
-  const { row, childIds } = await verifyDatabaseRecord(body.user, phoneNormalized, roleCase.expectedRole);
+  const { row, childIds } = await verifyDatabaseRecord(body.user, phoneNormalized, roleCase.expectedRole, roleCase.label);
 
   if (roleCase.label === "parent") {
     assert(Array.isArray(body.user.childIds) && body.user.childIds.length === 0, "parent registration should return empty childIds");
@@ -327,35 +549,108 @@ async function expectParentOnboarding(baseUrl, cookie) {
   log("Parent empty-child account can enter onboarding route");
 }
 
+function uniqueValues(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function placeholders(values) {
+  return values.map(() => "?").join(", ");
+}
+
+function buildWhereInConditions(conditions) {
+  const clauses = [];
+  const values = [];
+
+  for (const condition of conditions) {
+    const uniqueConditionValues = uniqueValues(condition.values);
+    if (uniqueConditionValues.length === 0) continue;
+    clauses.push(`${condition.column} in (${placeholders(uniqueConditionValues)})`);
+    values.push(...uniqueConditionValues);
+  }
+
+  return { clause: clauses.join(" or "), values };
+}
+
+async function deleteWhereIn(connection, tableName, conditions) {
+  const { clause, values } = buildWhereInConditions(conditions);
+  if (!clause) return;
+  await connection.execute(`delete from ${tableName} where ${clause}`, values);
+}
+
+async function countWhereIn(connection, tableName, conditions) {
+  const { clause, values } = buildWhereInConditions(conditions);
+  if (!clause) return 0;
+  const [rows] = await connection.execute(`select count(*) as count from ${tableName} where ${clause}`, values);
+  const firstRow = Array.isArray(rows) ? rows[0] : null;
+  return Number(firstRow?.count ?? 0);
+}
+
+function formatCreatedAccounts() {
+  if (createdAccounts.length === 0) return "none";
+  return createdAccounts
+    .map(
+      (account) =>
+        `${account.label}: ${account.phoneNormalized} role=${account.role} userId=${account.userId} institutionId=${account.institutionId}`
+    )
+    .join("; ");
+}
+
 async function cleanup() {
-  if (KEEP_DATA || (!createdUsers.length && !createdInstitutions.length)) return;
+  const userIds = uniqueValues([...createdUserIds]);
+  const institutionIds = uniqueValues([...createdInstitutionIds]);
+  const phoneNumbers = uniqueValues([...createdPhoneNumbers]);
+
+  if (!userIds.length && !institutionIds.length && !phoneNumbers.length) {
+    log("No smoke data was created; cleanup skipped");
+    return;
+  }
+
+  if (KEEP_DATA) {
+    log(`AUTH_SMOKE_KEEP_DATA is enabled; created smoke data was left in the database: ${formatCreatedAccounts()}`);
+    return;
+  }
+
   const connection = await db();
-  const uniqueInstitutions = [...new Set(createdInstitutions)];
-  const uniqueUsers = [...new Set(createdUsers)];
 
-  if (uniqueInstitutions.length) {
-    await connection.execute(
-      `delete from app_state_snapshots where institution_id in (${uniqueInstitutions.map(() => "?").join(", ")})`,
-      uniqueInstitutions
-    );
-  }
+  await deleteWhereIn(connection, "consent_records", [
+    { column: "user_id", values: userIds },
+    { column: "institution_id", values: institutionIds },
+  ]);
+  await deleteWhereIn(connection, "app_state_snapshots", [
+    { column: "institution_id", values: institutionIds },
+    { column: "updated_by", values: userIds },
+  ]);
+  await deleteWhereIn(connection, "app_users", [
+    { column: "id", values: userIds },
+    { column: "phone_normalized", values: phoneNumbers },
+  ]);
 
-  if (uniqueUsers.length) {
-    await connection.execute(
-      `delete from app_users where id in (${uniqueUsers.map(() => "?").join(", ")})`,
-      uniqueUsers
-    );
-  }
+  const remainingConsentRecords = await countWhereIn(connection, "consent_records", [
+    { column: "user_id", values: userIds },
+    { column: "institution_id", values: institutionIds },
+  ]);
+  const remainingSnapshots = await countWhereIn(connection, "app_state_snapshots", [
+    { column: "institution_id", values: institutionIds },
+    { column: "updated_by", values: userIds },
+  ]);
+  const remainingUsers = await countWhereIn(connection, "app_users", [
+    { column: "id", values: userIds },
+    { column: "phone_normalized", values: phoneNumbers },
+  ]);
 
-  log(`Cleaned up ${uniqueUsers.length} smoke user(s) and ${uniqueInstitutions.length} snapshot(s)`);
+  assert(remainingConsentRecords === 0, `cleanup left ${remainingConsentRecords} consent record(s)`);
+  assert(remainingSnapshots === 0, `cleanup left ${remainingSnapshots} snapshot(s)`);
+  assert(remainingUsers === 0, `cleanup left ${remainingUsers} app user(s)`);
+
+  log(`Created smoke accounts: ${formatCreatedAccounts()}`);
+  log(
+    `Cleaned up ${userIds.length} smoke user(s), ${institutionIds.length} snapshot scope(s), and verified 0 consent record(s) remain`
+  );
 }
 
 async function main() {
-  const missing = REQUIRED_ENV.filter((name) => !process.env[name]?.trim());
-  assert(
-    missing.length === 0,
-    `Missing required environment variable(s): ${missing.join(", ")}. Real DB auth smoke was not run.`
-  );
+  validateRequiredEnv();
+  await requireDatabaseSchema();
 
   const baseUrl = await startServerIfNeeded();
   await expectRegisterFailure(baseUrl, "invalid phone", {
