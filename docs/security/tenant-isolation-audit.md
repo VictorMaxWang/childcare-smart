@@ -185,3 +185,9 @@
 - teacher 班级隔离仍以 `institutionId + className` 为边界。本轮在代码中保留 `TODO(T8B-classId)`，后续需要迁移到稳定 `classId` 并保留历史 className 映射。
 - memory 物理表仍缺少 `institution_id` 字段。本轮通过 Next signed scope claim 和 FastAPI child scope 校验隔离读写，后续应补数据库字段与迁移脚本，形成物理租户边界。
 - 部分纯 provider/多模态 route 当前不读业务数据；若未来把结果写回真实 child record，必须先接入 `getSessionScope`/`requireScopedChild`。
+
+## T9 发布前验证补充（2026-07-05）
+
+- `npm run auth:smoke` 覆盖真实注册后的 `app_users.is_demo=false`、`institution_id`、`phone_normalized` 和 `app_state_snapshots` 创建检查。
+- smoke 会验证 admin/teacher/parent 注册后均可使用现有 `ccs_session` 访问对应受保护入口；parent 空 child 状态必须能看到建档入口或进入 onboarding。
+- 该 smoke 是发布前端到端检查，不替代上方 T8B 剩余 TODO。teacher 稳定 `classId` 和 memory 物理 `institution_id` 仍需后续迁移与测试。

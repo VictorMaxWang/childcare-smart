@@ -131,3 +131,11 @@ T6 已落地手机号登录兼容层，请求体支持：
 - `POST /api/parent/children` 仅允许普通家长账号调用，拒绝 demo、非家长、跨机构和 `consentAccepted=false`。
 - 服务端在同一事务中创建最小必要 child、更新 parent `child_ids`，并写入 `guardian_authorization`、`terms_of_service`、`child_privacy_policy` 三条 `consent_records`。
 - 第一版 child 仅收姓名/昵称、出生日期或月龄、可选性别；不收身份证、详细住址、人脸照片或医疗记录。
+
+## T9 更新：真实注册 smoke 与发布前检查
+
+- 新增 `npm run auth:smoke`，执行 `scripts/auth-register-real-db-smoke.mjs`，用于真实数据库注册链路发布前烟测。
+- smoke 覆盖手机号格式错误、`password` / `confirmPassword` 不一致、密码过短、admin/teacher/parent 三类真实账号注册、`ccs_session` 写入、手机号登录、受保护角色首页访问，以及 parent 空 child 时的建档入口或 onboarding 访问。
+- smoke 会查询真实 MySQL，确认 `app_users.is_demo=false`、`phone_normalized`、`institution_id` 和对应 `app_state_snapshots` 存在；脚本只清理自己创建的测试账号和 snapshot。
+- smoke 依赖 `DATABASE_URL`、`DATABASE_SSL` 和 `AUTH_SESSION_SECRET`。缺少真实数据库或 session secret 时不得记为通过，应在发布报告中明确“因缺少 DATABASE_URL/AUTH_SESSION_SECRET 未执行真实 DB smoke”。
+- 发布前检查固定为 `npm run lint`、`npm run typecheck`、`npm run build`，具备真实 DB 环境时再运行 `npm run auth:smoke`。
