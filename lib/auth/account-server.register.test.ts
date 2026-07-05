@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   insertAppUserWithPhoneFallback,
   registerNormalAccountWithDependencies,
+  resolveDatabaseRuntimeErrorCode,
   type RegisterNormalAccountDependencies,
 } from "@/lib/auth/account-server";
 import type { AccountRole } from "@/lib/auth/accounts";
@@ -395,4 +396,17 @@ test("registerNormalAccount propagates safe database config codes from duplicate
   }
   assert.deepEqual(insertedRows, []);
   assert.deepEqual(snapshots, []);
+});
+
+test("resolveDatabaseRuntimeErrorCode maps database failures to safe public codes", () => {
+  assert.equal(
+    resolveDatabaseRuntimeErrorCode(Object.assign(new Error("access denied"), { code: "ER_ACCESS_DENIED_ERROR", errno: 1045 })),
+    "DATABASE_ACCESS_DENIED"
+  );
+  assert.equal(
+    resolveDatabaseRuntimeErrorCode(Object.assign(new Error("unknown database"), { code: "ER_BAD_DB_ERROR", errno: 1049 })),
+    "DATABASE_UNKNOWN_DATABASE"
+  );
+  assert.equal(resolveDatabaseRuntimeErrorCode(Object.assign(new Error("timeout"), { code: "ETIMEDOUT" })), "DATABASE_CONNECT_TIMEOUT");
+  assert.equal(resolveDatabaseRuntimeErrorCode(Object.assign(new Error("ssl handshake failed"), { code: "HANDSHAKE_SSL_ERROR" })), "DATABASE_SSL_FAILED");
 });
