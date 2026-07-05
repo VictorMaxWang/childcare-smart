@@ -4,6 +4,18 @@
 
 本清单承接 T0 文档规则，后续实现按 T1-T9 推进。每个任务都必须保护现有 `teacher/admin/parent` 主链、现有 HMAC `ccs_session` 和 demo 账号隔离。
 
+## 完成状态（2026-07-05）
+
+- T1 完成：当前认证、session、DB 表、页面入口和权限隔离事实已记录。
+- T4 完成：手机号标准化、`phone_normalized` 迁移脚本和手机号优先查询已落地。
+- T3 完成：注册 API 支持手机号、服务端 `confirmPassword` 校验和旧 username 兼容。
+- T5 完成：注册后写入真实 `app_users`、创建真实 `institution_id` 和初始 `app_state_snapshots`。
+- T2 完成：`/register` 手机号注册页和 `/login` 注册入口已落地。
+- T6 完成：手机号 + 密码登录已落地，并兼容旧 username 登录。
+- T7 完成：parent 儿童建档移至登录后 onboarding，创建前要求监护人确认与同意。
+- T8A/T8B 完成：租户隔离审计与本轮服务端 scope 修复已记录在 `docs/security/tenant-isolation-audit.md`。
+- T9 完成：新增真实 DB 注册 smoke、README/env/docs 收口和发布前检查清单。
+
 ## T1 现有认证系统审计
 
 **目标**
