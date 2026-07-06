@@ -26,6 +26,7 @@ import { isPhoneLikeInput } from "@/lib/auth/phone";
 import { buildInterventionCardFromConsultation, type InterventionCard } from "@/lib/agent/intervention-card";
 import { getLocalToday, isDateWithinLastDays, normalizeLocalDate, shiftLocalDate, startOfLocalDay } from "@/lib/date";
 import { emptyInstitutionSnapshot } from "@/lib/persistence/bootstrap";
+import { writeJsonStorageSafely, type StorageWriteFailure } from "@/lib/persistence/browser-storage";
 import { materializeTasksFromLegacy, pickActiveTask } from "@/lib/tasks/task-model";
 import type { CanonicalTask, TaskOwnerRole } from "@/lib/tasks/types";
 import { buildDemoConsultationResults } from "@/lib/demo/demo-consultations";
@@ -559,8 +560,26 @@ function readStorage<T>(key: string, fallback: T): T {
 }
 
 function writeStorage<T>(key: string, value: T) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(key, JSON.stringify(value));
+  if (typeof window === "undefined") return false;
+  return writeJsonStorageSafely(window.localStorage, key, value, {
+    onFailure: reportStorageWriteFailure,
+  });
+}
+
+function reportStorageWriteFailure(failure: StorageWriteFailure) {
+  if (typeof console === "undefined") return;
+
+  console.warn("[store] Local cache write skipped", {
+    key: redactStorageKey(failure.key),
+    phase: failure.phase,
+    reason: failure.quotaExceeded ? "quota_exceeded" : "write_failed",
+  });
+}
+
+function redactStorageKey(key: string) {
+  const parts = key.split(".");
+  if (parts.length < 3 || parts[0] !== "childcare") return "childcare.<scope>";
+  return `childcare.<scope>.${parts.slice(2).join(".")}`;
 }
 
 function readScopedSnapshot(namespace: string, fallbackSnapshot: AppStateSnapshot): AppStateSnapshot {

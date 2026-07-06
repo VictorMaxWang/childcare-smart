@@ -26,6 +26,7 @@ import type { AccountRole } from "@/lib/auth/accounts";
 import {
   buildPrimaryNavGroups,
   isPrimaryNavItemActive,
+  resolvePrimaryNavChildId,
   type PrimaryNavIconKey,
   type PrimaryNavItem,
 } from "@/lib/navigation/primary-nav";
@@ -65,13 +66,15 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentLocation = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
-  const { currentUser } = useApp();
+  const { currentUser, visibleChildren } = useApp();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const wasOpenRef = useRef(false);
-  const navGroups = buildPrimaryNavGroups(currentUser.role, { childId: currentUser.childIds?.[0] });
+  const navGroups = buildPrimaryNavGroups(currentUser.role, {
+    childId: resolvePrimaryNavChildId(currentUser.childIds, visibleChildren),
+  });
 
   const close = () => setOpen(false);
 

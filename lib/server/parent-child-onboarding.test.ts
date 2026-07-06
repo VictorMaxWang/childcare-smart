@@ -185,6 +185,25 @@ test("parent child onboarding creates child, child_ids, and three consent record
   assert.equal(fixture.state().consents[0].userAgent, "unit-test-agent");
 });
 
+test("parent child onboarding creates a registration snapshot when the parent snapshot is missing", async () => {
+  const fixture = createFixture({ snapshot: null });
+
+  const child = await createParentChildWithConsent(
+    parentSession(),
+    { name: "Snapshot Child", birthDate: "2022-05-10", consentAccepted: true },
+    {},
+    fixture.dependencies
+  );
+  const snapshot = fixture.state().snapshot as ApiExtendedSnapshot;
+
+  assert.equal(child.id, "c-1");
+  assert.equal(snapshot.children[0].id, "c-1");
+  assert.equal(snapshot.meta?.workspace?.institutionId, "inst-family");
+  assert.equal(snapshot.meta?.workspace?.ownerUserId, "u-parent");
+  assert.deepEqual(fixture.state().userRow.child_ids, ["c-1"]);
+  assert.equal(fixture.state().consents.length, 3);
+});
+
 test("parent child onboarding rejects demo, non-parent, and cross-institution attempts", async () => {
   const demoFixture = createFixture();
   const teacherFixture = createFixture();
