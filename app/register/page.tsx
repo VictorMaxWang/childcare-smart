@@ -5,6 +5,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
+  ArrowRight,
   Baby,
   Building2,
   CheckCircle2,
@@ -346,8 +347,15 @@ export default function RegisterPage() {
             ) : null}
 
             <div className={styles.actions}>
-              <Button type="submit" variant="primary" loading={loading} className={styles.submitButton}>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={loading}
+                className={styles.submitButton}
+                data-testid="register-submit"
+              >
                 注册并进入系统
+                <ArrowRight aria-hidden="true" size={18} />
               </Button>
               <Link href="/login" className={styles.loginLink}>
                 已有账号，去登录

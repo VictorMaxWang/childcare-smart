@@ -35,7 +35,7 @@ export default function RootLayout({
                 toast: "rounded-[var(--replica-radius-control)] border border-[var(--replica-border)] bg-white text-(--text-primary) shadow-[var(--replica-shadow-control)]",
                 title: "text-sm font-semibold text-(--text-primary)",
                 description: "text-sm leading-5 text-(--text-secondary)",
-                actionButton: "rounded-[var(--replica-radius-control)] bg-[var(--replica-gradient-primary)] px-3 py-2 text-sm font-semibold text-white",
+                actionButton: "rounded-[var(--replica-radius-control)] bg-indigo-600 [background-image:var(--replica-gradient-primary)] px-3 py-2 text-sm font-semibold text-white",
                 cancelButton: "rounded-[var(--replica-radius-control)] border border-[var(--replica-border)] bg-white px-3 py-2 text-sm font-semibold text-(--text-secondary)",
                 closeButton: "border border-[var(--replica-border)] bg-white text-(--text-tertiary)",
               },
