@@ -34,6 +34,16 @@ export interface PrimaryNavOptions {
   childId?: string;
 }
 
+export function resolvePrimaryNavChildId(
+  childIds?: readonly (string | null | undefined)[] | null,
+  visibleChildren?: readonly { id?: string | null }[] | null
+): string | undefined {
+  const sessionChildId = childIds?.find((childId): childId is string => typeof childId === "string" && childId.length > 0);
+  if (sessionChildId) return sessionChildId;
+
+  return visibleChildren?.find((child) => typeof child.id === "string" && child.id.length > 0)?.id ?? undefined;
+}
+
 const OVERVIEW_ITEM: PrimaryNavItem = { href: "/", label: "数据总览", icon: "overview" };
 const CHILDREN_ITEM: PrimaryNavItem = { href: "/children", label: "幼儿档案", icon: "children" };
 const HEALTH_ITEM: PrimaryNavItem = { href: "/health", label: "晨检与健康", icon: "health" };

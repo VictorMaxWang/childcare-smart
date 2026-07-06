@@ -44,6 +44,7 @@ import {
   buildPrimaryNavGroups,
   buildPrimaryNavItems,
   isPrimaryNavItemActive,
+  resolvePrimaryNavChildId,
   type PrimaryNavGroup,
   type PrimaryNavIconKey,
   type PrimaryNavItem,
@@ -143,7 +144,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { currentUser, logout, authLoading, isAuthenticated } = useApp();
+  const { currentUser, visibleChildren, logout, authLoading, isAuthenticated } = useApp();
   const accessDeniedNoticeKeyRef = useRef<string | null>(null);
   const currentLocation = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
 
@@ -223,7 +224,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  const childId = currentUser.childIds?.[0];
+  const childId = resolvePrimaryNavChildId(currentUser.childIds, visibleChildren);
   const navOptions = { childId };
   const navItems = buildPrimaryNavItems(currentUser.role, navOptions);
   const navGroups = buildPrimaryNavGroups(currentUser.role, navOptions);

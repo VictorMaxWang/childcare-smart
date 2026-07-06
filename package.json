@@ -25,6 +25,7 @@
     "ai:smoke:storybook": "node ./scripts/parent-storybook-smoke.mjs",
     "auth:smoke": "node scripts/auth-register-real-db-smoke.mjs",
     "db:check": "node scripts/check-real-db-ready.mjs",
+    "sample-accounts:align": "node scripts/align-sample-accounts.mjs",
     "product:smoke": "playwright test tests/product-completion/api-scope.spec.ts tests/product-completion/full-user-journey.spec.ts --config=playwright.product.config.ts",
     "product:api": "playwright test tests/product-completion/api-scope.spec.ts tests/product-completion/crud-archive.spec.ts tests/product-completion/weekly-report.spec.ts tests/product-completion/feedback-attachments.spec.ts --config=playwright.product.config.ts",
     "product:ai": "node ./scripts/product-ai-smoke.mjs && playwright test tests/product-completion/vivo-provider.spec.ts tests/product-completion/ocr-asr-provider.spec.ts tests/product-completion/ai-routes-auth.spec.ts --config=playwright.product.config.ts",

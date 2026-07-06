@@ -46,6 +46,7 @@ import type {
 } from "@/lib/voice-assistant/types";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { resolvePrimaryNavChildId } from "@/lib/navigation/primary-nav";
 
 type VoiceOrbPhase = "idle" | "planning" | "awaiting-confirmation" | "executing" | "done" | "error";
 
@@ -178,7 +179,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
 
   const queryObject = useMemo(() => buildQueryObject(searchParams), [searchParams]);
   const currentPath = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
-  const activeChildId = queryObject.childId ?? queryObject.child ?? currentUser.childIds?.[0] ?? visibleChildren[0]?.id;
+  const activeChildId = queryObject.childId ?? queryObject.child ?? resolvePrimaryNavChildId(currentUser.childIds, visibleChildren);
   const resultAction = useMemo(() => resultActionFrom(result), [result]);
   const commandObjects = useMemo(
     () =>

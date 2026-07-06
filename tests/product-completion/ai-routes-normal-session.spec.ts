@@ -114,6 +114,34 @@ test.describe("normal session AI access", () => {
         401,
         "login_required"
       );
+
+      const createChildResponse = await parentApi.post("/api/parent/children", {
+        data: {
+          name: `Normal child ${Date.now()}`,
+          birthDate: "2022-03-01",
+          gender: "女",
+          consentAccepted: true,
+        },
+      });
+      expect(createChildResponse.status()).toBe(201);
+      const createChildBody = (await createChildResponse.json()) as {
+        ok: boolean;
+        data?: { id?: string; parentUserId?: string };
+      };
+      expect(createChildBody.ok).toBe(true);
+      expect(createChildBody.data?.id).toBeTruthy();
+      expect(createChildBody.data?.parentUserId).toBe(parent.user.id);
+
+      const stateAfterOnboardingResponse = await parentApi.get("/api/state");
+      expect(stateAfterOnboardingResponse.status()).toBe(200);
+      const stateAfterOnboardingBody = await stateAfterOnboardingResponse.json();
+      const scopedSnapshot = stateAfterOnboardingBody.snapshot as { children?: Array<{ id?: string }> };
+      expect((scopedSnapshot.children ?? []).map((child) => child.id)).toContain(createChildBody.data?.id);
+
+      const trendAfterOnboardingResponse = await parentApi.post("/api/ai/parent-trend-query", {
+        data: { childId: createChildBody.data?.id, question: "trend check" },
+      });
+      expect(trendAfterOnboardingResponse.status()).toBe(200);
     } finally {
       await parentApi.dispose();
       await anonymousApi.dispose();
