@@ -7,6 +7,7 @@ import {
   DatabaseConfigError,
   decodeDatabaseJson,
   encodeDatabaseJson,
+  getDatabasePool,
   withDbTransaction,
   type DatabaseConnection,
 } from "@/lib/db/server";
@@ -22,6 +23,25 @@ export const CHILD_ONBOARDING_CONSENT_TYPES = [
   "terms_of_service",
   "child_privacy_policy",
 ] as const;
+
+export const ENSURE_CONSENT_RECORDS_TABLE_SQL = `
+  create table if not exists consent_records (
+    id varchar(191) primary key,
+    institution_id varchar(191) not null,
+    user_id varchar(191) not null,
+    child_id varchar(191) not null,
+    consent_type varchar(64) not null,
+    policy_version varchar(64) not null,
+    agreed_at timestamp not null,
+    ip varchar(64) null,
+    user_agent varchar(512) null,
+    created_at timestamp not null default current_timestamp,
+    key idx_consent_records_institution_id (institution_id),
+    key idx_consent_records_user_id (user_id),
+    key idx_consent_records_child_id (child_id),
+    key idx_consent_records_user_child (user_id, child_id)
+  )
+`;
 
 export interface ParentChildOnboardingRequestMeta {
   ip?: string | null;
@@ -49,6 +69,7 @@ type ParentAppUserRow = {
 };
 
 export type ParentChildOnboardingDependencies = {
+  ensureConsentRecordsStorage: () => Promise<void>;
   runInTransaction: typeof withDbTransaction;
   loadParentUserForUpdate: (
     connection: DatabaseConnection,
@@ -243,7 +264,24 @@ async function defaultInsertConsentRecord(
   );
 }
 
+let consentRecordsStorageReady: Promise<void> | null = null;
+
+async function defaultEnsureConsentRecordsStorage() {
+  if (!consentRecordsStorageReady) {
+    consentRecordsStorageReady = getDatabasePool()
+      .execute(ENSURE_CONSENT_RECORDS_TABLE_SQL)
+      .then(() => undefined)
+      .catch((error) => {
+        consentRecordsStorageReady = null;
+        throw error;
+      });
+  }
+
+  await consentRecordsStorageReady;
+}
+
 export const defaultParentChildOnboardingDependencies: ParentChildOnboardingDependencies = {
+  ensureConsentRecordsStorage: defaultEnsureConsentRecordsStorage,
   runInTransaction: withDbTransaction,
   loadParentUserForUpdate: defaultLoadParentUserForUpdate,
   loadSnapshotForUpdate: defaultLoadSnapshotForUpdate,
@@ -274,6 +312,8 @@ export async function createParentChildWithConsent(
   }
 
   try {
+    await dependencies.ensureConsentRecordsStorage();
+
     return await dependencies.runInTransaction(async (connection) => {
       const parentRow = await dependencies.loadParentUserForUpdate(connection, session.id);
       if (!parentRow) {

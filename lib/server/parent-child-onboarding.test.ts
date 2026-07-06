@@ -55,6 +55,7 @@ function createFixture(options: {
   snapshot?: unknown | null;
   failConsentInsert?: boolean;
 } = {}) {
+  let ensureConsentStorageCount = 0;
   let transactionCount = 0;
   let idCounter = 0;
   let committed: TestState = {
@@ -77,6 +78,9 @@ function createFixture(options: {
   }
 
   const dependencies: ParentChildOnboardingDependencies = {
+    async ensureConsentRecordsStorage() {
+      ensureConsentStorageCount += 1;
+    },
     async runInTransaction(callback) {
       transactionCount += 1;
       active = clone(committed);
@@ -117,6 +121,7 @@ function createFixture(options: {
 
   return {
     dependencies,
+    ensureConsentStorageCount: () => ensureConsentStorageCount,
     state: () => committed,
     transactionCount: () => transactionCount,
   };
@@ -145,6 +150,7 @@ test("parent child onboarding rejects consentAccepted=false before DB writes", a
   );
 
   assert.equal(fixture.transactionCount(), 0);
+  assert.equal(fixture.ensureConsentStorageCount(), 0);
   assert.equal((fixture.state().snapshot as ApiExtendedSnapshot).children.length, 0);
   assert.deepEqual(fixture.state().userRow.child_ids, []);
   assert.deepEqual(fixture.state().consents, []);
@@ -178,6 +184,7 @@ test("parent child onboarding creates child, child_ids, and three consent record
     fixture.state().consents.map((item) => item.consentType),
     [...CHILD_ONBOARDING_CONSENT_TYPES]
   );
+  assert.equal(fixture.ensureConsentStorageCount(), 1);
   assert.equal(fixture.state().consents.every((item) => item.institutionId === "inst-family"), true);
   assert.equal(fixture.state().consents.every((item) => item.userId === "u-parent"), true);
   assert.equal(fixture.state().consents.every((item) => item.childId === "c-1"), true);
