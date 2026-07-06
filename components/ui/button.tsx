@@ -9,15 +9,15 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-[var(--replica-gradient-primary)] text-white shadow-[var(--replica-shadow-control)] hover:shadow-[var(--replica-shadow-card-hover)]",
-        primary: "bg-[var(--replica-gradient-primary)] text-white shadow-[var(--replica-shadow-control)] hover:shadow-[var(--replica-shadow-card-hover)]",
+        default: "bg-indigo-600 [background-image:var(--replica-gradient-primary)] text-white shadow-[var(--replica-shadow-control)] hover:shadow-[var(--replica-shadow-card-hover)]",
+        primary: "bg-indigo-600 [background-image:var(--replica-gradient-primary)] text-white shadow-[var(--replica-shadow-control)] hover:shadow-[var(--replica-shadow-card-hover)]",
         destructive: "bg-(--destructive) text-(--destructive-foreground) shadow-sm hover:bg-(--destructive-hover)",
         danger: "bg-(--destructive) text-(--destructive-foreground) shadow-sm hover:bg-(--destructive-hover)",
         outline: "border border-[var(--replica-border)] bg-white text-[var(--replica-text)] shadow-sm hover:border-indigo-200 hover:bg-indigo-50",
         secondary: "border border-[var(--replica-border)] bg-white text-[var(--replica-text-muted)] shadow-sm hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700",
         ghost: "text-(--foreground) hover:bg-(--secondary)",
         link: "h-auto px-0 text-(--primary) underline-offset-4 hover:text-(--primary-hover) hover:underline",
-        premium: "bg-[var(--replica-gradient-primary)] text-white shadow-md shadow-indigo-500/25 hover:shadow-lg hover:shadow-indigo-500/30",
+        premium: "bg-indigo-600 [background-image:var(--replica-gradient-primary)] text-white shadow-md shadow-indigo-500/25 hover:shadow-lg hover:shadow-indigo-500/30",
       },
       size: {
         default: "h-11 min-h-11 px-4 py-2 sm:h-10 sm:min-h-10",

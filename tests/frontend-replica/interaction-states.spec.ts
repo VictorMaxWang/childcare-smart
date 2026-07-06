@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 import { loginAs } from "../feature-completion/helpers";
 import { assistantCommand, CHILD_PARENT, demoContext, expectFailure, planExistingVoiceCommand } from "../product-completion/e11-helpers";
 import {
@@ -6,6 +6,21 @@ import {
   expectLocatorCenterIsTopmost,
   expectNoHorizontalOverflow,
 } from "./r08-helpers";
+
+async function expectGradientBackground(locator: Locator) {
+  await expect(locator).toBeVisible();
+  const style = await locator.evaluate((element) => {
+    const htmlElement = element as HTMLElement;
+    const computed = window.getComputedStyle(htmlElement);
+    return {
+      backgroundImage: computed.backgroundImage,
+      height: htmlElement.getBoundingClientRect().height,
+    };
+  });
+
+  expect(style.backgroundImage).toContain("linear-gradient");
+  return style;
+}
 
 test.describe("FRONTEND-REPLICA-R08 interaction states", () => {
   test("shared visual states expose loading, empty, error, and permission semantics", async ({ page }) => {
@@ -24,6 +39,19 @@ test.describe("FRONTEND-REPLICA-R08 interaction states", () => {
       if (state !== "empty") await expect(page.getByRole("alert").filter({ hasText: expectedText[state] })).toBeVisible();
       await expectNoHorizontalOverflow(page);
     }
+  });
+
+  test("primary CTA backgrounds remain visibly filled on register and shared visual states", async ({ page }) => {
+    await page.goto("/register");
+    const registerSubmit = page.locator("form button[type='submit']");
+    const registerStyle = await expectGradientBackground(registerSubmit);
+    expect(registerStyle.height).toBeGreaterThanOrEqual(52);
+    await expect(page.getByTestId("register-submit")).toBeVisible();
+
+    await loginAs(page, "u-admin", "/visual-parity/states?state=table-filter");
+    await expectGradientBackground(page.locator('a[href="/visual-parity/states?state=table-filter"]'));
+    await expectGradientBackground(page.getByRole("button", { name: "新增档案" }));
+    await expectNoHorizontalOverflow(page);
   });
 
   test("AI assistant provider, voice panel, unknown intent, cancel, and forbidden scope are explicit", async ({ page }, testInfo) => {
@@ -82,5 +110,21 @@ test.describe("FRONTEND-REPLICA-R08 interaction states", () => {
     await expect(chart).toBeFocused();
     await expect(page.getByTestId("r02-mobile-bottom-nav").locator("[aria-current='page']")).toHaveCount(1);
     await expectNoHorizontalOverflow(page);
+  });
+
+  test("mobile highlighted bottom navigation entries keep visible gradient icon backgrounds", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    for (const scenario of [
+      { accountId: "u-admin", route: "/admin", href: "/admin/agent" },
+      { accountId: "u-teacher", route: "/teacher", href: "/teacher/agent" },
+      { accountId: "u-parent", route: `/parent?child=${CHILD_PARENT}`, href: `/parent/agent?child=${CHILD_PARENT}` },
+    ]) {
+      await loginAs(page, scenario.accountId, scenario.route);
+      const highlightedLink = page.getByTestId("r02-mobile-bottom-nav").locator(`a[href="${scenario.href}"]`);
+      await expect(highlightedLink).toHaveAttribute("data-highlighted", "true");
+      await expectGradientBackground(highlightedLink.locator("[data-highlighted-icon='true']"));
+      await expectNoHorizontalOverflow(page);
+    }
   });
 });

@@ -26,6 +26,7 @@ export function MobileBottomNav({ items, pathname }: { items: MobileBottomNavIte
               key={`${item.href}-${item.label}`}
               href={item.href}
               aria-current={active ? "page" : undefined}
+              data-highlighted={item.highlight ? "true" : undefined}
               className={cn(
                 "flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-bold transition",
                 active
@@ -36,10 +37,11 @@ export function MobileBottomNav({ items, pathname }: { items: MobileBottomNavIte
               )}
             >
               <span
+                data-highlighted-icon={item.highlight ? "true" : undefined}
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-2xl transition",
                   item.highlight
-                    ? "bg-[var(--replica-gradient-primary)] text-white shadow-[0_10px_24px_rgb(99_102_241_/_0.26)]"
+                    ? "bg-indigo-600 [background-image:var(--replica-gradient-primary)] text-white shadow-[0_10px_24px_rgb(99_102_241_/_0.26)]"
                     : active
                       ? "bg-indigo-50 text-indigo-700 shadow-sm"
                       : "bg-slate-50 text-slate-500"
