@@ -1,4 +1,5 @@
 import { DEMO_ACCOUNTS, type SessionUser } from "@/lib/auth/accounts";
+import { writeJsonStorageSafely } from "@/lib/persistence/browser-storage";
 import { normalizeAppStateSnapshot, type AppStateSnapshot } from "@/lib/persistence/snapshot";
 import type { DemoDataContext, DemoRoleAlias, DemoStorage, MutationResult } from "./types";
 import { createDemoSeedSnapshot } from "./seed";
@@ -194,9 +195,10 @@ export function writeSnapshotToStorage(storage: DemoStorage, namespace: string, 
   });
   const snapshotToWrite = normalized ?? snapshot;
 
-  (Object.keys(SNAPSHOT_BUCKET_VERSIONS) as SnapshotBucket[]).forEach((bucket) => {
-    storage.setItem(buildBucketKey(namespace, bucket), JSON.stringify(snapshotToWrite[bucket]));
-  });
+  const writeResults = (Object.keys(SNAPSHOT_BUCKET_VERSIONS) as SnapshotBucket[]).map((bucket) =>
+    writeJsonStorageSafely(storage, buildBucketKey(namespace, bucket), snapshotToWrite[bucket])
+  );
+  return writeResults.every(Boolean);
 }
 
 export function clearSnapshotStorage(storage: DemoStorage, namespace: string) {
