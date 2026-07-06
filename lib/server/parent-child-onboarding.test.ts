@@ -190,6 +190,7 @@ test("parent child onboarding creates child, child_ids, and three consent record
   assert.equal(fixture.state().consents.every((item) => item.childId === "c-1"), true);
   assert.equal(fixture.state().consents[0].ip, "203.0.113.9");
   assert.equal(fixture.state().consents[0].userAgent, "unit-test-agent");
+  assert.equal(fixture.state().consents[0].agreedAt instanceof Date, true);
 });
 
 test("parent child onboarding creates a registration snapshot when the parent snapshot is missing", async () => {

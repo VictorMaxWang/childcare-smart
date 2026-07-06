@@ -55,7 +55,7 @@ export interface ParentChildOnboardingConsentRecord {
   childId: string;
   consentType: (typeof CHILD_ONBOARDING_CONSENT_TYPES)[number];
   policyVersion: string;
-  agreedAt: string;
+  agreedAt: Date;
   ip: string | null;
   userAgent: string | null;
 }
@@ -364,7 +364,7 @@ export async function createParentChildWithConsent(
           childId: child.id,
           consentType,
           policyVersion: CHILD_ONBOARDING_POLICY_VERSION,
-          agreedAt: nowIso,
+          agreedAt: new Date(now.getTime()),
           ip: requestIp,
           userAgent,
         });
