@@ -108,7 +108,7 @@ test("parent storybook delivery annotates local demo and cached media storage ob
       audioDelivery: "preview-only",
       realProvider: false,
       highlightCount: 1,
-      sceneCount: 1,
+      sceneCount: 2,
     },
     scenes: [
       {
@@ -126,6 +126,22 @@ test("parent storybook delivery annotates local demo and cached media storage ob
         voiceStyle: "gentle-bedtime",
         highlightSource: "unit-test",
       },
+      {
+        sceneIndex: 2,
+        sceneTitle: "Scene two",
+        sceneText: "Scene two text",
+        imagePrompt: "dynamic fallback that is not ready",
+        imageUrl: "/api/ai/parent-storybook/media/fallback-scene-2",
+        assetRef: "/api/ai/parent-storybook/media/fallback-scene-2",
+        imageSourceKind: "dynamic-fallback",
+        imageStatus: "fallback",
+        audioUrl: "/api/ai/parent-storybook/media/fallback-audio-2",
+        audioRef: "/api/ai/parent-storybook/media/fallback-audio-2",
+        audioScript: "Scene two text",
+        audioStatus: "fallback",
+        voiceStyle: "gentle-bedtime",
+        highlightSource: "unit-test",
+      },
     ],
   };
 
@@ -139,6 +155,14 @@ test("parent storybook delivery annotates local demo and cached media storage ob
   assert.equal(scene.audioStorageObject?.storageMode, "cached_media");
   assert.match(scene.audioStorageObject?.expiresAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
   assert.match(scene.audioUrl ?? "", /^\/api\/ai\/parent-storybook\/media\/[a-f0-9]+$/);
+  assert.equal(prepared.scenes[1].imageUrl, null);
+  assert.equal(prepared.scenes[1].assetRef, null);
+  assert.equal(prepared.scenes[1].audioUrl, null);
+  assert.equal(prepared.scenes[1].audioRef, null);
+  assert.equal(prepared.scenes[1].imageStorageObject?.url ?? null, null);
+  assert.equal(prepared.scenes[1].imageStorageObject?.localPreviewUrl ?? null, null);
+  assert.equal(prepared.scenes[1].audioStorageObject?.url ?? null, null);
+  assert.equal(prepared.scenes[1].audioStorageObject?.localPreviewUrl ?? null, null);
 
   mediaAssetCache.clear();
 });

@@ -67,6 +67,13 @@ function resolveMediaIdFromUrl(url: string) {
   return url.split("/").pop() || null;
 }
 
+function isStorybookMediaRoute(value: string | null | undefined) {
+  return (
+    typeof value === "string" &&
+    value.startsWith("/api/ai/parent-storybook/media/")
+  );
+}
+
 function resolveCachedMediaExpiresAtFromUrl(url?: string | null) {
   if (!url || !url.startsWith("/api/ai/parent-storybook/media/")) return null;
   cleanupExpired();
@@ -306,6 +313,30 @@ export function prepareParentStoryBookResponseForDelivery(
       ...scene,
       imageSourceKind: scene.imageSourceKind ?? resolveSceneImageSourceKind(scene),
     };
+
+    // 非 ready 媒体由查看器绘制可用的本地回退，不能把尚未生成或已失效的 API 路由交给浏览器。
+    if (nextScene.imageStatus !== "ready") {
+      nextScene = {
+        ...nextScene,
+        imageUrl: isStorybookMediaRoute(nextScene.imageUrl)
+          ? null
+          : nextScene.imageUrl,
+        assetRef: isStorybookMediaRoute(nextScene.assetRef)
+          ? null
+          : nextScene.assetRef,
+      };
+    }
+    if (nextScene.audioStatus !== "ready") {
+      nextScene = {
+        ...nextScene,
+        audioUrl: isStorybookMediaRoute(nextScene.audioUrl)
+          ? null
+          : nextScene.audioUrl,
+        audioRef: isStorybookMediaRoute(nextScene.audioRef)
+          ? null
+          : nextScene.audioRef,
+      };
+    }
 
     if (
       nextScene.audioStatus === "ready" &&

@@ -513,6 +513,27 @@ async function parseRemoteStoryResponse(response: Response) {
   }
 }
 
+async function prepareStoryMediaForDelivery(input: {
+  story: ParentStoryBookResponse;
+  normalAccount: boolean;
+  institutionId: string;
+  requestUrl: string;
+  serviceScope: ReturnType<typeof buildServiceScopeClaim>;
+}) {
+  // Brain 状态接口回退到 Next 时也必须执行同一持久化检查，避免跨实例媒体键变成 404。
+  const durableStory = input.normalAccount
+    ? await reconcileRemoteStoryBookMedia({
+        story: input.story,
+        institutionId: input.institutionId,
+        requestUrl: input.requestUrl,
+        serviceScope: input.serviceScope,
+      })
+    : input.story;
+  return prepareParentStoryBookResponseForDelivery(durableStory, {
+    cacheState: "bypass",
+  });
+}
+
 export async function POST(request: Request) {
   const authResult = await authorizeAiRouteSession(request, {
     requiredRole: "parent",
@@ -587,13 +608,20 @@ export async function POST(request: Request) {
     serviceScope: buildServiceScopeClaim(sessionScope),
   });
   if (!brainForward.response) {
-    const preparedStory = await completeStoryMediaLocally({
-      payload,
-      targetPath,
-      upstreamHost: brainForward.upstreamHost,
-      routeFallbackReason: brainForward.fallbackReason ?? "brain-proxy-unavailable",
+    const preparedStory = await prepareStoryMediaForDelivery({
+      story: await completeStoryMediaLocally({
+        payload,
+        targetPath,
+        upstreamHost: brainForward.upstreamHost,
+        routeFallbackReason:
+          brainForward.fallbackReason ?? "brain-proxy-unavailable",
+        institutionId: authResult.session.user.institutionId,
+        persistAudio: authResult.session.user.accountKind === "normal",
+      }),
+      normalAccount: authResult.session.user.accountKind === "normal",
       institutionId: authResult.session.user.institutionId,
-      persistAudio: authResult.session.user.accountKind === "normal",
+      requestUrl: request.url,
+      serviceScope: buildServiceScopeClaim(sessionScope),
     });
     return NextResponse.json(preparedStory, {
       status: 200,
@@ -610,13 +638,21 @@ export async function POST(request: Request) {
 
   const remoteStory = await parseRemoteStoryResponse(brainForward.response.clone());
   if (!brainForward.response.ok || !remoteStory) {
-    const preparedStory = await completeStoryMediaLocally({
-      payload,
-      targetPath,
-      upstreamHost: brainForward.upstreamHost,
-      routeFallbackReason: !brainForward.response.ok ? `brain-status-${brainForward.response.status}` : "brain-proxy-invalid-json",
+    const preparedStory = await prepareStoryMediaForDelivery({
+      story: await completeStoryMediaLocally({
+        payload,
+        targetPath,
+        upstreamHost: brainForward.upstreamHost,
+        routeFallbackReason: !brainForward.response.ok
+          ? `brain-status-${brainForward.response.status}`
+          : "brain-proxy-invalid-json",
+        institutionId: authResult.session.user.institutionId,
+        persistAudio: authResult.session.user.accountKind === "normal",
+      }),
+      normalAccount: authResult.session.user.accountKind === "normal",
       institutionId: authResult.session.user.institutionId,
-      persistAudio: authResult.session.user.accountKind === "normal",
+      requestUrl: request.url,
+      serviceScope: buildServiceScopeClaim(sessionScope),
     });
     return NextResponse.json(preparedStory, {
       status: 200,
@@ -631,15 +667,13 @@ export async function POST(request: Request) {
     });
   }
 
-  const durableRemoteStory =
-    authResult.session.user.accountKind === "normal"
-      ? await reconcileRemoteStoryBookMedia({
-          story: remoteStory,
-          institutionId: authResult.session.user.institutionId,
-          requestUrl: request.url,
-          serviceScope: buildServiceScopeClaim(sessionScope),
-        })
-      : remoteStory;
+  const durableRemoteStory = await prepareStoryMediaForDelivery({
+    story: remoteStory,
+    normalAccount: authResult.session.user.accountKind === "normal",
+    institutionId: authResult.session.user.institutionId,
+    requestUrl: request.url,
+    serviceScope: buildServiceScopeClaim(sessionScope),
+  });
   const preparedRemoteStory = {
     ...durableRemoteStory,
     provider: remoteStory.providerMeta.provider,
@@ -653,9 +687,12 @@ export async function POST(request: Request) {
         capability: "storybook-media",
       }),
   } satisfies ParentStoryBookResponse;
-  const preparedStory = prepareParentStoryBookResponseForDelivery(preparedRemoteStory, {
-    cacheState: "bypass",
-  });
+  const preparedStory = prepareParentStoryBookResponseForDelivery(
+    preparedRemoteStory,
+    {
+      cacheState: "bypass",
+    }
+  );
 
   return NextResponse.json(preparedStory, {
     status: 200,
