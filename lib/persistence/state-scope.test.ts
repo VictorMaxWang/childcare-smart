@@ -5,6 +5,7 @@ import type { SessionUser } from "@/lib/auth/accounts";
 import { emptyInstitutionSnapshot } from "@/lib/persistence/bootstrap";
 import {
   filterChildrenForSessionUser,
+  mergeScopedSnapshotForSessionUser,
   resolveAuthorizedChildIdSet,
   scopeSnapshotForSessionUser,
 } from "@/lib/persistence/state-scope";
@@ -72,4 +73,58 @@ test("scoped parent snapshot keeps records for owned children added after sessio
 
   assert.deepEqual(scoped.children.map((item) => item.id).sort(), ["c-explicit", "c-owned"]);
   assert.deepEqual(scoped.attendance.map((item) => item.id).sort(), ["a-explicit", "a-owned"]);
+});
+
+test("partial parent cache cannot delete remote child records during snapshot merge", () => {
+  const parent: SessionUser = {
+    ...parentSession,
+    id: "parent-normal",
+    institutionId: "institution-normal",
+    childIds: ["child-normal"],
+  };
+  const childRecord = child({
+    id: "child-normal",
+    institutionId: parent.institutionId,
+    parentUserId: parent.id,
+  });
+  const health = {
+    id: "health-normal",
+    childId: childRecord.id,
+    date: "2026-07-24",
+    temperature: 36.5,
+    mood: "正常",
+    handMouthEye: "正常" as const,
+    isAbnormal: false,
+    checkedBy: "测试教师",
+    checkedByRole: "教师" as const,
+  };
+  const currentSnapshot = {
+    ...emptyInstitutionSnapshot("2026-07-24T00:00:00.000Z"),
+    children: [childRecord],
+    health: [health],
+  };
+  const incomingSnapshot = {
+    ...emptyInstitutionSnapshot("2026-07-24T01:00:00.000Z"),
+    storybooks: [
+      {
+        storybookId: "storybook-normal",
+        childId: childRecord.id,
+        sourceRecordIds: [health.id],
+        pages: [],
+        generatedAt: "2026-07-24T01:00:00.000Z",
+      },
+    ],
+  };
+
+  const merged = mergeScopedSnapshotForSessionUser({
+    currentSnapshot,
+    incomingSnapshot,
+    user: parent,
+  });
+
+  assert.deepEqual(merged.children.map((item) => item.id), [childRecord.id]);
+  assert.deepEqual(merged.health.map((item) => item.id), [health.id]);
+  assert.deepEqual(merged.storybooks.map((item) => item.storybookId), [
+    "storybook-normal",
+  ]);
 });
