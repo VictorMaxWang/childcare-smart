@@ -1,9 +1,13 @@
 # Current Status Ledger
 
-更新基准：`2026-04-12`
+更新基准：`2026-07-24`
 
 ## 当前状态
 
+- 真实账号注册仍创建独立的个人/机构初始空间；注册成功不等于已经加入同一托育机构。
+- 新增的一次性机构邀请码负责后续正式绑定：园长创建邀请，教师按稳定班级 ID 加入，家长在完整监护同意校验后迁入孩子与历史记录。
+- 规范授权真相位于 `institution_memberships`、`teacher_class_assignments`、`child_registry`、`guardian_child_links`；`app_users` 的机构、班级、child_ids 仅保留兼容投影。
+- 代码、单元/API 测试与生产构建已通过；生产 SQL、示例账号对齐、部署和 Chrome 三账号闭环仍待执行，当前不能宣称线上已修复。
 - 比赛展示口径已统一为 `慧育童行 - SmartChildcare Agent`，中文展示名为 `慧育童行`，英文名 / 技术系统名为 `SmartChildcare Agent`。
 - 当前 demo 数据热修已经切到“相对日期 + 固定 hero child matrix”模式。
 - 前端本地 demo snapshot 与后端 `build_demo_snapshot()` 已经围绕同一批 child case 对齐。
@@ -45,6 +49,8 @@
 
 ## 仍然成立的限制
 
+- 未执行 `supabase/sql/20260724_create_institution_memberships.sql` 的环境会回退旧授权字段，不具备正式邀请绑定能力。
+- `scripts/align-sample-accounts.mjs` 默认 dry-run；只有人工确认目标库后使用 `--apply` 才会写入。
 - demo 数据仍然是演示化数据，不能夸大成真实业务事实。
 - Parent 仍只绑定 `c-1`。
 - Storybook 受保护文件未动，本轮不会改变其上游能力边界。

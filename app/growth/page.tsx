@@ -49,6 +49,7 @@ import { buildRecentLocalDateRange, normalizeLocalDate } from "@/lib/date";
 import { DEMO_MEDIA_FALLBACKS } from "@/lib/demo-media/assets";
 import { OBSERVATION_INDICATOR_MAP, type ObservationIndicatorOption } from "@/lib/mock/observation";
 import { toast } from "sonner";
+import { createRecord } from "@/lib/api/records";
 
 export default function GrowthPage() {
   const router = useRouter();
@@ -56,13 +57,20 @@ export default function GrowthPage() {
   const searchParams = useSearchParams();
   const childFromQuery = searchParams.get("child");
   const parentD01 = useParentD01Data(childFromQuery);
-  const { currentUser, visibleChildren, growthRecords, addGrowthRecord } = useApp();
+  const {
+    currentUser,
+    visibleChildren,
+    growthRecords,
+    addGrowthRecord,
+    reloadAppSnapshotFromApi,
+  } = useApp();
   const [selectedChildId, setSelectedChildId] = useState<string>(visibleChildren[0]?.id ?? "");
   const [category, setCategory] = useState<BehaviorCategory>("情绪表现");
   const [tags, setTags] = useState("午睡前, 课堂观察");
   const [description, setDescription] = useState("");
   const [needsAttention, setNeedsAttention] = useState(false);
   const [selectedIndicators, setSelectedIndicators] = useState<string[]>([]);
+  const [savingGrowthRecord, setSavingGrowthRecord] = useState(false);
   const [filterValue, setFilterValue] = useState("全部");
   const [reviewFilter, setReviewFilter] = useState("全部");
   const [followUpAction, setFollowUpAction] = useState("");
@@ -198,7 +206,7 @@ export default function GrowthPage() {
     [reviewChartData]
   );
 
-  function submitRecord() {
+  async function submitRecord() {
     if (!selectedChildId || !description.trim()) {
       toast.warning("请先补充观察描述。", {
         description: "成长记录至少需要明确对象和具体观察内容。",
@@ -207,7 +215,7 @@ export default function GrowthPage() {
     }
 
     const childName = visibleChildren.find((child) => child.id === selectedChildId)?.name ?? "该幼儿";
-    const saveResult = addGrowthRecord({
+    const payload = {
       childId: selectedChildId,
       category,
       tags: tags.split(/[，,]/).map((item) => item.trim()).filter(Boolean),
@@ -215,7 +223,43 @@ export default function GrowthPage() {
       needsAttention,
       followUpAction: followUpAction.trim() || undefined,
       reviewDate: reviewDate || undefined,
+      reviewStatus: needsAttention ? "待复查" : "已完成",
       selectedIndicators: selectedIndicators.length > 0 ? selectedIndicators : undefined,
+    } as const;
+
+    if (currentUser.accountKind === "normal") {
+      setSavingGrowthRecord(true);
+      try {
+        await createRecord("growth", payload);
+        const reloadResult = await reloadAppSnapshotFromApi();
+        if (reloadResult.status === "failed") {
+          toast.warning("成长记录已写入服务端", {
+            description: "页面刷新暂时失败，请手动刷新后查看最新记录。",
+          });
+        } else {
+          toast.success("成长记录已保存", {
+            description: `${childName} 的${category}观察已同步到服务端，可用于后续 AI 绘本分析。`,
+          });
+        }
+        setDescription("");
+        setTags("");
+        setNeedsAttention(false);
+        setFollowUpAction("");
+        setReviewDate("");
+        setSelectedIndicators([]);
+      } catch (requestError) {
+        toast.error("成长记录保存失败", {
+          description:
+            requestError instanceof Error ? requestError.message : "服务端写入失败，请重试。",
+        });
+      } finally {
+        setSavingGrowthRecord(false);
+      }
+      return;
+    }
+
+    const saveResult = addGrowthRecord({
+      ...payload,
     });
     if (saveResult.status === "failed") {
       toast.error("成长记录保存失败", {
@@ -773,7 +817,7 @@ export default function GrowthPage() {
                 {needsAttention ? "需要关注" : "正常观察"}
               </Button>
             </div>
-            <Button className="w-full gap-2" onClick={submitRecord} data-testid="r05-growth-save-record">
+            <Button className="w-full gap-2" onClick={() => void submitRecord()} loading={savingGrowthRecord} data-testid="r05-growth-save-record">
               <PlusCircle className="h-4 w-4" />
               保存记录
             </Button>

@@ -18,12 +18,16 @@ export function findChild(snapshot: Pick<ApiExtendedSnapshot, "children">, child
 }
 
 export function canAccessChild(
-  session: Pick<SessionUser, "role" | "id" | "institutionId" | "className" | "childIds">,
+  session: Pick<SessionUser, "role" | "id" | "institutionId" | "classId" | "className" | "childIds">,
   child: SnapshotChild | null | undefined
 ) {
   if (!child || child.institutionId !== session.institutionId) return false;
   if (session.role === ROLE_ADMIN) return true;
-  if (session.role === ROLE_TEACHER) return child.className === session.className;
+  if (session.role === ROLE_TEACHER) {
+    // 新关系两侧都有稳定 ID 时必须按 ID 授权；旧档案缺 ID 时才兼容 className。
+    if (session.classId && child.classId) return child.classId === session.classId;
+    return child.className === session.className;
+  }
 
   if (session.role === ROLE_PARENT) {
     const explicitChildIds = readParentChildIds(session);

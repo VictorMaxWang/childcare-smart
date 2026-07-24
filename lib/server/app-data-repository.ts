@@ -1,7 +1,14 @@
 import "server-only";
 
 import type { SessionUser } from "@/lib/auth/accounts";
-import { DATABASE_URL_CONFIG_ERROR_MESSAGE, DatabaseConfigError, dbQuery, decodeDatabaseJson, encodeDatabaseJson } from "@/lib/db/server";
+import {
+  DATABASE_URL_CONFIG_ERROR_MESSAGE,
+  DatabaseConfigError,
+  dbQuery,
+  decodeDatabaseJson,
+  encodeDatabaseJson,
+  withDbTransaction,
+} from "@/lib/db/server";
 import type { ApiExtendedSnapshot } from "@/lib/api/types";
 import { DEMO_DATASET_VERSION } from "@/lib/demo-data/persistence";
 import { createDemoSeedSnapshot } from "@/lib/demo-data/seed";
@@ -11,6 +18,10 @@ import { normalizeExtendedSnapshot } from "@/lib/server/app-data-model";
 export interface AppDataRepository {
   load(session: SessionUser): Promise<ApiExtendedSnapshot>;
   save(session: SessionUser, snapshot: ApiExtendedSnapshot): Promise<void>;
+  mutate?<T>(
+    session: SessionUser,
+    mutator: (snapshot: ApiExtendedSnapshot) => T
+  ): Promise<T>;
 }
 
 type GlobalWithApiDemoSnapshots = typeof globalThis & {
@@ -80,6 +91,71 @@ export class DefaultAppDataRepository implements AppDataRepository {
     } catch (error) {
       if (error instanceof DatabaseConfigError) {
         throw new ApiRouteError("provider_unavailable", DATABASE_URL_CONFIG_ERROR_MESSAGE, 503);
+      }
+      throw error;
+    }
+  }
+
+  async mutate<T>(
+    session: SessionUser,
+    mutator: (snapshot: ApiExtendedSnapshot) => T
+  ) {
+    if (session.accountKind === "demo") {
+      const key = `${DEMO_DATASET_VERSION}:${session.institutionId}`;
+      const snapshots = getDemoSnapshotMap();
+      const current =
+        snapshots.get(key) ?? normalizeExtendedSnapshot(createDemoSeedSnapshot(), session);
+      const snapshot = normalizeExtendedSnapshot(structuredClone(current), session);
+      const result = mutator(snapshot);
+      snapshots.set(key, normalizeExtendedSnapshot(snapshot, session));
+      return result;
+    }
+
+    try {
+      return await withDbTransaction(async (connection) => {
+        const [rows] = await connection.execute(
+          `
+            select snapshot
+            from app_state_snapshots
+            where institution_id = ?
+            limit 1
+            for update
+          `,
+          [session.institutionId]
+        );
+        const row = Array.isArray(rows)
+          ? (rows[0] as { snapshot?: unknown } | undefined)
+          : undefined;
+        const raw = decodeDatabaseJson<unknown>(row?.snapshot) ?? row?.snapshot;
+        const snapshot = normalizeExtendedSnapshot(raw, session);
+        const result = mutator(snapshot);
+        const encodedSnapshot = encodeDatabaseJson(snapshot);
+
+        await connection.execute(
+          `
+            insert into app_state_snapshots (institution_id, snapshot, updated_by)
+            values (?, ?, ?)
+            on duplicate key update
+              snapshot = ?,
+              updated_by = ?
+          `,
+          [
+            session.institutionId,
+            encodedSnapshot,
+            session.id,
+            encodedSnapshot,
+            session.id,
+          ]
+        );
+        return result;
+      });
+    } catch (error) {
+      if (error instanceof DatabaseConfigError) {
+        throw new ApiRouteError(
+          "provider_unavailable",
+          DATABASE_URL_CONFIG_ERROR_MESSAGE,
+          503
+        );
       }
       throw error;
     }

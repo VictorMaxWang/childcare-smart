@@ -16,6 +16,7 @@ import {
   Utensils,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import { InstitutionJoinPanel } from "@/components/account/InstitutionJoinPanel";
 import UnifiedIntentEntryCard from "@/components/intent/UnifiedIntentEntryCard";
 import CareModeToggle from "@/components/parent/CareModeToggle";
 import ParentCareFocusCard from "@/components/parent/ParentCareFocusCard";
@@ -343,6 +344,7 @@ export default function ParentHomePage() {
     if (!invalidChildId) {
       return (
         <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+          <InstitutionJoinPanel user={currentUser} />
           <section className="rounded-[1.5rem] border border-dashed border-indigo-200 bg-white p-6 shadow-sm sm:p-8">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
               <BrainCircuit className="h-6 w-6" aria-hidden="true" />
@@ -1052,6 +1054,7 @@ export default function ParentHomePage() {
         className="max-w-[78rem]"
         testId="r07-parent-page"
       >
+        <InstitutionJoinPanel user={currentUser} />
         <PixelParentHomeReplica
           todayText={TODAY_TEXT}
           currentUserName={currentUser.name}
@@ -1092,6 +1095,7 @@ export default function ParentHomePage() {
       testId="r07-parent-page"
       actions={headerActions}
     >
+      <InstitutionJoinPanel user={currentUser} />
       <RoleSplitLayout
         main={
           <div className="space-y-6">

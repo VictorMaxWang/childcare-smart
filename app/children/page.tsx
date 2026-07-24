@@ -5,8 +5,10 @@ import {
   Archive,
   BookOpenCheck,
   Clock3,
+  Copy,
   Eye,
   HeartPulse,
+  KeyRound,
   Pencil,
   RotateCcw,
   Search,
@@ -52,6 +54,10 @@ import {
   updateChild,
 } from "@/lib/api/children";
 import { createRecord, listRecords, updateRecord } from "@/lib/api/records";
+import {
+  createMemberInvitation,
+  type CreatedMemberInvitation,
+} from "@/lib/api/member-invitations";
 import type { ApiChild, ApiChildInput } from "@/lib/api/types";
 import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
 import {
@@ -165,6 +171,11 @@ export default function ChildrenPage() {
   const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: "archive" | "restore"; child: ApiChild } | null>(null);
   const [confirmSaving, setConfirmSaving] = useState(false);
+  const [parentInviteOpen, setParentInviteOpen] = useState(false);
+  const [parentInviteClassName, setParentInviteClassName] = useState(DEFAULT_FORM.className);
+  const [parentInviteSaving, setParentInviteSaving] = useState(false);
+  const [parentInviteError, setParentInviteError] = useState("");
+  const [createdParentInvitation, setCreatedParentInvitation] = useState<CreatedMemberInvitation | null>(null);
   const [form, setForm] = useState<ChildFormState>({
     ...DEFAULT_FORM,
     className: currentUser.className ?? DEFAULT_FORM.className,
@@ -340,6 +351,55 @@ export default function ChildrenPage() {
     }
   }
 
+  function openParentInvite() {
+    setParentInviteClassName(DEFAULT_FORM.className);
+    setParentInviteError("");
+    setCreatedParentInvitation(null);
+    setParentInviteOpen(true);
+  }
+
+  function resetParentInvite() {
+    setParentInviteClassName(DEFAULT_FORM.className);
+    setParentInviteError("");
+    setCreatedParentInvitation(null);
+  }
+
+  async function handleCreateParentInvitation() {
+    if (!parentInviteClassName.trim()) {
+      setParentInviteError("请填写孩子要加入的班级。");
+      return;
+    }
+
+    setParentInviteSaving(true);
+    setParentInviteError("");
+    try {
+      const invitation = await createMemberInvitation({
+        role: "家长",
+        className: parentInviteClassName.trim(),
+      });
+      setCreatedParentInvitation(invitation);
+      toast.success("家长邀请码已生成", {
+        description: "家长接受后，其已获同意的孩子档案会迁入当前机构。",
+      });
+    } catch (requestError) {
+      const message = apiErrorMessage(requestError);
+      setParentInviteError(message);
+      toast.error("邀请码生成失败", { description: message });
+    } finally {
+      setParentInviteSaving(false);
+    }
+  }
+
+  async function copyParentInvitationCode() {
+    if (!createdParentInvitation) return;
+    try {
+      await navigator.clipboard.writeText(createdParentInvitation.code);
+      toast.success("邀请码已复制");
+    } catch {
+      toast.warning("浏览器未允许复制，请手动记录邀请码。");
+    }
+  }
+
   async function handleToggleAttendance(child: ApiChild) {
     if (!canManageAttendance || child.archivedAt) return;
     const existing = attendanceMap.get(child.id);
@@ -406,6 +466,17 @@ export default function ChildrenPage() {
                   <UserPlus className="mr-2 h-4 w-4" />
                   {canManageChildren ? "新增幼儿档案" : "仅可查看档案"}
                 </Button>
+                {canManageChildren ? (
+                  <Button
+                    variant="outline"
+                    className="min-h-11 rounded-2xl"
+                    onClick={openParentInvite}
+                    data-testid="parent-open-invite"
+                  >
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    邀请家长加入
+                  </Button>
+                ) : null}
                 <Button
                   variant="outline"
                   className="min-h-11 rounded-2xl"
@@ -652,6 +723,66 @@ export default function ChildrenPage() {
             <Button onClick={() => void handleSubmit()} loading={saving} data-testid="e02-save-child">
               {editingChildId ? "保存修改" : "保存档案"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={parentInviteOpen}
+        onOpenChange={(value) => {
+          setParentInviteOpen(value);
+          if (!value) resetParentInvite();
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>邀请注册家长加入机构</DialogTitle>
+            <DialogDescription>
+              家长登录真实账号后主动接受。已有孩子档案会在完整同意记录校验通过后迁入机构。
+            </DialogDescription>
+          </DialogHeader>
+          {createdParentInvitation ? (
+            <div className="space-y-4 py-2">
+              <div className="border border-emerald-200 bg-emerald-50 p-4">
+                <p className="text-sm font-semibold text-emerald-900">一次性邀请码</p>
+                <code className="mt-2 block break-all text-xl font-semibold text-emerald-950" data-testid="parent-invite-code">
+                  {createdParentInvitation.code}
+                </code>
+                <p className="mt-2 text-xs text-emerald-800">
+                  班级：{createdParentInvitation.className} · 有效期至{" "}
+                  {new Date(createdParentInvitation.expiresAt).toLocaleString("zh-CN")}
+                </p>
+              </div>
+              <Button type="button" variant="outline" onClick={() => void copyParentInvitationCode()} className="w-full">
+                <Copy className="mr-2 h-4 w-4" />
+                复制邀请码
+              </Button>
+            </div>
+          ) : (
+            <div className="py-2">
+              <FormField label="孩子加入班级" required description="已有家庭档案中的孩子会统一迁入该班级。">
+                <Input
+                  value={parentInviteClassName}
+                  onChange={(event) => setParentInviteClassName(event.target.value)}
+                  data-testid="parent-invite-class"
+                />
+              </FormField>
+            </div>
+          )}
+          {parentInviteError ? (
+            <p className="border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">
+              {parentInviteError}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setParentInviteOpen(false)}>
+              {createdParentInvitation ? "完成" : "取消"}
+            </Button>
+            {!createdParentInvitation ? (
+              <Button onClick={() => void handleCreateParentInvitation()} loading={parentInviteSaving} data-testid="parent-create-invite">
+                生成邀请码
+              </Button>
+            ) : null}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -43,6 +43,29 @@ test("teacher cannot access a child from another class", () => {
   assert.throws(() => requireChildAccess(teacher, snapshot, "c-1"), assertForbidden);
 });
 
+test("stable classId prevents access to a same-name class", () => {
+  const teacher: SessionUser = {
+    ...demoUser("u-teacher"),
+    classId: "class-a",
+    className: "同名班",
+  };
+  const snapshot = buildSnapshot(teacher);
+  snapshot.children = [
+    {
+      ...snapshot.children[0],
+      id: "same-name-other-class",
+      institutionId: teacher.institutionId,
+      classId: "class-b",
+      className: "同名班",
+    },
+  ];
+
+  assert.throws(
+    () => requireChildAccess(teacher, snapshot, "same-name-other-class"),
+    assertForbidden
+  );
+});
+
 test("director can access institution children and class scope", () => {
   const director = demoUser("u-admin");
   const snapshot = buildSnapshot(director);

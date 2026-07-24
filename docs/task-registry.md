@@ -1,8 +1,31 @@
 # Task Registry
 
-更新基准：`2026-04-12`
+更新基准：`2026-07-24`
 
 ## Active Hotfix
+
+### Real Account Institution Membership Hotfix
+
+- 状态：`Code-verified / Production-pending`
+- 目标：让独立注册的园长、教师、家长通过一次性邀请码建立正式机构、班级与监护关系，并完成“教师记录 -> 家长读取 -> AI 分析/绘本”的真实账号闭环。
+- 主改动源：
+  - `lib/server/institution-membership.ts`
+  - `supabase/sql/20260724_create_institution_memberships.sql`
+  - `app/api/admin/member-invitations/route.ts`
+  - `app/api/account/member-invitations/accept/route.ts`
+  - `lib/auth/membership-projection.ts`
+  - `lib/server/app-data-repository.ts`
+  - `scripts/align-sample-accounts.mjs`
+- 已完成：
+  - 规范机构成员、稳定班级 ID、教师分班、幼儿登记、监护链接和授权审计。
+  - 家长迁移前校验三类监护同意，失败整体回滚并保留源家庭快照。
+  - 晨检、饮食、成长真实账号写入改为等待服务端成功后再提示。
+  - 家长真实账号直接读取服务端作用域数据；AI 绘本记录完整来源 ID。
+  - 授权/建档/缓存/记录测试、注册测试、lint、typecheck、production build 已通过。
+- 生产待完成：
+  - 在生产库执行规范关系 SQL 并运行 `npm run db:check`。
+  - dry-run 后执行三示例账号对齐。
+  - 部署 main，并在 Chrome 完成三账号记录、读取与 AI/绘本验收。
 
 ### Demo Data & Recording Asset Recovery Hotfix
 

@@ -192,15 +192,31 @@ export function restoreParentStorybookResponse(
 
 export function useParentD01Data(requestedChildId?: string | null) {
   const app = useApp();
-  const { currentUser, visibleChildren } = app;
+  const {
+    currentUser,
+    visibleChildren,
+    healthCheckRecords,
+    mealRecords,
+    growthRecords,
+    healthMaterials,
+    consultations,
+    reminders,
+    messages,
+    nutritionMenus,
+    storybooks,
+  } = app;
 
   const context = useMemo(() => getCurrentDemoContext(currentUser), [currentUser]);
   const scopedSnapshot = getScopedSnapshot(context);
 
   const authorizedChildren = useMemo(() => {
+    // 真实账号的 visibleChildren 已由服务端 scope 过滤，本地缓存不能再次缩小授权结果。
+    if (currentUser.accountKind === "normal") {
+      return visibleChildren;
+    }
     const scopedIds = new Set(scopedSnapshot.children.map((child) => child.id));
     return visibleChildren.filter((child) => scopedIds.has(child.id));
-  }, [scopedSnapshot.children, visibleChildren]);
+  }, [currentUser.accountKind, scopedSnapshot.children, visibleChildren]);
 
   const authorizedChildIds = useMemo(
     () => new Set(authorizedChildren.map((child) => child.id)),
@@ -216,8 +232,91 @@ export function useParentD01Data(requestedChildId?: string | null) {
         : authorizedChildren[0]?.id ?? "";
 
   const selectedChild = authorizedChildren.find((child) => child.id === selectedChildId) ?? null;
-  const parentHomeData: ParentHomeData | null =
-    selectedChildId && !invalidChildId ? getParentHomeData(selectedChildId, context) : null;
+  const parentHomeData = useMemo<ParentHomeData | null>(() => {
+    if (!selectedChildId || invalidChildId || !selectedChild) return null;
+    if (currentUser.accountKind !== "normal") {
+      return getParentHomeData(selectedChildId, context);
+    }
+
+    const classId = selectedChild.classId ?? selectedChild.className;
+    const dailyRecords: ParentHomeData["dailyRecords"] = [
+      ...healthCheckRecords
+        .filter((record) => record.childId === selectedChildId)
+        .map((record) => ({
+          recordId: record.id,
+          childId: record.childId,
+          classId,
+          type: "morning-check" as const,
+          payload: { ...record },
+          createdBy: record.checkedBy,
+          createdAt: record.date,
+          updatedAt: record.date,
+          visibleToParent: true,
+        })),
+      ...mealRecords
+        .filter((record) => record.childId === selectedChildId)
+        .map((record) => ({
+          recordId: record.id,
+          childId: record.childId,
+          classId,
+          type: "diet" as const,
+          payload: { ...record },
+          createdBy: record.recordedBy,
+          createdAt: record.date,
+          updatedAt: record.date,
+          visibleToParent: true,
+        })),
+      ...growthRecords
+        .filter((record) => record.childId === selectedChildId)
+        .map((record) => ({
+          recordId: record.id,
+          childId: record.childId,
+          classId,
+          type: "growth" as const,
+          payload: { ...record },
+          createdBy: record.recorder,
+          createdAt: record.createdAt,
+          updatedAt: record.createdAt,
+          visibleToParent: true,
+        })),
+    ].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+    return {
+      childId: selectedChildId,
+      messages: messages.filter((message) => message.childId === selectedChildId),
+      dailyRecords,
+      healthMaterials: healthMaterials.filter(
+        (material) => material.childId === selectedChildId
+      ),
+      consultations: consultations.filter(
+        (consultation) => consultation.childId === selectedChildId
+      ),
+      reminders: reminders.filter(
+        (reminder) =>
+          reminder.childId === selectedChildId ||
+          reminder.targetId === selectedChildId
+      ),
+      nutritionMenus: nutritionMenus.filter((menu) => menu.classId === classId),
+      storybooks: storybooks.filter(
+        (storybook) => storybook.childId === selectedChildId
+      ),
+    };
+  }, [
+    consultations,
+    context,
+    currentUser.accountKind,
+    growthRecords,
+    healthCheckRecords,
+    healthMaterials,
+    invalidChildId,
+    mealRecords,
+    messages,
+    nutritionMenus,
+    reminders,
+    selectedChild,
+    selectedChildId,
+    storybooks,
+  ]);
 
   return {
     ...app,

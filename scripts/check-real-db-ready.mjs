@@ -4,7 +4,19 @@ import { createPool } from "mysql2/promise";
 
 loadLocalEnvFile(".env.local");
 
-const REQUIRED_TABLES = ["app_users", "app_state_snapshots", "consent_records"];
+const REQUIRED_TABLES = [
+  "app_users",
+  "app_state_snapshots",
+  "consent_records",
+  "institutions",
+  "institution_classes",
+  "institution_memberships",
+  "teacher_class_assignments",
+  "child_registry",
+  "guardian_child_links",
+  "member_invitations",
+  "authorization_audit_events",
+];
 const REQUIRED_COLUMNS = [
   ["app_users", "id"],
   ["app_users", "username_normalized"],
@@ -33,6 +45,48 @@ const REQUIRED_COLUMNS = [
   ["consent_records", "ip"],
   ["consent_records", "user_agent"],
   ["consent_records", "created_at"],
+  ["institutions", "id"],
+  ["institutions", "status"],
+  ["institutions", "created_by"],
+  ["institution_classes", "id"],
+  ["institution_classes", "institution_id"],
+  ["institution_classes", "name"],
+  ["institution_classes", "status"],
+  ["institution_memberships", "user_id"],
+  ["institution_memberships", "institution_id"],
+  ["institution_memberships", "role"],
+  ["institution_memberships", "class_id"],
+  ["institution_memberships", "status"],
+  ["institution_memberships", "authz_version"],
+  ["institution_memberships", "created_by"],
+  ["institution_memberships", "joined_at"],
+  ["teacher_class_assignments", "user_id"],
+  ["teacher_class_assignments", "institution_id"],
+  ["teacher_class_assignments", "class_id"],
+  ["teacher_class_assignments", "status"],
+  ["teacher_class_assignments", "assigned_by"],
+  ["child_registry", "child_id"],
+  ["child_registry", "institution_id"],
+  ["child_registry", "class_id"],
+  ["child_registry", "status"],
+  ["guardian_child_links", "institution_id"],
+  ["guardian_child_links", "user_id"],
+  ["guardian_child_links", "child_id"],
+  ["guardian_child_links", "status"],
+  ["member_invitations", "id"],
+  ["member_invitations", "institution_id"],
+  ["member_invitations", "target_role"],
+  ["member_invitations", "class_id"],
+  ["member_invitations", "code_hash"],
+  ["member_invitations", "status"],
+  ["member_invitations", "expires_at"],
+  ["member_invitations", "accepted_by"],
+  ["authorization_audit_events", "id"],
+  ["authorization_audit_events", "institution_id"],
+  ["authorization_audit_events", "actor_user_id"],
+  ["authorization_audit_events", "subject_user_id"],
+  ["authorization_audit_events", "action"],
+  ["authorization_audit_events", "metadata"],
 ];
 
 const REQUIRED_INDEXES = [
@@ -41,6 +95,12 @@ const REQUIRED_INDEXES = [
     column: "phone_normalized",
     unique: true,
     label: "unique index on app_users.phone_normalized",
+  },
+  {
+    table: "member_invitations",
+    column: "code_hash",
+    unique: true,
+    label: "unique index on member_invitations.code_hash",
   },
 ];
 
@@ -254,7 +314,7 @@ async function main() {
     return;
   }
 
-  passLine("real DB registration prerequisites ready");
+  passLine("real DB registration and institution membership prerequisites ready");
 }
 
 await main();
