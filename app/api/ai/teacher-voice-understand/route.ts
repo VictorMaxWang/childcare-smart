@@ -1,11 +1,22 @@
 import { NextResponse } from "next/server";
-import { resolveAsrProvider } from "@/lib/ai/providers";
+import { resolveAsrProvider, type AsrProvider } from "@/lib/ai/providers";
 import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import { buildTeacherVoiceUnderstandFallback } from "@/lib/ai/teacher-voice-understand";
+import { VivoProviderError } from "@/lib/providers/vivo";
 import { createBrainTransportHeaders } from "@/lib/server/brain-client";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 
 const TEACHER_VOICE_UNDERSTAND_TARGET = "/api/v1/agents/teacher/voice-understand";
+
+export type TeacherVoiceUnderstandRouteDependencies = {
+  authorize: typeof authorizeAiRoute;
+  resolveProvider: () => AsrProvider;
+};
+
+const defaultDependencies: TeacherVoiceUnderstandRouteDependencies = {
+  authorize: authorizeAiRoute,
+  resolveProvider: resolveAsrProvider,
+};
 
 function buildLocalFallbackHeaders() {
   return createBrainTransportHeaders({
@@ -27,13 +38,64 @@ function toOptionalNumber(value: FormDataEntryValue | unknown) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
+function buildProviderUnavailableResponse(
+  provider: AsrProvider,
+  error: VivoProviderError,
+  headers: Headers,
+  inputMode: "multipart" | "json"
+) {
+  const providerStatus = {
+    ...provider.getStatus(),
+    state: "fallback" as const,
+    live: false,
+    fallback: true,
+    isRealProvider: false,
+    status: error.status,
+    reason: "ASR provider rejected this audio input.",
+  };
+  const providerTrace = buildAiProviderTrace({
+    provider: providerStatus.providerName,
+    source: "provider_unavailable",
+    mode: "fallback",
+    fallback: true,
+    fallbackReason: "provider-unavailable",
+    realProvider: false,
+    capability: "asr",
+    providerStatus,
+    extra: {
+      workflow: "teacher-voice-understand",
+      inputMode,
+    },
+  });
+
+  return NextResponse.json(
+    {
+      ok: false,
+      code: "provider_unavailable",
+      error: "ASR provider is unavailable for this audio input.",
+      source: providerTrace.source,
+      provider: providerTrace.provider,
+      mode: providerTrace.mode,
+      fallback: providerTrace.fallback,
+      fallbackReason: providerTrace.fallbackReason,
+      providerTrace,
+      status: providerStatus,
+      warnings: providerStatus.warnings ?? [],
+    },
+    { status: 503, headers }
+  );
+}
+
+export async function handleTeacherVoiceUnderstandRequest(
+  request: Request,
+  dependencies: TeacherVoiceUnderstandRouteDependencies = defaultDependencies
+) {
+  const authError = await dependencies.authorize(request, { requiredRole: "staff" });
   if (authError) return authError;
 
   const headers = buildLocalFallbackHeaders();
   const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
-  const asrProvider = resolveAsrProvider();
+  const asrProvider = dependencies.resolveProvider();
 
   if (contentType.includes("multipart/form-data")) {
     const formData = await request.formData();
@@ -59,15 +121,24 @@ export async function POST(request: Request) {
     const durationMs = toOptionalNumber(formData.get("durationMs"));
     const scene = toOptionalString(formData.get("scene")) || "teacher-global-fab";
 
-    const asrResult = await asrProvider.transcribe({
-      attachmentName,
-      audioBytes: audio instanceof File ? Buffer.from(await audio.arrayBuffer()) : undefined,
-      fallbackText,
-      transcript,
-      mimeType,
-      durationMs,
-      scene,
-    });
+    let asrResult;
+    try {
+      asrResult = await asrProvider.transcribe({
+        attachmentName,
+        audioBytes: audio instanceof File ? Buffer.from(await audio.arrayBuffer()) : undefined,
+        fallbackText,
+        transcript,
+        mimeType,
+        durationMs,
+        scene,
+      });
+    } catch (error) {
+      // 供应商拒绝浏览器音频格式属于可恢复能力降级，不应把真实账号推入 500 错误页。
+      if (error instanceof VivoProviderError) {
+        return buildProviderUnavailableResponse(asrProvider, error, headers, "multipart");
+      }
+      throw error;
+    }
 
     if (asrResult.source === "provider_unavailable" && !asrResult.output.transcript.trim()) {
       const providerTrace = buildAiProviderTrace({
@@ -147,17 +218,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const asrResult = await asrProvider.transcribe({
-    attachmentName: toOptionalString(payload.attachmentName),
-    fallbackText,
-    transcript,
-    mimeType: toOptionalString(payload.mimeType),
-    durationMs:
-      typeof payload.durationMs === "number" && Number.isFinite(payload.durationMs)
-        ? payload.durationMs
-        : undefined,
-    scene: toOptionalString(payload.scene) || "teacher-global-fab",
-  });
+  let asrResult;
+  try {
+    asrResult = await asrProvider.transcribe({
+      attachmentName: toOptionalString(payload.attachmentName),
+      fallbackText,
+      transcript,
+      mimeType: toOptionalString(payload.mimeType),
+      durationMs:
+        typeof payload.durationMs === "number" && Number.isFinite(payload.durationMs)
+          ? payload.durationMs
+          : undefined,
+      scene: toOptionalString(payload.scene) || "teacher-global-fab",
+    });
+  } catch (error) {
+    if (error instanceof VivoProviderError) {
+      return buildProviderUnavailableResponse(asrProvider, error, headers, "json");
+    }
+    throw error;
+  }
 
   return NextResponse.json(
     buildTeacherVoiceUnderstandFallback({
@@ -183,4 +262,8 @@ export async function POST(request: Request) {
     }),
     { status: 200, headers }
   );
+}
+
+export async function POST(request: Request) {
+  return handleTeacherVoiceUnderstandRequest(request);
 }
