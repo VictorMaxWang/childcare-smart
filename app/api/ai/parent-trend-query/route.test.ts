@@ -147,7 +147,7 @@ test("parent trend route converts provider 503 into 200 fallback", async () => {
   });
 });
 
-test("parent trend route marks sparse data without failing", async () => {
+test("parent trend route ignores a forged sparse snapshot and uses trusted session data", async () => {
   await withMockedFetch((async () =>
     new Response(JSON.stringify({ error: "provider down" }), {
       status: 503,
@@ -165,14 +165,16 @@ test("parent trend route marks sparse data without failing", async () => {
       const body = await readTrend(response);
 
       assert.equal(response.status, 200);
+      // 家长端提交的 appSnapshot 不可信，服务端必须继续使用当前会话的数据范围。
+      assert.equal(body.source, "request_snapshot");
       assert.equal(body.dataQuality.sparse, true);
-      assert.equal(body.dataQuality.observedDays, 0);
+      assert.ok(body.dataQuality.observedDays > 0);
       assert.ok(body.warnings.some((warning) => warning.includes("有效记录覆盖")));
     });
   });
 });
 
-test("parent trend route can build demo snapshot fallback for authorized child without request snapshot", async () => {
+test("parent trend route uses the trusted scoped snapshot when the request omits appSnapshot", async () => {
   await withMockedFetch((async () =>
     new Response(JSON.stringify({ error: "provider down" }), {
       status: 503,
@@ -189,14 +191,14 @@ test("parent trend route can build demo snapshot fallback for authorized child w
 
       assert.equal(response.status, 200);
       assertFallbackContract(body, "brain-status-503");
-      assert.equal(body.source, "demo_snapshot");
+      assert.equal(body.source, "request_snapshot");
       assert.ok(body.series.length > 0);
       assert.ok(body.dataQuality.observedDays >= 0);
     });
   });
 });
 
-test("parent trend route includes latest feedback in fallback explanation", async () => {
+test("parent trend route ignores client-provided feedback and uses scoped feedback", async () => {
   await withMockedFetch((async () =>
     new Response("not json", {
       status: 200,
@@ -247,7 +249,7 @@ test("parent trend route includes latest feedback in fallback explanation", asyn
       assert.equal(response.status, 200);
       assertFallbackContract(body, "brain-proxy-invalid-json");
       assert.match(text, /已纳入家长反馈/);
-      assert.match(text, /bedtime routine/);
+      assert.doesNotMatch(text, /bedtime routine/);
       assert.ok(body.supportingSignals.some((signal) => signal.sourceType === "feedback"));
     });
   });
