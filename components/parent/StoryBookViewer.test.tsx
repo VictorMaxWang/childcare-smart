@@ -12,6 +12,7 @@ import {
   resolveRuntimeAudioDeliveryHotfix,
   resolveRuntimeSceneImageDeliveryHotfix,
   resolveRuntimeStoryModeHotfix,
+  resolveSceneAudioFallbackUrlHotfix,
   resolveSceneCaptionTiming,
 } from "./StoryBookViewer.tsx";
 
@@ -276,6 +277,29 @@ test("runtime banners hotfix maps brain 504 and local speech honestly", () => {
   assert.ok(items.some((item) => item.detail.includes("ready 1")));
   assert.ok(items.some((item) => item.label.includes("朗读：本地朗读兜底")));
   assert.ok(items.every((item) => !item.label.includes("mixed")));
+});
+
+test("audio fallback hotfix converts cached media ids into authorized media URLs", () => {
+  assert.equal(
+    resolveSceneAudioFallbackUrlHotfix(
+      buildScene({
+        audioStatus: "ready",
+        audioUrl: "data:audio/mpeg;base64,broken",
+        audioRef: "cached audio/1",
+      })
+    ),
+    "/api/ai/parent-storybook/media/cached%20audio%2F1"
+  );
+  assert.equal(
+    resolveSceneAudioFallbackUrlHotfix(
+      buildScene({
+        audioStatus: "ready",
+        audioUrl: "/api/ai/parent-storybook/media/audio-1",
+        audioRef: "/api/ai/parent-storybook/media/audio-1",
+      })
+    ),
+    null
+  );
 });
 
 test("runtime banners split real text from fallback illustrations", () => {

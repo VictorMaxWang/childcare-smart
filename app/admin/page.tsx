@@ -19,6 +19,7 @@ import { buildAdminGovernanceDemoViewModel } from "@/lib/agent/admin-governance-
 import { dedupeAdminHomeExposure } from "@/lib/agent/admin-home-dedupe";
 import { useAdminConsultationWorkspace } from "@/lib/agent/use-admin-consultation-workspace";
 import { fetchWeeklyReport } from "@/lib/agent/weekly-report-client";
+import { resolveWeeklyReportScope } from "@/lib/agent/weekly-report-scope";
 import type { WeeklyReportResponse } from "@/lib/ai/types";
 import { getAdminSummary } from "@/lib/api/analytics";
 import { listFeedback as listApiFeedback, type ApiFeedback } from "@/lib/api/communication";
@@ -312,9 +313,13 @@ export default function AdminHomePage() {
   const weeklyReportPayload = useMemo(
     () => ({
       role: "admin" as const,
+      ...(resolveWeeklyReportScope({
+        role: "admin",
+        institutionId: currentUser.institutionId,
+      }) ?? {}),
       snapshot: buildAdminWeeklyReportSnapshot(adminHomePayload, home.adminContext),
     }),
-    [adminHomePayload, home.adminContext]
+    [adminHomePayload, currentUser.institutionId, home.adminContext]
   );
   const weeklyReportKey = useMemo(() => JSON.stringify(weeklyReportPayload), [weeklyReportPayload]);
 

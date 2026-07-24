@@ -26,6 +26,7 @@ import {
 } from "recharts";
 import { getRoleHomePath } from "@/lib/auth/accounts";
 import type { WeeklyReportResponse, WeeklyReportSnapshot } from "@/lib/ai/types";
+import { resolveWeeklyReportScope } from "@/lib/agent/weekly-report-scope";
 import { getLocalToday, isDateWithinLastDays, shiftLocalDate } from "@/lib/date";
 import type { AdminBoardData } from "@/lib/store";
 import { INSTITUTION_NAME, useApp } from "@/lib/store";
@@ -320,7 +321,7 @@ export default function RootOverviewPage() {
   );
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || getRoleHomePath(currentUser.role) !== "/admin") return;
 
     const cached = weeklyReportCacheRef.current.get(weeklyReportKey);
     if (cached) {
@@ -338,7 +339,14 @@ export default function RootOverviewPage() {
         const response = await fetch("/api/ai/weekly-report", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot: weeklyReportSnapshot }),
+          body: JSON.stringify({
+            role: "admin",
+            ...(resolveWeeklyReportScope({
+              role: "admin",
+              institutionId: currentUser.institutionId,
+            }) ?? {}),
+            snapshot: weeklyReportSnapshot,
+          }),
           signal: controller.signal,
         });
 
@@ -366,7 +374,13 @@ export default function RootOverviewPage() {
       cancelled = true;
       controller.abort();
     };
-  }, [isAuthenticated, weeklyReportKey, weeklyReportSnapshot]);
+  }, [
+    currentUser.institutionId,
+    currentUser.role,
+    isAuthenticated,
+    weeklyReportKey,
+    weeklyReportSnapshot,
+  ]);
 
   if (authLoading || !isAuthenticated || currentUser.role === "家长" || currentUser.role === "教师") {
     return (

@@ -9,6 +9,7 @@ const ROLE_ADMIN = "\u673a\u6784\u7ba1\u7406\u5458";
 const ROLE_TEACHER = "\u6559\u5e08";
 const ROLE_PARENT = "\u5bb6\u957f";
 const DEFAULT_PARENT_CHILD_CLASS_NAME = "\u5f85\u5206\u73ed";
+const DEFAULT_SAMPLE_CLASS_NAME = "\u8054\u8c03\u793a\u4f8b\u73ed";
 const SAMPLE_ACCOUNTS = [
   { label: "admin", env: "SAMPLE_ADMIN_PHONE", phone: "10000000000", role: ROLE_ADMIN },
   { label: "teacher", env: "SAMPLE_TEACHER_PHONE", phone: "10000000001", role: ROLE_TEACHER },
@@ -320,10 +321,19 @@ function buildMergedSnapshot(users, snapshotRows) {
     }
   }
 
+  const existingAssignedClassName = merged.children.find(
+    (child) =>
+      child &&
+      typeof child === "object" &&
+      typeof child.className === "string" &&
+      child.className.trim() &&
+      child.className !== DEFAULT_PARENT_CHILD_CLASS_NAME
+  )?.className;
+  // “待分班”只用于新建家庭空间占位；三账号联调时应落到可协作的真实班级。
   const className =
     process.env.SAMPLE_CLASS_NAME?.trim() ||
-    merged.children.find((child) => child && typeof child === "object" && typeof child.className === "string")?.className ||
-    DEFAULT_PARENT_CHILD_CLASS_NAME;
+    existingAssignedClassName ||
+    DEFAULT_SAMPLE_CLASS_NAME;
   const classId = process.env.SAMPLE_CLASS_ID?.trim() || stableClassId(users.admin.institution_id, className);
   merged.children = merged.children.map((child) =>
     child && typeof child === "object"

@@ -61,6 +61,7 @@ import {
   type TeacherAgentWorkflowType,
 } from "@/lib/agent/teacher-agent";
 import { fetchWeeklyReport } from "@/lib/agent/weekly-report-client";
+import { resolveWeeklyReportScope } from "@/lib/agent/weekly-report-scope";
 import type { MobileDraft, ReminderItem, WeeklyReportResponse } from "@/lib/ai/types";
 import { buildTeacherVoiceUnderstandFallback } from "@/lib/ai/teacher-voice-understand";
 import {
@@ -376,9 +377,14 @@ export default function TeacherAgentPage() {
   const weeklyReportPayload = useMemo(
     () => ({
       role: "teacher" as const,
+      ...(resolveWeeklyReportScope({
+        role: "teacher",
+        className: currentUser.className,
+        childId: defaultChildId,
+      }) ?? {}),
       snapshot: buildTeacherWeeklyReportSnapshot(classContext),
     }),
-    [classContext]
+    [classContext, currentUser.className, defaultChildId]
   );
   const weeklyReportKey = useMemo(
     () => JSON.stringify(weeklyReportPayload),

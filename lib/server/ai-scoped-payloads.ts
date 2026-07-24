@@ -110,6 +110,30 @@ function byChildId<T extends { childId?: string }>(items: T[], childId: string) 
   return items.filter((item) => item.childId === childId);
 }
 
+function resolveWeeklyReportChildren(
+  source: WeeklyReportPayload,
+  scope: SessionScope
+) {
+  if (source.scopeType === "child" && source.scopeId) {
+    return scope.visibleChildren.filter((child) => child.id === source.scopeId);
+  }
+  if (source.scopeType === "class" && source.scopeId) {
+    return scope.visibleChildren.filter(
+      (child) =>
+        child.className === source.scopeId ||
+        ("classId" in child && child.classId === source.scopeId)
+    );
+  }
+  return scope.visibleChildren;
+}
+
+function filterWeeklyRecordsByChildren<T extends { childId?: string }>(
+  items: T[],
+  childIds: Set<string>
+) {
+  return items.filter((item) => Boolean(item.childId && childIds.has(item.childId)));
+}
+
 function latestByDate<T>(items: T[], readDate: (item: T) => string) {
   return [...items].sort((left, right) => Date.parse(readDate(right)) - Date.parse(readDate(left)));
 }
@@ -393,40 +417,48 @@ export function buildWeeklyReportPayloadFromScope(
 ): WeeklyReportPayload {
   const role = (source.role ?? (source.scopeType === "institution" ? "admin" : scope.user.role.includes("师") ? "teacher" : "parent")) as WeeklyReportRole;
   const periodLabel = asString((source.snapshot as unknown as AnyRecord).periodLabel, "Current period");
-  const healthAbnormalCount = scope.scopedSnapshot.health.filter((item) => Boolean((item as AnyRecord).isAbnormal)).length;
-  const growthAttention = scope.scopedSnapshot.growth.filter((item) => Boolean((item as AnyRecord).needsAttention));
+  // 会话快照只保证“账号可见”，这里继续按本次请求 scope 收窄，避免多孩家庭或回退到单孩周报时混入其他幼儿。
+  const visibleChildren = resolveWeeklyReportChildren(source, scope);
+  const childIds = new Set(visibleChildren.map((child) => child.id));
+  const attendance = filterWeeklyRecordsByChildren(scope.scopedSnapshot.attendance, childIds);
+  const meals = filterWeeklyRecordsByChildren(scope.scopedSnapshot.meals, childIds);
+  const health = filterWeeklyRecordsByChildren(scope.scopedSnapshot.health, childIds);
+  const growth = filterWeeklyRecordsByChildren(scope.scopedSnapshot.growth, childIds);
+  const feedback = filterWeeklyRecordsByChildren(scope.scopedSnapshot.feedback, childIds);
+  const healthAbnormalCount = health.filter((item) => Boolean((item as AnyRecord).isAbnormal)).length;
+  const growthAttention = growth.filter((item) => Boolean((item as AnyRecord).needsAttention));
   const snapshot: WeeklyReportSnapshot = {
     institutionName: scope.institutionId,
     periodLabel,
     role,
     overview: {
-      visibleChildren: scope.visibleChildren.length,
+      visibleChildren: visibleChildren.length,
       attendanceRate:
-        scope.scopedSnapshot.attendance.length > 0
-          ? scope.scopedSnapshot.attendance.filter((item) => Boolean((item as AnyRecord).isPresent)).length /
-            scope.scopedSnapshot.attendance.length
+        attendance.length > 0
+          ? attendance.filter((item) => Boolean((item as AnyRecord).isPresent)).length /
+            attendance.length
           : 0,
-      mealRecordCount: scope.scopedSnapshot.meals.length,
+      mealRecordCount: meals.length,
       healthAbnormalCount,
       growthAttentionCount: growthAttention.length,
       pendingReviewCount: growthAttention.filter((item) => asString((item as AnyRecord).reviewStatus).includes("待")).length,
-      feedbackCount: scope.scopedSnapshot.feedback.length,
+      feedbackCount: feedback.length,
     },
     diet: {
       balancedRate: 0,
-      hydrationAvg: average(scope.scopedSnapshot.meals.map((item) => asNumber((item as AnyRecord).waterMl))),
+      hydrationAvg: average(meals.map((item) => asNumber((item as AnyRecord).waterMl))),
       monotonyDays: 0,
       vegetableDays: 0,
       proteinDays: 0,
     },
-    topAttentionChildren: scope.visibleChildren.slice(0, 5).map((child) => ({
+    topAttentionChildren: visibleChildren.slice(0, 5).map((child) => ({
       childName: child.name,
       attentionCount: growthAttention.filter((item) => item.childId === child.id).length,
-      hydrationAvg: average(byChildId(scope.scopedSnapshot.meals, child.id).map((item) => asNumber((item as AnyRecord).waterMl))),
+      hydrationAvg: average(byChildId(meals, child.id).map((item) => asNumber((item as AnyRecord).waterMl))),
       vegetableDays: 0,
     })),
     highlights: [
-      `${scope.visibleChildren.length} visible children in current session scope.`,
+      `${visibleChildren.length} visible children in current request scope.`,
       `${healthAbnormalCount} abnormal health records in current session scope.`,
     ],
     risks: growthAttention.slice(0, 5).map((item) => asString((item as AnyRecord).description)).filter(Boolean),
