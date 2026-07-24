@@ -23,6 +23,7 @@ import {
   prepareParentStoryBookResponseForDelivery,
 } from "@/lib/server/parent-storybook-cache";
 import { persistParentStoryBookMedia } from "@/lib/server/parent-storybook-media-store";
+import { reconcileRemoteStoryBookMedia } from "@/lib/server/parent-storybook-remote-media";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -630,16 +631,25 @@ export async function POST(request: Request) {
     });
   }
 
+  const durableRemoteStory =
+    authResult.session.user.accountKind === "normal"
+      ? await reconcileRemoteStoryBookMedia({
+          story: remoteStory,
+          institutionId: authResult.session.user.institutionId,
+          requestUrl: request.url,
+          serviceScope: buildServiceScopeClaim(sessionScope),
+        })
+      : remoteStory;
   const preparedRemoteStory = {
-    ...remoteStory,
+    ...durableRemoteStory,
     provider: remoteStory.providerMeta.provider,
     providerTrace:
-      remoteStory.providerTrace ??
+      durableRemoteStory.providerTrace ??
       buildAiProviderTraceFromProviderMeta({
-        providerMeta: remoteStory.providerMeta,
-        source: remoteStory.source,
-        fallback: remoteStory.fallback,
-        fallbackReason: remoteStory.fallbackReason,
+        providerMeta: durableRemoteStory.providerMeta,
+        source: durableRemoteStory.source,
+        fallback: durableRemoteStory.fallback,
+        fallbackReason: durableRemoteStory.fallbackReason,
         capability: "storybook-media",
       }),
   } satisfies ParentStoryBookResponse;

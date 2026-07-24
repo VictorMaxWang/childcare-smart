@@ -4,6 +4,8 @@ import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
+  SMARTCHILDCARE_FALLBACK_REASON_HEADER,
+  SMARTCHILDCARE_TRANSPORT_HEADER,
   shouldAcceptRemotePayload,
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
@@ -18,6 +20,7 @@ import {
   buildParentTrendFallbackResponse,
   isParentTrendQueryResponse,
 } from "@/lib/server/parent-trend-fallback";
+import { enhanceParentTrendWithVivo } from "@/lib/server/parent-trend-vivo";
 
 function isParentTrendPayload(value: unknown): value is ParentTrendQueryPayload {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -73,6 +76,28 @@ function enrichParentTrendResponse(
         },
       }),
   };
+}
+
+async function buildLocalOrVivoTrendResponse(input: {
+  payload: ParentTrendQueryPayload;
+  brainForward: BrainForwardResult;
+  fallbackReason: string;
+}) {
+  const local = buildParentTrendFallbackResponse({
+    payload: input.payload,
+    fallbackReason: input.fallbackReason,
+  });
+  const enhanced = await enhanceParentTrendWithVivo(local);
+  const headers = buildFallbackHeaders({
+    targetPath: input.brainForward.targetPath,
+    upstreamHost: input.brainForward.upstreamHost,
+    fallbackReason: input.fallbackReason,
+  });
+  if (enhanced) {
+    headers.set(SMARTCHILDCARE_TRANSPORT_HEADER, "next-vivo-chat");
+    headers.delete(SMARTCHILDCARE_FALLBACK_REASON_HEADER);
+  }
+  return NextResponse.json(enhanced ?? local, { status: 200, headers });
 }
 
 export async function POST(request: Request) {
@@ -158,33 +183,17 @@ export async function POST(request: Request) {
         : !contentType.includes("application/json")
         ? "brain-proxy-invalid-json"
         : "brain-incomplete-parent-trend-result");
-    const headers = buildFallbackHeaders({
-      targetPath: brainForward.targetPath,
-      upstreamHost: brainForward.upstreamHost,
+    return buildLocalOrVivoTrendResponse({
+      payload: trustedPayload,
+      brainForward,
       fallbackReason,
     });
-
-    return NextResponse.json(
-      buildParentTrendFallbackResponse({
-        payload: trustedPayload,
-        fallbackReason,
-      }),
-      { status: 200, headers }
-    );
   }
 
   const fallbackReason = brainForward.fallbackReason ?? "brain-proxy-unavailable";
-  const headers = buildFallbackHeaders({
-    targetPath: brainForward.targetPath,
-    upstreamHost: brainForward.upstreamHost,
+  return buildLocalOrVivoTrendResponse({
+    payload: trustedPayload,
+    brainForward,
     fallbackReason,
   });
-
-  return NextResponse.json(
-    buildParentTrendFallbackResponse({
-      payload: trustedPayload,
-      fallbackReason,
-    }),
-    { status: 200, headers }
-  );
 }
