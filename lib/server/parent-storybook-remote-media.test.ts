@@ -126,6 +126,41 @@ test("instance-only cached media is persisted before its URL is returned", async
   assert.match(result.scenes[0].audioUrl ?? "", /durable-audio$/u);
 });
 
+test("safe non-hash Brain media keys are copied or removed instead of leaking broken routes", async () => {
+  const input = story();
+  input.scenes[0].imageUrl =
+    "/api/ai/parent-storybook/media/fallback-scene-1";
+  input.scenes[0].assetRef =
+    "/api/ai/parent-storybook/media/fallback-scene-1";
+  const loadedKeys: string[] = [];
+  const result = await reconcileRemoteStoryBookMedia(
+    {
+      story: input,
+      institutionId: "institution-1",
+      requestUrl: "http://localhost/api/ai/parent-storybook/media-status",
+      serviceScope: { institutionId: "institution-1", childIds: ["child-1"] },
+    },
+    {
+      readLocal: async () => null,
+      loadRemote: async ({ mediaKey, expectedKind }) => {
+        loadedKeys.push(mediaKey);
+        return expectedKind === "image"
+          ? null
+          : { contentType: "audio/wav", bytes: Buffer.from("audio") };
+      },
+      persistLocal: async (input) => ({
+        mediaUrl: `/api/ai/parent-storybook/media/persisted-${input.contentType.split("/")[0]}`,
+        mediaKey: "persisted",
+      }),
+    }
+  );
+
+  assert.ok(loadedKeys.includes("fallback-scene-1"));
+  assert.equal(result.scenes[0].imageUrl, null);
+  assert.equal(result.scenes[0].assetRef, null);
+  assert.equal(result.scenes[0].imageStatus, "fallback");
+});
+
 test("unreadable ready media is downgraded instead of returning a broken URL", async () => {
   const result = await reconcileRemoteStoryBookMedia(
     {

@@ -15,7 +15,8 @@ import {
 
 const MAX_REMOTE_MEDIA_BYTES = 4 * 1024 * 1024;
 const MEDIA_ROUTE_PATTERN =
-  /^\/api\/ai\/parent-storybook\/media\/([a-f0-9]{40})(?:\?.*)?$/u;
+  /^\/api\/ai\/parent-storybook\/media\/([^/?#]+)(?:\?.*)?$/u;
+const SAFE_REMOTE_MEDIA_KEY_PATTERN = /^[a-zA-Z0-9._-]{1,191}$/u;
 
 type LoadedMedia = {
   contentType: string;
@@ -84,7 +85,14 @@ const defaultDependencies: RemoteMediaDependencies = {
 
 function mediaKeyFromUrl(value: string | null | undefined) {
   if (typeof value !== "string") return null;
-  return value.trim().match(MEDIA_ROUTE_PATTERN)?.[1] ?? null;
+  const encoded = value.trim().match(MEDIA_ROUTE_PATTERN)?.[1];
+  if (!encoded) return null;
+  try {
+    const decoded = decodeURIComponent(encoded);
+    return SAFE_REMOTE_MEDIA_KEY_PATTERN.test(decoded) ? decoded : null;
+  } catch {
+    return null;
+  }
 }
 
 async function ensureDurableMediaUrl(input: {
