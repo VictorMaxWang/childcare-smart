@@ -33,6 +33,7 @@ type StoryBookMediaCacheEntry = {
   bytes: Buffer;
   ownerChildId: string | null;
   ownerStorybookId: string | null;
+  persisted: boolean;
 };
 
 const storyResponseCache = new Map<string, StoryBookResponseCacheEntry>();
@@ -72,7 +73,7 @@ function resolveCachedMediaExpiresAtFromUrl(url?: string | null) {
   const mediaId = resolveMediaIdFromUrl(url);
   if (!mediaId) return null;
   const entry = mediaAssetCache.get(mediaId);
-  return entry ? expiresAtIso(entry.expiresAt) : null;
+  return entry && !entry.persisted ? expiresAtIso(entry.expiresAt) : null;
 }
 
 function cloneStory(story: ParentStoryBookResponse) {
@@ -217,20 +218,43 @@ export function cacheParentStoryBookMediaDataUrl(
   const parsed = parseDataUrl(dataUrl);
   if (!parsed) return null;
 
+  return cacheParentStoryBookMediaBytes(
+    parsed.contentType,
+    parsed.bytes,
+    seed,
+    owner,
+    dataUrl.slice(0, 128)
+  );
+}
+
+export function cacheParentStoryBookMediaBytes(
+  contentType: string,
+  bytes: Buffer,
+  seed: string,
+  owner?: { childId?: string | null; storybookId?: string | null },
+  identityPrefix = bytes.subarray(0, 96).toString("base64")
+) {
+  cleanupExpired();
   const mediaId = crypto
     .createHash("sha1")
-    .update(`${seed}:${dataUrl.slice(0, 128)}:${parsed.bytes.length}`)
+    .update(`${seed}:${identityPrefix}:${bytes.length}`)
     .digest("hex");
 
   mediaAssetCache.set(mediaId, {
     expiresAt: now() + STORYBOOK_MEDIA_TTL_SECONDS * 1000,
-    contentType: parsed.contentType,
-    bytes: parsed.bytes,
+    contentType,
+    bytes,
     ownerChildId: owner?.childId ?? null,
     ownerStorybookId: owner?.storybookId ?? null,
+    persisted: false,
   });
 
   return `/api/ai/parent-storybook/media/${mediaId}`;
+}
+
+export function markCachedParentStoryBookMediaPersisted(mediaId: string) {
+  const entry = mediaAssetCache.get(mediaId);
+  if (entry) entry.persisted = true;
 }
 
 export function cacheParentStoryBookAudioDataUrl(dataUrl: string, seed: string) {
@@ -253,9 +277,12 @@ export function readCachedParentStoryBookMedia(mediaId: string) {
   return {
     contentType: entry.contentType,
     bytes: entry.bytes,
-    expiresAt: expiresAtIso(entry.expiresAt),
+    expiresAt: entry.persisted ? null : expiresAtIso(entry.expiresAt),
     ownerChildId: entry.ownerChildId,
     ownerStorybookId: entry.ownerStorybookId,
+    storageMode: entry.persisted
+      ? ("database_media" as const)
+      : ("cached_media" as const),
   };
 }
 

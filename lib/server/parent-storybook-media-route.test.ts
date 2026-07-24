@@ -47,12 +47,12 @@ test("parent storybook media cache keeps the opaque media URL contract", () => {
   );
 
   const mediaKey = audioUrl?.split("/").at(-1);
-  assert.ok(mediaKey);
+  if (!mediaKey) throw new Error("audio media key was not generated");
 
   const cachedAudio = readCachedParentStoryBookMedia(mediaKey);
   assert.ok(cachedAudio);
   assert.equal(cachedAudio.contentType, "audio/wav");
-  assert.match(cachedAudio.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(cachedAudio.expiresAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
   assert.deepEqual(
     Array.from(cachedAudio.bytes),
     Array.from(Buffer.from("UklGRg==", "base64"))
@@ -72,12 +72,12 @@ test("parent storybook media cache also serves svg fallback assets", () => {
 
   assert.equal(typeof imageUrl, "string");
   const mediaKey = imageUrl?.split("/").at(-1);
-  assert.ok(mediaKey);
+  if (!mediaKey) throw new Error("image media key was not generated");
 
   const cachedImage = readCachedParentStoryBookMedia(mediaKey);
   assert.ok(cachedImage);
   assert.equal(cachedImage.contentType, "image/svg+xml");
-  assert.match(cachedImage.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(cachedImage.expiresAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
   assert.match(cachedImage.bytes.toString("utf8"), /Page 5/);
 
   mediaAssetCache.clear();

@@ -22,6 +22,7 @@ import {
   cacheParentStoryBookMediaDataUrl,
   prepareParentStoryBookResponseForDelivery,
 } from "@/lib/server/parent-storybook-cache";
+import { persistParentStoryBookMedia } from "@/lib/server/parent-storybook-media-store";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -289,6 +290,8 @@ async function completeStoryMediaLocally(input: {
   targetPath: string;
   upstreamHost: string | null;
   routeFallbackReason: string | null;
+  institutionId: string;
+  persistAudio: boolean;
 }) {
   const startedAt = Date.now();
   const story = JSON.parse(JSON.stringify(input.payload.story)) as ParentStoryBookResponse;
@@ -374,12 +377,24 @@ async function completeStoryMediaLocally(input: {
         page: scene.sceneIndex,
         voiceStyle: scene.voiceStyle,
       });
+      const mediaSeed = `${story.storyId}:next-vivo-tts:${scene.sceneIndex}`;
       const audioDataUrl = `data:${result.audioContentType};base64,${result.audioBytes.toString("base64")}`;
-      const audioUrl = cacheParentStoryBookMediaDataUrl(
-        audioDataUrl,
-        `${story.storyId}:next-vivo-tts:${scene.sceneIndex}`,
-        { childId: story.childId, storybookId: story.storyId }
-      ) ?? audioDataUrl;
+      const audioUrl = input.persistAudio
+        ? (
+            await persistParentStoryBookMedia({
+              institutionId: input.institutionId,
+              childId: story.childId,
+              storybookId: story.storyId,
+              contentType: result.audioContentType,
+              bytes: result.audioBytes,
+              seed: mediaSeed,
+            })
+          ).mediaUrl
+        : cacheParentStoryBookMediaDataUrl(
+            audioDataUrl,
+            mediaSeed,
+            { childId: story.childId, storybookId: story.storyId }
+          ) ?? audioDataUrl;
       const index = scenesByIndex.get(scene.sceneIndex);
       if (typeof index === "number") {
         story.scenes[index] = {
@@ -576,6 +591,8 @@ export async function POST(request: Request) {
       targetPath,
       upstreamHost: brainForward.upstreamHost,
       routeFallbackReason: brainForward.fallbackReason ?? "brain-proxy-unavailable",
+      institutionId: authResult.session.user.institutionId,
+      persistAudio: authResult.session.user.accountKind === "normal",
     });
     return NextResponse.json(preparedStory, {
       status: 200,
@@ -597,6 +614,8 @@ export async function POST(request: Request) {
       targetPath,
       upstreamHost: brainForward.upstreamHost,
       routeFallbackReason: !brainForward.response.ok ? `brain-status-${brainForward.response.status}` : "brain-proxy-invalid-json",
+      institutionId: authResult.session.user.institutionId,
+      persistAudio: authResult.session.user.accountKind === "normal",
     });
     return NextResponse.json(preparedStory, {
       status: 200,
