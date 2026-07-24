@@ -78,21 +78,6 @@ function filterByChildId<T>(
   });
 }
 
-function replaceScopedItems<T>(
-  currentItems: T[],
-  incomingItems: T[],
-  authorizedChildIds: Set<string>,
-  readChildId: (item: T) => string | null | undefined
-) {
-  const preservedItems = currentItems.filter((item) => {
-    const childId = readChildId(item);
-    return !childId || !authorizedChildIds.has(childId);
-  });
-
-  const scopedIncomingItems = filterByChildId(incomingItems, authorizedChildIds, readChildId);
-  return [...preservedItems, ...scopedIncomingItems];
-}
-
 function mergeItemsByKey<T>(
   currentItems: T[],
   incomingItems: T[],
@@ -140,17 +125,6 @@ function filterMenusForScope(
   authorizedClassNames: Set<string>
 ) {
   return items.filter((item) => authorizedClassNames.has(item.classId));
-}
-
-function replaceScopedMenus(
-  currentItems: SnapshotNutritionMenu[],
-  incomingItems: SnapshotNutritionMenu[],
-  authorizedClassNames: Set<string>
-) {
-  return [
-    ...currentItems.filter((item) => !authorizedClassNames.has(item.classId)),
-    ...filterMenusForScope(incomingItems, authorizedClassNames),
-  ];
 }
 
 export function scopeSnapshotForSessionUser(
@@ -250,111 +224,94 @@ export function mergeScopedSnapshotForSessionUser(params: {
     } satisfies AppStateSnapshot;
   }
 
-  const authorizedChildIds = resolveAuthorizedChildIdSet(user, currentSnapshot.children);
-  const authorizedClassNames = resolveAuthorizedClassNameSet(currentSnapshot.children, authorizedChildIds);
-
+  // 浏览器缓存可能因容量不足只保留部分 bucket；缺失项不能被解释为删除远端数据。
+  // 正常账号的显式删除使用归档接口，因此这里仅在授权范围内按稳定主键 upsert。
   return {
     ...currentSnapshot,
-    children: replaceScopedItems(
+    children: mergeItemsByKey(
       currentSnapshot.children,
       scopedIncomingSnapshot.children,
-      authorizedChildIds,
       (item) => item.id
     ),
-    attendance: replaceScopedItems(
+    attendance: mergeItemsByKey(
       currentSnapshot.attendance,
       scopedIncomingSnapshot.attendance,
-      authorizedChildIds,
-      (item) => item.childId
+      (item) => item.id
     ),
-    meals: replaceScopedItems(
+    meals: mergeItemsByKey(
       currentSnapshot.meals,
       scopedIncomingSnapshot.meals,
-      authorizedChildIds,
-      (item) => item.childId
+      (item) => item.id
     ),
-    growth: replaceScopedItems(
+    growth: mergeItemsByKey(
       currentSnapshot.growth,
       scopedIncomingSnapshot.growth,
-      authorizedChildIds,
-      (item) => item.childId
+      (item) => item.id
     ),
-    feedback: replaceScopedItems(
+    feedback: mergeItemsByKey(
       currentSnapshot.feedback,
       scopedIncomingSnapshot.feedback,
-      authorizedChildIds,
-      (item) => item.childId
+      (item) => item.id
     ),
-    health: replaceScopedItems(
+    health: mergeItemsByKey(
       currentSnapshot.health,
       scopedIncomingSnapshot.health,
-      authorizedChildIds,
-      (item) => item.childId
+      (item) => item.id
     ),
-    taskCheckIns: replaceScopedItems(
+    taskCheckIns: mergeItemsByKey(
       currentSnapshot.taskCheckIns,
       scopedIncomingSnapshot.taskCheckIns,
-      authorizedChildIds,
-      (item) => item.childId
+      (item) => item.id
     ),
-    interventionCards: replaceScopedItems(
+    interventionCards: mergeItemsByKey(
       currentSnapshot.interventionCards,
       scopedIncomingSnapshot.interventionCards,
-      authorizedChildIds,
-      (item) => item.targetChildId
+      (item) => item.id
     ),
-    consultations: replaceScopedItems(
+    consultations: mergeItemsByKey(
       currentSnapshot.consultations,
       scopedIncomingSnapshot.consultations,
-      authorizedChildIds,
-      (item) => item.childId
+      (item) => item.consultationId
     ),
-    mobileDrafts: replaceScopedItems(
+    mobileDrafts: mergeItemsByKey(
       currentSnapshot.mobileDrafts,
       scopedIncomingSnapshot.mobileDrafts,
-      authorizedChildIds,
-      (item) => item.childId
+      (item) => item.draftId
     ),
-    reminders: replaceScopedItems(
+    reminders: mergeItemsByKey(
       currentSnapshot.reminders,
       scopedIncomingSnapshot.reminders,
-      authorizedChildIds,
-      readReminderChildId
+      (item) => item.reminderId
     ),
-    tasks: replaceScopedItems(
+    tasks: mergeItemsByKey(
       currentSnapshot.tasks,
       scopedIncomingSnapshot.tasks,
-      authorizedChildIds,
-      (item) => item.childId
+      (item) => item.taskId
     ),
-    messages: replaceScopedItems(
+    messages: mergeItemsByKey(
       currentSnapshot.messages,
       scopedIncomingSnapshot.messages,
-      authorizedChildIds,
-      (item) => item.childId
+      (item) => item.messageId
     ),
-    conversations: replaceScopedItems(
+    conversations: mergeItemsByKey(
       currentSnapshot.conversations,
       scopedIncomingSnapshot.conversations,
-      authorizedChildIds,
-      (item) => item.childId
+      (item) => item.conversationId
     ),
-    healthMaterials: replaceScopedItems(
+    healthMaterials: mergeItemsByKey(
       currentSnapshot.healthMaterials,
       scopedIncomingSnapshot.healthMaterials,
-      authorizedChildIds,
-      (item) => item.childId
+      (item) => item.materialId
     ),
-    nutritionMenus: replaceScopedMenus(
+    nutritionMenus: mergeItemsByKey(
       currentSnapshot.nutritionMenus,
       scopedIncomingSnapshot.nutritionMenus,
-      authorizedClassNames
+      (item) => item.menuId
     ),
-    storybooks: replaceScopedItems(
+    storybooks: mergeItemsByKey(
       currentSnapshot.storybooks,
       scopedIncomingSnapshot.storybooks,
-      authorizedChildIds,
-      (item) => item.childId
+      (item) => item.storybookId
     ),
     updatedAt: scopedIncomingSnapshot.updatedAt,
   } satisfies AppStateSnapshot;

@@ -749,7 +749,10 @@ export default function ParentStoryBookPage() {
         const shouldPersistGeneratedStorybook =
           !forceNetworkForManualOverride && !backgroundMediaPoll;
         const storybookSaveResult =
-          selectedFeed && data.childId === selectedFeed.child.id && shouldPersistGeneratedStorybook
+          parentD01.currentUser.accountKind !== "normal" &&
+          selectedFeed &&
+          data.childId === selectedFeed.child.id &&
+          shouldPersistGeneratedStorybook
             ? saveParentStorybook({
                 childId: selectedFeed.child.id,
                 response: data,
