@@ -72,7 +72,8 @@ const MEDIA_POLL_MAX_DELAY_MS = 70_000;
 const MEDIA_POLL_MAX_ATTEMPTS = 40;
 const STORYBOOK_USER_REQUEST_TIMEOUT_MS = 75_000;
 const STORYBOOK_MEDIA_POLL_TIMEOUT_MS = 50_000;
-const STORYBOOK_API_SAVE_TIMEOUT_MS = 5_000;
+// 线上冷启动需要读取并原子写回机构快照，5 秒会把最终成功的保存误报为失败。
+const STORYBOOK_API_SAVE_TIMEOUT_MS = 15_000;
 
 function buildMediaStatusPrioritySceneIndices(
   story: ParentStoryBookResponse,
