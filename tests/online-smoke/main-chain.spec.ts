@@ -1,4 +1,13 @@
-import { expect, test, type APIResponse, type Browser, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
+import {
+  expect,
+  test,
+  type APIResponse,
+  type Browser,
+  type BrowserContext,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -247,7 +256,10 @@ test("online demo main chain smoke", async ({ browser }, testInfo) => {
         accountName: ACCOUNTS.parent.accountName,
         requireProtected: true,
       });
-      const storybookVisible = await page.getByTestId("lin-xiaoyu-fixed-storybook").isVisible({ timeout: 20_000 }).catch(() => false);
+      const storybookVisible = await waitForVisible(
+        page.getByTestId("lin-xiaoyu-fixed-storybook"),
+        20_000
+      );
       if (!storybookVisible) {
         addIssue(report, active, {
           severity: "P1",
@@ -284,7 +296,7 @@ test("online demo main chain smoke", async ({ browser }, testInfo) => {
 
       await loginAs(page, report, active, baseURL, ACCOUNTS.admin, "/admin", "admin-writeback-check");
       const adminFeedback = page.getByTestId("admin-family-feedback-writeback");
-      const adminFeedbackVisible = await adminFeedback.first().isVisible({ timeout: 30_000 }).catch(() => false);
+      const adminFeedbackVisible = await waitForVisible(adminFeedback.first(), 30_000);
       const adminText = adminFeedbackVisible ? await adminFeedback.first().innerText().catch(() => "") : "";
       const adminShowsFeedback = adminText.includes(marker) || adminText.includes("已回流") || adminText.includes("家庭执行结果");
       if (!adminShowsFeedback) {
@@ -516,6 +528,14 @@ async function settle(page: Page) {
   await page.waitForTimeout(800);
 }
 
+async function waitForVisible(locator: Locator, timeoutMs: number) {
+  // Locator.isVisible() 是即时采样，timeout 参数不会等待；巡检必须显式等待异步结果挂载。
+  return locator
+    .waitFor({ state: "visible", timeout: timeoutMs })
+    .then(() => true)
+    .catch(() => false);
+}
+
 async function getPageMetrics(page: Page): Promise<PageMetrics> {
   return page.evaluate(() => {
     const bodyText = document.body?.innerText ?? "";
@@ -686,7 +706,7 @@ async function createTeacherRecordAndConsultation(
 
 async function tryRunHighRiskConsultation(page: Page, report: OnlineSmokeReport, active: ActiveRoute, marker: string) {
   const startButton = page.getByTestId("r06-consultation-start-button");
-  const visible = await startButton.isVisible({ timeout: 10_000 }).catch(() => false);
+  const visible = await waitForVisible(startButton, 10_000);
   if (!visible) {
     const screenshot = await capture(page, report, "desktop-teacher-high-risk-start-missing");
     addIssue(report, active, {
@@ -721,7 +741,7 @@ async function tryRunHighRiskConsultation(page: Page, report: OnlineSmokeReport,
   }
   await startButton.click();
   const result = page.locator("#consultation-result");
-  const shown = await result.isVisible({ timeout: 30_000 }).catch(() => false);
+  const shown = await waitForVisible(result, 30_000);
   if (!shown) {
     const screenshot = await capture(page, report, "desktop-teacher-high-risk-result-timeout");
     addIssue(report, active, {
@@ -759,7 +779,7 @@ async function tryRunHighRiskConsultation(page: Page, report: OnlineSmokeReport,
 
 async function submitParentFeedback(page: Page, report: OnlineSmokeReport, active: ActiveRoute, marker: string) {
   const section = page.getByTestId("r07-parent-agent-feedback-section").first();
-  if (!(await section.isVisible({ timeout: 45_000 }).catch(() => false))) {
+  if (!(await waitForVisible(section, 45_000))) {
     addIssue(report, active, {
       severity: "P1",
       category: "chain",
@@ -781,7 +801,11 @@ async function submitParentFeedback(page: Page, report: OnlineSmokeReport, activ
     await section.getByRole("textbox").first().fill(feedbackNote, { timeout: 20_000 });
   });
 
-  if (!(await submit.isEnabled({ timeout: 20_000 }).catch(() => false))) {
+  const submitEnabled = await expect(submit)
+    .toBeEnabled({ timeout: 20_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!submitEnabled) {
     addIssue(report, active, {
       severity: "P1",
       category: "button",
@@ -793,12 +817,10 @@ async function submitParentFeedback(page: Page, report: OnlineSmokeReport, activ
   }
 
   await submit.click();
-  const bodyContainsMarker = await page
-    .locator("body")
-    .filter({ hasText: marker })
-    .first()
-    .isVisible({ timeout: 30_000 })
-    .catch(() => false);
+  const bodyContainsMarker = await waitForVisible(
+    page.locator("body").filter({ hasText: marker }).first(),
+    30_000
+  );
   if (!bodyContainsMarker) {
     addIssue(report, active, {
       severity: "P2",
@@ -951,7 +973,7 @@ function attachCollectors(page: Page, report: OnlineSmokeReport, active: ActiveR
   page.on("console", (message) => {
     if (message.type() !== "error") return;
     const text = message.text();
-    if (isAllowedConsoleNoise(text)) return;
+    if (isAllowedConsoleNoise(text, message.location().url)) return;
     const issue = addIssue(report, active, {
       severity: "P2",
       category: "console",
@@ -1095,22 +1117,35 @@ function isSameOrigin(rawUrl: string, baseURL: string) {
   }
 }
 
-function isAllowedConsoleNoise(text: string) {
+function isAllowedConsoleNoise(text: string, sourceUrl = "") {
   return (
     text.includes("ERR_ABORTED") ||
     text.includes("ResizeObserver loop") ||
     text.includes("va.vercel-scripts.com") ||
-    text.includes("net::ERR_BLOCKED_BY_ORB")
+    text.includes("net::ERR_BLOCKED_BY_ORB") ||
+    // 匿名页用 401 表示“尚未登录”；只豁免浏览器明确归因到会话探测接口的资源日志。
+    (isExpectedAnonymousSessionResponse(sourceUrl, 401) &&
+      text.includes("Failed to load resource") &&
+      text.includes("401"))
   );
 }
 
 function isAllowedNetworkNoise(url: string, status: number) {
   return (
-    (url.includes("/api/auth/session") && status === 401) ||
+    isExpectedAnonymousSessionResponse(url, status) ||
     url.includes("_next/webpack-hmr") ||
     url.includes("__nextjs_original-stack-frame") ||
     url.includes("favicon.ico")
   );
+}
+
+function isExpectedAnonymousSessionResponse(rawUrl: string, status: number) {
+  if (status !== 401) return false;
+  try {
+    return new URL(rawUrl).pathname === "/api/auth/session";
+  } catch {
+    return false;
+  }
 }
 
 function nextIssueId(report: OnlineSmokeReport) {
