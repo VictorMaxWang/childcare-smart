@@ -28,7 +28,10 @@ import {
   isAiProviderUnavailableError,
 } from "@/lib/ai/server";
 import type { WeeklyReportResponse } from "@/lib/ai/types";
-import { forwardBrainRequest } from "@/lib/server/brain-client";
+import {
+  forwardBrainRequest,
+  shouldAcceptRemoteResponse,
+} from "@/lib/server/brain-client";
 import { buildAdminAgentPayloadFromScope } from "@/lib/server/ai-scoped-payloads";
 import { buildServiceScopeClaim, getSessionScope } from "@/lib/server/session-scope";
 import { buildMemoryContextForPrompt } from "@/lib/server/memory-context";
@@ -193,7 +196,13 @@ export async function POST(request: Request) {
   const brainForward = await forwardBrainRequest(brainRequest, "/api/v1/agents/admin/run", {
     serviceScope,
   });
-  if (brainForward.response) {
+  if (
+    brainForward.response &&
+    await shouldAcceptRemoteResponse(
+      brainForward.response,
+      authResult.session.user.accountKind
+    )
+  ) {
     if (payload.workflow !== "weekly-ops-report" || !brainForward.response.ok) {
       return brainForward.response;
     }
@@ -218,7 +227,9 @@ export async function POST(request: Request) {
   }
 
   const context = buildAdminAgentContext(payload);
-  const runtimeOptions = getAiRuntimeOptions(request);
+  const runtimeOptions = getAiRuntimeOptions(request, {
+    accountKind: authResult.session.user.accountKind,
+  });
 
   try {
   if (payload.workflow === "daily-priority") {

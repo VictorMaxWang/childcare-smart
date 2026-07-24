@@ -222,6 +222,82 @@ function buildForwardHeaders(request: Request) {
   return headers;
 }
 
+function isExplicitMockToken(value: unknown) {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "mock" ||
+    normalized.startsWith("mock-") ||
+    normalized.startsWith("mock_") ||
+    normalized.endsWith("-mock") ||
+    normalized.endsWith("_mock")
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function hasExplicitMockMetadata(value: unknown, depth = 0): boolean {
+  if (!isRecord(value) || depth > 4) return false;
+  if (value.mock === true || value.isMock === true) return true;
+
+  for (const key of [
+    "source",
+    "provider",
+    "mode",
+    "model",
+    "state",
+    "providerName",
+    "provider_name",
+    "requestedProvider",
+  ]) {
+    if (isExplicitMockToken(value[key])) return true;
+  }
+
+  return Object.values(value).some((nested) =>
+    isRecord(nested) ? hasExplicitMockMetadata(nested, depth + 1) : false
+  );
+}
+
+function isExplicitMockPayload(payload: unknown) {
+  if (!isRecord(payload)) return false;
+  const record = payload;
+
+  return (
+    record.mock === true ||
+    isExplicitMockToken(record.source) ||
+    isExplicitMockToken(record.provider) ||
+    isExplicitMockToken(record.mode) ||
+    isExplicitMockToken(record.model) ||
+    hasExplicitMockMetadata(record.providerTrace) ||
+    hasExplicitMockMetadata(record.providerStatus) ||
+    hasExplicitMockMetadata(record.providerMeta) ||
+    hasExplicitMockMetadata(record.dataQuality)
+  );
+}
+
+export function shouldAcceptRemotePayload(
+  payload: unknown,
+  accountKind: "demo" | "normal"
+) {
+  return accountKind === "demo" || !isExplicitMockPayload(payload);
+}
+
+export async function shouldAcceptRemoteResponse(
+  response: Response,
+  accountKind: "demo" | "normal"
+) {
+  if (accountKind === "demo" || !response.ok) return true;
+
+  try {
+    return shouldAcceptRemotePayload(await response.clone().json(), accountKind);
+  } catch {
+    // 这些调用方都期待结构化结果；真实账号遇到 HTML 错误页或损坏响应时应转入本地 provider。
+    return false;
+  }
+}
+
 function getBrainInternalSharedSecret() {
   return (
     process.env.BRAIN_INTERNAL_SHARED_SECRET?.trim() ||
@@ -516,6 +592,7 @@ export const brainClientInternals = {
   trimTrailingSlash,
   resolveLocalDevBrainBaseUrls,
   resolveBrainBaseUrlDetails,
+  shouldAcceptRemotePayload,
 };
 
 function createSseResponse(body: ReadableStream<Uint8Array>, extraHeaders?: HeadersInit) {

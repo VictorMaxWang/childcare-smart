@@ -29,6 +29,10 @@ const releaseEnvKeys = [
   "VIVO_ASR_CLIENT_VERSION",
   "VIVO_ASR_USER_ID",
   "VIVO_ASR_ENGINE_ID",
+  "DASHSCOPE_API_KEY",
+  "BAILIAN_MODEL",
+  "BAILIAN_ENDPOINT",
+  "BAILIAN_TIMEOUT_MS",
 ];
 
 const localAiEnvKeys = [
@@ -42,7 +46,9 @@ const localAiEnvKeys = [
   "VIVO_ASR_USER_ID",
   "VIVO_ASR_ENGINE_ID",
   "DASHSCOPE_API_KEY",
-  "AI_MODEL",
+  "BAILIAN_MODEL",
+  "BAILIAN_ENDPOINT",
+  "BAILIAN_TIMEOUT_MS",
 ];
 
 function resolvePath(filePath) {

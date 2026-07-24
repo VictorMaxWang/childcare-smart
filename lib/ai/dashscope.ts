@@ -13,8 +13,39 @@ import type {
 import { buildActionizedWeeklyReportResponse } from "@/lib/ai/weekly-report";
 import { logSecurityEvent } from "@/lib/server/security-log";
 
-const DASHSCOPE_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
-const REQUEST_TIMEOUT_MS = 12000;
+const DEFAULT_DASHSCOPE_ENDPOINT =
+  "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+const DEFAULT_BAILIAN_MODEL = "qwen3.7-plus";
+const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
+const MIN_REQUEST_TIMEOUT_MS = 250;
+const MAX_REQUEST_TIMEOUT_MS = 120000;
+
+export interface BailianRuntimeConfig {
+  endpoint: string;
+  model: string;
+  timeoutMs: number;
+}
+
+function resolveRequestTimeoutMs(value: string | undefined) {
+  const parsed = Number(value?.trim());
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_REQUEST_TIMEOUT_MS;
+  return Math.max(
+    MIN_REQUEST_TIMEOUT_MS,
+    Math.min(Math.round(parsed), MAX_REQUEST_TIMEOUT_MS)
+  );
+}
+
+export function resolveBailianRuntimeConfig(): BailianRuntimeConfig {
+  return {
+    endpoint: process.env.BAILIAN_ENDPOINT?.trim() || DEFAULT_DASHSCOPE_ENDPOINT,
+    // 百炼变量是当前正式配置；AI_MODEL 仅保留给旧部署兼容。默认使用已实测可用的官方替代型号。
+    model:
+      process.env.BAILIAN_MODEL?.trim() ||
+      process.env.AI_MODEL?.trim() ||
+      DEFAULT_BAILIAN_MODEL,
+    timeoutMs: resolveRequestTimeoutMs(process.env.BAILIAN_TIMEOUT_MS),
+  };
+}
 
 type DashscopeTextPart = { type: "text"; text: string };
 type DashscopeImagePart = { type: "image_url"; image_url: { url: string } };
@@ -353,7 +384,7 @@ function buildInstitutionFollowUpPrompt(
 
 async function requestDashscopeJson(prompt: string) {
   const apiKey = process.env.DASHSCOPE_API_KEY || "";
-  const model = process.env.AI_MODEL || "qwen-turbo";
+  const { endpoint, model, timeoutMs } = resolveBailianRuntimeConfig();
 
   if (!apiKey) {
     logSecurityEvent("warn", "ai.dashscope.missing_env", { provider: "dashscope" });
@@ -361,10 +392,10 @@ async function requestDashscopeJson(prompt: string) {
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(DASHSCOPE_ENDPOINT, {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -372,6 +403,8 @@ async function requestDashscopeJson(prompt: string) {
       },
       body: JSON.stringify({
         model,
+        // 结构化托育建议不需要长链路推理，关闭思考可显著降低真实页面等待时间。
+        enable_thinking: false,
         response_format: { type: "json_object" },
         temperature: 0.2,
         messages: [
@@ -425,6 +458,7 @@ async function requestDashscopeJsonWithMessages({
   messages: Array<{ role: "system" | "user" | "assistant"; content: DashscopeContent }>;
 }) {
   const apiKey = process.env.DASHSCOPE_API_KEY || "";
+  const { endpoint, timeoutMs } = resolveBailianRuntimeConfig();
 
   if (!apiKey) {
     logSecurityEvent("warn", "ai.dashscope.missing_env", { provider: "dashscope" });
@@ -432,10 +466,10 @@ async function requestDashscopeJsonWithMessages({
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(DASHSCOPE_ENDPOINT, {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -574,7 +608,7 @@ export async function requestDashscopeMealVision(imageDataUrl: string): Promise<
 export async function requestDashscopeDietEvaluation(
   input: DietEvaluationInput
 ): Promise<DietEvaluationResult | null> {
-  const model = process.env.AI_DIET_MODEL || process.env.AI_MODEL || "qwen-turbo";
+  const model = process.env.AI_DIET_MODEL?.trim() || resolveBailianRuntimeConfig().model;
   const prompt = [
     "你是托育机构营养分析助手。",
     "请结合孩子年龄与饮食记录给出评分和建议，输出严格JSON。",
@@ -650,3 +684,8 @@ export async function requestDashscopeFollowUp(
     return null;
   }
 }
+
+export const dashscopeInternals = {
+  resolveRuntimeConfig: resolveBailianRuntimeConfig,
+  resolveRequestTimeoutMs,
+};

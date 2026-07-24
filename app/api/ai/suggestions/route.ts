@@ -9,7 +9,10 @@ import {
 import type { AiSuggestionPayload, AiSuggestionResponse } from "@/lib/ai/types";
 import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
 import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
-import { forwardBrainRequest } from "@/lib/server/brain-client";
+import {
+  forwardBrainRequest,
+  shouldAcceptRemoteResponse,
+} from "@/lib/server/brain-client";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import { ApiRouteError } from "@/lib/server/api-errors";
 import {
@@ -47,7 +50,6 @@ export async function POST(request: Request) {
     payload.scope !== "institution" && "child" in payload.snapshot
       ? payload.snapshot
       : null;
-  const isChildScoped = childSnapshot !== null;
   const childId = childSnapshot?.child.id ?? null;
   if (!childId) {
     return aiRouteLimitedResponse({
@@ -88,13 +90,24 @@ export async function POST(request: Request) {
   const brainForward = await forwardBrainRequest(brainRequest, "/api/v1/agents/parent/suggestions", {
     serviceScope: buildServiceScopeClaim(sessionScope),
   });
-  if (brainForward.response?.ok || (brainForward.response && !isChildScoped)) {
+  if (
+    brainForward.response?.ok &&
+    await shouldAcceptRemoteResponse(
+      brainForward.response,
+      authResult.session.user.accountKind
+    )
+  ) {
     return brainForward.response;
   }
 
   let result: AiSuggestionResponse;
   try {
-    result = await executeSuggestion(trustedPayload, getAiRuntimeOptions(request));
+    result = await executeSuggestion(
+      trustedPayload,
+      getAiRuntimeOptions(request, {
+        accountKind: authResult.session.user.accountKind,
+      })
+    );
   } catch (error) {
     if (isAiProviderUnavailableError(error)) {
       return NextResponse.json(buildAiProviderUnavailableBody(error), { status: error.status });

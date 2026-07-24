@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import type { ParentMessageReflexionRequest, ParentMessageReflexionResponse } from "@/lib/ai/types";
 import { sanitizeParentMessageReflexionResponse } from "@/lib/agent/parent-message-reflexion";
-import { forwardBrainRequest } from "@/lib/server/brain-client";
+import {
+  forwardBrainRequest,
+  shouldAcceptRemotePayload,
+} from "@/lib/server/brain-client";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import { ApiRouteError } from "@/lib/server/api-errors";
 import { buildParentMessageRequestFromScope } from "@/lib/server/ai-scoped-payloads";
@@ -130,6 +133,20 @@ export async function POST(request: Request) {
       return NextResponse.json(
         sanitizeParentMessageReflexionResponse(
           buildParentMessageFallbackResponse(trustedBody, "brain-proxy-invalid-json")
+        ),
+        { status: 200 }
+      );
+    }
+
+    if (
+      !shouldAcceptRemotePayload(
+        responseBody,
+        authResult.session.user.accountKind
+      )
+    ) {
+      return NextResponse.json(
+        sanitizeParentMessageReflexionResponse(
+          buildParentMessageFallbackResponse(trustedBody, "brain-mock-result")
         ),
         { status: 200 }
       );

@@ -170,7 +170,7 @@ test("follow-up route accepts structured latestFeedback and falls back locally w
   }
 });
 
-test("follow-up route reselects task-aware structured feedback from snapshot recentDetails", async () => {
+test("follow-up route ignores client-injected feedback and uses the trusted scoped snapshot", async () => {
   const originalFetch = globalThis.fetch;
   const payload = buildPayload();
   const snapshot = payload.snapshot as ChildSuggestionSnapshot;
@@ -178,7 +178,7 @@ test("follow-up route reselects task-aware structured feedback from snapshot rec
     childId: snapshot.child.id,
     currentInterventionCard: payload.currentInterventionCard!,
   }).parentTask.taskId;
-  let memoryRequestBody: Record<string, unknown> | null = null;
+  const memoryRequestBodies: Array<Record<string, unknown>> = [];
 
   payload.latestFeedback = {
     feedbackId: "fb-unrelated",
@@ -252,7 +252,9 @@ test("follow-up route reselects task-aware structured feedback from snapshot rec
     }
 
     if (url.endsWith("/api/v1/memory/context")) {
-      memoryRequestBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      memoryRequestBodies.push(
+        JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>
+      );
       return new Response(JSON.stringify({ error: "memory unavailable" }), {
         status: 500,
         headers: { "content-type": "application/json" },
@@ -279,14 +281,18 @@ test("follow-up route reselects task-aware structured feedback from snapshot rec
       const body = (await response.json()) as Record<string, unknown>;
 
       assert.equal(response.status, 200);
-      assert.equal(
-        (memoryRequestBody?.options as Record<string, unknown> | undefined)?.session_id,
-        "consult-task-aware"
-      );
       assert.ok(
-        ((body.continuityNotes as string[] | undefined) ?? []).some(
-          (item) => item.includes("Child had a fever") || item.includes(parentTaskId)
+        memoryRequestBodies.some(
+          (body) =>
+            (body.options as Record<string, unknown> | undefined)?.session_id ===
+            "consultation-defense-c-1"
         )
+      );
+      assert.equal(
+        ((body.continuityNotes as string[] | undefined) ?? []).some((item) =>
+          item.includes("Child had a fever")
+        ),
+        false
       );
     });
   } finally {

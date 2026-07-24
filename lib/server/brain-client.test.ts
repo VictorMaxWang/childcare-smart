@@ -5,6 +5,7 @@ import {
   brainClientInternals,
   forwardBrainRequest,
   getBrainBaseUrl,
+  shouldAcceptRemoteResponse,
 } from "./brain-client.ts";
 
 function withEnv(
@@ -297,4 +298,57 @@ test("brain client surfaces timeout override and elapsed timing on abort", async
     globalThis.fetch = originalFetch;
     globalThis.setTimeout = originalSetTimeout;
   }
+});
+
+test("normal accounts reject explicit remote mock payloads while demo accounts retain mock support", () => {
+  const shouldAcceptRemotePayload = (
+    brainClientInternals as typeof brainClientInternals & {
+      shouldAcceptRemotePayload?: (
+        payload: unknown,
+        accountKind: "demo" | "normal"
+      ) => boolean;
+    }
+  ).shouldAcceptRemotePayload;
+
+  assert.equal(typeof shouldAcceptRemotePayload, "function");
+
+  const payloads = [
+    { source: "mock" },
+    { provider: "mock" },
+    { mode: "mock" },
+    { model: "mock-suggestion-v1" },
+    { mock: true },
+    { providerTrace: { source: "mock", provider: "mock", mode: "mock" } },
+    { providerStatus: { mock: true } },
+    { providerStatus: { chat: { mock: true } } },
+    { providerMeta: { provider: "mock-brain" } },
+    { dataQuality: { isMock: true } },
+  ];
+
+  for (const payload of payloads) {
+    assert.equal(shouldAcceptRemotePayload!(payload, "normal"), false);
+    assert.equal(shouldAcceptRemotePayload!(payload, "demo"), true);
+  }
+
+  assert.equal(
+    shouldAcceptRemotePayload!(
+      {
+        source: "ai",
+        provider: "vivo",
+        providerTrace: { mode: "live" },
+      },
+      "normal"
+    ),
+    true
+  );
+});
+
+test("normal accounts reject non-JSON success responses from structured brain routes", async () => {
+  const htmlResponse = new Response("<html>upstream error</html>", {
+    status: 200,
+    headers: { "content-type": "text/html" },
+  });
+
+  assert.equal(await shouldAcceptRemoteResponse(htmlResponse, "normal"), false);
+  assert.equal(await shouldAcceptRemoteResponse(htmlResponse, "demo"), true);
 });

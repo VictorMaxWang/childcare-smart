@@ -4,6 +4,7 @@ import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
+  shouldAcceptRemotePayload,
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
@@ -134,7 +135,16 @@ export async function POST(request: Request) {
       ? await brainForward.response.clone().json().catch(() => null)
       : null;
 
-    if (brainForward.response.ok && isParentTrendQueryResponse(responseBody)) {
+    const remotePayloadAccepted = shouldAcceptRemotePayload(
+      responseBody,
+      authResult.session.user.accountKind
+    );
+
+    if (
+      brainForward.response.ok &&
+      remotePayloadAccepted &&
+      isParentTrendQueryResponse(responseBody)
+    ) {
       return NextResponse.json(enrichParentTrendResponse(responseBody, brainForward), {
         status: brainForward.response.status,
         headers: brainForward.response.headers,
@@ -143,7 +153,9 @@ export async function POST(request: Request) {
 
     const fallbackReason =
       brainForward.fallbackReason ??
-      (!contentType.includes("application/json")
+      (!remotePayloadAccepted
+        ? "brain-mock-result"
+        : !contentType.includes("application/json")
         ? "brain-proxy-invalid-json"
         : "brain-incomplete-parent-trend-result");
     const headers = buildFallbackHeaders({

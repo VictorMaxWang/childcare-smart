@@ -34,6 +34,7 @@ import {
   createBrainTransportHeaders,
   forwardBrainRequest,
   readBrainTransportHeaders,
+  shouldAcceptRemotePayload,
   type BrainServiceScopeClaim,
   type BrainForwardResult,
   type BrainTransport,
@@ -217,7 +218,11 @@ function enrichTeacherAgentResult(params: {
   } satisfies TeacherAgentResult;
 }
 
-async function maybeReadBrainResult(brainForward: BrainForwardResult, payload: TeacherAgentRequestPayload) {
+async function maybeReadBrainResult(
+  brainForward: BrainForwardResult,
+  payload: TeacherAgentRequestPayload,
+  accountKind: "demo" | "normal"
+) {
   if (!brainForward.response) return null;
   if (!brainForward.response.ok) return { response: brainForward.response, fallbackReason: null };
 
@@ -230,6 +235,9 @@ async function maybeReadBrainResult(brainForward: BrainForwardResult, payload: T
   }
   if (!isCompleteTeacherAgentResult(raw)) {
     return { response: null, fallbackReason: "brain-incomplete-teacher-agent-result" };
+  }
+  if (!shouldAcceptRemotePayload(raw, accountKind)) {
+    return { response: null, fallbackReason: "brain-mock-result" };
   }
 
   const result = enrichTeacherAgentResult({
@@ -444,7 +452,11 @@ export async function POST(request: Request) {
     timeoutMs: TEACHER_AGENT_BRAIN_TIMEOUT_MS,
     serviceScope,
   });
-  const brainResult = await maybeReadBrainResult(brainForward, payload);
+  const brainResult = await maybeReadBrainResult(
+    brainForward,
+    payload,
+    authResult.session.user.accountKind
+  );
 
   if (brainResult?.response) return brainResult.response;
 
@@ -452,12 +464,16 @@ export async function POST(request: Request) {
     brainResult?.fallbackReason ?? brainForward.fallbackReason,
     "brain-proxy-unavailable"
   );
-  const baseRuntimeOptions = getAiRuntimeOptions(request);
+  const baseRuntimeOptions = getAiRuntimeOptions(request, {
+    accountKind: authResult.session.user.accountKind,
+  });
   const localRuntimeOptions: AiRuntimeOptions = {
     ...baseRuntimeOptions,
-    forceFallback: baseRuntimeOptions.forceFallback || Boolean(fallbackReason),
-    fallbackReason,
+    // Brain 不可用或返回 mock 时仍应尝试 Next 侧真实 provider；provider 自身失败后才进入规则兜底。
+    forceFallback: baseRuntimeOptions.forceFallback,
+    fallbackReason: baseRuntimeOptions.forceFallback ? fallbackReason : null,
   };
+  const localFallbackReason = localRuntimeOptions.forceFallback ? fallbackReason : null;
 
   try {
     const result = await runLocalTeacherAgent({
@@ -474,14 +490,14 @@ export async function POST(request: Request) {
         result,
         payload,
         transport: "next-json-fallback",
-        fallbackReason,
+        fallbackReason: localFallbackReason,
       }),
       {
         status: 200,
         headers: buildTransportHeaders({
           transport: "next-json-fallback",
           upstreamHost: brainForward.upstreamHost,
-          fallbackReason,
+          fallbackReason: localFallbackReason,
         }),
       }
     );

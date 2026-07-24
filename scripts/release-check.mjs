@@ -196,6 +196,9 @@ async function main() {
       "DATABASE_SSL",
       "AUTH_SESSION_SECRET",
       "DASHSCOPE_API_KEY",
+      "BAILIAN_MODEL",
+      "BAILIAN_ENDPOINT",
+      "BAILIAN_TIMEOUT_MS",
     ];
     for (const key of requiredEnvKeys) {
       const ok = Object.prototype.hasOwnProperty.call(envMap, key);
