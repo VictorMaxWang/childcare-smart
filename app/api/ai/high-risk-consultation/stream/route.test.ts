@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { HighRiskConsultationRequestPayload } from "@/lib/agent/high-risk-consultation";
 import { getLocalToday } from "@/lib/date";
-import { POST } from "./route.ts";
+import { highRiskConsultationStreamInternals, POST } from "./route.ts";
 
 type TestEnvKey =
   | "BRAIN_API_BASE_URL"
@@ -145,6 +145,24 @@ function buildStreamRequest() {
     body: JSON.stringify(buildPayload()),
   });
 }
+
+test("high-risk consultation stream identifies nested remote mock results", () => {
+  const containsMock =
+    highRiskConsultationStreamInternals.containsExplicitMockSsePayload;
+
+  assert.equal(
+    containsMock(
+      'event: done\ndata: {"result":{"source":"mock","model":"mock-high-risk-v1"}}'
+    ),
+    true
+  );
+  assert.equal(
+    containsMock(
+      'event: done\ndata: {"result":{"source":"ai","provider":"vivo","providerTrace":{"mode":"live"}}}'
+    ),
+    false
+  );
+});
 
 test("high-risk consultation stream appends local fallback done when brain SSE never finishes", async () => {
   const originalFetch = globalThis.fetch;

@@ -10,6 +10,7 @@ import { buildHighRiskConsultationPayloadFromScope } from "@/lib/server/ai-scope
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
+  shouldAcceptRemotePayload,
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
 import {
@@ -31,6 +32,7 @@ const HIGH_RISK_CONSULTATION_STREAM_TARGET_PATH = "/api/v1/agents/consultations/
 const DEFAULT_HIGH_RISK_CONSULTATION_BRAIN_TIMEOUT_MS = 8_000;
 const DEFAULT_HIGH_RISK_CONSULTATION_STREAM_DONE_TIMEOUT_MS = 24_000;
 const HIGH_RISK_CONSULTATION_BROWSER_BUDGET_MS = 28_000;
+const MAX_VALIDATED_REMOTE_STREAM_BYTES = 2_000_000;
 
 function encodeEvent(event: StreamEvent) {
   return `event: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`;
@@ -84,8 +86,12 @@ function streamResponse(events: StreamEvent[], status = 200, extraHeaders?: Head
   );
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  return isRecord(value) ? value : {};
 }
 
 function asStringArray(value: unknown): string[] {
@@ -405,6 +411,36 @@ function parseSseEventName(block: string) {
     .trim();
 }
 
+function parseSseEventPayload(block: string) {
+  const data = block
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n");
+  if (!data) return null;
+
+  try {
+    return JSON.parse(data) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function containsExplicitMockResult(value: unknown, depth = 0): boolean {
+  if (!shouldAcceptRemotePayload(value, "normal")) return true;
+  if (!isRecord(value) || depth >= 3) return false;
+
+  return ["result", "data", "payload", "output"].some((key) =>
+    containsExplicitMockResult(value[key], depth + 1)
+  );
+}
+
+function containsExplicitMockSsePayload(block: string) {
+  const payload = parseSseEventPayload(block);
+  return payload !== null && containsExplicitMockResult(payload);
+}
+
 function isSseResponse(response: Response) {
   return (response.headers.get("content-type") ?? "").toLowerCase().includes("text/event-stream");
 }
@@ -414,12 +450,14 @@ function createRemoteStreamWithDoneFallback(params: {
   payload: HighRiskConsultationRequestPayload;
   traceId: string;
   brainForward: BrainForwardResult;
+  accountKind: "demo" | "normal";
 }) {
-  const { response, payload, traceId, brainForward } = params;
+  const { response, payload, traceId, brainForward, accountKind } = params;
   const remoteBody = response.body;
   const watchdogMs = getHighRiskConsultationStreamDoneTimeoutMs(brainForward);
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
+  const validateBeforeForwarding = accountKind === "normal";
 
   if (!remoteBody) {
     return streamResponse(
@@ -437,6 +475,9 @@ function createRemoteStreamWithDoneFallback(params: {
         let closed = false;
         let doneSeen = false;
         let fallbackStarted = false;
+        let mockResultSeen = false;
+        let bufferedBytes = 0;
+        const remoteChunks: Uint8Array[] = [];
 
         const close = () => {
           if (closed) return;
@@ -448,10 +489,10 @@ function createRemoteStreamWithDoneFallback(params: {
           if (closed || doneSeen || fallbackStarted) return;
           fallbackStarted = true;
           await reader.cancel().catch(() => undefined);
-          if (buffer.trim()) {
+          if (!validateBeforeForwarding && buffer.trim()) {
             controller.enqueue(encoder.encode("\n\n"));
-            buffer = "";
           }
+          buffer = "";
           for (const event of buildFallbackStreamEvents(payload, traceId, fallbackReason, message)) {
             controller.enqueue(encoder.encode(encodeEvent(event)));
           }
@@ -471,15 +512,41 @@ function createRemoteStreamWithDoneFallback(params: {
             if (closed) return;
             if (done) break;
 
-            controller.enqueue(value);
+            if (validateBeforeForwarding) {
+              bufferedBytes += value.byteLength;
+              if (bufferedBytes > MAX_VALIDATED_REMOTE_STREAM_BYTES) {
+                await appendFallback(
+                  "brain-stream-response-too-large",
+                  "远端会诊结果超过安全大小限制，已切换为本地会诊。"
+                );
+                return;
+              }
+              remoteChunks.push(value.slice());
+            } else {
+              controller.enqueue(value);
+            }
             buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
             const chunks = buffer.split("\n\n");
             buffer = chunks.pop() ?? "";
 
             for (const chunk of chunks) {
+              if (validateBeforeForwarding && containsExplicitMockSsePayload(chunk)) {
+                mockResultSeen = true;
+              }
               if (parseSseEventName(chunk) !== "done") continue;
-              doneSeen = true;
               clearTimeout(watchdog);
+              if (mockResultSeen) {
+                await appendFallback(
+                  "brain-stream-mock-result",
+                  "远端会诊返回了演示结果，已切换为当前儿童范围内的本地会诊。"
+                );
+                return;
+              }
+
+              doneSeen = true;
+              if (validateBeforeForwarding) {
+                for (const remoteChunk of remoteChunks) controller.enqueue(remoteChunk);
+              }
               await reader.cancel().catch(() => undefined);
               close();
               return;
@@ -587,6 +654,7 @@ export async function POST(request: Request) {
       payload,
       traceId,
       brainForward,
+      accountKind: authResult.session.user.accountKind,
     });
   }
 
@@ -599,3 +667,7 @@ export async function POST(request: Request) {
     buildLocalStreamHeaders(brainForward, fallbackReason)
   );
 }
+
+export const highRiskConsultationStreamInternals = {
+  containsExplicitMockSsePayload,
+};

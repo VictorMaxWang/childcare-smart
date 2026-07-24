@@ -869,6 +869,7 @@ export default function ParentStoryBookPage() {
     isLockedLinXiaoyuStorybook,
     latestSavedStorybook,
     parentD01.invalidChildId,
+    parentD01.currentUser.accountKind,
     reloadToken,
     saveParentStorybook,
     selectedFeed,

@@ -10,7 +10,10 @@ import type { AiFollowUpPayload, AiFollowUpResponse, ChildSuggestionSnapshot } f
 import { buildConsultationInputFromSnapshot } from "@/lib/agent/consultation/input";
 import { maybeRunHighRiskConsultation } from "@/lib/agent/consultation/coordinator";
 import { selectStructuredFeedbackConsumption } from "@/lib/feedback/consumption";
-import { forwardBrainRequest } from "@/lib/server/brain-client";
+import {
+  forwardBrainRequest,
+  shouldAcceptRemoteResponse,
+} from "@/lib/server/brain-client";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import { ApiRouteError } from "@/lib/server/api-errors";
 import {
@@ -174,7 +177,13 @@ export async function POST(request: Request) {
   const brainForward = await forwardBrainRequest(brainRequest, "/api/v1/agents/parent/follow-up", {
     serviceScope,
   });
-  if (brainForward.response?.ok || (brainForward.response && !isChildScoped)) {
+  if (
+    brainForward.response?.ok &&
+    await shouldAcceptRemoteResponse(
+      brainForward.response,
+      authResult.session.user.accountKind
+    )
+  ) {
     return brainForward.response;
   }
 
@@ -257,7 +266,12 @@ export async function POST(request: Request) {
 
   let result: AiFollowUpResponse;
   try {
-    result = await executeFollowUp(taskAwarePayload, getAiRuntimeOptions(request));
+    result = await executeFollowUp(
+      taskAwarePayload,
+      getAiRuntimeOptions(request, {
+        accountKind: authResult.session.user.accountKind,
+      })
+    );
   } catch (error) {
     if (isAiProviderUnavailableError(error)) {
       return NextResponse.json(buildAiProviderUnavailableBody(error), { status: error.status });

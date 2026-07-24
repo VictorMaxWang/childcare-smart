@@ -16,12 +16,10 @@ import {
 } from "@/lib/agent/admin-consultation";
 import { buildAdminD01HighRiskConsultation } from "@/lib/agent/admin-local-consultation-fallback";
 import { buildAdminGovernanceDemoViewModel } from "@/lib/agent/admin-governance-demo";
-import type { ConsultationInput } from "@/lib/agent/consultation/input";
-import { buildLocalHighRiskConsultationFallback } from "@/lib/agent/high-risk-consultation-fallback";
 import { dedupeAdminHomeExposure } from "@/lib/agent/admin-home-dedupe";
 import { useAdminConsultationWorkspace } from "@/lib/agent/use-admin-consultation-workspace";
 import { fetchWeeklyReport } from "@/lib/agent/weekly-report-client";
-import type { ConsultationResult, WeeklyReportResponse } from "@/lib/ai/types";
+import type { WeeklyReportResponse } from "@/lib/ai/types";
 import { getAdminSummary } from "@/lib/api/analytics";
 import { listFeedback as listApiFeedback, type ApiFeedback } from "@/lib/api/communication";
 import type { ApiAdminSummary } from "@/lib/api/types";
@@ -72,75 +70,6 @@ function buildFamilyFeedbackWriteback(
     submittedAtLabel: formatFeedbackTime(feedbackTimestampOf(feedback)),
     sourceLabel: feedback.sourceChannel === "parent-agent" ? "来自家长行动页 feedback writeback" : `来源：${feedback.sourceChannel}`,
   };
-}
-
-function buildLinXiaoyuDefenseFallback(params: {
-  childName?: string;
-  className?: string;
-  generatedAt: string;
-}): ConsultationResult {
-  const input: ConsultationInput = {
-    childId: "c-1",
-    childName: params.childName || "林小雨",
-    className: params.className || "向阳班",
-    ageBand: "小班",
-    source: "teacher",
-    generatedAt: params.generatedAt,
-    summary: {
-      health: {
-        abnormalCount: 1,
-        handMouthEyeAbnormalCount: 0,
-        moodKeywords: ["害怕退缩", "需要陪伴"],
-      },
-      meals: {
-        recordCount: 1,
-        hydrationAvg: 180,
-        balancedRate: 1,
-        monotonyDays: 0,
-        allergyRiskCount: 0,
-      },
-      growth: {
-        recordCount: 2,
-        attentionCount: 1,
-        pendingReviewCount: 1,
-        topCategories: [{ category: "社会情绪", count: 2 }],
-      },
-      feedback: {
-        count: 1,
-        statusCounts: { pending: 1 },
-        keywords: ["共读绘本", "小步尝试"],
-      },
-    },
-    focusReasons: [
-      "林小雨在走廊活动听到推车声后害怕退缩，需要勇敢表达与小步尝试的社会情绪支持。",
-      "教师观察、成长记录、家长反馈和历史跟进均指向 48 小时复查闭环。",
-    ],
-    suggestionSummary: "将走廊活动拆成可选择的小目标，并同步园长端承接。",
-    priorityHint: {
-      level: "P1",
-      score: 92,
-      reason: "需要管理端承接 48 小时复查。",
-    },
-    responseSource: "fallback",
-    continuityNotes: [
-      "在老师陪伴下可以说出“我害怕”。",
-      "今晚家庭任务为共读绘本并完成一次门口小步尝试。",
-      "48 小时内复查是否能减少提示后表达需求。",
-    ],
-    memoryMeta: {
-      backend: "local-demo-memory",
-      degraded: false,
-      usedSources: ["teacher-observation", "growth-record", "guardian-feedback", "consultation-history"],
-      errors: [],
-      matchedSnapshotIds: ["memory-snapshot-c-1-social-emotional"],
-      matchedTraceIds: ["history-trace-c-1-48h-review"],
-    },
-  };
-
-  return buildLocalHighRiskConsultationFallback({
-    input,
-    fallbackReason: "admin-defense-board-upgrade",
-  });
 }
 
 export default function AdminHomePage() {

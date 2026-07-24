@@ -8,7 +8,10 @@ import {
   resolveWeeklyReportRoleFromPayload,
 } from "@/lib/ai/server";
 import type { WeeklyReportPayload } from "@/lib/ai/types";
-import { forwardBrainRequest } from "@/lib/server/brain-client";
+import {
+  forwardBrainRequest,
+  shouldAcceptRemoteResponse,
+} from "@/lib/server/brain-client";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import { ApiRouteError } from "@/lib/server/api-errors";
 import { buildWeeklyReportPayloadFromScope } from "@/lib/server/ai-scoped-payloads";
@@ -79,10 +82,23 @@ export async function POST(request: Request) {
   const brainForward = await forwardBrainRequest(brainRequest, "/api/v1/agents/reports/weekly", {
     serviceScope: buildServiceScopeClaim(sessionScope),
   });
-  if (brainForward.response) return brainForward.response;
+  if (
+    brainForward.response &&
+    await shouldAcceptRemoteResponse(
+      brainForward.response,
+      authResult.session.user.accountKind
+    )
+  ) {
+    return brainForward.response;
+  }
 
   try {
-    const result = await executeWeeklyReport(trustedPayload, getAiRuntimeOptions(request));
+    const result = await executeWeeklyReport(
+      trustedPayload,
+      getAiRuntimeOptions(request, {
+        accountKind: authResult.session.user.accountKind,
+      })
+    );
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
     if (isAiProviderUnavailableError(error)) {

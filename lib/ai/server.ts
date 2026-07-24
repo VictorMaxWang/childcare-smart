@@ -10,6 +10,12 @@ import {
   buildMockInstitutionSuggestion,
   buildMockWeeklyReport,
 } from "@/lib/ai/mock";
+import {
+  requestDashscopeFollowUp,
+  requestDashscopeSuggestion,
+  requestDashscopeWeeklyReport,
+  resolveBailianRuntimeConfig,
+} from "@/lib/ai/dashscope";
 import { toFollowUpFeedbackLite } from "@/lib/feedback/normalize";
 import { buildActionizedWeeklyReportResponse, resolveWeeklyReportRole } from "@/lib/ai/weekly-report";
 import { getVivoProviderStatus, requestVivoChat, VivoProviderError } from "@/lib/providers/vivo";
@@ -70,10 +76,16 @@ export interface AiRuntimeOptions {
   fallbackReason?: string | null;
 }
 
-export function getAiRuntimeOptions(request?: Request): AiRuntimeOptions {
+export function getAiRuntimeOptions(
+  request?: Request,
+  context?: { accountKind?: "demo" | "normal" }
+): AiRuntimeOptions {
+  const allowConfiguredMock = context?.accountKind === "demo";
+
   return {
-    configuredModel: process.env.VIVO_LLM_MODEL || process.env.AI_MODEL || "Volc-DeepSeek-V3.2",
-    forceMock: process.env.NEXT_PUBLIC_FORCE_MOCK_MODE === "true",
+    configuredModel: process.env.VIVO_LLM_MODEL || "Volc-DeepSeek-V3.2",
+    // 全局 mock 开关只服务演示账号，真实账号必须继续尝试真实 provider。
+    forceMock: allowConfiguredMock && process.env.NEXT_PUBLIC_FORCE_MOCK_MODE === "true",
     forceFallback:
       process.env.NODE_ENV !== "production" && request?.headers.get("x-ai-force-fallback") === "1",
   };
@@ -303,6 +315,27 @@ function fallbackReasonMeta(options: AiRuntimeOptions, providerStatus: ChatProvi
   return explicitReason || providerReason || (options.forceFallback ? "force-fallback" : null);
 }
 
+function isBailianConfigured() {
+  return Boolean(process.env.DASHSCOPE_API_KEY?.trim());
+}
+
+function bailianProviderMeta() {
+  const config = resolveBailianRuntimeConfig();
+  return {
+    model: config.model,
+    provider: "dashscope",
+    providerStatus: {
+      chat: {
+        provider: "dashscope",
+        configured: true,
+        supported: true,
+        status: "ready",
+        model: config.model,
+      },
+    },
+  };
+}
+
 export function isValidSuggestionSnapshot(snapshot: unknown): snapshot is ChildSuggestionSnapshot {
   if (!snapshot || typeof snapshot !== "object") return false;
   const obj = snapshot as Record<string, unknown>;
@@ -414,32 +447,45 @@ export async function executeSuggestion(
     return fallback;
   }
 
-  const { parsed, model, providerStatus } = await requestStructuredVivoJson({
-    options,
-    taskType: "childcare-ai-suggestion",
-    prompt: buildStructuredPrompt({
-      task: isInstitutionScope
-        ? "Generate an institution-level director assistant risk summary and action plan."
-        : "Generate a child-level childcare suggestion summary and action plan.",
-      input: payload,
-      example: withoutRuntimeFields(fallback),
-    }),
-  });
-  const aiResult = normalizeSuggestionOutput(parsed);
-  if (!aiResult) {
-    throw new AiProviderUnavailableError("vivo chat response could not be normalized as an AI suggestion.", {
-      ...providerStatus,
-      status: "error",
-      reason: "Invalid suggestion JSON shape.",
+  try {
+    const { parsed, model, providerStatus } = await requestStructuredVivoJson({
+      options,
+      taskType: "childcare-ai-suggestion",
+      prompt: buildStructuredPrompt({
+        task: isInstitutionScope
+          ? "Generate an institution-level director assistant risk summary and action plan."
+          : "Generate a child-level childcare suggestion summary and action plan.",
+        input: payload,
+        example: withoutRuntimeFields(fallback),
+      }),
     });
-  }
+    const aiResult = normalizeSuggestionOutput(parsed);
+    if (!aiResult) {
+      throw new AiProviderUnavailableError("vivo chat response could not be normalized as an AI suggestion.", {
+        ...providerStatus,
+        status: "error",
+        reason: "Invalid suggestion JSON shape.",
+      });
+    }
 
-  return {
-    ...aiResult,
-    source: "ai",
-    model,
-    ...providerMeta(providerStatus),
-  } satisfies AiSuggestionResponse;
+    return {
+      ...aiResult,
+      source: "ai",
+      model,
+      ...providerMeta(providerStatus),
+    } satisfies AiSuggestionResponse;
+  } catch (error) {
+    if (!isAiProviderUnavailableError(error) || !isBailianConfigured()) throw error;
+
+    // vivo 失败时才尝试百炼，保证真实账号仍能得到真实模型结果，而不是直接退回 mock。
+    const bailianResult = await requestDashscopeSuggestion(payload.snapshot);
+    if (!bailianResult) throw error;
+    return {
+      ...bailianResult,
+      source: "ai",
+      ...bailianProviderMeta(),
+    } satisfies AiSuggestionResponse;
+  }
 }
 
 export async function executeFollowUp(
@@ -471,32 +517,44 @@ export async function executeFollowUp(
     return fallback;
   }
 
-  const { parsed, model, providerStatus } = await requestStructuredVivoJson({
-    options,
-    taskType: "childcare-ai-follow-up",
-    prompt: buildStructuredPrompt({
-      task: isInstitutionScope
-        ? "Answer a director follow-up question about institution priorities and dispatch decisions."
-        : "Answer a parent or teacher follow-up question about the current childcare action card.",
-      input: payload,
-      example: withoutRuntimeFields(fallback),
-    }),
-  });
-  const aiResult = normalizeFollowUpOutput(parsed);
-  if (!aiResult) {
-    throw new AiProviderUnavailableError("vivo chat response could not be normalized as a follow-up answer.", {
-      ...providerStatus,
-      status: "error",
-      reason: "Invalid follow-up JSON shape.",
+  try {
+    const { parsed, model, providerStatus } = await requestStructuredVivoJson({
+      options,
+      taskType: "childcare-ai-follow-up",
+      prompt: buildStructuredPrompt({
+        task: isInstitutionScope
+          ? "Answer a director follow-up question about institution priorities and dispatch decisions."
+          : "Answer a parent or teacher follow-up question about the current childcare action card.",
+        input: payload,
+        example: withoutRuntimeFields(fallback),
+      }),
     });
-  }
+    const aiResult = normalizeFollowUpOutput(parsed);
+    if (!aiResult) {
+      throw new AiProviderUnavailableError("vivo chat response could not be normalized as a follow-up answer.", {
+        ...providerStatus,
+        status: "error",
+        reason: "Invalid follow-up JSON shape.",
+      });
+    }
 
-  return {
-    ...aiResult,
-    source: "ai",
-    model,
-    ...providerMeta(providerStatus),
-  } satisfies AiFollowUpResponse;
+    return {
+      ...aiResult,
+      source: "ai",
+      model,
+      ...providerMeta(providerStatus),
+    } satisfies AiFollowUpResponse;
+  } catch (error) {
+    if (!isAiProviderUnavailableError(error) || !isBailianConfigured()) throw error;
+
+    const bailianResult = await requestDashscopeFollowUp(payload);
+    if (!bailianResult) throw error;
+    return {
+      ...bailianResult,
+      source: "ai",
+      ...bailianProviderMeta(),
+    } satisfies AiFollowUpResponse;
+  }
 }
 
 export async function executeWeeklyReport(
@@ -530,28 +588,40 @@ export async function executeWeeklyReport(
     return fallback;
   }
 
-  const { parsed, model, providerStatus } = await requestStructuredVivoJson({
-    options,
-    taskType: "childcare-ai-weekly-report",
-    prompt: buildStructuredPrompt({
-      task: `Generate a role=${role} weekly report for childcare operations.`,
-      input: payload,
-      example: withoutRuntimeFields(fallback),
-    }),
-  });
-  const aiResult = normalizeWeeklyReportOutput(parsed, payload.snapshot, role);
-  if (!aiResult) {
-    throw new AiProviderUnavailableError("vivo chat response could not be normalized as a weekly report.", {
-      ...providerStatus,
-      status: "error",
-      reason: "Invalid weekly report JSON shape.",
+  try {
+    const { parsed, model, providerStatus } = await requestStructuredVivoJson({
+      options,
+      taskType: "childcare-ai-weekly-report",
+      prompt: buildStructuredPrompt({
+        task: `Generate a role=${role} weekly report for childcare operations.`,
+        input: payload,
+        example: withoutRuntimeFields(fallback),
+      }),
     });
-  }
+    const aiResult = normalizeWeeklyReportOutput(parsed, payload.snapshot, role);
+    if (!aiResult) {
+      throw new AiProviderUnavailableError("vivo chat response could not be normalized as a weekly report.", {
+        ...providerStatus,
+        status: "error",
+        reason: "Invalid weekly report JSON shape.",
+      });
+    }
 
-  return {
-    ...aiResult,
-    source: "ai",
-    model,
-    ...providerMeta(providerStatus),
-  } satisfies WeeklyReportResponse;
+    return {
+      ...aiResult,
+      source: "ai",
+      model,
+      ...providerMeta(providerStatus),
+    } satisfies WeeklyReportResponse;
+  } catch (error) {
+    if (!isAiProviderUnavailableError(error) || !isBailianConfigured()) throw error;
+
+    const bailianResult = await requestDashscopeWeeklyReport(payload.snapshot, role);
+    if (!bailianResult) throw error;
+    return {
+      ...bailianResult,
+      source: "ai",
+      ...bailianProviderMeta(),
+    } satisfies WeeklyReportResponse;
+  }
 }

@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
-import { requestDashscopeDietEvaluation, type DietEvaluationInput, type DietEvaluationResult } from "@/lib/ai/dashscope";
-import { forwardBrainRequest } from "@/lib/server/brain-client";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import {
+  requestDashscopeDietEvaluation,
+  resolveBailianRuntimeConfig,
+  type DietEvaluationInput,
+  type DietEvaluationResult,
+} from "@/lib/ai/dashscope";
+import {
+  forwardBrainRequest,
+  shouldAcceptRemoteResponse,
+} from "@/lib/server/brain-client";
+import { authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import { logSecurityEvent } from "@/lib/server/security-log";
 
 interface DietEvaluationPayload {
@@ -109,13 +117,25 @@ function buildFallbackEvaluation(input: DietEvaluationInput): DietEvaluationResu
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, { allowUnscoped: true });
-  if (authError) return authError;
+  const authResult = await authorizeAiRouteSession(request, { allowUnscoped: true });
+  if (authResult instanceof Response) return authResult;
 
   const brainForward = await forwardBrainRequest(request, "/api/v1/multimodal/diet-evaluation");
-  if (brainForward.response) return brainForward.response;
+  const remoteResponseAccepted =
+    brainForward.response?.ok &&
+    (await shouldAcceptRemoteResponse(
+      brainForward.response,
+      authResult.session.user.accountKind
+    ));
+  if (brainForward.response && remoteResponseAccepted) return brainForward.response;
+  const rejectedRemoteResult = Boolean(brainForward.response);
+  const remoteFallbackReason = brainForward.response
+    ? brainForward.response.ok
+      ? "brain-untrusted-result"
+      : `brain-status-${brainForward.response.status}`
+    : brainForward.fallbackReason;
 
-  const configuredModel = process.env.AI_DIET_MODEL || process.env.AI_MODEL || "qwen-turbo";
+  const configuredModel = process.env.AI_DIET_MODEL?.trim() || resolveBailianRuntimeConfig().model;
   let payload: DietEvaluationPayload | null = null;
 
   try {
@@ -137,6 +157,7 @@ export async function POST(request: Request) {
         evaluation: fallback,
         source: "fallback",
         model: "diet-rule-fallback",
+        fallbackReason: rejectedRemoteResult ? remoteFallbackReason : undefined,
       },
       { status: 200 }
     );
@@ -153,6 +174,9 @@ export async function POST(request: Request) {
         evaluation: fallback,
         source: "fallback",
         model: "diet-rule-fallback",
+        fallbackReason: rejectedRemoteResult
+          ? remoteFallbackReason
+          : brainForward.fallbackReason ?? "dashscope-provider-unavailable",
       },
       { status: 200 }
     );

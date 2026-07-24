@@ -8,6 +8,7 @@ import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
+  shouldAcceptRemoteResponse,
   type BrainForwardResult,
 } from "@/lib/server/brain-client";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
@@ -37,12 +38,15 @@ function getHighRiskConsultationBrainTimeoutMs() {
   );
 }
 
-function buildLocalFallbackHeaders(brainForward: BrainForwardResult) {
+function buildLocalFallbackHeaders(
+  brainForward: BrainForwardResult,
+  fallbackReason = brainForward.fallbackReason ?? "brain-proxy-unavailable"
+) {
   return createBrainTransportHeaders({
     transport: "next-json-fallback",
     targetPath: brainForward.targetPath,
     upstreamHost: brainForward.upstreamHost,
-    fallbackReason: brainForward.fallbackReason ?? "brain-proxy-unavailable",
+    fallbackReason,
   });
 }
 
@@ -229,7 +233,24 @@ export async function POST(request: Request) {
     timeoutMs: getHighRiskConsultationBrainTimeoutMs(),
     serviceScope,
   });
-  if (brainForward.response) return maybeEnrichRemoteResponse(brainForward);
+  if (brainForward.response) {
+    const remoteResponseAccepted =
+      brainForward.response.ok &&
+      (await shouldAcceptRemoteResponse(
+        brainForward.response,
+        authResult.session.user.accountKind
+      ));
+    if (remoteResponseAccepted) return maybeEnrichRemoteResponse(brainForward);
+
+    const fallbackReason = brainForward.response.ok
+      ? "brain-untrusted-result"
+      : `brain-status-${brainForward.response.status}`;
+    return localFallbackResponse(
+      payload,
+      buildLocalFallbackHeaders(brainForward, fallbackReason),
+      fallbackReason
+    );
+  }
 
   const fallbackReason = brainForward.fallbackReason ?? "brain-proxy-unavailable";
   return localFallbackResponse(payload, buildLocalFallbackHeaders(brainForward), fallbackReason);

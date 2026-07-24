@@ -193,7 +193,9 @@ test("high-risk consultation route returns complete Lin Xiaoyu fallback when for
       assert.match(text, /勇敢表达/);
       assert.match(text, /小步尝试/);
       assert.match(text, /家庭反馈已回流/);
-      assert.match(text, /高风险会诊写回测试/);
+      // 会诊只信任服务端按会话范围重建的数据，客户端伪造的反馈不得进入证据链。
+      assert.doesNotMatch(text, /高风险会诊写回测试/);
+      assert.doesNotMatch(text, /feedback-api-high-risk-writeback/);
       assert.match(text, /48 小时/);
     });
   } finally {
