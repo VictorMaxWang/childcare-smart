@@ -9,6 +9,7 @@ loadLocalEnvFile(".env.local");
 
 const scryptAsync = promisify(crypto.scrypt);
 const APPLY = process.argv.includes("--apply");
+const HELP = process.argv.includes("--help");
 const accountLabel = readArg("account");
 const ACCOUNT_CONFIG = {
   admin: {
@@ -170,6 +171,14 @@ async function loadAccount(executor, phone, expectedRole) {
 }
 
 async function main() {
+  if (HELP) {
+    console.log(
+      "Usage: npm run account:repair-sample-password -- --account=<admin|teacher|parent> [--apply]"
+    );
+    console.log("Set the matching SAMPLE_<ROLE>_PASSWORD environment variable before running.");
+    return;
+  }
+
   const config = ACCOUNT_CONFIG[accountLabel];
   if (!config) fail("Pass --account=admin, --account=teacher, or --account=parent");
 
