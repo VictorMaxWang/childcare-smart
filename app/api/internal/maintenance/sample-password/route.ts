@@ -37,6 +37,8 @@ export interface SamplePasswordMaintenanceDependencies {
   repair: (account: SampleAccountLabel, password: string) => Promise<RepairResult>;
 }
 
+const NO_STORE_HEADERS = { "cache-control": "no-store" };
+
 function phoneCandidates(phone: string) {
   return [phone, `+86${phone}`];
 }
@@ -146,12 +148,12 @@ export async function handleSamplePasswordMaintenance(
 ) {
   const expectedToken = dependencies.getToken();
   if (!expectedToken) {
-    return NextResponse.json({ ok: false }, { status: 404 });
+    return NextResponse.json({ ok: false }, { status: 404, headers: NO_STORE_HEADERS });
   }
 
   const actualToken = request.headers.get("x-account-maintenance-token")?.trim() ?? "";
   if (!tokenMatches(actualToken, expectedToken)) {
-    return NextResponse.json({ ok: false }, { status: 401 });
+    return NextResponse.json({ ok: false }, { status: 401, headers: NO_STORE_HEADERS });
   }
 
   const body = (await request.json().catch(() => null)) as
@@ -164,7 +166,10 @@ export async function handleSamplePasswordMaintenance(
     body.password.length < 6 ||
     body.password.length > 128
   ) {
-    return NextResponse.json({ ok: false, error: "Invalid maintenance request" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "Invalid maintenance request" },
+      { status: 400, headers: NO_STORE_HEADERS }
+    );
   }
 
   try {
@@ -173,10 +178,13 @@ export async function handleSamplePasswordMaintenance(
       account: result.account,
       changed: result.changed,
     });
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE_HEADERS });
   } catch (error) {
     logSecurityEvent("error", "auth.sample_password_repair_failed", { error });
-    return NextResponse.json({ ok: false, error: "Maintenance failed" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: "Maintenance failed" },
+      { status: 500, headers: NO_STORE_HEADERS }
+    );
   }
 }
 

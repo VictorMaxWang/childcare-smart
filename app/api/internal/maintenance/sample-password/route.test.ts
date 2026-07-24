@@ -77,6 +77,7 @@ test("sample password maintenance repairs one allowlisted account without echoin
   const response = await handleSamplePasswordMaintenance(buildRequest(), dependencies);
   const body = await response.json();
   assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
   assert.deepEqual(body, { ok: true, account: "admin", changed: true });
   assert.equal(receivedPassword, "new-password");
   assert.doesNotMatch(JSON.stringify(body), /new-password/);
