@@ -53,6 +53,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getLocalToday } from "@/lib/date";
 import { getHydrationDisplayState } from "@/lib/hydration-display";
+import { createRecord, updateRecord } from "@/lib/api/records";
 import { cn } from "@/lib/utils";
 import EmptyState from "@/components/EmptyState";
 import { useParentD01Data } from "@/components/parent/useParentD01Data";
@@ -174,6 +175,7 @@ export default function DietPage() {
     getWeeklyDietTrend,
     getSmartInsights,
     getTodayAttendance,
+    reloadAppSnapshotFromApi,
   } = useApp();
   const router = useRouter();
   const pathname = usePathname();
@@ -195,6 +197,7 @@ export default function DietPage() {
   const [bulkAllergyReaction, setBulkAllergyReaction] = useState("");
   const [bulkExcludedChildIds, setBulkExcludedChildIds] = useState<string[]>([]);
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
   const [evaluatingMeal, setEvaluatingMeal] = useState<MealType | null>(null);
 
   const [bulkVisionLoading, setBulkVisionLoading] = useState(false);
@@ -335,10 +338,13 @@ export default function DietPage() {
     return { applicable, blocked, excluded };
   }, [bulkPreview]);
 
-  function saveMealRecord(meal: MealType, patch: Partial<MealRecord>): PersistAppSnapshotResult | null {
+  async function saveMealRecord(
+    meal: MealType,
+    patch: Partial<MealRecord>
+  ): Promise<PersistAppSnapshotResult | null> {
     if (!selectedChild) return null;
     const existing = selectedChildMeals[meal];
-    const result = upsertMealRecord({
+    const payload = {
       childId: selectedChild.id,
       date: TODAY,
       meal,
@@ -347,7 +353,47 @@ export default function DietPage() {
       preference: patch.preference ?? existing?.preference ?? "正常",
       allergyReaction: patch.allergyReaction ?? existing?.allergyReaction ?? "",
       waterMl: patch.waterMl ?? existing?.waterMl ?? 120,
+      nutritionScore: calcNutritionScore(
+        patch.foods ?? existing?.foods ?? [],
+        patch.waterMl ?? existing?.waterMl ?? 120,
+        patch.preference ?? existing?.preference ?? "正常"
+      ),
       aiEvaluation: patch.aiEvaluation ?? existing?.aiEvaluation,
+    };
+
+    if (currentUser.accountKind === "normal") {
+      try {
+        if (existing) {
+          await updateRecord("meal", existing.id, payload);
+        } else {
+          await createRecord("meal", payload);
+        }
+        const reloadResult = await reloadAppSnapshotFromApi();
+        if (reloadResult.status === "failed") {
+          return {
+            status: "saved",
+            syncStatus: "remote_synced",
+            message: "饮食记录已写入服务端，页面刷新暂时失败。",
+            persistedAt: new Date().toISOString(),
+          };
+        }
+        return reloadResult;
+      } catch (requestError) {
+        const message =
+          requestError instanceof Error ? requestError.message : "服务端写入失败，请重试。";
+        toast.error("饮食记录保存失败", { description: message });
+        return {
+          status: "failed",
+          syncStatus: "failed",
+          message,
+          error: message,
+          persistedAt: new Date().toISOString(),
+        };
+      }
+    }
+
+    const result = upsertMealRecord({
+      ...payload,
       recordedBy: currentUser.name,
       recordedByRole: currentUser.role,
     });
@@ -412,7 +458,7 @@ export default function DietPage() {
       }
 
       const data = (await response.json()) as DietEvaluationResponse;
-      const saveResult = saveMealRecord(meal, {
+      const saveResult = await saveMealRecord(meal, {
         aiEvaluation: {
           ...data.evaluation,
           generatedAt: new Date().toISOString(),
@@ -467,7 +513,75 @@ export default function DietPage() {
     setConfirmBulkOpen(true);
   }
 
-  function confirmApplyBulkTemplate() {
+  async function confirmApplyBulkTemplate() {
+    if (currentUser.accountKind === "normal") {
+      setBulkSaving(true);
+      try {
+        const writeResults = await Promise.allSettled(
+          bulkPreviewSummary.applicable.map(async (item) => {
+            const payload = {
+              childId: item.childId,
+              date: TODAY,
+              meal: bulkMeal,
+              foods: bulkFoods,
+              intakeLevel: bulkIntake,
+              preference: bulkPreference,
+              allergyReaction: bulkAllergyReaction,
+              waterMl: Number(bulkWaterMl) || 0,
+              nutritionScore: calcNutritionScore(
+                bulkFoods,
+                Number(bulkWaterMl) || 0,
+                bulkPreference
+              ),
+            };
+            const existing = mealRecords.find(
+              (record) =>
+                record.childId === item.childId &&
+                record.date === TODAY &&
+                record.meal === bulkMeal
+            );
+            if (existing) {
+              await updateRecord("meal", existing.id, payload);
+            } else {
+              await createRecord("meal", payload);
+            }
+          })
+        );
+        const failedCount = writeResults.filter(
+          (result) => result.status === "rejected"
+        ).length;
+        const reloadResult = await reloadAppSnapshotFromApi();
+        if (failedCount > 0) {
+          toast.error("部分饮食记录未能写入", {
+            description: `成功 ${
+              writeResults.length - failedCount
+            } 人，失败 ${failedCount} 人。失败对象请重试，已成功记录不会丢失。`,
+          });
+          return;
+        }
+        setConfirmBulkOpen(false);
+        if (reloadResult.status === "failed") {
+          toast.warning("批量饮食记录已写入服务端", {
+            description: "页面刷新暂时失败，请手动刷新后查看最新记录。",
+          });
+        } else {
+          toast.success("批量录入已完成", {
+            description: `成功 ${bulkPreviewSummary.applicable.length} 人，拦截/排除 ${
+              bulkPreviewSummary.blocked.length + bulkPreviewSummary.excluded.length
+            } 人。记录已同步到服务端。`,
+          });
+        }
+      } catch (requestError) {
+        toast.error("批量录入失败", {
+          description:
+            requestError instanceof Error ? requestError.message : "服务端写入失败，请重试。",
+        });
+      } finally {
+        setBulkSaving(false);
+      }
+      return;
+    }
+
     setConfirmBulkOpen(false);
 
     const result = bulkApplyMealTemplate({
@@ -1235,7 +1349,7 @@ export default function DietPage() {
 
           <DialogFooter className="grid grid-cols-2 gap-3 border-t border-slate-100 bg-slate-50/70 px-6 py-4 sm:grid-cols-2 sm:justify-stretch">
             <Button variant="outline" className="min-h-11 rounded-xl" onClick={() => setConfirmBulkOpen(false)}>取消</Button>
-            <Button className="min-h-11 rounded-xl" onClick={confirmApplyBulkTemplate} data-testid="r05-diet-confirm-bulk">确认录入</Button>
+            <Button className="min-h-11 rounded-xl" onClick={() => void confirmApplyBulkTemplate()} loading={bulkSaving} data-testid="r05-diet-confirm-bulk">确认录入</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1395,7 +1509,7 @@ function MealEditorCard({
 }: {
   meal: MealType;
   record?: MealRecord;
-  onSave: (patch: Partial<MealRecord>) => PersistAppSnapshotResult | null;
+  onSave: (patch: Partial<MealRecord>) => Promise<PersistAppSnapshotResult | null>;
   onGenerateEvaluation: () => void;
   evaluating: boolean;
 }) {
@@ -1410,11 +1524,12 @@ function MealEditorCard({
   const [photoPreview, setPhotoPreview] = useState("");
   const [visionFoods, setVisionFoods] = useState<FoodItem[]>([]);
   const [visionModel, setVisionModel] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const foods = record?.foods ?? [];
   const mealScore = calcNutritionScore(foods, Number(waterMl) || 0, preference);
 
-  function addFood(item?: { name: string; category: FoodCategory; amount: string }) {
+  async function addFood(item?: { name: string; category: FoodCategory; amount: string }) {
     const nextName = item?.name ?? foodName.trim();
     if (!nextName) return;
 
@@ -1428,8 +1543,21 @@ function MealEditorCard({
       },
     ];
 
-    onSave({ foods: nextFoods, intakeLevel, preference, allergyReaction, waterMl: Number(waterMl) || 0 });
-    setFoodName("");
+    setSaving(true);
+    try {
+      const result = await onSave({
+        foods: nextFoods,
+        intakeLevel,
+        preference,
+        allergyReaction,
+        waterMl: Number(waterMl) || 0,
+      });
+      if (result && result.status !== "failed") {
+        setFoodName("");
+      }
+    } finally {
+      setSaving(false);
+    }
   }
 
   function updateVisionFood(index: number, key: "name" | "category" | "amount", value: string) {
@@ -1508,7 +1636,7 @@ function MealEditorCard({
     }
   }
 
-  function confirmVisionFoods() {
+  async function confirmVisionFoods() {
     const cleaned = visionFoods
       .map((item) => ({
         ...item,
@@ -1522,26 +1650,34 @@ function MealEditorCard({
       return;
     }
 
-    const saveResult = onSave({
-      foods: [
-        ...foods,
-        ...cleaned.map((item) => ({
-          ...item,
-          id: createFoodId(`${meal}-final`),
-        })),
-      ],
-      intakeLevel,
-      preference,
-      allergyReaction,
-      waterMl: Number(waterMl) || 0,
-    });
-    if (!saveResult || saveResult.status === "failed") {
-      return;
+    setSaving(true);
+    try {
+      const saveResult = await onSave({
+        foods: [
+          ...foods,
+          ...cleaned.map((item) => ({
+            ...item,
+            id: createFoodId(`${meal}-final`),
+          })),
+        ],
+        intakeLevel,
+        preference,
+        allergyReaction,
+        waterMl: Number(waterMl) || 0,
+      });
+      if (!saveResult || saveResult.status === "failed") {
+        return;
+      }
+      setVisionFoods([]);
+      toast.success("识别食物已录入本餐记录。", {
+        description:
+          saveResult.status === "local_only"
+            ? "已写入共享演示数据，刷新后保留。"
+            : "已写入服务端，家长端刷新后可见。",
+      });
+    } finally {
+      setSaving(false);
     }
-    setVisionFoods([]);
-    toast.success("识别食物已录入本餐记录。", {
-      description: saveResult.status === "local_only" ? "已写入共享演示数据，刷新后保留。" : "已写入当前数据层，刷新后保留。",
-    });
   }
 
   return (
@@ -1563,7 +1699,7 @@ function MealEditorCard({
                 {food.name} · {food.amount}
                 <button
                   onClick={() =>
-                    onSave({
+                    void onSave({
                       foods: foods.filter((_, currentIndex) => currentIndex !== index),
                       intakeLevel,
                       preference,
@@ -1619,7 +1755,7 @@ function MealEditorCard({
           <FormField label="摄入量">
             <div className="flex gap-2">
               <Input value={foodAmount} onChange={(event) => setFoodAmount(event.target.value)} placeholder="摄入量" />
-              <Button size="icon" variant="outline" onClick={() => addFood()} aria-label={`添加${meal}食物`} data-testid={`add-food-${meal}`}>
+              <Button size="icon" variant="outline" onClick={() => void addFood()} loading={saving} aria-label={`添加${meal}食物`} data-testid={`add-food-${meal}`}>
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -1630,7 +1766,8 @@ function MealEditorCard({
           {QUICK_FOODS[meal].map((food) => (
             <button
               key={`${meal}-${food.name}`}
-              onClick={() => addFood(food)}
+              onClick={() => void addFood(food)}
+              disabled={saving}
               className="min-h-9 rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-50"
             >
               + {food.name}
@@ -1710,7 +1847,7 @@ function MealEditorCard({
                   <Plus className="mr-1 h-3.5 w-3.5" />
                   添加一项
                 </Button>
-                <Button size="sm" onClick={confirmVisionFoods}>
+                <Button size="sm" onClick={() => void confirmVisionFoods()} loading={saving}>
                   确定录入
                 </Button>
               </div>
@@ -1725,7 +1862,7 @@ function MealEditorCard({
               onValueChange={(value) => {
                 const next = value as IntakeLevel;
                 setIntakeLevel(next);
-                onSave({ foods, intakeLevel: next, preference, allergyReaction, waterMl: Number(waterMl) || 0 });
+                void onSave({ foods, intakeLevel: next, preference, allergyReaction, waterMl: Number(waterMl) || 0 });
               }}
             >
               <SelectTrigger>
@@ -1746,7 +1883,7 @@ function MealEditorCard({
               onValueChange={(value) => {
                 const next = value as PreferenceStatus;
                 setPreference(next);
-                onSave({ foods, intakeLevel, preference: next, allergyReaction, waterMl: Number(waterMl) || 0 });
+                void onSave({ foods, intakeLevel, preference: next, allergyReaction, waterMl: Number(waterMl) || 0 });
               }}
             >
               <SelectTrigger>
@@ -1767,7 +1904,7 @@ function MealEditorCard({
               onChange={(event) => {
                 const next = event.target.value;
                 setWaterMl(next);
-                onSave({ foods, intakeLevel, preference, allergyReaction, waterMl: Number(next) || 0 });
+                void onSave({ foods, intakeLevel, preference, allergyReaction, waterMl: Number(next) || 0 });
               }}
               placeholder="补水内部记录（ml）"
             />
@@ -1778,7 +1915,7 @@ function MealEditorCard({
               onChange={(event) => {
                 const next = event.target.value;
                 setAllergyReaction(next);
-                onSave({ foods, intakeLevel, preference, allergyReaction: next, waterMl: Number(waterMl) || 0 });
+                void onSave({ foods, intakeLevel, preference, allergyReaction: next, waterMl: Number(waterMl) || 0 });
               }}
               placeholder="过敏反应 / 特殊说明"
             />

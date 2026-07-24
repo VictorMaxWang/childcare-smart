@@ -144,7 +144,8 @@ test("D03 teacher health, diet and growth records persist across roles", async (
   await page.getByRole("button", { name: /保存记录/ }).click();
   await expect.poll(() => bucketIncludes(page, BUCKETS.growth, growthToken)).toBe(true);
   await expect.poll(() => bucketHasRecordForChild(page, BUCKETS.growth, growthToken, "c-1")).toBe(true);
-  await expect.poll(() => storybookIncludesGrowthSource(page, growthToken)).toBe(true);
+  // 教师保存观察记录不应伪造“已生成绘本”；真实绘本只在家长触发 AI 后保存。
+  await expect.poll(() => storybookIncludesGrowthSource(page, growthToken)).toBe(false);
   await screenshot(page, "06-li-growth-after-save.png");
 
   await page.reload();

@@ -41,6 +41,7 @@ import {
   type ParentStoryBookClientCacheState,
   writeParentStoryBookCache,
 } from "@/lib/parent/storybook-cache";
+import { collectStorybookSourceRecordIds } from "@/lib/parent/storybook-provenance";
 import {
   LIN_XIAOYU_CHILD_ALIAS,
   LIN_XIAOYU_CHILD_ID,
@@ -199,6 +200,31 @@ export default function ParentStoryBookPage() {
     ].sort((left, right) => right.generatedAt.localeCompare(left.generatedAt));
   }, [parentD01.parentHomeData?.storybooks, selectedFeed, storybooks]);
   const latestSavedStorybook = savedStorybooks[0] ?? null;
+  const storybookSourceRecordIds = useMemo(() => {
+    if (!selectedFeed) return [];
+    const childId = selectedFeed.child.id;
+    const latestIntervention = getChildInterventionCard(childId);
+    const latestConsultation = getLatestConsultationForChild(childId);
+    return collectStorybookSourceRecordIds({
+      childId,
+      healthCheckRecords,
+      mealRecords,
+      growthRecords,
+      guardianFeedbacks,
+      taskCheckInRecords,
+      interventionId: latestIntervention?.id,
+      consultationId: latestConsultation?.consultationId,
+    });
+  }, [
+    getChildInterventionCard,
+    getLatestConsultationForChild,
+    growthRecords,
+    guardianFeedbacks,
+    healthCheckRecords,
+    mealRecords,
+    selectedFeed,
+    taskCheckInRecords,
+  ]);
   const isLockedLinXiaoyuStorybook =
     !parentD01.invalidChildId && selectedFeed?.child.id === LIN_XIAOYU_CHILD_ID;
   const hasManualStorybookOverrideActive =
@@ -718,11 +744,7 @@ export default function ParentStoryBookPage() {
           appliedControls.preset,
           data
         );
-        const sourceRecordIds = selectedFeed
-          ? growthRecords
-              .filter((record) => record.childId === selectedFeed.child.id)
-              .map((record) => record.id)
-          : [];
+        const sourceRecordIds = storybookSourceRecordIds;
         const shouldPersistGeneratedStorybook =
           !forceNetworkForManualOverride && !backgroundMediaPoll;
         const storybookSaveResult =
@@ -839,7 +861,6 @@ export default function ParentStoryBookPage() {
   }, [
     appliedControls.preset,
     cacheKey,
-    growthRecords,
     hasManualStorybookOverrideActive,
     isLockedLinXiaoyuStorybook,
     latestSavedStorybook,
@@ -847,6 +868,7 @@ export default function ParentStoryBookPage() {
     reloadToken,
     saveParentStorybook,
     selectedFeed,
+    storybookSourceRecordIds,
   ]);
 
   function syncThemeDraft(nextTheme: string) {

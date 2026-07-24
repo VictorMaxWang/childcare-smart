@@ -23,6 +23,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import { InstitutionJoinPanel } from "@/components/account/InstitutionJoinPanel";
 import {
   ReplicaBarChart,
   ReplicaComboChart,
@@ -118,6 +119,7 @@ export default function TeacherWorkbenchPage() {
   if (visibleChildren.length === 0) {
     return (
       <div className="app-page">
+        <InstitutionJoinPanel user={currentUser} />
         <EmptyState
           icon={<UsersRound className="h-6 w-6" />}
           title="当前教师账号还没有班级可见数据"
@@ -289,6 +291,7 @@ export default function TeacherWorkbenchPage() {
       data-visible-children={visualClassSize}
       data-present-children={visualAttendance}
     >
+      <InstitutionJoinPanel user={currentUser} />
       <DesktopWorkbench
         abnormalCount={abnormalCount}
         className={className}

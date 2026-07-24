@@ -284,8 +284,16 @@ function sanitizeChildPatch(input: AnyRecord): AnyRecord {
   if ("guardians" in input) patch.guardians = readArray(input.guardians);
   if ("className" in input) patch.className = readString(input.className, "待分班");
   if ("specialNotes" in input) patch.specialNotes = readString(input.specialNotes);
-  if ("parentUserId" in input) patch.parentUserId = readString(input.parentUserId) || undefined;
   return patch;
+}
+
+function rejectDirectParentBinding(input: AnyRecord) {
+  if ("parentUserId" in input) {
+    throw new ApiRouteError(
+      "invalid_request",
+      "家长账号绑定必须通过机构邀请码和监护人同意流程完成。"
+    );
+  }
 }
 
 function withArchive<T extends object>(
@@ -478,6 +486,15 @@ export class AppDataService {
     action: string,
     mutator: (snapshot: ApiExtendedSnapshot) => T
   ) {
+    if (this.repository.mutate) {
+      return this.repository.mutate(this.session, (snapshot) => {
+        const data = mutator(snapshot);
+        appendAuditLog(snapshot, this.session, targetType, targetId, action, "success");
+        snapshot.updatedAt = nowIso();
+        return data;
+      });
+    }
+
     const snapshot = await this.load();
     const data = mutator(snapshot);
     appendAuditLog(snapshot, this.session, targetType, targetId, action, "success");
@@ -499,6 +516,7 @@ export class AppDataService {
 
   async createChild(input: AnyRecord) {
     requireDirector(this.session);
+    rejectDirectParentBinding(input);
     return this.mutate("child", "new", "create", (snapshot) => {
       const now = nowIso();
       const child = {
@@ -515,7 +533,6 @@ export class AppDataService {
         className: readString(input.className, "待分班"),
         specialNotes: readString(input.specialNotes),
         avatar: input.gender === "男" ? "👦" : "👧",
-        parentUserId: readString(input.parentUserId) || undefined,
         createdAt: now,
         updatedAt: now,
       } as AppStateSnapshot["children"][number];
@@ -526,6 +543,7 @@ export class AppDataService {
 
   async updateChild(childId: string, input: AnyRecord) {
     requireDirector(this.session);
+    rejectDirectParentBinding(input);
     return this.mutate("child", childId, "update", (snapshot) => {
       requireChildAccess(this.session, snapshot, childId);
       const patch = sanitizeChildPatch(input);
@@ -962,8 +980,13 @@ export class AppDataService {
           foods: readArray(input.foods),
           intakeLevel: readString(input.intakeLevel, "适中"),
           preference: readString(input.preference, "正常"),
+          allergyReaction: readString(input.allergyReaction) || undefined,
           waterMl: readNumber(input.waterMl, 0),
           nutritionScore: readNumber(input.nutritionScore, 80),
+          aiEvaluation:
+            input.aiEvaluation && typeof input.aiEvaluation === "object"
+              ? input.aiEvaluation
+              : undefined,
           recordedBy: this.session.name,
           recordedByRole: this.session.role,
         };
@@ -981,6 +1004,7 @@ export class AppDataService {
           followUpAction: readString(input.followUpAction) || undefined,
           reviewDate: readString(input.reviewDate) || undefined,
           reviewStatus: readString(input.reviewStatus, "已完成"),
+          selectedIndicators: readArray<string>(input.selectedIndicators).filter((item) => typeof item === "string"),
           mediaUrls: readArray<string>(input.mediaUrls).filter((item) => typeof item === "string"),
         };
       }

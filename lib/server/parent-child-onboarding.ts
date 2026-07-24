@@ -91,6 +91,15 @@ export type ParentChildOnboardingDependencies = {
     connection: DatabaseConnection,
     record: ParentChildOnboardingConsentRecord
   ) => Promise<void>;
+  upsertChildAuthorization: (
+    connection: DatabaseConnection,
+    authorization: {
+      userId: string;
+      institutionId: string;
+      classId: string;
+      childId: string;
+    }
+  ) => Promise<void>;
   createId: typeof createApiId;
   now: () => Date;
 };
@@ -152,6 +161,7 @@ function createMinimalParentChild(params: {
     weightKg: 0,
     guardians: [],
     institutionId: params.session.institutionId,
+    classId: params.session.classId,
     className: params.session.className || DEFAULT_PARENT_CHILD_CLASS_NAME,
     specialNotes: "",
     avatar: gender === "男" ? "👦" : "👧",
@@ -264,6 +274,55 @@ async function defaultInsertConsentRecord(
   );
 }
 
+async function defaultUpsertChildAuthorization(
+  connection: DatabaseConnection,
+  authorization: {
+    userId: string;
+    institutionId: string;
+    classId: string;
+    childId: string;
+  }
+) {
+  await connection.execute(
+    `
+      insert into child_registry (child_id, institution_id, class_id, status, created_by)
+      values (?, ?, ?, 'active', ?)
+      on duplicate key update
+        class_id = if(institution_id = values(institution_id), values(class_id), class_id),
+        status = 'active',
+        updated_at = current_timestamp
+    `,
+    [
+      authorization.childId,
+      authorization.institutionId,
+      authorization.classId,
+      authorization.userId,
+    ]
+  );
+  await connection.execute(
+    `
+      insert into guardian_child_links (
+        institution_id,
+        user_id,
+        child_id,
+        status,
+        created_by,
+        linked_at
+      )
+      values (?, ?, ?, 'active', ?, current_timestamp)
+      on duplicate key update
+        status = 'active',
+        updated_at = current_timestamp
+    `,
+    [
+      authorization.institutionId,
+      authorization.userId,
+      authorization.childId,
+      authorization.userId,
+    ]
+  );
+}
+
 let consentRecordsStorageReady: Promise<void> | null = null;
 
 async function defaultEnsureConsentRecordsStorage() {
@@ -288,6 +347,7 @@ export const defaultParentChildOnboardingDependencies: ParentChildOnboardingDepe
   saveSnapshot: defaultSaveSnapshot,
   updateUserChildIds: defaultUpdateUserChildIds,
   insertConsentRecord: defaultInsertConsentRecord,
+  upsertChildAuthorization: defaultUpsertChildAuthorization,
   createId: createApiId,
   now: () => new Date(),
 };
@@ -355,6 +415,14 @@ export async function createParentChildWithConsent(
       snapshot.updatedAt = nowIso;
       await dependencies.saveSnapshot(connection, session.institutionId, snapshot, session.id);
       await dependencies.updateUserChildIds(connection, session.id, childIds);
+      if (session.classId) {
+        await dependencies.upsertChildAuthorization(connection, {
+          userId: session.id,
+          institutionId: session.institutionId,
+          classId: session.classId,
+          childId: child.id,
+        });
+      }
 
       for (const consentType of CHILD_ONBOARDING_CONSENT_TYPES) {
         await dependencies.insertConsentRecord(connection, {

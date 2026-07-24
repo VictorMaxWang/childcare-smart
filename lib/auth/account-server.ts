@@ -20,6 +20,10 @@ import {
 } from "@/lib/auth/accounts";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { normalizePhone } from "@/lib/auth/phone";
+import {
+  applyMembershipProjection,
+  loadMembershipProjection,
+} from "@/lib/auth/membership-projection";
 import { registrationWorkspaceSnapshot } from "@/lib/persistence/bootstrap";
 import { getSessionUserId } from "@/lib/auth/session";
 import { logSecurityEvent } from "@/lib/server/security-log";
@@ -397,7 +401,10 @@ export async function resolveSessionUserById(userId: string) {
   }
 
   const row = await getAppUserById(userId);
-  return row ? mapDbUserToSessionUser(row) : null;
+  if (!row) return null;
+  const session = mapDbUserToSessionUser(row);
+  const membership = await loadMembershipProjection(userId);
+  return applyMembershipProjection(session, membership);
 }
 
 export async function getCurrentSessionUser() {

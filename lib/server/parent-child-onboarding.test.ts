@@ -21,6 +21,12 @@ type TestState = {
   userRow: ParentUserRow;
   snapshot: unknown | null;
   consents: ParentChildOnboardingConsentRecord[];
+  childAuthorizations: Array<{
+    userId: string;
+    institutionId: string;
+    classId: string;
+    childId: string;
+  }>;
 };
 
 function parentSession(overrides: Partial<SessionUser> = {}) {
@@ -69,6 +75,7 @@ function createFixture(options: {
     } as ParentUserRow,
     snapshot: options.snapshot === undefined ? initialSnapshot() : options.snapshot,
     consents: [],
+    childAuthorizations: [],
   };
   let active: TestState | null = null;
 
@@ -109,6 +116,9 @@ function createFixture(options: {
         throw new Error("insert consent failed");
       }
       current().consents.push({ ...record });
+    },
+    async upsertChildAuthorization(_connection, authorization) {
+      current().childAuthorizations.push({ ...authorization });
     },
     createId(prefix) {
       idCounter += 1;
@@ -159,7 +169,7 @@ test("parent child onboarding rejects consentAccepted=false before DB writes", a
 test("parent child onboarding creates child, child_ids, and three consent records in scope", async () => {
   const fixture = createFixture();
   const child = await createParentChildWithConsent(
-    parentSession(),
+    parentSession({ classId: "class-sunrise", className: "向阳班" }),
     {
       name: " 小雨 ",
       nickname: "雨雨",
@@ -177,6 +187,8 @@ test("parent child onboarding creates child, child_ids, and three consent record
   assert.equal(child.nickname, "雨雨");
   assert.equal(child.institutionId, "inst-family");
   assert.equal(child.parentUserId, "u-parent");
+  assert.equal(child.classId, "class-sunrise");
+  assert.equal(child.className, "向阳班");
   assert.deepEqual(child.guardians, []);
   assert.equal(snapshot.children[0].id, child.id);
   assert.deepEqual(fixture.state().userRow.child_ids, ["c-1"]);
@@ -191,6 +203,14 @@ test("parent child onboarding creates child, child_ids, and three consent record
   assert.equal(fixture.state().consents[0].ip, "203.0.113.9");
   assert.equal(fixture.state().consents[0].userAgent, "unit-test-agent");
   assert.equal(fixture.state().consents[0].agreedAt instanceof Date, true);
+  assert.deepEqual(fixture.state().childAuthorizations, [
+    {
+      userId: "u-parent",
+      institutionId: "inst-family",
+      classId: "class-sunrise",
+      childId: "c-1",
+    },
+  ]);
 });
 
 test("parent child onboarding creates a registration snapshot when the parent snapshot is missing", async () => {

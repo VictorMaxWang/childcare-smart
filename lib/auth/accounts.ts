@@ -8,8 +8,10 @@ export interface SessionUser {
   role: AccountRole;
   avatar: string;
   institutionId: string;
+  classId?: string;
   className?: string;
   childIds?: string[];
+  authzVersion?: number;
   accountKind: AccountKind;
 }
 

@@ -44,7 +44,6 @@ import {
   createDailyRecord,
   createHealthMaterial as createDemoHealthMaterial,
   failHealthParseResult as failDemoHealthParseResult,
-  generateStorybookFromGrowthRecords,
   saveConsultationResult as saveDemoConsultationResult,
   saveHealthParseResult as saveDemoHealthParseResult,
   markMessageRead as markDemoMessageRead,
@@ -5714,7 +5713,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         record.description === input.description &&
         record.recorder === currentUser.name
     );
-    let mutationResult: MutationResult<unknown> = createdRecord
+    const mutationResult: MutationResult<unknown> = createdRecord
       ? updateDailyRecord({
           context,
           childId: input.childId,
@@ -5726,13 +5725,6 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
           },
         })
       : createResult;
-
-    if (mutationResult.status !== "failed") {
-      const storybookResult = generateStorybookFromGrowthRecords(input.childId, context);
-      if (storybookResult.status !== "failed") {
-        mutationResult = storybookResult;
-      }
-    }
 
     return finishD01Mutation(mutationResult);
   }, [currentUser.name, finishD01Mutation, getD01Context]);

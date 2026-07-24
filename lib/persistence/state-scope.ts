@@ -19,7 +19,7 @@ export function isParentSessionUser(user: Pick<SessionUser, "role"> | null | und
 
 export function filterChildrenForSessionUser(
   children: SnapshotChild[],
-  user: Pick<SessionUser, "role" | "id" | "institutionId" | "className" | "childIds">
+  user: Pick<SessionUser, "role" | "id" | "institutionId" | "classId" | "className" | "childIds">
 ) {
   if (user.role === ROLE_ADMIN) {
     return children.filter((child) => child.institutionId === user.institutionId);
@@ -27,7 +27,11 @@ export function filterChildrenForSessionUser(
 
   if (user.role === ROLE_TEACHER) {
     return children.filter(
-      (child) => child.institutionId === user.institutionId && child.className === user.className
+      (child) =>
+        child.institutionId === user.institutionId &&
+        (user.classId && child.classId
+          ? child.classId === user.classId
+          : child.className === user.className)
     );
   }
 
@@ -40,7 +44,7 @@ export function filterChildrenForSessionUser(
 }
 
 export function resolveAuthorizedChildIdSet(
-  user: Pick<SessionUser, "role" | "id" | "institutionId" | "className" | "childIds">,
+  user: Pick<SessionUser, "role" | "id" | "institutionId" | "classId" | "className" | "childIds">,
   children: SnapshotChild[]
 ) {
   if (!isParentSessionUser(user)) {
@@ -151,7 +155,7 @@ function replaceScopedMenus(
 
 export function scopeSnapshotForSessionUser(
   snapshot: AppStateSnapshot,
-  user: Pick<SessionUser, "role" | "id" | "institutionId" | "className" | "childIds">
+  user: Pick<SessionUser, "role" | "id" | "institutionId" | "classId" | "className" | "childIds">
 ) {
   const authorizedChildIds = resolveAuthorizedChildIdSet(user, snapshot.children);
   const authorizedClassNames = resolveAuthorizedClassNameSet(snapshot.children, authorizedChildIds);
@@ -185,7 +189,7 @@ export function scopeSnapshotForSessionUser(
 export function mergeScopedSnapshotForSessionUser(params: {
   currentSnapshot: AppStateSnapshot;
   incomingSnapshot: AppStateSnapshot;
-  user: Pick<SessionUser, "role" | "id" | "institutionId" | "className" | "childIds">;
+  user: Pick<SessionUser, "role" | "id" | "institutionId" | "classId" | "className" | "childIds">;
 }) {
   const { currentSnapshot, incomingSnapshot, user } = params;
   const scopedIncomingSnapshot = scopeSnapshotForSessionUser(incomingSnapshot, user);

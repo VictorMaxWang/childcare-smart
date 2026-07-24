@@ -23,6 +23,7 @@ import { StatusTag } from "@/components/ui/status-tag";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { buildRecentLocalDateRange, getLocalToday, isDateWithinLastDays } from "@/lib/date";
+import { createRecord, updateRecord } from "@/lib/api/records";
 import { toast } from "sonner";
 
 import { HEALTH_MOOD_OPTIONS, HAND_MOUTH_EYE_OPTIONS, TEMPERATURE_THRESHOLD } from "@/lib/mock/health";
@@ -41,7 +42,14 @@ const TEMPERATURE_MIN = 34;
 const TEMPERATURE_MAX = 42;
 
 export default function HealthPage() {
-  const { presentChildren, healthCheckRecords, upsertHealthCheck, currentUser, visibleChildren } = useApp();
+  const {
+    presentChildren,
+    healthCheckRecords,
+    upsertHealthCheck,
+    currentUser,
+    visibleChildren,
+    reloadAppSnapshotFromApi,
+  } = useApp();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -59,6 +67,7 @@ export default function HealthPage() {
   const [handMouthEye, setHandMouthEye] = useState<"正常" | "异常">("正常");
   const [remark, setRemark] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [savingHealthCheck, setSavingHealthCheck] = useState(false);
 
   useEffect(() => {
     if (!isParent || !parentD01.selectedChildId || parentD01.invalidChildId || childFromQuery === parentD01.selectedChildId) {
@@ -220,7 +229,7 @@ export default function HealthPage() {
     setIsDialogOpen(true);
   };
 
-  const handleSaveHealthCheck = () => {
+  const handleSaveHealthCheck = async () => {
     if (!selectedChildId) return;
     
     const trimmedTemperature = temperature.trim();
@@ -246,6 +255,51 @@ export default function HealthPage() {
     setTemperatureError("");
     const isTempAbnormal = tempNum >= TEMPERATURE_THRESHOLD;
     const isAbnormal = isTempAbnormal || handMouthEye === "异常" || mood.includes("哭闹");
+    const childName = childData.find((child) => child.id === selectedChildId)?.name ?? "该幼儿";
+
+    if (currentUser.accountKind === "normal") {
+      setSavingHealthCheck(true);
+      try {
+        const existing = childData.find((child) => child.id === selectedChildId)?.health;
+        const payload = {
+          childId: selectedChildId,
+          date: getLocalToday(),
+          temperature: tempNum,
+          mood,
+          handMouthEye,
+          isAbnormal,
+          remark,
+        };
+        if (existing) {
+          await updateRecord("health", existing.id, payload);
+        } else {
+          await createRecord("health", payload);
+        }
+        const reloadResult = await reloadAppSnapshotFromApi();
+        if (reloadResult.status === "failed") {
+          toast.warning("晨检记录已写入服务端", {
+            description: "页面刷新暂时失败，请手动刷新后查看最新记录。",
+          });
+        } else if (isAbnormal) {
+          toast.warning("晨检记录已保存", {
+            description: `${childName} 已标记为异常状态，请及时复核并通知家长。记录已同步到服务端。`,
+          });
+        } else {
+          toast.success("晨检记录已保存", {
+            description: `${childName} 的今日晨检状态已同步到服务端。`,
+          });
+        }
+        setIsDialogOpen(false);
+      } catch (requestError) {
+        toast.error("晨检记录保存失败", {
+          description:
+            requestError instanceof Error ? requestError.message : "服务端写入失败，请重试。",
+        });
+      } finally {
+        setSavingHealthCheck(false);
+      }
+      return;
+    }
 
     const saveResult = upsertHealthCheck({
       childId: selectedChildId,
@@ -256,7 +310,6 @@ export default function HealthPage() {
       remark
     });
 
-    const childName = childData.find((child) => child.id === selectedChildId)?.name ?? "该幼儿";
     if (saveResult.status === "failed") {
       toast.error("晨检记录保存失败", {
         description: saveResult.message,
@@ -989,7 +1042,7 @@ if (isParent) {
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               取消
             </Button>
-            <Button onClick={handleSaveHealthCheck} data-testid="r05-health-save-check">
+            <Button onClick={() => void handleSaveHealthCheck()} loading={savingHealthCheck} data-testid="r05-health-save-check">
               保存记录
             </Button>
           </DialogFooter>

@@ -25,6 +25,30 @@ class MemoryRepository implements AppDataRepository {
   }
 }
 
+class AtomicOnlyRepository implements AppDataRepository {
+  private snapshot: unknown = createDemoSeedSnapshot("2026-05-02T00:00:00.000Z");
+  mutateCount = 0;
+
+  async load(): Promise<ApiExtendedSnapshot> {
+    throw new Error("non-atomic load must not run");
+  }
+
+  async save(): Promise<void> {
+    throw new Error("non-atomic save must not run");
+  }
+
+  async mutate<T>(
+    session: SessionUser,
+    mutator: (snapshot: ApiExtendedSnapshot) => T
+  ): Promise<T> {
+    this.mutateCount += 1;
+    const snapshot = normalizeExtendedSnapshot(structuredClone(this.snapshot), session);
+    const result = mutator(snapshot);
+    this.snapshot = structuredClone(snapshot);
+    return result;
+  }
+}
+
 type TestRecord = {
   id: string;
   childId: string;
@@ -145,6 +169,72 @@ test("record create/read/update/archive persists through the repository", async 
 
   const withArchived = await service.listRecords("health", { childId: "c-1", includeArchived: true });
   assert.equal(withArchived.some((record) => asTestRecord(record).id === created.id && asTestRecord(record).archivedAt), true);
+});
+
+test("bound normal teacher records are readable by the authorized normal parent", async () => {
+  const repo = new MemoryRepository();
+  const teacherSession: SessionUser = {
+    ...demoUser("u-teacher2"),
+    accountKind: "normal",
+    classId: "class-morning",
+  };
+  const parentSession: SessionUser = {
+    ...demoUser("u-parent"),
+    accountKind: "normal",
+    childIds: ["c-1"],
+  };
+  const teacher = new AppDataService(teacherSession, repo);
+  const parent = new AppDataService(parentSession, repo);
+
+  const health = asTestRecord(
+    await teacher.createRecord("health", {
+      childId: "c-1",
+      date: "2026-07-24",
+      temperature: 36.8,
+      remark: "shared-health",
+    })
+  );
+  const meal = asTestRecord(
+    await teacher.createRecord("meal", {
+      childId: "c-1",
+      date: "2026-07-24",
+      meal: "午餐",
+      foods: [{ id: "food-1", name: "米饭", category: "主食", amount: "1碗" }],
+      nutritionScore: 88,
+    })
+  );
+  const growth = asTestRecord(
+    await teacher.createRecord("growth", {
+      childId: "c-1",
+      description: "shared-growth",
+      selectedIndicators: ["主动表达"],
+    })
+  );
+
+  const parentHealth = await parent.listRecords("health", { childId: "c-1" });
+  const parentMeals = await parent.listRecords("meal", { childId: "c-1" });
+  const parentGrowth = await parent.listRecords("growth", { childId: "c-1" });
+
+  assert.ok(parentHealth.some((record) => asTestRecord(record).id === health.id));
+  assert.ok(parentMeals.some((record) => asTestRecord(record).id === meal.id));
+  assert.ok(parentGrowth.some((record) => asTestRecord(record).id === growth.id));
+});
+
+test("service writes through the repository atomic mutation contract when available", async () => {
+  const repo = new AtomicOnlyRepository();
+  const service = new AppDataService(demoUser("u-admin"), repo);
+
+  const child = asTestChild(
+    await service.createChild({
+      name: "原子写入测试",
+      birthDate: "2022-05-10",
+      gender: "女",
+      className: "向阳班",
+    })
+  );
+
+  assert.ok(child.id);
+  assert.equal(repo.mutateCount, 1);
 });
 
 test("createConsultation preserves rich high-risk result fields", async () => {
@@ -270,14 +360,10 @@ test("director can create, update, archive and restore child profiles through sc
     guardians: [{ name: "测试家长", relation: "母亲", phone: "13800000000" }],
     className: "向阳班",
     specialNotes: "E02 create child",
-    parentUserId: "u-parent",
   }));
 
   assert.ok(created.id);
   assert.equal(created.institutionId, "inst-1");
-
-  const parent = new AppDataService(demoUser("u-parent"), repo);
-  assert.equal(asTestChild(await parent.getChild(created.id)).id, created.id);
 
   const updated = asTestChild(await director.updateChild(created.id, {
     id: "client-forged-id",
@@ -307,6 +393,23 @@ test("director can create, update, archive and restore child profiles through sc
 
   const afterRestore = await director.listChildren();
   assert.equal(afterRestore.some((child) => asTestChild(child).id === created.id), true);
+});
+
+test("ordinary child CRUD cannot forge a parent account binding", async () => {
+  const repo = new MemoryRepository();
+  const director = new AppDataService(demoUser("u-admin"), repo);
+
+  await assert.rejects(
+    () =>
+      director.createChild({
+        name: "伪造绑定",
+        birthDate: "2023-02-03",
+        gender: "女",
+        className: "向阳班",
+        parentUserId: "u-parent",
+      }),
+    assertApiError("invalid_request")
+  );
 });
 
 test("teacher management is director-only and supports archive restore metadata", async () => {

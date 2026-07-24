@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
 import { createPool } from "mysql2/promise";
 
 loadLocalEnvFile(".env.local");
@@ -82,6 +83,14 @@ function fail(message) {
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
+}
+
+function stableClassId(institutionId, className) {
+  const digest = createHash("sha256")
+    .update(`${institutionId}\u0000${className}`, "utf8")
+    .digest("hex")
+    .slice(0, 24);
+  return `class-aligned-${digest}`;
 }
 
 function placeholders(values) {
@@ -314,12 +323,14 @@ function buildMergedSnapshot(users, snapshotRows) {
     process.env.SAMPLE_CLASS_NAME?.trim() ||
     merged.children.find((child) => child && typeof child === "object" && typeof child.className === "string")?.className ||
     DEFAULT_PARENT_CHILD_CLASS_NAME;
+  const classId = process.env.SAMPLE_CLASS_ID?.trim() || stableClassId(users.admin.institution_id, className);
   merged.children = merged.children.map((child) =>
     child && typeof child === "object"
       ? {
           ...child,
           institutionId: users.admin.institution_id,
-          className: child.className || className,
+          classId,
+          className,
         }
       : child
   );
@@ -343,9 +354,45 @@ function buildMergedSnapshot(users, snapshotRows) {
       .filter((child) => child && typeof child === "object" && child.parentUserId === users.parent.id)
       .map((child) => child.id),
   ]).filter((childId) => childIds.has(childId));
+  merged.children = merged.children.map((child) =>
+    child && typeof child === "object" && parentChildIds.includes(child.id)
+      ? { ...child, parentUserId: users.parent.id }
+      : child
+  );
+
+  const teacherIndex = merged.teachers.findIndex(
+    (teacher) =>
+      teacher &&
+      typeof teacher === "object" &&
+      (teacher.userId === users.teacher.id ||
+        (!teacher.userId && teacher.name === users.teacher.display_name))
+  );
+  const teacherProfile = {
+    teacherId:
+      (teacherIndex >= 0 ? merged.teachers[teacherIndex].teacherId : "") ||
+      `teacher-account-${users.teacher.id}`,
+    userId: users.teacher.id,
+    name: users.teacher.display_name,
+    institutionId: users.admin.institution_id,
+    className,
+    createdAt:
+      teacherIndex >= 0 && merged.teachers[teacherIndex].createdAt
+        ? merged.teachers[teacherIndex].createdAt
+        : new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  if (teacherIndex >= 0) {
+    merged.teachers[teacherIndex] = {
+      ...merged.teachers[teacherIndex],
+      ...teacherProfile,
+    };
+  } else {
+    merged.teachers.unshift(teacherProfile);
+  }
 
   return {
     snapshot: merged,
+    classId,
     className,
     parentChildIds,
   };
@@ -355,6 +402,185 @@ async function applyAlignment(pool, users, alignment) {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    await connection.execute(
+      `
+        insert into institutions (id, status, created_by)
+        values (?, 'active', ?)
+        on duplicate key update
+          status = 'active',
+          updated_at = current_timestamp
+      `,
+      [users.admin.institution_id, users.admin.id]
+    );
+    const [existingClassRows] = await connection.execute(
+      `
+        select id
+        from institution_classes
+        where institution_id = ? and name = ?
+        limit 1
+        for update
+      `,
+      [users.admin.institution_id, alignment.className]
+    );
+    const classId =
+      Array.isArray(existingClassRows) &&
+      existingClassRows[0] &&
+      typeof existingClassRows[0].id === "string"
+        ? existingClassRows[0].id
+        : alignment.classId;
+    await connection.execute(
+      `
+        insert into institution_classes (id, institution_id, name, status)
+        values (?, ?, ?, 'active')
+        on duplicate key update
+          name = ?,
+          status = 'active',
+          updated_at = current_timestamp
+      `,
+      [
+        classId,
+        users.admin.institution_id,
+        alignment.className,
+        alignment.className,
+      ]
+    );
+    const snapshotChildIds = unique(
+      alignment.snapshot.children.map((child) =>
+        child && typeof child === "object" ? child.id : ""
+      )
+    );
+    if (snapshotChildIds.length > 0) {
+      const [registeredChildren] = await connection.execute(
+        `
+          select child_id, institution_id
+          from child_registry
+          where child_id in (${placeholders(snapshotChildIds)})
+          for update
+        `,
+        snapshotChildIds
+      );
+      const collision = Array.isArray(registeredChildren)
+        ? registeredChildren.find(
+            (row) => row.institution_id !== users.admin.institution_id
+          )
+        : null;
+      if (collision) {
+        fail("Child registry collision with another institution; no changes were applied");
+      }
+    }
+
+    for (const membership of [
+      { user: users.admin, classId: null },
+      { user: users.teacher, classId },
+      { user: users.parent, classId },
+    ]) {
+      await connection.execute(
+        `
+          insert into institution_memberships (
+            user_id,
+            institution_id,
+            role,
+            class_id,
+            status,
+            authz_version,
+            created_by,
+            joined_at
+          )
+          values (?, ?, ?, ?, 'active', 1, ?, current_timestamp)
+          on duplicate key update
+            institution_id = ?,
+            role = ?,
+            class_id = ?,
+            status = 'active',
+            authz_version = authz_version + 1,
+            updated_at = current_timestamp
+        `,
+        [
+          membership.user.id,
+          users.admin.institution_id,
+          membership.user.role,
+          membership.classId,
+          users.admin.id,
+          users.admin.institution_id,
+          membership.user.role,
+          membership.classId,
+        ]
+      );
+    }
+
+    await connection.execute(
+      `
+        insert into teacher_class_assignments (
+          user_id,
+          institution_id,
+          class_id,
+          status,
+          assigned_by,
+          assigned_at
+        )
+        values (?, ?, ?, 'active', ?, current_timestamp)
+        on duplicate key update
+          institution_id = ?,
+          class_id = ?,
+          status = 'active',
+          assigned_by = ?,
+          assigned_at = current_timestamp,
+          updated_at = current_timestamp
+      `,
+      [
+        users.teacher.id,
+        users.admin.institution_id,
+        classId,
+        users.admin.id,
+        users.admin.institution_id,
+        classId,
+        users.admin.id,
+      ]
+    );
+
+    for (const child of alignment.snapshot.children) {
+      if (!child || typeof child !== "object" || !child.id) continue;
+      await connection.execute(
+        `
+          insert into child_registry (child_id, institution_id, class_id, status, created_by)
+          values (?, ?, ?, 'active', ?)
+          on duplicate key update
+            class_id = if(institution_id = values(institution_id), values(class_id), class_id),
+            status = 'active',
+            updated_at = current_timestamp
+        `,
+        [child.id, users.admin.institution_id, classId, users.admin.id]
+      );
+    }
+
+    for (const childId of alignment.parentChildIds) {
+      await connection.execute(
+        `
+          insert into guardian_child_links (
+            institution_id,
+            user_id,
+            child_id,
+            status,
+            created_by,
+            linked_at
+          )
+          values (?, ?, ?, 'active', ?, current_timestamp)
+          on duplicate key update
+            status = 'active',
+            created_by = ?,
+            linked_at = current_timestamp,
+            updated_at = current_timestamp
+        `,
+        [
+          users.admin.institution_id,
+          users.parent.id,
+          childId,
+          users.admin.id,
+          users.admin.id,
+        ]
+      );
+    }
+
     await connection.execute(
       `
         update app_users
@@ -371,6 +597,24 @@ async function applyAlignment(pool, users, alignment) {
       `,
       [users.admin.institution_id, encodeJson(alignment.parentChildIds), users.parent.id]
     );
+    if (alignment.parentChildIds.length > 0) {
+      await connection.execute(
+        `
+          update consent_records
+          set institution_id = ?
+          where user_id = ?
+            and child_id in (${placeholders(alignment.parentChildIds)})
+        `,
+        [
+          users.admin.institution_id,
+          users.parent.id,
+          ...alignment.parentChildIds,
+        ]
+      );
+    }
+    alignment.snapshot.children = alignment.snapshot.children.map((child) =>
+      child && typeof child === "object" ? { ...child, classId } : child
+    );
     const encodedSnapshot = encodeJson(alignment.snapshot);
     await connection.execute(
       `
@@ -382,6 +626,35 @@ async function applyAlignment(pool, users, alignment) {
       `,
       [users.admin.institution_id, encodedSnapshot, users.admin.id, encodedSnapshot, users.admin.id]
     );
+
+    for (const subject of [users.admin, users.teacher, users.parent]) {
+      await connection.execute(
+        `
+          insert into authorization_audit_events (
+            id,
+            institution_id,
+            actor_user_id,
+            subject_user_id,
+            action,
+            metadata,
+            created_at
+          )
+          values (?, ?, ?, ?, 'sample_account_alignment', ?, current_timestamp)
+        `,
+        [
+          `authz-${randomUUID()}`,
+          users.admin.institution_id,
+          users.admin.id,
+          subject.id,
+          encodeJson({
+            role: subject.role,
+            classId: subject.role === ROLE_ADMIN ? null : classId,
+            parentChildCount:
+              subject.role === ROLE_PARENT ? alignment.parentChildIds.length : 0,
+          }),
+        ]
+      );
+    }
     await connection.commit();
   } catch (error) {
     await connection.rollback().catch(() => {});
