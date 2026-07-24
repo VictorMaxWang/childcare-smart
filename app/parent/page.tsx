@@ -61,9 +61,11 @@ import { sanitizeParentFacingText } from "@/lib/agent/parent-copy";
 import { buildParentHomeTransparencyModel } from "@/lib/agent/parent-transparency";
 import { buildParentWeeklyReportSnapshot } from "@/lib/agent/parent-weekly-report";
 import { fetchWeeklyReport } from "@/lib/agent/weekly-report-client";
+import { resolveWeeklyReportScope } from "@/lib/agent/weekly-report-scope";
 import { buildFallbackSuggestion } from "@/lib/ai/fallback";
 import type { AiSuggestionResponse, WeeklyReportResponse } from "@/lib/ai/types";
 import { useCareMode } from "@/lib/care-mode";
+import { formatMealFoodSummary } from "@/lib/meals/display";
 import { buildParentSpeechScript } from "@/lib/voice/browser-tts";
 import { buildParentHomeViewModel } from "@/lib/view-models/role-home";
 import { formatDisplayDate, getAgeText } from "@/lib/store";
@@ -223,6 +225,10 @@ export default function ParentHomePage() {
       previewContext
         ? {
             role: "parent" as const,
+            ...(resolveWeeklyReportScope({
+              role: "parent",
+              childId: previewContext.child.id,
+            }) ?? {}),
             snapshot: buildParentWeeklyReportSnapshot(previewContext),
           }
         : null,
@@ -410,18 +416,16 @@ export default function ParentHomePage() {
     ],
     outro: "浏览器播报，仅用于当前设备预览，不是后端真实语音。",
   });
-  const childMeta = `${viewModel.child.className} · ${getAgeText(
+  const childAgeText = getAgeText(viewModel.child.birthDate);
+  const childMeta = `${viewModel.child.className} · ${childAgeText} · 出生于 ${formatDisplayDate(
     viewModel.child.birthDate
-  )} · 出生于 ${formatDisplayDate(viewModel.child.birthDate)}`;
+  )}`;
   const latestHealthCheck = previewContext.weeklyHealthChecks[0];
   const latestMeal =
     [...previewContext.todayMeals].sort(
       (left, right) => (PARENT_MEAL_PRIORITY[right.meal] ?? 0) - (PARENT_MEAL_PRIORITY[left.meal] ?? 0)
     )[0] ?? previewContext.weeklyMeals[0];
-  const latestMealFoodSummary =
-    latestMeal?.foods
-      .map((food) => `${food.name}${food.amount ? `(${food.amount})` : ""}`)
-      .join("、") ?? "";
+  const latestMealFoodSummary = formatMealFoodSummary(latestMeal?.foods);
   const latestGrowthRecord = previewContext.weeklyGrowthRecords[0];
   const latestFeedback = previewContext.latestFeedback;
   const childScopedMessages =
@@ -486,7 +490,7 @@ export default function ParentHomePage() {
       title: "饮食摘要",
       meta: latestMeal ? `${formatDisplayDate(latestMeal.date)} · ${latestMeal.meal}` : "今日暂无饮食记录",
       description: latestMeal
-        ? `${latestMeal.foods.map((food) => `${food.name}${food.amount ? `(${food.amount})` : ""}`).join("、")} · 饮水 ${latestMeal.waterMl} ml · 营养评分 ${latestMeal.nutritionScore}`
+        ? `${latestMealFoodSummary || "暂无食物明细"} · 饮水 ${latestMeal.waterMl} ml · 营养评分 ${latestMeal.nutritionScore}`
         : "还没有可展示的餐食记录。",
       tone: latestMeal?.allergyReaction ? "amber" : "sky",
       icon: <CalendarDays className="h-4 w-4" />,
@@ -1059,6 +1063,7 @@ export default function ParentHomePage() {
           todayText={TODAY_TEXT}
           currentUserName={currentUser.name}
           childName={viewModel.child.name}
+          childAgeText={childAgeText}
           childMeta={childMeta}
           allergies={viewModel.child.allergies}
           statusLabel={parentStatusLabel}

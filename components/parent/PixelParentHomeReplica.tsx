@@ -68,6 +68,7 @@ export interface PixelParentHomeReplicaProps {
   todayText: string;
   currentUserName: string;
   childName: string;
+  childAgeText: string;
   childMeta: string;
   allergies: string[];
   statusLabel: string;
@@ -111,6 +112,7 @@ export default function PixelParentHomeReplica({
   todayText,
   currentUserName,
   childName,
+  childAgeText,
   childMeta,
   allergies,
   statusLabel,
@@ -194,8 +196,12 @@ export default function PixelParentHomeReplica({
                 <div className="min-w-0">
                   <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
                     <h2 className="min-w-0 break-words text-2xl font-black tracking-normal text-slate-950 sm:text-3xl">{childName}</h2>
-                    <Badge variant="info" className="rounded-full px-2.5 py-0.5 text-sm sm:px-3 sm:py-1 sm:text-base">
-                      3岁2个月
+                    <Badge
+                      variant="info"
+                      className="rounded-full px-2.5 py-0.5 text-sm sm:px-3 sm:py-1 sm:text-base"
+                      data-testid="r07-parent-child-age"
+                    >
+                      {childAgeText}
                     </Badge>
                   </div>
                   <p className="mt-1 break-words text-sm leading-5 text-slate-500 sm:mt-2 sm:text-base sm:leading-7">{childMeta}</p>

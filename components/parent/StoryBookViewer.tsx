@@ -863,6 +863,18 @@ function sceneHasReadyAudioHotfix(
   return Boolean(scene?.audioStatus === "ready" && scene.audioUrl);
 }
 
+/**
+ * 将后端保存的裸媒体 ID 转成受鉴权的媒体路由，避免浏览器把它误解为页面相对地址。
+ */
+export function resolveSceneAudioFallbackUrlHotfix(
+  scene: Pick<ParentStoryBookScene, "audioUrl" | "audioRef">
+) {
+  const audioRef = typeof scene.audioRef === "string" ? scene.audioRef.trim() : "";
+  if (!audioRef || audioRef === scene.audioUrl) return null;
+  if (/^(?:https?:|data:|blob:|\/)/i.test(audioRef)) return audioRef;
+  return `/api/ai/parent-storybook/media/${encodeURIComponent(audioRef)}`;
+}
+
 function normalizeRuntimeAudioDeliveryHotfix(
   audioDelivery?: StoryBookAudioDelivery
 ): Exclude<StoryBookRuntimeAudioDelivery, "local-speech"> {
@@ -2543,15 +2555,16 @@ function StoryBookSceneStream({
         : [scene.audioScript || scene.sceneText].filter(Boolean);
     let triedRuntimeTts = false;
     const tryRuntimeTtsFallback = () => {
-      if (triedRuntimeTts || !scene.audioRef || scene.audioRef === scene.audioUrl) {
+      const fallbackAudioUrl = resolveSceneAudioFallbackUrlHotfix(scene);
+      if (triedRuntimeTts || !fallbackAudioUrl) {
         return false;
       }
       triedRuntimeTts = true;
       startAudio(
         {
           ...scene,
-          audioUrl: scene.audioRef,
-          audioRef: scene.audioRef,
+          audioUrl: fallbackAudioUrl,
+          audioRef: fallbackAudioUrl,
         },
         index,
         options
@@ -2710,7 +2723,18 @@ function StoryBookSceneStream({
         return;
       }
       if (playbackState === "paused" && audioRef.current) {
-        void audioRef.current.play().catch(() => startPreview(scene, index));
+        void audioRef.current.play().catch(() => {
+          setPlaybackErrorMessage(
+            canUseLocalSpeech
+              ? "真实朗读恢复失败，已切换为本地朗读。"
+              : "朗读恢复失败，图片和文字可继续阅读。"
+          );
+          if (canUseLocalSpeech) {
+            startLocalSpeech(scene, index);
+            return;
+          }
+          startPreview(scene, index);
+        });
         return;
       }
       if (playbackState === "paused" && canUseLocalSpeech) {

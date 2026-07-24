@@ -6,6 +6,7 @@ import {
   type LoginNormalAccountDependencies,
 } from "@/lib/auth/account-server";
 import type { AccountRole } from "@/lib/auth/accounts";
+import type { MembershipAuthorizationProjection } from "@/lib/auth/membership-projection";
 
 function appUserRow(username: string, passwordHash = "hash:secret123", role: AccountRole = "家长") {
   return {
@@ -27,6 +28,8 @@ function createLoginDeps(options?: {
   usernameRows?: Record<string, ReturnType<typeof appUserRow>>;
   phoneError?: string;
   usernameError?: string;
+  membershipProjection?: MembershipAuthorizationProjection | null;
+  membershipError?: Error;
 }) {
   const phoneCalls: string[] = [];
   const usernameCalls: string[] = [];
@@ -48,6 +51,10 @@ function createLoginDeps(options?: {
     },
     async verifyPassword(password, hash) {
       return hash === `hash:${password}`;
+    },
+    async loadMembershipProjection() {
+      if (options?.membershipError) throw options.membershipError;
+      return options?.membershipProjection ?? null;
     },
   };
 
@@ -160,4 +167,52 @@ test("authenticateLoginAccount returns service unavailable for lookup failures",
   if (result.ok) return;
   assert.equal(result.status, 503);
   assert.equal(result.error, "服务暂时不可用");
+});
+
+test("authenticateLoginAccount returns the canonical membership projection immediately", async () => {
+  const role = "\u6559\u5e08" as AccountRole;
+  const { dependencies } = createLoginDeps({
+    phoneRows: {
+      "+8613800000000": appUserRow("+8613800000000", "hash:secret123", role),
+    },
+    membershipProjection: {
+      institutionId: "inst-canonical",
+      role,
+      classId: "class-canonical",
+      className: "\u8054\u8c03\u793a\u4f8b\u73ed",
+      childIds: [],
+      authzVersion: 3,
+    },
+  });
+
+  const result = await authenticateLoginAccountWithDependencies(
+    { phone: "13800000000", password: "secret123" },
+    dependencies
+  );
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.data.institutionId, "inst-canonical");
+  assert.equal(result.data.classId, "class-canonical");
+  assert.equal(result.data.className, "\u8054\u8c03\u793a\u4f8b\u73ed");
+  assert.equal(result.data.authzVersion, 3);
+});
+
+test("authenticateLoginAccount reports projection query failures as service unavailable", async () => {
+  const { dependencies } = createLoginDeps({
+    phoneRows: {
+      "+8613800000000": appUserRow("+8613800000000"),
+    },
+    membershipError: new Error("membership query failed"),
+  });
+
+  const result = await authenticateLoginAccountWithDependencies(
+    { phone: "13800000000", password: "secret123" },
+    dependencies
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.status, 503);
+  assert.equal(result.error, "\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528");
 });

@@ -102,6 +102,10 @@ test.describe("FRONTEND-REPLICA-R07 parent replica", () => {
     await expect(page.getByTestId("r07-parent-page")).toBeVisible();
     await expect(page.getByTestId("r07-parent-replica-page")).toHaveAttribute("data-child-name", /林小雨/);
     await expect(page.getByTestId("r07-parent-status-card")).toHaveCount(5);
+    await expect(page.getByTestId("r07-parent-child-age")).toBeVisible();
+    await expect(page.getByTestId("r07-parent-child-age")).toHaveText(/^(?:\d+个月|\d+岁(?:\d+个月)?)$/);
+    await expect(page.getByTestId("r07-parent-child-age")).not.toHaveText("3岁2个月");
+    await expect(page.locator("body")).not.toContainText(/\bundefined\b/);
     await expect(page.locator('[data-testid="r07-parent-status-card"][data-status-id="meal"]')).toBeVisible();
     await expect(page.locator('[data-testid="r07-parent-status-card"][data-status-id="temp"]')).toBeVisible();
     await expect(page.locator('[data-testid="r07-parent-status-card"][data-status-id="activity"]')).toBeVisible();

@@ -417,12 +417,14 @@ export type LoginNormalAccountDependencies = {
   getUserByPhoneNormalized: (phone: string) => Promise<AppUserLookupResult>;
   getUserByUsername: (username: string) => Promise<AppUserLookupResult>;
   verifyPassword: typeof verifyPassword;
+  loadMembershipProjection: typeof loadMembershipProjection;
 };
 
 const defaultLoginNormalAccountDependencies: LoginNormalAccountDependencies = {
   getUserByPhoneNormalized: getAppUserByPhoneNormalized,
   getUserByUsername: getAppUserByUsername,
   verifyPassword,
+  loadMembershipProjection,
 };
 
 async function verifyLoginRow(
@@ -437,7 +439,14 @@ async function verifyLoginRow(
     return { ok: false, status: 401, error: LOGIN_INVALID_CREDENTIALS_ERROR };
   }
 
-  return { ok: true, data: mapDbUserToSessionUser(row) };
+  try {
+    const session = mapDbUserToSessionUser(row);
+    const membership = await dependencies.loadMembershipProjection(row.id);
+    return { ok: true, data: applyMembershipProjection(session, membership) };
+  } catch (error) {
+    logSecurityEvent("error", "auth.login.membership_projection_failed", { error });
+    return { ok: false, status: 503, error: LOGIN_SERVICE_UNAVAILABLE_ERROR };
+  }
 }
 
 async function lookupUsernameCandidates(
