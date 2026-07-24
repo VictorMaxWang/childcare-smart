@@ -38,10 +38,20 @@ export function resolvePrimaryNavChildId(
   childIds?: readonly (string | null | undefined)[] | null,
   visibleChildren?: readonly { id?: string | null }[] | null
 ): string | undefined {
-  const sessionChildId = childIds?.find((childId): childId is string => typeof childId === "string" && childId.length > 0);
-  if (sessionChildId) return sessionChildId;
+  const sessionChildIds =
+    childIds?.filter((childId): childId is string => typeof childId === "string" && childId.length > 0) ?? [];
+  const visibleChildIds =
+    visibleChildren
+      ?.map((child) => child.id)
+      .filter((childId): childId is string => typeof childId === "string" && childId.length > 0) ?? [];
 
-  return visibleChildren?.find((child) => typeof child.id === "string" && child.id.length > 0)?.id ?? undefined;
+  // 可见幼儿来自最新服务端状态；会话 childIds 可能在建档或重新绑定后仍是旧快照。
+  if (visibleChildIds.length > 0) {
+    const visibleChildIdSet = new Set(visibleChildIds);
+    return sessionChildIds.find((childId) => visibleChildIdSet.has(childId)) ?? visibleChildIds[0];
+  }
+
+  return sessionChildIds[0];
 }
 
 const OVERVIEW_ITEM: PrimaryNavItem = { href: "/", label: "数据总览", icon: "overview" };
