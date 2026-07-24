@@ -554,6 +554,14 @@ export default function TeacherHighRiskConsultationPage() {
         }),
     [activeChildId, consultations]
   );
+  const pendingConsultationRecords = useMemo(
+    () =>
+      storedConsultationsForChild
+        // 健康材料入口会先写入会诊壳记录；字段未齐全前也必须让教师确认记录已成功共享。
+        .filter((item) => !isRenderableConsultationApiResult(item))
+        .slice(0, 3),
+    [storedConsultationsForChild]
+  );
   const draftId = selectedChild ? `high-risk-consultation-${selectedChild.id}` : "";
   const existingDraft = useMemo(() => mobileDrafts.find((draft) => draft.draftId === draftId), [draftId, mobileDrafts]);
   const existingDraftPayload = useMemo(
@@ -1405,6 +1413,55 @@ export default function TeacherHighRiskConsultationPage() {
                 <p className="rounded-lg bg-white/80 px-3 py-2">最终结果会同步为园内动作、家庭任务和复查提醒。</p>
               </div>
             </TeacherMiniPanel>
+            {pendingConsultationRecords.length > 0 ? (
+              <section
+                aria-labelledby="pending-consultation-records-title"
+                className="border-y border-amber-100 bg-amber-50/60 px-4 py-5 sm:px-5"
+                data-testid="teacher-pending-consultation-records"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 id="pending-consultation-records-title" className="text-base font-semibold text-slate-950">
+                      待完善会诊记录
+                    </h2>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                      这些记录已写入共享数据，可继续补充教师观察并生成完整方案。
+                    </p>
+                  </div>
+                  <Badge variant="warning">{pendingConsultationRecords.length} 条待完善</Badge>
+                </div>
+                <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                  {pendingConsultationRecords.map((consultation) => (
+                    <article
+                      key={consultation.consultationId}
+                      className="rounded-lg border border-amber-100 bg-white p-4 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <Badge variant="outline">
+                          {consultation.riskLevel === "high" ? "高风险" : consultation.riskLevel === "medium" ? "中风险" : "低风险"}
+                        </Badge>
+                        <span className="text-xs text-slate-500">
+                          {formatDisplayDate((consultation as { updatedAt?: string }).updatedAt ?? consultation.generatedAt)}
+                        </span>
+                      </div>
+                      <p className="mt-3 line-clamp-3 text-sm font-medium leading-6 text-slate-900">
+                        {consultation.summary}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-4 w-full gap-2"
+                        onClick={openConsultationSetup}
+                      >
+                        <ClipboardList className="h-4 w-4" />
+                        补充并生成完整方案
+                      </Button>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
             {result && !showSetupSections ? (
               <SectionCard
                 title="已切换到结果优先视图"
