@@ -67,6 +67,7 @@ test("child-scoped weekly reports exclude records from other authorized children
   );
 
   assert.equal(result.snapshot.overview.visibleChildren, 1);
+  assert.equal(result.snapshot.overview.attendanceRate, 100);
   assert.equal(result.snapshot.overview.mealRecordCount, 1);
   assert.equal(result.snapshot.overview.healthAbnormalCount, 0);
   assert.equal(result.snapshot.overview.feedbackCount, 1);
@@ -83,6 +84,7 @@ test("class-scoped weekly reports only aggregate children from that class", () =
   );
 
   assert.equal(result.snapshot.overview.visibleChildren, 1);
+  assert.equal(result.snapshot.overview.attendanceRate, 0);
   assert.equal(result.snapshot.overview.healthAbnormalCount, 1);
   assert.equal(result.snapshot.diet.hydrationAvg, 100);
   assert.deepEqual(result.snapshot.risks, ["B risk"]);

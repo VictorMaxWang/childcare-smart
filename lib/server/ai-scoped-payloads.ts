@@ -435,8 +435,11 @@ export function buildWeeklyReportPayloadFromScope(
       visibleChildren: visibleChildren.length,
       attendanceRate:
         attendance.length > 0
-          ? attendance.filter((item) => Boolean((item as AnyRecord).isPresent)).length /
-            attendance.length
+          ? Math.round(
+              (attendance.filter((item) => Boolean((item as AnyRecord).isPresent)).length /
+                attendance.length) *
+                100
+            )
           : 0,
       mealRecordCount: meals.length,
       healthAbnormalCount,

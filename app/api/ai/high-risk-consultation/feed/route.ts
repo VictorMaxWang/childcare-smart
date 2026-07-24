@@ -162,11 +162,12 @@ export async function GET(request: Request) {
   const authResult = await authorizeAiRouteSession(request, {
     requiredRole: "staff",
     allowUnscoped: true,
-    requireScopedNormalSession: true,
   });
   if (authResult instanceof Response) return authResult;
 
   const url = new URL(request.url);
+  // Feed 没有客户端资源 scope；数据范围必须由服务端 session 投影决定，
+  // 随后仍会对可见幼儿和可选 child_id 做二次校验。
   const sessionScope = await getSessionScope(authResult.session);
   if (authResult.session.user.accountKind !== "demo" && sessionScope.visibleChildren.length === 0) {
     return aiRouteLimitedResponse({
