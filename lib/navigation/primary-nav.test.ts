@@ -37,12 +37,20 @@ test("parent nav exposes parent tools without institution or teacher entries", (
   assert.equal(navItems.some((item) => item.href.startsWith("/admin")), false);
 });
 
-test("resolvePrimaryNavChildId prefers session childIds", () => {
-  assert.equal(resolvePrimaryNavChildId(["c-session"], [{ id: "c-visible" }]), "c-session");
+test("resolvePrimaryNavChildId keeps a session child that is still visible", () => {
+  assert.equal(resolvePrimaryNavChildId(["c-session"], [{ id: "c-visible" }, { id: "c-session" }]), "c-session");
+});
+
+test("resolvePrimaryNavChildId replaces a stale session child with a visible child", () => {
+  assert.equal(resolvePrimaryNavChildId(["c-stale"], [{ id: "c-visible" }]), "c-visible");
 });
 
 test("resolvePrimaryNavChildId falls back to visible children after parent onboarding", () => {
   assert.equal(resolvePrimaryNavChildId([], [{ id: "c-owned" }]), "c-owned");
+});
+
+test("resolvePrimaryNavChildId keeps the session fallback while visible children are loading", () => {
+  assert.equal(resolvePrimaryNavChildId(["c-session"], []), "c-session");
 });
 
 test("parent primary navigation carries the resolved child scope", () => {
