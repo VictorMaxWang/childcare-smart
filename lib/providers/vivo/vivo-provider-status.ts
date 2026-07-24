@@ -91,17 +91,11 @@ function requiredEnvForCapability(capability: VivoCapability) {
       "VIVO_ASR_ENGINE_ID",
     ];
   }
+  // TTS 协议元数据在 getVivoEnv 中都有可工作的默认值；这里只要求真正决定鉴权和端点的核心配置。
   return [
     "VIVO_APP_KEY",
     "VIVO_APP_ID",
     "VIVO_BASE_URL",
-    "STORYBOOK_TTS_MODEL",
-    "STORYBOOK_TTS_PRODUCT",
-    "STORYBOOK_TTS_PACKAGE",
-    "STORYBOOK_TTS_CLIENT_VERSION",
-    "STORYBOOK_TTS_SYSTEM_VERSION",
-    "STORYBOOK_TTS_SDK_VERSION",
-    "STORYBOOK_TTS_ANDROID_VERSION",
   ];
 }
 
