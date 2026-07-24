@@ -19,6 +19,7 @@ const SAMPLE_ACCOUNTS = [
 }));
 const SNAPSHOT_ARRAY_KEYS = [
   "children",
+  "teachers",
   "attendance",
   "meals",
   "growth",
