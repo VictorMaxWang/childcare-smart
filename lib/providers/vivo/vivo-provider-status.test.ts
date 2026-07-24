@@ -92,6 +92,28 @@ test("vivo provider status keeps partial env unconfigured", async () => {
   });
 });
 
+test("vivo TTS readiness accepts core credentials because metadata has runtime defaults", async () => {
+  await withProviderEnv(
+    {
+      VIVO_APP_ID: "fake-tts-app-id",
+      VIVO_APP_KEY: "fake-tts-secret",
+      VIVO_BASE_URL: "https://api.example.invalid",
+    },
+    () => {
+      const status = getVivoProviderStatus("tts");
+
+      assert.equal(status.state, "configured");
+      assert.equal(status.configured, true);
+      assert.equal(status.status, "ready");
+      assert.deepEqual(status.requiredEnv, [
+        "VIVO_APP_KEY",
+        "VIVO_APP_ID",
+        "VIVO_BASE_URL",
+      ]);
+    }
+  );
+});
+
 test("vivo provider status reports configured without claiming live", async () => {
   const appId = "fake-real-next-app-id";
   const appKey = "fake-real-next-secret";

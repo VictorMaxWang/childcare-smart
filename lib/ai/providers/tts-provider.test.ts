@@ -74,19 +74,12 @@ test("legacy TTS_PROVIDER_API_KEY no longer creates placeholder live TTS", async
   });
 });
 
-test("resolveTtsProvider reports configured vivo TTS without claiming live", async () => {
+test("resolveTtsProvider uses built-in TTS metadata defaults with core vivo credentials", async () => {
   await withProviderEnv(
     {
       VIVO_APP_ID: "fake-tts-app-id",
       VIVO_APP_KEY: "fake-tts-secret",
       VIVO_BASE_URL: "https://api.example.invalid",
-      STORYBOOK_TTS_MODEL: "fake-tts-model",
-      STORYBOOK_TTS_PRODUCT: "fake-tts-product",
-      STORYBOOK_TTS_PACKAGE: "com.example.fake",
-      STORYBOOK_TTS_CLIENT_VERSION: "1.0.0",
-      STORYBOOK_TTS_SYSTEM_VERSION: "1",
-      STORYBOOK_TTS_SDK_VERSION: "1",
-      STORYBOOK_TTS_ANDROID_VERSION: "13",
     },
     () => {
       const provider = resolveTtsProvider();
@@ -99,6 +92,11 @@ test("resolveTtsProvider reports configured vivo TTS without claiming live", asy
       assert.equal(status.live, false);
       assert.equal(status.fallback, false);
       assert.equal(status.mock, false);
+      assert.deepEqual(status.requiredEnv, [
+        "VIVO_APP_KEY",
+        "VIVO_APP_ID",
+        "VIVO_BASE_URL",
+      ]);
       assert.equal(serialized.includes("fake-tts-secret"), false);
       assert.equal(serialized.includes("fake-tts-app-id"), false);
     }
