@@ -709,8 +709,11 @@ def test_parent_storybook_heavy_fixture_real_service_stays_fast_without_request_
         assert result["providerMeta"]["mode"] == "fallback"
         assert result["providerMeta"]["requestSource"] == payload["requestSource"]
         assert result["providerMeta"]["fallbackReason"] != "brain-proxy-timeout"
-        assert result["providerMeta"]["diagnostics"]["brain"]["fallbackReason"] is None
-        assert result["providerMeta"]["diagnostics"]["brain"]["timeoutMs"] is None
+        assert (
+            result["providerMeta"]["diagnostics"]["brain"]["fallbackReason"]
+            == "provider-unconfigured-dev-fallback"
+        )
+        assert result["providerMeta"]["diagnostics"]["brain"]["timeoutMs"] == 20000
         assert result["providerMeta"]["diagnostics"]["image"]["jobStatus"] == "warming"
         assert result["providerMeta"]["diagnostics"]["audio"]["jobStatus"] == "warming"
 

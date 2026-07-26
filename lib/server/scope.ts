@@ -141,16 +141,46 @@ export function requireFeedbackViewAccess(
 export function canReplyConversation(
   session: SessionUser,
   snapshot: Pick<ApiExtendedSnapshot, "children">,
-  conversation: { childId?: string } | null | undefined
+  conversation:
+    | {
+        childId?: string;
+        participantIds?: string[];
+        participantRoles?: string[];
+      }
+    | null
+    | undefined
 ) {
   if (!conversation?.childId) return false;
-  return canAccessChild(session, findChild(snapshot, conversation.childId));
+  if (!canAccessChild(session, findChild(snapshot, conversation.childId))) return false;
+  if (session.role === ROLE_ADMIN) {
+    // 园长承担机构内家园沟通监管职责；幼儿机构范围校验通过后可接管、回复和标记会话。
+    return true;
+  }
+
+  const participantIds = conversation.participantIds ?? [];
+  if (participantIds.includes(session.id)) return true;
+
+  const participantRoles = conversation.participantRoles ?? [];
+  if (participantRoles.length === 0) {
+    // 兼容尚未补齐参与者字段的历史会话，仍保留原有幼儿范围约束。
+    return true;
+  }
+  if (session.role === ROLE_PARENT) return participantRoles.includes("parent");
+  if (session.role === ROLE_TEACHER) return participantRoles.includes("teacher");
+  return false;
 }
 
 export function requireConversationReplyAccess(
   session: SessionUser,
   snapshot: Pick<ApiExtendedSnapshot, "children">,
-  conversation: { childId?: string } | null | undefined
+  conversation:
+    | {
+        childId?: string;
+        participantIds?: string[];
+        participantRoles?: string[];
+      }
+    | null
+    | undefined
 ) {
   if (!conversation) {
     throw new ApiRouteError("not_found", "未找到会话。");

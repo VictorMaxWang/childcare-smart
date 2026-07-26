@@ -30,7 +30,9 @@ test.describe("E11 OCR and ASR fallback regression", () => {
       } else {
         expect(response.status()).toBe(200);
         const body = await response.json();
-        expect(body.source).toBe("vivo-ocr-provider");
+        expect(["vivo-ocr-provider", "dashscope-ocr-provider"]).toContain(
+          body.source
+        );
         expect(body.fallback).toBe(false);
       }
     } finally {

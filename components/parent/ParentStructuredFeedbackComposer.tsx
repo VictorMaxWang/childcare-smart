@@ -295,7 +295,7 @@ export default function ParentStructuredFeedbackComposer({
     setShowDetails(false);
   }
 
-  if (typeof childId === "string") {
+  if (!careMode) {
     return (
       <div className="space-y-5">
         <section className="overflow-hidden rounded-[28px] border border-violet-100 bg-white p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] sm:p-6">
@@ -561,14 +561,14 @@ export default function ParentStructuredFeedbackComposer({
             <div>
               <h4 className="text-lg font-bold text-slate-950">上传照片/视频 <span className="text-base font-normal text-slate-400">（选填）</span></h4>
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                有助于老师更好地了解孩子的情况；当前 MVP 保存附件元数据和本地预览，不伪装为云端上传成功。
+                有助于老师更好地了解孩子的情况；真实账号保存至私有文件存储，演示账号仅保留演示预览。
               </p>
             </div>
             <div className="w-full sm:max-w-md">
               <AttachmentMediaPicker
                 value={attachmentDrafts}
                 onChange={setAttachmentDrafts}
-                accept="image/*,audio/*,.pdf,.doc,.docx,.txt"
+                accept="image/jpeg,image/png,image/webp,audio/mpeg,audio/mp4,audio/wav,audio/webm,application/pdf"
                 disabled={!interventionCard || submitting}
               />
             </div>
@@ -898,13 +898,13 @@ export default function ParentStructuredFeedbackComposer({
                 附件补充
               </p>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                支持图片、文件和语音补充；当前 MVP 保存附件元数据和本地预览，保存后老师可在反馈详情中查看和播放，不伪装为云端对象存储。
+                支持图片、文件和语音补充；真实账号保存至私有文件存储，演示账号仅保留演示预览。
               </p>
               <div className="mt-3">
                 <AttachmentMediaPicker
                   value={attachmentDrafts}
                   onChange={setAttachmentDrafts}
-                  accept="image/*,audio/*,.pdf,.doc,.docx,.txt"
+                  accept="image/jpeg,image/png,image/webp,audio/mpeg,audio/mp4,audio/wav,audio/webm,application/pdf"
                   disabled={!interventionCard || submitting}
                 />
               </div>
@@ -937,6 +937,7 @@ export default function ParentStructuredFeedbackComposer({
           ) : null}
           <Button
             type="button"
+            data-testid="parent-submit-structured-feedback"
             className={cn("w-full sm:w-auto", careMode ? "min-h-12 rounded-lg px-5 text-base" : "rounded-lg")}
             onClick={() => void handleSubmit()}
             disabled={!interventionCard || submitting}

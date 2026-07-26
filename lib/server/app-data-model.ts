@@ -179,7 +179,9 @@ function normalizeAttachments(value: unknown, session: SessionUser) {
           item.relatedType === "health-material" ||
           item.relatedType === "consultation" ||
           item.relatedType === "weekly-report" ||
-          item.relatedType === "storybook"
+          item.relatedType === "storybook" ||
+          item.relatedType === "meal" ||
+          item.relatedType === "growth"
             ? item.relatedType
             : undefined,
         relatedId: readString(item.relatedId) || undefined,
@@ -193,6 +195,9 @@ function normalizeAttachments(value: unknown, session: SessionUser) {
         storageMode: readStorageObjectMode(item.storageMode),
         uploadStatus: item.uploadStatus === "uploaded" || item.uploadStatus === "failed" ? item.uploadStatus : "metadata_saved",
         localPreviewUrl: readString(item.localPreviewUrl) || undefined,
+        storageProvider: item.storageProvider === "vercel_blob" ? "vercel_blob" : undefined,
+        storageKey: readString(item.storageKey) || undefined,
+        storageEtag: readString(item.storageEtag) || undefined,
         downloadUrl: undefined,
         durationMs: typeof item.durationMs === "number" ? item.durationMs : undefined,
         createdBy: readString(item.createdBy),

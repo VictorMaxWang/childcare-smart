@@ -4,6 +4,16 @@ export {
   type HighRiskConsultationLlmOutput,
   type LlmProvider,
 } from "./llm-provider";
-export { resolveOcrProvider, type OcrProvider } from "./ocr-provider";
-export { resolveAsrProvider, type AsrProvider } from "./asr-provider";
+export {
+  getEffectiveOcrProviderStatus,
+  resolveOcrProvider,
+  type OcrProvider,
+  type OcrProviderStatus,
+} from "./ocr-provider";
+export {
+  getEffectiveAsrProviderStatus,
+  resolveAsrProvider,
+  type AsrProvider,
+  type AsrProviderStatus,
+} from "./asr-provider";
 export { resolveTtsProvider, type TtsProvider } from "./tts-provider";

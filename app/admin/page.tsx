@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import FeedbackDetailDialog from "@/components/communication/FeedbackDetailDialog";
@@ -22,7 +23,11 @@ import { fetchWeeklyReport } from "@/lib/agent/weekly-report-client";
 import { resolveWeeklyReportScope } from "@/lib/agent/weekly-report-scope";
 import type { WeeklyReportResponse } from "@/lib/ai/types";
 import { getAdminSummary } from "@/lib/api/analytics";
-import { listFeedback as listApiFeedback, type ApiFeedback } from "@/lib/api/communication";
+import {
+  listFeedback as listApiFeedback,
+  updateConversationStatus as updateApiConversationStatus,
+  type ApiFeedback,
+} from "@/lib/api/communication";
 import type { ApiAdminSummary } from "@/lib/api/types";
 import { buildAdminCommunicationSummary } from "@/lib/communication/home-school";
 import {
@@ -30,6 +35,7 @@ import {
   formatParentFeedbackImprovementLabel,
   formatParentFeedbackReactionLabel,
 } from "@/lib/feedback/consumption";
+import { compareFeedbackRecency } from "@/lib/feedback/recency";
 import type { GuardianFeedback } from "@/lib/feedback/types";
 import { INSTITUTION_NAME, useApp } from "@/lib/store";
 
@@ -74,6 +80,7 @@ function buildFamilyFeedbackWriteback(
 }
 
 export default function AdminHomePage() {
+  const router = useRouter();
   const {
     currentUser,
     visibleChildren,
@@ -90,7 +97,7 @@ export default function AdminHomePage() {
     getWeeklyDietTrend,
     getSmartInsights,
     getLatestConsultations,
-    updateHomeSchoolConversationStatus,
+    reloadAppSnapshotFromApi,
   } = useApp();
   const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
   const [weeklyReport, setWeeklyReport] = useState<WeeklyReportResponse | null>(null);
@@ -103,6 +110,8 @@ export default function AdminHomePage() {
   const [apiFeedbacks, setApiFeedbacks] = useState<ApiFeedback[]>([]);
   const [feedbackDetailId, setFeedbackDetailId] = useState<string | null>(null);
   const [feedbackDetailOpen, setFeedbackDetailOpen] = useState(false);
+  const isDemoAccount = currentUser.accountKind === "demo";
+  const institutionName = isDemoAccount ? INSTITUTION_NAME : "当前机构";
 
   const latestConsultations = getLatestConsultations();
   const localConsultationSummaries = useMemo(() => {
@@ -141,6 +150,10 @@ export default function AdminHomePage() {
     });
   }, [healthMaterials, latestConsultations, visibleChildren]);
   const adminBoardConsultations = useMemo(() => {
+    if (!isDemoAccount) {
+      return latestConsultations;
+    }
+
     const child = visibleChildren.find((item) => item.id === "c-1");
     const existing = latestConsultations.find((item) => item.childId === "c-1");
     const defenseConsultation = buildAdminD01HighRiskConsultation({
@@ -153,14 +166,19 @@ export default function AdminHomePage() {
       defenseConsultation,
       ...latestConsultations.filter((item) => item.childId !== "c-1"),
     ];
-  }, [latestConsultations, visibleChildren]);
+  }, [isDemoAccount, latestConsultations, visibleChildren]);
   const {
     priorityItems: consultationPriorityItems,
     notificationEvents,
+    notificationError,
     feedBadge,
     feedStatusMessage,
+    createConsultationScopedNotification,
+    isCreatingNotification,
+    dispatchAvailable,
+    dispatchStatusMessage,
   } = useAdminConsultationWorkspace({
-    institutionName: INSTITUTION_NAME,
+    institutionName,
     visibleChildren,
     localConsultations: adminBoardConsultations,
     consultationFeedOptions: {
@@ -171,18 +189,20 @@ export default function AdminHomePage() {
   const localConsultationPriorityItems = useMemo(
     () =>
       buildAdminConsultationPriorityItems({
-        institutionName: INSTITUTION_NAME,
+        institutionName,
         localConsultations: adminBoardConsultations,
         children: visibleChildren,
         notificationEvents,
         limit: 20,
-        useLocalFallback: true,
+        useLocalFallback: adminBoardConsultations.length > 0,
       }),
-    [adminBoardConsultations, notificationEvents, visibleChildren]
+    [adminBoardConsultations, institutionName, notificationEvents, visibleChildren]
   );
   const priorityBoardItems = useMemo(() => {
     const seen = new Set<string>();
-    const preferredXiaoyu = localConsultationPriorityItems.find((item) => item.childId === "c-1");
+    const preferredXiaoyu = isDemoAccount
+      ? localConsultationPriorityItems.find((item) => item.childId === "c-1")
+      : undefined;
     return [preferredXiaoyu, ...consultationPriorityItems, ...localConsultationPriorityItems]
       .filter((item): item is AdminConsultationPriorityItem => Boolean(item))
       .filter((item) => !preferredXiaoyu || item.childId !== "c-1" || item.consultationId === preferredXiaoyu.consultationId)
@@ -192,7 +212,7 @@ export default function AdminHomePage() {
         return true;
       })
       .slice(0, 8);
-  }, [consultationPriorityItems, localConsultationPriorityItems]);
+  }, [consultationPriorityItems, isDemoAccount, localConsultationPriorityItems]);
   const governancePriorityItems = useMemo(() => {
     const seen = new Set<string>();
     return [...priorityBoardItems, ...localConsultationPriorityItems, ...consultationPriorityItems].filter((item) => {
@@ -207,7 +227,7 @@ export default function AdminHomePage() {
       workflow: "daily-priority" as const,
       currentUser: {
         name: currentUser.name,
-        institutionName: INSTITUTION_NAME,
+        institutionName,
         institutionId: currentUser.institutionId,
         role: currentUser.role,
       },
@@ -233,6 +253,7 @@ export default function AdminHomePage() {
       growthRecords,
       guardianFeedbacks,
       healthCheckRecords,
+      institutionName,
       mealRecords,
       notificationEvents,
       visibleChildren,
@@ -254,15 +275,15 @@ export default function AdminHomePage() {
       }
     });
 
-    return Array.from(byId.values()).sort((left, right) =>
-      feedbackTimestampOf(right).localeCompare(feedbackTimestampOf(left))
-    );
+    return Array.from(byId.values()).sort(compareFeedbackRecency);
   }, [apiFeedbacks, guardianFeedbacks]);
 
   const familyFeedbackWritebacks = useMemo(() => {
-    const preferredFeedbacks = ["c-1", "c-3"]
-      .map((childId) => mergedFamilyFeedbacks.find((feedback) => feedback.childId === childId))
-      .filter((feedback): feedback is GuardianFeedback => Boolean(feedback));
+    const preferredFeedbacks = isDemoAccount
+      ? ["c-1", "c-3"]
+          .map((childId) => mergedFamilyFeedbacks.find((feedback) => feedback.childId === childId))
+          .filter((feedback): feedback is GuardianFeedback => Boolean(feedback))
+      : [];
     const preferredIds = new Set(preferredFeedbacks.map((feedback) => feedback.feedbackId || feedback.id));
 
     return [
@@ -271,7 +292,7 @@ export default function AdminHomePage() {
     ]
       .slice(0, 5)
       .map((feedback) => buildFamilyFeedbackWriteback(feedback, visibleChildren));
-  }, [mergedFamilyFeedbacks, visibleChildren]);
+  }, [isDemoAccount, mergedFamilyFeedbacks, visibleChildren]);
 
   const latestFamilyFeedback = familyFeedbackWritebacks[0] ?? null;
   const communicationSummary = useMemo(
@@ -286,6 +307,7 @@ export default function AdminHomePage() {
   const governanceDemo = useMemo(
     () =>
       buildAdminGovernanceDemoViewModel({
+        mode: isDemoAccount ? "demo" : "live",
         priorityItems: governancePriorityItems,
         home: displayHome,
         adminSummary,
@@ -302,6 +324,7 @@ export default function AdminHomePage() {
       displayHome,
       growthRecords,
       healthMaterials,
+      isDemoAccount,
       mealRecords,
       mergedFamilyFeedbacks,
       governancePriorityItems,
@@ -440,19 +463,18 @@ export default function AdminHomePage() {
     toast.info("正在刷新园长看板数据");
   }
 
-  function handleMarkCommunicationHandled(conversationId: string) {
-    const result = updateHomeSchoolConversationStatus(conversationId, "closed");
-    if (result.status === "failed") {
-      toast.error(`处理状态保存失败：${result.error ?? result.message}`);
-      return;
+  async function handleMarkCommunicationHandled(conversationId: string) {
+    try {
+      await updateApiConversationStatus(conversationId, "closed");
+      await reloadAppSnapshotFromApi();
+      toast.success("家园沟通已标记处理", {
+        description: "状态已写入机构数据，刷新后仍会保留。",
+      });
+    } catch (error) {
+      toast.error("处理状态保存失败", {
+        description: error instanceof Error ? error.message : "请稍后重试。",
+      });
     }
-
-    toast.success("家园沟通已标记处理", {
-      description:
-        result.status === "local_only"
-          ? "已写入共享演示数据，刷新后保留。"
-          : "已写入当前数据层，刷新后保留。",
-    });
   }
 
   if (visibleChildren.length === 0) {
@@ -461,7 +483,9 @@ export default function AdminHomePage() {
         <EmptyState
           icon={<ShieldAlert className="h-6 w-6" />}
           title="当前园长账号还没有可展示的机构数据"
-          description="请先使用示例园长账号，或为机构管理员账号初始化机构级数据。"
+          description="先创建首个幼儿档案，再邀请教师和家长加入机构；完成后园长看板会自动汇总真实记录。"
+          actionLabel="创建首个幼儿档案"
+          onAction={() => router.push("/children")}
         />
       </div>
     );
@@ -471,7 +495,7 @@ export default function AdminHomePage() {
     <>
       <DirectorDashboardReplica
         home={displayHome}
-        institutionName={INSTITUTION_NAME}
+        institutionName={institutionName}
         currentUserName={currentUser.name}
         todayText={TODAY_TEXT}
         weeklyReport={weeklyReport}
@@ -515,10 +539,15 @@ export default function AdminHomePage() {
             layoutVariant="stacked"
             sourceBadgeLabel={feedBadge.label}
             sourceBadgeVariant={feedBadge.variant}
-            dispatchAvailable={false}
-            dispatchStatusMessage="答辩展示模式，保留只读承接"
+            onCreateConsultationNotification={(item) =>
+              void createConsultationScopedNotification(item)
+            }
+            isCreatingConsultationNotification={isCreatingNotification}
+            notificationError={notificationError}
+            dispatchAvailable={dispatchAvailable}
+            dispatchStatusMessage={dispatchStatusMessage ?? undefined}
             emptyTitle="风险优先级板已就绪"
-            emptyDescription="教师端生成林小雨会诊后，这里会同步显示园长承接卡。"
+            emptyDescription="教师端生成高风险会诊后，这里会同步显示园长承接卡。"
           />
         </div>
       </section>
@@ -528,7 +557,11 @@ export default function AdminHomePage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-slate-950">高风险会诊汇总</p>
-                <p className="mt-1 text-xs text-slate-500">来自 D01 本地演示数据，刷新后保留。</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {isDemoAccount
+                    ? "来自共享演示数据，刷新后保留。"
+                    : "来自当前机构已保存会诊，刷新后保留。"}
+                </p>
               </div>
               <p className="text-xs font-semibold text-rose-600">本地真实记录 {localConsultationSummaries.length} 条</p>
             </div>

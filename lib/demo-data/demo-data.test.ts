@@ -27,8 +27,10 @@ function buildContexts() {
   const storage = createMemoryDemoStorage();
   const now = () => "2026-05-01T08:00:00.000Z";
   const parent = getCurrentDemoContext("parent", { storage, now });
-  const teacher = getCurrentDemoContext("teacher", { storage, now });
-  const teacher2 = getCurrentDemoContext("teacher2", { storage, now });
+  // 防守场景会把林小雨所在晨曦班交给周老师；测试按同班/跨班关系命名，
+  // 避免以后再次因教师展示顺序变化而把权限回归误判成持久化失败。
+  const teacher = getCurrentDemoContext("teacher2", { storage, now });
+  const teacher2 = getCurrentDemoContext("teacher", { storage, now });
   const director = getCurrentDemoContext("director", { storage, now });
   resetDemoData(parent);
   return { storage, now, parent, teacher, teacher2, director };
@@ -42,7 +44,7 @@ test("D01 seed initializes once and later reads do not overwrite new messages", 
   assert.equal(sent.status, "local_only");
   assert.ok(listMessages(teacher).some((message) => message.content === token));
 
-  const refreshedTeacher = getCurrentDemoContext("teacher", {
+  const refreshedTeacher = getCurrentDemoContext(teacher.user, {
     storage: teacher.storage,
     now: teacher.now,
   });
@@ -103,8 +105,9 @@ test("D01 health material parse result persists across context refresh", () => {
     now: parent.now,
   });
   const materials = listHealthMaterials("c-1", refreshedParent);
-  assert.equal(materials[0]?.parseStatus, "completed");
-  assert.equal(materials[0]?.parseResult?.summary, "D01 parsed health material");
+  const persistedMaterial = materials.find((material) => material.materialId === materialId);
+  assert.equal(persistedMaterial?.parseStatus, "completed");
+  assert.equal(persistedMaterial?.parseResult?.summary, "D01 parsed health material");
 });
 
 test("D05 health material parse task tracks processing, completion and failure", () => {
@@ -143,7 +146,10 @@ test("D05 health material parse task tracks processing, completion and failure",
     storage: parent.storage,
     now: parent.now,
   });
-  assert.equal(listHealthMaterials("c-1", refreshedParent)[0]?.parseStatus, "completed");
+  assert.equal(
+    listHealthMaterials("c-1", refreshedParent).find((material) => material.materialId === materialId)?.parseStatus,
+    "completed"
+  );
 
   const failed = failHealthParseResult({
     context: teacher,
@@ -210,7 +216,7 @@ test("D05 consultation result, notes and workflow status persist across roles", 
   assert.ok(listConsultations(parent).some((item) => item.consultationId === consultation.consultationId));
   assert.equal(listConsultations(teacher2).some((item) => item.consultationId === consultation.consultationId), false);
 
-  const refreshedTeacher = getCurrentDemoContext("teacher", {
+  const refreshedTeacher = getCurrentDemoContext(teacher.user, {
     storage: teacher.storage,
     now: teacher.now,
   });

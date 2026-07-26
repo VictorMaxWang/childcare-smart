@@ -6,8 +6,8 @@ test.describe.configure({ mode: "serial" });
 
 test.describe("E11 teacher voice command regression", () => {
   test("teacher write commands require confirmation, persist and keep class scope", async ({}, testInfo) => {
-    const teacher = await demoContext(testInfo, "u-teacher");
-    const teacher2 = await demoContext(testInfo, "u-teacher2");
+    const teacher = await demoContext(testInfo, "u-teacher2");
+    const otherTeacher = await demoContext(testInfo, "u-teacher");
     const parent = await demoContext(testInfo, "u-parent");
     const token = `E11-teacher-${Date.now()}`;
 
@@ -45,7 +45,7 @@ test.describe("E11 teacher voice command regression", () => {
         remark: `${token}-denied`,
       });
       await expectFailure(
-        await teacher2.post("/api/voice-assistant/commands", {
+        await otherTeacher.post("/api/voice-assistant/commands", {
           data: { action: "execute", command: forbidden, confirmed: true, context: { currentPath: "/teacher" } },
         }),
         403,
@@ -57,7 +57,7 @@ test.describe("E11 teacher voice command regression", () => {
       expect(teacherRecords.some((record) => record.remark?.includes(`${token}-denied`))).toBe(false);
     } finally {
       await teacher.dispose();
-      await teacher2.dispose();
+      await otherTeacher.dispose();
       await parent.dispose();
     }
   });

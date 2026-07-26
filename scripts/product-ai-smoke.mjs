@@ -24,6 +24,20 @@ const vivoEnvNames = [
   "VIVO_ASR_ENGINE_ID",
 ];
 
+const dashscopeEnvNames = [
+  "DASHSCOPE_API_KEY",
+  "BAILIAN_ENDPOINT",
+  "BAILIAN_MODEL",
+  "AI_OCR_MODEL",
+  "AI_ASR_MODEL",
+];
+
+const DEFAULT_DASHSCOPE_ENDPOINT =
+  "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+const DEFAULT_DASHSCOPE_CHAT_MODEL = "qwen3.7-plus";
+const DEFAULT_DASHSCOPE_OCR_MODEL = "qwen3.5-ocr";
+const DEFAULT_DASHSCOPE_ASR_MODEL = "qwen3-asr-flash";
+
 const capabilityRequirements = {
   chat: ["VIVO_APP_KEY", "VIVO_APP_ID", "VIVO_BASE_URL", "VIVO_LLM_MODEL"],
   ocr: ["VIVO_APP_KEY", "VIVO_APP_ID", "VIVO_BASE_URL", "VIVO_OCR_PATH"],
@@ -75,7 +89,21 @@ function createRequestId(prefix) {
 }
 
 function envStatus() {
-  return Object.fromEntries(vivoEnvNames.map((name) => [name, readEnv(name) ? "SET" : "MISSING"]));
+  return Object.fromEntries(
+    [...vivoEnvNames, ...dashscopeEnvNames].map((name) => [
+      name,
+      readEnv(name) ? "SET" : "MISSING",
+    ])
+  );
+}
+
+function dashscopeConfig() {
+  return {
+    endpoint: readEnv("BAILIAN_ENDPOINT") || DEFAULT_DASHSCOPE_ENDPOINT,
+    chatModel: readEnv("BAILIAN_MODEL") || DEFAULT_DASHSCOPE_CHAT_MODEL,
+    ocrModel: readEnv("AI_OCR_MODEL") || DEFAULT_DASHSCOPE_OCR_MODEL,
+    asrModel: readEnv("AI_ASR_MODEL") || DEFAULT_DASHSCOPE_ASR_MODEL,
+  };
 }
 
 function capabilityStatus(capability) {
@@ -154,6 +182,152 @@ function authHeaders(extra = {}) {
   return {
     ...extra,
     Authorization: `Bearer ${readEnv("VIVO_APP_KEY")}`,
+  };
+}
+
+function dashscopeHeaders() {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${readEnv("DASHSCOPE_API_KEY")}`,
+  };
+}
+
+function requireDashscopeChoice(body, capability) {
+  const choice = body?.choices?.[0];
+  if (!choice?.message || typeof choice.message.content !== "string") {
+    const error = new Error(`DashScope ${capability} response missing a completion choice.`);
+    error.classification = "unknown";
+    throw error;
+  }
+  return choice;
+}
+
+async function smokeDashscopeChat() {
+  const config = dashscopeConfig();
+  const result = await fetchJson(
+    config.endpoint,
+    {
+      method: "POST",
+      headers: dashscopeHeaders(),
+      body: JSON.stringify({
+        model: config.chatModel,
+        enable_thinking: false,
+        messages: [{ role: "user", content: "只回复 READY。" }],
+        temperature: 0,
+      }),
+    },
+    60_000
+  );
+  const choice = requireDashscopeChoice(result.body, "chat");
+  if (!choice.message.content.trim()) {
+    throw Object.assign(new Error("DashScope chat response was empty."), {
+      classification: "unknown",
+    });
+  }
+  return {
+    httpStatus: result.httpStatus,
+    requestId: result.body?.id ?? createRequestId("dashscope-chat"),
+    evidence: "READY",
+    model: config.chatModel,
+  };
+}
+
+async function smokeDashscopeOcr() {
+  const config = dashscopeConfig();
+  const image = await fs.readFile(
+    path.join(
+      projectDir,
+      "public",
+      "demo-media",
+      "gpt-image2",
+      "health-materials",
+      "demo-health-auto-019.webp"
+    )
+  );
+  const result = await fetchJson(
+    config.endpoint,
+    {
+      method: "POST",
+      headers: dashscopeHeaders(),
+      body: JSON.stringify({
+        model: config.ocrModel,
+        enable_thinking: false,
+        temperature: 0.01,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/webp;base64,${image.toString("base64")}`,
+                },
+                min_pixels: 3072,
+                max_pixels: 8_388_608,
+              },
+              {
+                type: "text",
+                text: "请只输出图片中可辨认的文字。",
+              },
+            ],
+          },
+        ],
+      }),
+    },
+    60_000
+  );
+  const choice = requireDashscopeChoice(result.body, "ocr");
+  if (!choice.message.content.trim()) {
+    throw Object.assign(new Error("DashScope OCR response was empty."), {
+      classification: "unknown",
+    });
+  }
+  return {
+    httpStatus: result.httpStatus,
+    requestId: result.body?.id ?? createRequestId("dashscope-ocr"),
+    evidence: "TEXT_RECOGNIZED",
+    model: config.ocrModel,
+  };
+}
+
+async function smokeDashscopeAsr() {
+  const config = dashscopeConfig();
+  const audio = createSilentWav();
+  const result = await fetchJson(
+    config.endpoint,
+    {
+      method: "POST",
+      headers: dashscopeHeaders(),
+      body: JSON.stringify({
+        model: config.asrModel,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_audio",
+                input_audio: {
+                  data: `data:audio/wav;base64,${audio.toString("base64")}`,
+                },
+              },
+            ],
+          },
+        ],
+        stream: false,
+        asr_options: {
+          language: "zh",
+          enable_itn: true,
+        },
+      }),
+    },
+    60_000
+  );
+  requireDashscopeChoice(result.body, "asr");
+  return {
+    httpStatus: result.httpStatus,
+    requestId: result.body?.id ?? createRequestId("dashscope-asr"),
+    evidence: "PROVIDER_REACHED",
+    model: config.asrModel,
   };
 }
 
@@ -366,23 +540,13 @@ async function smokeAsr() {
   return { httpStatus: result.httpStatus, requestId, evidence: "READY" };
 }
 
-async function runCapability(capability, runner) {
-  const config = capabilityStatus(capability);
-  if (config.status !== "ready") {
-    return {
-      status: "missing-env",
-      sentLiveRequest: false,
-      missingEnv: config.missingEnv,
-      classification: null,
-      httpStatus: null,
-    };
-  }
-
+async function executeCapabilityRunner(provider, runner) {
   const started = Date.now();
   try {
     const result = await runner();
     return {
       status: "live-pass",
+      provider,
       sentLiveRequest: true,
       missingEnv: [],
       classification: null,
@@ -390,10 +554,12 @@ async function runCapability(capability, runner) {
       requestId: result.requestId,
       durationMs: Date.now() - started,
       evidence: result.evidence,
+      model: result.model,
     };
   } catch (error) {
     return {
       status: "provider-error",
+      provider,
       sentLiveRequest: true,
       missingEnv: [],
       classification: classifyProviderError(error),
@@ -403,9 +569,29 @@ async function runCapability(capability, runner) {
   }
 }
 
+async function runEffectiveCapability(capability, vivoRunner, dashscopeRunner) {
+  const vivoConfig = capabilityStatus(capability);
+  if (vivoConfig.status === "ready") {
+    return executeCapabilityRunner("vivo", vivoRunner);
+  }
+  if (readEnv("DASHSCOPE_API_KEY")) {
+    return executeCapabilityRunner("dashscope", dashscopeRunner);
+  }
+  return {
+    status: "missing-env",
+    provider: "vivo / dashscope",
+    sentLiveRequest: false,
+    missingEnv: Array.from(
+      new Set([...vivoConfig.missingEnv, "DASHSCOPE_API_KEY"])
+    ),
+    classification: null,
+    httpStatus: null,
+  };
+}
+
 function markdownReport(report) {
   const lines = [
-    "# R04 vivo product:ai live smoke",
+    "# R04 effective AI provider live smoke",
     "",
     `Generated: ${report.generatedAt}`,
     "",
@@ -444,12 +630,14 @@ const publicVivoEnv = Object.keys(process.env)
   .sort();
 
 const capabilities = {
-  chat: await runCapability("chat", smokeChat),
-  ocr: await runCapability("ocr", smokeOcr),
-  asr: await runCapability("asr", smokeAsr),
+  chat: await runEffectiveCapability("chat", smokeChat, smokeDashscopeChat),
+  ocr: await runEffectiveCapability("ocr", smokeOcr, smokeDashscopeOcr),
+  asr: await runEffectiveCapability("asr", smokeAsr, smokeDashscopeAsr),
 };
 
-const missingEnv = vivoEnvNames.filter((name) => !readEnv(name));
+const missingEnv = Object.entries(capabilities)
+  .filter(([, item]) => item.status === "missing-env")
+  .map(([name]) => name);
 const providerFailures = Object.values(capabilities).filter((item) => item.status === "provider-error");
 const livePasses = Object.values(capabilities).filter((item) => item.status === "live-pass");
 const missingCapabilities = Object.values(capabilities).filter((item) => item.status === "missing-env");
@@ -468,10 +656,10 @@ const releaseGate =
     ? "blocked-public-env"
     : providerFailures.length > 0
       ? "blocked-provider-error"
-      : missingEnv.length > 0
-        ? "demo-ok-production-blocked"
-        : livePasses.length === 3
-          ? "live-provider-verified"
+      : livePasses.length === 3
+        ? "live-provider-verified"
+        : missingEnv.length > 0
+          ? "production-blocked-missing-capability"
           : "needs-real-provider";
 
 const report = {
@@ -497,7 +685,7 @@ await fs.writeFile(path.join(outDir, "product-ai-live-smoke.md"), markdownReport
 console.log(JSON.stringify(report, null, 2));
 
 if (missingEnv.length > 0) {
-  console.warn(`product-ai missing-env: ${missingEnv.join(", ")}`);
+  console.error(`product-ai missing effective capabilities: ${missingEnv.join(", ")}`);
 }
 if (publicVivoEnv.length > 0) {
   console.error("product-ai security risk: NEXT_PUBLIC_VIVO_* SET");
@@ -508,4 +696,9 @@ if (providerFailures.length > 0) {
   );
 }
 
-process.exitCode = publicVivoEnv.length > 0 || providerFailures.length > 0 ? 1 : 0;
+process.exitCode =
+  publicVivoEnv.length > 0 ||
+  providerFailures.length > 0 ||
+  missingCapabilities.length > 0
+    ? 1
+    : 0;

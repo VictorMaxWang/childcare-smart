@@ -8,6 +8,7 @@ import { createDemoSeedSnapshot } from "@/lib/demo-data/seed";
 import type { AppDataRepository } from "@/lib/server/app-data-repository";
 import { normalizeExtendedSnapshot } from "@/lib/server/app-data-model";
 import { AppDataService } from "@/lib/server/app-data-service";
+import { ApiRouteError } from "@/lib/server/api-errors";
 
 class MemoryRepository implements AppDataRepository {
   private snapshot: unknown;
@@ -104,4 +105,83 @@ test("admin dispatch creates canonical teacher assignment and mirrors completion
   assert.equal(reminder?.status, "done");
   assert.equal(reminder?.sourceType, "admin_dispatch");
   assert.equal(reminder?.assigneeRole, "teacher");
+});
+
+test("admin dispatch rejects issue targets without an explicit child or class anchor", async () => {
+  const repo = new MemoryRepository();
+  const admin = new AppDataService(demoUser("u-admin"), repo);
+  const payload = dispatchPayload("unanchored");
+  payload.targetType = "issue";
+  payload.targetId = "issue-without-child";
+  payload.targetName = "Unanchored issue";
+  payload.source.relatedChildIds = [];
+  payload.source.relatedClassNames = [];
+
+  await assert.rejects(
+    () => admin.createAdminDispatch(payload),
+    (error: unknown) => {
+      assert.ok(error instanceof ApiRouteError);
+      assert.equal(error.code, "invalid_request");
+      return true;
+    }
+  );
+});
+
+test("ordinary teacher can access assignments when profile teacherId differs from login userId", async () => {
+  const seed = normalizeExtendedSnapshot(
+    createDemoSeedSnapshot("2026-05-02T00:00:00.000Z"),
+    demoUser("u-admin")
+  );
+  const teacherProfile = seed.teachers.find((item) => item.userId === "u-teacher2");
+  assert.ok(teacherProfile);
+  teacherProfile.teacherId = "teacher-profile-zhou";
+
+  const repo = new MemoryRepository(seed);
+  const admin = new AppDataService(demoUser("u-admin"), repo);
+  const teacher = new AppDataService(demoUser("u-teacher2"), repo);
+  const event = await admin.createAdminDispatch(dispatchPayload(`profile-id-${Date.now()}`));
+
+  const assignments = await teacher.listAssignments();
+  const assignment = assignments.find((item) => item.assignmentId === event.assignmentId);
+  assert.ok(assignment, "teacher user should resolve through the linked teacher profile");
+  assert.equal(assignment.teacherId, "teacher-profile-zhou");
+
+  const updated = await teacher.updateAssignmentStatus(event.id, {
+    status: "completed",
+    completionSummary: "profile-linked teacher completed task",
+  });
+  assert.equal(updated.status, "completed");
+});
+
+test("admin dispatch patch preserves omitted status and round-trips editable fields", async () => {
+  const repo = new MemoryRepository();
+  const admin = new AppDataService(demoUser("u-admin"), repo);
+  const event = await admin.createAdminDispatch(
+    dispatchPayload(`patch-roundtrip-${Date.now()}`)
+  );
+
+  const summaryOnly = await admin.updateAdminDispatchStatus(event.id, {
+    id: event.id,
+    summary: "更新后的真实摘要",
+    recommendedOwnerName: "周老师",
+  });
+  assert.equal(summaryOnly.status, "pending");
+  assert.equal(summaryOnly.summary, "更新后的真实摘要");
+  assert.equal(summaryOnly.recommendedOwnerName, "周老师");
+
+  const completed = await admin.updateAdminDispatchStatus(event.id, {
+    id: event.id,
+    status: "completed",
+    completionSummary: "已处理",
+  });
+  assert.equal(completed.status, "completed");
+  assert.ok(completed.completedAt);
+
+  const reopened = await admin.updateAdminDispatchStatus(event.id, {
+    id: event.id,
+    status: "in_progress",
+    completedAt: null,
+  });
+  assert.equal(reopened.status, "in_progress");
+  assert.equal(reopened.completedAt, null);
 });

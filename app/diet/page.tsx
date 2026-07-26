@@ -54,6 +54,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getLocalToday } from "@/lib/date";
 import { getHydrationDisplayState } from "@/lib/hydration-display";
 import { createRecord, updateRecord } from "@/lib/api/records";
+import { uploadAttachmentFile } from "@/lib/api/communication";
+import {
+  clampImageDataUrl,
+  imageDataUrlToFile,
+  readImageFileAsDataUrl,
+} from "@/lib/media/image-client";
 import { cn } from "@/lib/utils";
 import EmptyState from "@/components/EmptyState";
 import { useParentD01Data } from "@/components/parent/useParentD01Data";
@@ -93,48 +99,82 @@ interface VisionMealResponse {
   model: string;
 }
 
+interface MealSavePatch extends Partial<MealRecord> {
+  photoUpload?: {
+    dataUrl: string;
+    fileName: string;
+  };
+}
+
+interface MealSaveResult extends PersistAppSnapshotResult {
+  mediaUploadStatus?: "stored" | "failed" | "demo_skipped";
+  mediaWarning?: string;
+}
+
+async function readVisionMealResponse(response: Response): Promise<VisionMealResponse> {
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error("图片识别服务返回了无法解析的数据，请稍后重试。");
+  }
+
+  const data =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : null;
+  if (!response.ok) {
+    throw new Error(
+      typeof data?.error === "string" && data.error.trim()
+        ? data.error.trim()
+        : "图片识别服务暂时不可用，请改用手动录入。"
+    );
+  }
+
+  if (
+    !data ||
+    (data.source !== "ai" && data.source !== "fallback") ||
+    typeof data.model !== "string" ||
+    !Array.isArray(data.foods)
+  ) {
+    throw new Error("图片识别服务返回的数据格式无效，请稍后重试。");
+  }
+
+  const foods = data.foods
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const food = item as Record<string, unknown>;
+      const name = typeof food.name === "string" ? food.name.trim() : "";
+      if (!name) return null;
+      const category = FOOD_CATEGORY_OPTIONS.includes(food.category as FoodCategory)
+        ? (food.category as FoodCategory)
+        : "其他";
+      return {
+        name,
+        category,
+        amount:
+          typeof food.amount === "string" && food.amount.trim()
+            ? food.amount.trim()
+            : "1份",
+      };
+    })
+    .filter((item): item is VisionMealResponse["foods"][number] => Boolean(item));
+
+  if (foods.length === 0) {
+    throw new Error("没有识别到可用食物，请换一张清晰照片或手动录入。");
+  }
+
+  return {
+    foods,
+    source: data.source,
+    model: data.model.trim() || (data.source === "ai" ? "AI 视觉模型" : "演示规则"),
+  };
+}
+
 interface DietEvaluationResponse {
   evaluation: Omit<MealAiEvaluation, "generatedAt" | "model">;
   source: "ai" | "fallback";
   model: string;
-}
-
-function clampImageSize(imageDataUrl: string, maxWidth = 800, quality = 0.82): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const image = new window.Image();
-    image.onload = () => {
-      const ratio = image.width > maxWidth ? maxWidth / image.width : 1;
-      const targetWidth = Math.max(1, Math.round(image.width * ratio));
-      const targetHeight = Math.max(1, Math.round(image.height * ratio));
-      const canvas = document.createElement("canvas");
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-      const context = canvas.getContext("2d");
-      if (!context) {
-        reject(new Error("Canvas 初始化失败"));
-        return;
-      }
-      context.drawImage(image, 0, 0, targetWidth, targetHeight);
-      resolve(canvas.toDataURL("image/jpeg", quality));
-    };
-    image.onerror = () => reject(new Error("图片解析失败"));
-    image.src = imageDataUrl;
-  });
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        reject(new Error("文件读取失败"));
-        return;
-      }
-      resolve(reader.result);
-    };
-    reader.onerror = () => reject(new Error("文件读取失败"));
-    reader.readAsDataURL(file);
-  });
 }
 
 function parseIsoDate(date: string) {
@@ -161,6 +201,25 @@ function formatMenuMealLines(value: unknown): string[] {
     return [String(value)];
   }
   return ["未填写"];
+}
+
+function readMealPhotoUrls(record: Record<string, unknown>) {
+  const candidates = [
+    ...(Array.isArray(record.photoUrls) ? record.photoUrls : []),
+    ...(Array.isArray(record.mediaRefs) ? record.mediaRefs : []),
+  ];
+  return [
+    ...new Set(
+      candidates
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(
+          (item) =>
+            /^\/api\/attachments\/[a-z0-9_-]+\/content$/iu.test(item) ||
+            item.startsWith("/demo-media/")
+        )
+    ),
+  ].slice(0, 3);
 }
 
 export default function DietPage() {
@@ -340,8 +399,8 @@ export default function DietPage() {
 
   async function saveMealRecord(
     meal: MealType,
-    patch: Partial<MealRecord>
-  ): Promise<PersistAppSnapshotResult | null> {
+    patch: MealSavePatch
+  ): Promise<MealSaveResult | null> {
     if (!selectedChild) return null;
     const existing = selectedChildMeals[meal];
     const payload = {
@@ -359,14 +418,52 @@ export default function DietPage() {
         patch.preference ?? existing?.preference ?? "正常"
       ),
       aiEvaluation: patch.aiEvaluation ?? existing?.aiEvaluation,
+      photoUrls: patch.photoUrls ?? existing?.photoUrls ?? [],
+      mediaRefs: patch.mediaRefs ?? existing?.mediaRefs ?? [],
     };
 
     if (currentUser.accountKind === "normal") {
       try {
-        if (existing) {
-          await updateRecord("meal", existing.id, payload);
-        } else {
-          await createRecord("meal", payload);
+        let savedRecord = existing
+          ? await updateRecord("meal", existing.id, payload)
+          : await createRecord("meal", payload);
+        let mediaUploadStatus: MealSaveResult["mediaUploadStatus"];
+        let mediaWarning: string | undefined;
+
+        if (patch.photoUpload) {
+          try {
+            const attachment = await uploadAttachmentFile({
+              file: imageDataUrlToFile(
+                patch.photoUpload.dataUrl,
+                patch.photoUpload.fileName
+              ),
+              childId: selectedChild.id,
+              relatedType: "meal",
+              relatedId: savedRecord.id,
+            });
+            const protectedUrl =
+              attachment.downloadUrl ?? attachment.storageObject?.url;
+            if (!protectedUrl) {
+              throw new Error("媒体服务未返回受保护的读取地址。");
+            }
+            const photoUrls = [
+              ...new Set([
+                ...(savedRecord.photoUrls ?? []),
+                protectedUrl,
+              ]),
+            ].slice(-3);
+            savedRecord = await updateRecord("meal", savedRecord.id, {
+              photoUrls,
+              mediaRefs: photoUrls,
+            });
+            mediaUploadStatus = "stored";
+          } catch (mediaError) {
+            mediaUploadStatus = "failed";
+            mediaWarning =
+              mediaError instanceof Error
+                ? mediaError.message
+                : "照片上传失败，请稍后重试。";
+          }
         }
         const reloadResult = await reloadAppSnapshotFromApi();
         if (reloadResult.status === "failed") {
@@ -375,9 +472,11 @@ export default function DietPage() {
             syncStatus: "remote_synced",
             message: "饮食记录已写入服务端，页面刷新暂时失败。",
             persistedAt: new Date().toISOString(),
+            mediaUploadStatus,
+            mediaWarning,
           };
         }
-        return reloadResult;
+        return { ...reloadResult, mediaUploadStatus, mediaWarning };
       } catch (requestError) {
         const message =
           requestError instanceof Error ? requestError.message : "服务端写入失败，请重试。";
@@ -401,6 +500,14 @@ export default function DietPage() {
       toast.error("饮食记录保存失败", {
         description: result.message,
       });
+    }
+    if (patch.photoUpload && result.status !== "failed") {
+      return {
+        ...result,
+        mediaUploadStatus: "demo_skipped",
+        mediaWarning:
+          "演示账号仅保存识别后的结构化食物，不上传幼儿原始照片。",
+      };
     }
     return result;
   }
@@ -614,9 +721,10 @@ export default function DietPage() {
     if (!file) return;
 
     setBulkVisionLoading(true);
+    setBulkVisionModel("");
     try {
-      const originDataUrl = await readFileAsDataUrl(file);
-      const compressedDataUrl = await clampImageSize(originDataUrl);
+      const originDataUrl = await readImageFileAsDataUrl(file);
+      const compressedDataUrl = await clampImageDataUrl(originDataUrl);
       setBulkPhotoPreview(compressedDataUrl);
 
       const response = await fetch("/api/ai/vision-meal", {
@@ -629,11 +737,7 @@ export default function DietPage() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("识别请求失败");
-      }
-
-      const data = (await response.json()) as VisionMealResponse;
+      const data = await readVisionMealResponse(response);
       const normalizedFoods = data.foods.map((item, index) => ({
         id: createFoodId(`bulk-vision-${index}`),
         name: item.name,
@@ -653,9 +757,13 @@ export default function DietPage() {
       } else {
         toast.warning("已生成可编辑餐单草稿", toastOptions);
       }
-    } catch {
+    } catch (error) {
+      setBulkVisionModel("");
       toast.error("识别失败", {
-        description: "抱歉，无法识别图片中的食物，请重试或手动添加。",
+        description:
+          error instanceof Error
+            ? error.message
+            : "抱歉，无法识别图片中的食物，请重试或手动添加。",
       });
     } finally {
       setBulkVisionLoading(false);
@@ -712,7 +820,9 @@ export default function DietPage() {
                   {parentChild.className}
                 </Badge>
                 <Badge variant="info" className="rounded-full px-3 py-1">
-                  D01 演示餐谱
+                  {currentUser.accountKind === "demo"
+                    ? "D01 演示餐谱"
+                    : "真实饮食记录"}
                 </Badge>
               </div>
               <h1 className="mt-4 flex items-center gap-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
@@ -720,7 +830,9 @@ export default function DietPage() {
                 营养餐谱
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                按孩子所在班级和日期展示餐谱，并关联该孩子的饮食记录。没有后端餐谱时使用 D01 demo menu 明确标注为演示数据。
+                {currentUser.accountKind === "demo"
+                  ? "按孩子所在班级和日期展示演示餐谱，并关联该孩子的饮食记录。"
+                  : "展示老师写入的真实饮食记录与受保护餐食照片；机构尚未发布餐谱时不会补造演示菜单。"}
               </p>
             </div>
             <Button type="button" variant="outline" className="rounded-2xl" onClick={() => router.push(`/parent?child=${parentChild.id}`)}>
@@ -739,7 +851,9 @@ export default function DietPage() {
           <Card className="rounded-lg">
             <CardHeader>
               <CardTitle className="text-lg">班级餐谱</CardTitle>
-              <CardDescription>只显示 {parentChild.className} 可见餐谱。</CardDescription>
+              <CardDescription>
+                只显示 {parentChild.className} 可见餐谱。
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {parentMenus.length === 0 ? (
@@ -756,7 +870,11 @@ export default function DietPage() {
                       <p className="font-semibold text-slate-950">{formatDisplayDate(menu.date)}</p>
                       <p className="mt-1 text-xs text-slate-500">班级：{menu.classId}</p>
                     </div>
-                    <Badge variant="info">演示餐谱</Badge>
+                    <Badge variant="info">
+                      {currentUser.accountKind === "demo"
+                        ? "演示餐谱"
+                        : "机构餐谱"}
+                    </Badge>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {Object.entries(menu.meals).map(([mealName, mealValue]) => (
@@ -778,7 +896,11 @@ export default function DietPage() {
           <Card className="rounded-lg">
             <CardHeader>
               <CardTitle className="text-lg">饮食记录关联</CardTitle>
-              <CardDescription>来自 D01 dailyRecords 的 diet 记录。</CardDescription>
+              <CardDescription>
+                {currentUser.accountKind === "demo"
+                  ? "来自 D01 dailyRecords 的 diet 记录。"
+                  : "来自教师端服务端记录，照片需当前家长账号授权后读取。"}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {parentDietRecords.length === 0 ? (
@@ -794,6 +916,7 @@ export default function DietPage() {
                 const waterMl = typeof payload.waterMl === "number" ? payload.waterMl : null;
                 const score = typeof payload.nutritionScore === "number" ? payload.nutritionScore : null;
                 const foods = Array.isArray(payload.foods) ? payload.foods : [];
+                const photoUrls = readMealPhotoUrls(payload);
                 return (
                   <div key={record.recordId} className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -814,6 +937,20 @@ export default function DietPage() {
                         );
                       })}
                     </div>
+                    {photoUrls.length > 0 ? (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {photoUrls.map((photoUrl, index) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={`${record.recordId}-photo-${index}`}
+                            src={photoUrl}
+                            alt={`${meal}餐食照片 ${index + 1}`}
+                            data-testid="parent-meal-photo"
+                            className="h-32 w-full rounded-xl object-cover ring-1 ring-slate-100"
+                          />
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
@@ -1217,7 +1354,15 @@ export default function DietPage() {
             >
               {bulkVisionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
               {bulkVisionLoading ? "识别中..." : "拍照 / 上传餐盘图片"}
-              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleBulkVisionUpload} disabled={bulkVisionLoading} />
+              <input
+                data-testid="bulk-meal-vision-input"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleBulkVisionUpload}
+                disabled={bulkVisionLoading}
+              />
             </label>
 
             {bulkPhotoPreview ? (
@@ -1509,7 +1654,7 @@ function MealEditorCard({
 }: {
   meal: MealType;
   record?: MealRecord;
-  onSave: (patch: Partial<MealRecord>) => Promise<PersistAppSnapshotResult | null>;
+  onSave: (patch: MealSavePatch) => Promise<MealSaveResult | null>;
   onGenerateEvaluation: () => void;
   evaluating: boolean;
 }) {
@@ -1589,9 +1734,11 @@ function MealEditorCard({
     if (!file) return;
 
     setVisionLoading(true);
+    setVisionFoods([]);
+    setVisionModel("");
     try {
-      const originDataUrl = await readFileAsDataUrl(file);
-      const compressedDataUrl = await clampImageSize(originDataUrl);
+      const originDataUrl = await readImageFileAsDataUrl(file);
+      const compressedDataUrl = await clampImageDataUrl(originDataUrl);
       setPhotoPreview(compressedDataUrl);
 
       const response = await fetch("/api/ai/vision-meal", {
@@ -1604,11 +1751,7 @@ function MealEditorCard({
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("识别请求失败");
-      }
-
-      const data = (await response.json()) as VisionMealResponse;
+      const data = await readVisionMealResponse(response);
       const normalizedFoods = data.foods.map((item, index) => ({
         id: createFoodId(`${meal}-vision-${index}`),
         name: item.name,
@@ -1628,8 +1771,15 @@ function MealEditorCard({
       } else {
         toast.warning("已生成可编辑识别草稿", toastOptions);
       }
-    } catch {
-      toast.error("图片识别失败，请重试或改用手动录入。");
+    } catch (error) {
+      setVisionFoods([]);
+      setVisionModel("");
+      toast.error("图片识别失败", {
+        description:
+          error instanceof Error
+            ? error.message
+            : "请重试或改用手动录入。",
+      });
     } finally {
       setVisionLoading(false);
       event.target.value = "";
@@ -1650,12 +1800,21 @@ function MealEditorCard({
       return;
     }
 
+    const newFoods = cleaned.filter(
+      (candidate) =>
+        !foods.some(
+          (existingFood) =>
+            existingFood.name === candidate.name &&
+            existingFood.category === candidate.category &&
+            existingFood.amount === candidate.amount
+        )
+    );
     setSaving(true);
     try {
       const saveResult = await onSave({
         foods: [
           ...foods,
-          ...cleaned.map((item) => ({
+          ...newFoods.map((item) => ({
             ...item,
             id: createFoodId(`${meal}-final`),
           })),
@@ -1664,11 +1823,34 @@ function MealEditorCard({
         preference,
         allergyReaction,
         waterMl: Number(waterMl) || 0,
+        photoUpload: photoPreview
+          ? {
+              dataUrl: photoPreview,
+              fileName: `meal-${meal}-${Date.now()}.jpg`,
+            }
+          : undefined,
       });
       if (!saveResult || saveResult.status === "failed") {
         return;
       }
-      setVisionFoods([]);
+      if (saveResult.mediaUploadStatus !== "failed") {
+        setVisionFoods([]);
+        setPhotoPreview("");
+      }
+      if (saveResult.mediaWarning) {
+        toast.warning(
+          saveResult.mediaUploadStatus === "failed"
+            ? "食物已录入，照片尚未保存"
+            : "食物已录入",
+          {
+            description:
+              saveResult.mediaUploadStatus === "failed"
+                ? `${saveResult.mediaWarning} 保留当前草稿后可再次点击“确定录入”重试照片。`
+                : saveResult.mediaWarning,
+          }
+        );
+        return;
+      }
       toast.success("识别食物已录入本餐记录。", {
         description:
           saveResult.status === "local_only"
@@ -1719,14 +1901,24 @@ function MealEditorCard({
 
         {record?.photoUrls?.length ? (
           <div className="space-y-2">
-            <p className="text-xs font-medium text-slate-500">示例餐食图</p>
+            <p className="text-xs font-medium text-slate-500">
+              {record.photoUrls.some((item) =>
+                item.startsWith("/api/attachments/")
+              )
+                ? "餐食照片"
+                : "示例餐食图"}
+            </p>
             <div className="grid gap-2">
               {record.photoUrls.map((photoUrl, index) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   key={`${record.id}-demo-photo-${index}`}
                   src={photoUrl}
-                  alt={`${meal}示例餐食图 ${index + 1}`}
+                  alt={`${meal}${
+                    photoUrl.startsWith("/api/attachments/")
+                      ? "餐食照片"
+                      : "示例餐食图"
+                  } ${index + 1}`}
                   className="h-32 w-full rounded-2xl object-cover ring-1 ring-slate-100"
                 />
               ))}
@@ -1789,7 +1981,15 @@ function MealEditorCard({
           >
             {visionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
             {visionLoading ? "识别中..." : "拍照 / 上传餐盘图片"}
-            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleVisionUpload} disabled={visionLoading} />
+            <input
+              data-testid={`meal-vision-input-${meal}`}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handleVisionUpload}
+              disabled={visionLoading}
+            />
           </label>
 
           {photoPreview ? (
@@ -1804,7 +2004,10 @@ function MealEditorCard({
           ) : null}
 
           {visionFoods.length > 0 ? (
-            <div className="space-y-2 rounded-xl bg-white p-2">
+            <div
+              className="space-y-2 rounded-xl bg-white p-2"
+              data-testid={`meal-vision-result-${meal}`}
+            >
               {visionFoods.map((food, index) => (
                 <div key={food.id} className="grid grid-cols-1 gap-2 sm:grid-cols-12">
                   <Input

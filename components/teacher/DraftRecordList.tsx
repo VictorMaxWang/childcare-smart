@@ -9,6 +9,7 @@ export default function DraftRecordList({
   items,
   discardedCount = 0,
   initialExpandedRecordId,
+  confirmingRecordId,
   onConfirm,
   onDiscard,
   onSaveEdit,
@@ -16,6 +17,7 @@ export default function DraftRecordList({
   items: TeacherDraftUiItem[];
   discardedCount?: number;
   initialExpandedRecordId?: string;
+  confirmingRecordId?: string | null;
   onConfirm: (recordId: string) => void | Promise<void>;
   onDiscard: (recordId: string) => void | Promise<void>;
   onSaveEdit: (
@@ -78,6 +80,7 @@ export default function DraftRecordList({
           <DraftRecordCard
             key={`${item.id}:${item.updatedAt}`}
             item={item}
+            isConfirming={confirmingRecordId === item.id}
             isExpanded={expandedRecordId === item.id}
             onToggleExpand={() =>
               setManualExpandedRecordId((current) =>

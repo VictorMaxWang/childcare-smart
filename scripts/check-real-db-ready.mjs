@@ -16,6 +16,8 @@ const REQUIRED_TABLES = [
   "guardian_child_links",
   "member_invitations",
   "authorization_audit_events",
+  "storybook_media_assets",
+  "admin_notification_events",
 ];
 const REQUIRED_COLUMNS = [
   ["app_users", "id"],
@@ -87,6 +89,21 @@ const REQUIRED_COLUMNS = [
   ["authorization_audit_events", "subject_user_id"],
   ["authorization_audit_events", "action"],
   ["authorization_audit_events", "metadata"],
+  ["storybook_media_assets", "institution_id"],
+  ["storybook_media_assets", "media_key"],
+  ["storybook_media_assets", "child_id"],
+  ["storybook_media_assets", "storybook_id"],
+  ["storybook_media_assets", "content_type"],
+  ["storybook_media_assets", "media_bytes"],
+  ["storybook_media_assets", "byte_length"],
+  ["admin_notification_events", "id"],
+  ["admin_notification_events", "institution_id"],
+  ["admin_notification_events", "status"],
+  ["admin_notification_events", "target_type"],
+  ["admin_notification_events", "target_id"],
+  ["admin_notification_events", "priority_level"],
+  ["admin_notification_events", "recommended_owner_role"],
+  ["admin_notification_events", "source_json"],
 ];
 
 const REQUIRED_INDEXES = [

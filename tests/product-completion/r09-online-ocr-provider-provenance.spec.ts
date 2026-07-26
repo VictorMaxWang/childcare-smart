@@ -431,8 +431,10 @@ test("R09 online OCR provider provenance and R05 completion gap", async ({ page 
       String(imageBody.fallback),
     ].join(";");
     evidence.imageOcrLiveConfirmed =
-      imageBody.source === "vivo-ocr-provider" &&
-      imageBody.provider === "vivo" &&
+      ["vivo-ocr-provider", "dashscope-ocr-provider"].includes(
+        String(imageBody.source)
+      ) &&
+      ["vivo", "dashscope"].includes(String(imageBody.provider)) &&
       imageBody.fallback === false &&
       imageProviderStatus.ocr.status === "ready" &&
       imageProviderStatus.files.some((file) => file.isRealProvider === true);

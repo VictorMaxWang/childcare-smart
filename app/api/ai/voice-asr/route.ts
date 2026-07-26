@@ -1,8 +1,13 @@
 import { resolveAsrProvider } from "@/lib/ai/providers/asr-provider";
 import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import { VivoProviderError } from "@/lib/providers/vivo/vivo-errors";
-import { apiOk, withApiErrors } from "@/lib/server/api-errors";
+import { apiOk, ApiRouteError, withApiErrors } from "@/lib/server/api-errors";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import {
+  validateVoiceAudioFile,
+  validateVoiceDuration,
+  validateVoiceText,
+} from "@/lib/voice/audio-constraints";
 import type { VoiceAsrResponse } from "@/lib/voice-assistant/types";
 
 export const runtime = "nodejs";
@@ -27,6 +32,17 @@ export function POST(request: Request) {
       audio && typeof audio === "object" && "arrayBuffer" in audio
         ? (audio as File)
         : null;
+    const durationMs = readNumber(formData.get("durationMs"));
+    const transcript = readString(formData.get("transcript"));
+    const fallbackText = readString(formData.get("fallbackText"));
+    const validationError =
+      (audioFile ? validateVoiceAudioFile(audioFile) : null) ||
+      validateVoiceDuration(durationMs) ||
+      validateVoiceText(transcript) ||
+      validateVoiceText(fallbackText);
+    if (validationError) {
+      throw new ApiRouteError("invalid_request", validationError);
+    }
     const audioBytes = audioFile ? Buffer.from(await audioFile.arrayBuffer()) : undefined;
     const provider = resolveAsrProvider();
     const providerStatus = provider.getStatus();
@@ -34,11 +50,11 @@ export function POST(request: Request) {
       .transcribe({
         attachmentName: audioFile?.name || readString(formData.get("attachmentName")) || "voice-assistant.webm",
         audioBytes,
-        durationMs: readNumber(formData.get("durationMs")),
-        fallbackText: readString(formData.get("fallbackText")),
+        durationMs,
+        fallbackText,
         mimeType: readString(formData.get("mimeType")) || audioFile?.type,
         scene: readString(formData.get("scene")) || "voice-orb",
-        transcript: readString(formData.get("transcript")),
+        transcript,
       })
       .catch((error: unknown) => {
         if (error instanceof VivoProviderError) {
@@ -120,7 +136,7 @@ export function POST(request: Request) {
       fallbackReason,
       realProvider: result.mode === "live" && !result.output.fallback,
       capability: "asr",
-      model: result.provider,
+      model: result.model,
       providerStatus: result.output.providerStatus,
     });
 

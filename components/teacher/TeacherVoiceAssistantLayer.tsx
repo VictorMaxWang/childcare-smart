@@ -751,8 +751,20 @@ export default function TeacherVoiceAssistantLayer() {
   }, [resetToIdle]);
 
   const openCommandAssistant = useCallback(() => {
-    window.dispatchEvent(new CustomEvent("smartchildcare:open-voice-orb"));
-  }, []);
+    const transcript =
+      result?.understanding?.transcript.text ??
+      result?.upload.transcript ??
+      result?.upload.draftContent ??
+      "";
+    window.dispatchEvent(
+      new CustomEvent("smartchildcare:open-voice-orb", {
+        detail: {
+          text: transcript,
+          childId: selectedResultChildId || undefined,
+        },
+      })
+    );
+  }, [result, selectedResultChildId]);
 
   const saveVoiceDraft = useCallback(
     (destination?: "teacher-agent" | "high-risk-consultation") => {

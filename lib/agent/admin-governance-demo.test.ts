@@ -113,3 +113,46 @@ test("admin governance demo quality cockpit and weekly summary are non-empty", (
   assert.ok(viewModel.familyFeedbackItems.some((item) => item.childName === "陈安安"));
   assert.ok(viewModel.governanceActions.some((item) => item.title === "健康材料解析入口"));
 });
+
+test("live governance mode keeps a real empty institution empty", () => {
+  const seeded = createDemoSeedSnapshot(FIXED_NOW);
+  const emptySnapshot = {
+    ...seeded,
+    children: [],
+    attendance: [],
+    health: [],
+    growth: [],
+    feedback: [],
+    meals: [],
+    tasks: [],
+    healthMaterials: [],
+  };
+  const home = buildHome(emptySnapshot);
+
+  const viewModel = buildAdminGovernanceDemoViewModel({
+    mode: "live",
+    priorityItems: [],
+    home,
+    adminSummary: null,
+    weeklyReport: null,
+    familyFeedbacks: [],
+    tasks: [],
+    healthMaterials: [],
+    growthRecords: [],
+    mealRecords: [],
+    children: [],
+  });
+
+  assert.deepEqual(viewModel.riskItems, []);
+  assert.equal(viewModel.qualityMetrics.every((metric) => metric.numericValue === 0), true);
+  assert.equal(
+    viewModel.trendRows.every((row) => row.risk === 0 && row.feedback === 0 && row.action === 0),
+    true
+  );
+  assert.deepEqual(viewModel.reviewTasks48h, []);
+  assert.deepEqual(viewModel.familyFeedbackItems, []);
+  assert.deepEqual(viewModel.governanceActions, []);
+  assert.deepEqual(viewModel.weeklySummary.highlights, []);
+  assert.deepEqual(viewModel.weeklySummary.risks, []);
+  assert.deepEqual(viewModel.weeklySummary.nextWeekActions, []);
+});

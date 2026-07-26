@@ -60,18 +60,19 @@ test("M05 parent growth page renders GPT Image 2 growth media and survives refre
 });
 
 test("M05 teacher growth scopes render images without leaking another class", async ({ page }, testInfo) => {
-  await loginAs(page, "u-teacher", "/growth");
-  await expect(page.getByTestId("growth-record-card").first()).toBeVisible();
-  await expect(page.locator('[data-testid="growth-record-card"][data-child-id="c-1"]').first()).toBeVisible();
-  const liSrc = await expectGrowthImage200(page);
-  expect(liSrc).toContain("/demo-media/gpt-image2/growth/");
-
   await loginAs(page, "u-teacher2", "/growth");
   await expect(page.getByTestId("growth-record-card").first()).toBeVisible();
-  expect(await page.locator('[data-testid="growth-record-card"][data-child-id="c-1"]').count()).toBe(0);
-  expect(await page.locator('[data-testid="growth-record-card"][data-child-id="c-3"]').count()).toBeGreaterThan(0);
+  await expect(page.locator('[data-testid="growth-record-card"][data-child-id="c-1"]').first()).toBeVisible();
+  await expect(page.locator('[data-testid="growth-record-card"][data-child-id="c-3"]').first()).toBeVisible();
   const zhouSrc = await expectGrowthImage200(page);
   expect(zhouSrc).toContain("/demo-media/gpt-image2/growth/");
+
+  await loginAs(page, "u-teacher", "/growth");
+  await expect(page.getByTestId("growth-record-card").first()).toBeVisible();
+  expect(await page.locator('[data-testid="growth-record-card"][data-child-id="c-1"]').count()).toBe(0);
+  expect(await page.locator('[data-testid="growth-record-card"][data-child-id="c-7"]').count()).toBeGreaterThan(0);
+  const liSrc = await expectGrowthImage200(page);
+  expect(liSrc).toContain("/demo-media/gpt-image2/growth/");
 
   await expectDataConsistency(testInfo);
 });
@@ -93,9 +94,23 @@ test("M05 existing meal, health material, and storybook media remain intact", as
   expect(mealSrc).toBeTruthy();
   expect((await page.request.get(mealSrc!)).status(), mealSrc!).toBe(200);
 
-  await loginAs(page, "u-parent", "/parent/storybook?child=c-4");
-  await expect(page.locator('img[src*="/demo-media/gpt-image2/storybooks/"]').first()).toBeVisible();
-  const storybookSrc = await page.locator('img[src*="/demo-media/gpt-image2/storybooks/"]').first().getAttribute("src");
+  const parent = await demoContext(testInfo, "u-parent");
+  const storybooks = await expectOk<
+    Array<{
+      storybookId: string;
+      pages?: Array<{ mediaRef?: string }>;
+    }>
+  >(await parent.get("/api/storybooks?childId=c-4"));
+  const seededStorybook = storybooks.find(
+    (item) => item.storybookId === "storybook-c-4"
+  );
+  const storybookSrc = seededStorybook?.pages
+    ?.map((pageItem) => pageItem.mediaRef)
+    .find((src) => src?.includes("/demo-media/gpt-image2/storybooks/"));
   expect(storybookSrc).toBeTruthy();
   expect((await page.request.get(storybookSrc!)).status(), storybookSrc!).toBe(200);
+
+  await loginAs(page, "u-parent", "/parent/storybook?child=c-4");
+  await expect(page.locator('img[alt="成长瞬间"]').first()).toBeVisible();
+  await parent.dispose();
 });

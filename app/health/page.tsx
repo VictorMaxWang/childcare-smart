@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Activity, AlertTriangle, CheckCircle2, HeartPulse, MessageSquareText, Search, ShieldAlert, Thermometer, Users, Utensils } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, Download, HeartPulse, MessageSquareText, Search, ShieldAlert, Thermometer, Users, Utensils } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { buildRecentLocalDateRange, getLocalToday, isDateWithinLastDays } from "@/lib/date";
 import { createRecord, updateRecord } from "@/lib/api/records";
+import { listAttachments } from "@/lib/api/communication";
+import type { ApiAttachment } from "@/lib/api/types";
 import { toast } from "sonner";
 
 import { HEALTH_MOOD_OPTIONS, HAND_MOUTH_EYE_OPTIONS, TEMPERATURE_THRESHOLD } from "@/lib/mock/health";
@@ -40,6 +42,43 @@ const TEMPLATE_REMARKS = {
 
 const TEMPERATURE_MIN = 34;
 const TEMPERATURE_MAX = 42;
+
+function readHealthMaterialSummary(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const result = value as Record<string, unknown>;
+  const summary =
+    typeof result.summary === "string" ? result.summary.trim() : "";
+  const riskItems = Array.isArray(result.riskItems)
+    ? result.riskItems
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const record = item as Record<string, unknown>;
+          const title =
+            typeof record.title === "string" ? record.title.trim() : "";
+          const detail =
+            typeof record.detail === "string" ? record.detail.trim() : "";
+          return title || detail ? { title, detail } : null;
+        })
+        .filter((item): item is { title: string; detail: string } =>
+          Boolean(item)
+        )
+    : [];
+  const followUps = [
+    ...(Array.isArray(result.followUpHints) ? result.followUpHints : []),
+    ...(Array.isArray(result.recommendations) ? result.recommendations : []),
+  ]
+    .map((item) => {
+      if (!item || typeof item !== "object") return "";
+      const record = item as Record<string, unknown>;
+      const title =
+        typeof record.title === "string" ? record.title.trim() : "";
+      const detail =
+        typeof record.detail === "string" ? record.detail.trim() : "";
+      return [title, detail].filter(Boolean).join("：");
+    })
+    .filter(Boolean);
+  return { summary, riskItems, followUps };
+}
 
 export default function HealthPage() {
   const {
@@ -68,6 +107,9 @@ export default function HealthPage() {
   const [remark, setRemark] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [savingHealthCheck, setSavingHealthCheck] = useState(false);
+  const [healthMaterialAttachments, setHealthMaterialAttachments] = useState<
+    ApiAttachment[]
+  >([]);
 
   useEffect(() => {
     if (!isParent || !parentD01.selectedChildId || parentD01.invalidChildId || childFromQuery === parentD01.selectedChildId) {
@@ -85,6 +127,29 @@ export default function HealthPage() {
     router,
     searchParams,
   ]);
+
+  useEffect(() => {
+    let active = true;
+    if (!isParent || !parentD01.selectedChildId) {
+      setHealthMaterialAttachments([]);
+      return () => {
+        active = false;
+      };
+    }
+    void listAttachments({
+      childId: parentD01.selectedChildId,
+      relatedType: "health-material",
+    })
+      .then((items) => {
+        if (active) setHealthMaterialAttachments(items);
+      })
+      .catch(() => {
+        if (active) setHealthMaterialAttachments([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isParent, parentD01.selectedChildId]);
 
   // Computed data — use visibleChildren so admin/teacher can see all children, not just present ones
   const childData = useMemo(() => {
@@ -389,7 +454,7 @@ if (isParent) {
                 健康管理
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                家长端只读展示晨检、健康材料和高风险会诊摘要，数据按 childId 从 D01 store 读取。
+                家长端按孩子授权只读展示晨检、健康材料和高风险会诊摘要。
               </p>
             </div>
             <Button type="button" variant="outline" className="rounded-2xl" onClick={() => router.push(`/parent?child=${parentChild.id}`)}>
@@ -486,22 +551,71 @@ if (isParent) {
                     description="当前孩子还没有上传或解析的健康材料。"
                   />
                 ) : null}
-                {healthMaterials.map((material) => (
-                  <div key={material.materialId} className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-semibold text-slate-900">{material.filename}</p>
-                      <Badge variant={material.parseStatus === "completed" ? "success" : material.parseStatus === "failed" ? "destructive" : "secondary"}>
-                        {material.parseStatus}
-                      </Badge>
-                    </div>
-                    <p className="mt-2 text-slate-500">{material.description ?? "暂无说明"}</p>
-                    {material.parseResult ? (
-                      <pre className="mt-2 max-h-32 overflow-auto rounded-xl bg-white p-2 text-xs text-slate-500">
-                        {JSON.stringify(material.parseResult, null, 2)}
-                      </pre>
-                    ) : null}
-                  </div>
-                ))}
+                {healthMaterials.map((material) => {
+                  const parsed = readHealthMaterialSummary(material.parseResult);
+                  const attachments = healthMaterialAttachments.filter(
+                    (attachment) =>
+                      attachment.relatedId === material.materialId
+                  );
+                  return (
+                    <article
+                      key={material.materialId}
+                      data-testid={`parent-health-material-${material.materialId}`}
+                      className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-semibold text-slate-900">{material.filename}</p>
+                        <Badge variant={material.parseStatus === "completed" ? "success" : material.parseStatus === "failed" ? "destructive" : "secondary"}>
+                          {material.parseStatus === "completed"
+                            ? "已解析"
+                            : material.parseStatus === "failed"
+                              ? "解析失败"
+                              : "处理中"}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 leading-6 text-slate-600">
+                        {parsed?.summary || material.description || material.parseError || "暂无说明"}
+                      </p>
+                      {parsed?.riskItems.length ? (
+                        <div className="mt-3 rounded-md border border-rose-100 bg-white p-3">
+                          <p className="text-xs font-semibold text-rose-700">需重点留意</p>
+                          {parsed.riskItems.slice(0, 2).map((item, index) => (
+                            <p key={`${item.title}-${index}`} className="mt-2 text-xs leading-5 text-slate-600">
+                              {[item.title, item.detail].filter(Boolean).join("：")}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
+                      {parsed?.followUps.length ? (
+                        <div className="mt-3 rounded-md border border-indigo-100 bg-white p-3">
+                          <p className="text-xs font-semibold text-indigo-700">复查与后续建议</p>
+                          {parsed.followUps.slice(0, 2).map((item, index) => (
+                            <p key={`${item}-${index}`} className="mt-2 text-xs leading-5 text-slate-600">
+                              {item}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
+                      {attachments.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {attachments.map((attachment) =>
+                            attachment.downloadUrl ? (
+                              <a
+                                key={attachment.attachmentId}
+                                href={`${attachment.downloadUrl}?download=1`}
+                                data-testid="parent-health-material-download"
+                                className="inline-flex min-h-9 items-center gap-2 rounded-md border border-indigo-200 bg-white px-3 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                                查看原始材料
+                              </a>
+                            ) : null
+                          )}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
               </CardContent>
             </Card>
 

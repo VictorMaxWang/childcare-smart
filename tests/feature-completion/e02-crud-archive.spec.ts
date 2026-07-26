@@ -54,23 +54,33 @@ test.describe.serial("E02 CRUD archive and scope", () => {
     const token = `e02-api-${Date.now()}`;
 
     try {
+      await expectFailure(
+        await director.post("/api/children", {
+          data: {
+            name: `${token}-forged-binding`,
+            parentUserId: "u-parent",
+          },
+        }),
+        400,
+        "invalid_request"
+      );
+
       const createdChild = await expectSuccess<{ id: string; name: string }>(
         await director.post("/api/children", {
           data: {
             name: `${token}-child`,
             birthDate: "2023-03-04",
-            allergies: ["鐗涘ザ"],
+            allergies: ["牛奶"],
             heightCm: 94,
             weightKg: 13,
-            guardians: [{ name: "E02濡堝", relation: "姣嶄翰", phone: "13800000000" }],
+            guardians: [{ name: "E02妈妈", relation: "母亲", phone: "13800000000" }],
             specialNotes: "E02 API create",
-            parentUserId: "u-parent",
           },
         }),
         201
       );
 
-      await expectSuccess(await parent.get(`/api/children/${createdChild.id}`));
+      await expectFailure(await parent.get(`/api/children/${createdChild.id}`), 403, "forbidden_scope");
       await expectFailure(await parent.get("/api/children/c-3"), 403, "forbidden_scope");
 
       const updatedChild = await expectSuccess<{ id: string; name: string; className: string; archivedAt?: string }>(

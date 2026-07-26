@@ -201,6 +201,10 @@ test("bound normal teacher records are readable by the authorized normal parent"
       meal: "午餐",
       foods: [{ id: "food-1", name: "米饭", category: "主食", amount: "1碗" }],
       nutritionScore: 88,
+      photoUrls: [
+        "/api/attachments/meal-photo-normal/content",
+        "https://tracker.example/meal.png",
+      ],
     })
   );
   const growth = asTestRecord(
@@ -208,6 +212,7 @@ test("bound normal teacher records are readable by the authorized normal parent"
       childId: "c-1",
       description: "shared-growth",
       selectedIndicators: ["主动表达"],
+      mediaUrls: ["/api/attachments/growth-photo-normal/content"],
     })
   );
 
@@ -216,8 +221,99 @@ test("bound normal teacher records are readable by the authorized normal parent"
   const parentGrowth = await parent.listRecords("growth", { childId: "c-1" });
 
   assert.ok(parentHealth.some((record) => asTestRecord(record).id === health.id));
-  assert.ok(parentMeals.some((record) => asTestRecord(record).id === meal.id));
-  assert.ok(parentGrowth.some((record) => asTestRecord(record).id === growth.id));
+  const parentMeal = parentMeals.find(
+    (record) => asTestRecord(record).id === meal.id
+  ) as { photoUrls?: string[] } | undefined;
+  const parentGrowthRecord = parentGrowth.find(
+    (record) => asTestRecord(record).id === growth.id
+  ) as { mediaUrls?: string[] } | undefined;
+  assert.deepEqual(parentMeal?.photoUrls, [
+    "/api/attachments/meal-photo-normal/content",
+  ]);
+  assert.deepEqual(parentGrowthRecord?.mediaUrls, [
+    "/api/attachments/growth-photo-normal/content",
+  ]);
+});
+
+test("normal home-school messages use a canonical child conversation and enforce participants", async () => {
+  const repo = new MemoryRepository();
+  const parentSession: SessionUser = {
+    ...demoUser("u-parent"),
+    accountKind: "normal",
+    childIds: ["c-1"],
+  };
+  const teacherSession: SessionUser = {
+    ...demoUser("u-teacher2"),
+    accountKind: "normal",
+    classId: "class-morning",
+  };
+  const crossClassTeacher: SessionUser = {
+    ...demoUser("u-teacher"),
+    accountKind: "normal",
+    classId: "class-sunrise",
+  };
+  const parent = new AppDataService(parentSession, repo);
+  const teacher = new AppDataService(teacherSession, repo);
+  const otherTeacher = new AppDataService(crossClassTeacher, repo);
+  const director = new AppDataService(
+    { ...demoUser("u-admin"), accountKind: "normal" },
+    repo
+  );
+
+  const sent = await parent.sendMessage({
+    childId: "c-1",
+    conversationId: "conv-c-3-home-school",
+    content: "normal canonical conversation",
+  });
+  assert.equal(sent.conversationId, "conv-c-1-home-school");
+
+  const snapshot = await repo.load(parentSession);
+  const conversation = snapshot.conversations.find(
+    (item) => item.conversationId === sent.conversationId
+  );
+  assert.ok(conversation);
+  assert.deepEqual([...conversation.participantRoles].sort(), ["parent", "teacher"]);
+
+  await assert.rejects(
+    () =>
+      teacher.replyMessage(sent.messageId, {
+        conversationId: "conv-c-3-home-school",
+        content: "must not switch threads",
+      }),
+    assertApiError("conflict")
+  );
+  const reply = await teacher.replyMessage(sent.messageId, {
+    content: "canonical reply",
+  });
+  assert.equal(reply.conversationId, sent.conversationId);
+
+  await assert.rejects(
+    () => otherTeacher.markMessageRead(sent.messageId),
+    assertApiError("forbidden_scope")
+  );
+
+  const directorMessages = await director.listMessages({ childId: "c-1" });
+  assert.ok(directorMessages.some((message) => message.messageId === sent.messageId));
+  const marked = await director.markMessageRead(sent.messageId);
+  assert.ok(marked?.readBy.includes("u-admin"));
+  const directorReply = await director.replyMessage(sent.messageId, {
+    content: "director supervised reply",
+  });
+  assert.equal(directorReply.senderRole, "director");
+  assert.equal(directorReply.conversationId, sent.conversationId);
+
+  const closed = await teacher.updateConversationStatus(
+    sent.conversationId,
+    { status: "closed" }
+  );
+  assert.equal(closed?.status, "closed");
+  await assert.rejects(
+    () =>
+      otherTeacher.updateConversationStatus(sent.conversationId, {
+        status: "archived",
+      }),
+    assertApiError("forbidden_scope")
+  );
 });
 
 test("service writes through the repository atomic mutation contract when available", async () => {
@@ -346,6 +442,23 @@ test("createConsultation preserves rich high-risk result fields", async () => {
   assert.ok((record.manualReviewSummary as { reviewRequiredCount?: number }).reviewRequiredCount);
   assert.ok(Array.isArray(record.warnings));
   assert.equal(((record.traceMeta as Record<string, unknown>).dataQuality as { evidenceCount?: number }).evidenceCount, evidenceItems.length);
+
+  const snapshot = await repo.load(demoUser("u-teacher2"));
+  assert.equal(
+    snapshot.consultations.filter((item) => item.consultationId === "consult-rich-safety").length,
+    1
+  );
+  assert.equal(
+    snapshot.interventionCards.some((item) => item.id === "card-rich-safety"),
+    true
+  );
+  const consultationReminders = snapshot.reminders.filter(
+    (item) => item.sourceId === "consult-rich-safety"
+  );
+  assert.deepEqual(
+    [...new Set(consultationReminders.map((item) => item.targetRole))].sort(),
+    ["admin", "parent", "teacher"]
+  );
 });
 
 test("director can create, update, archive and restore child profiles through scoped service", async () => {
@@ -393,6 +506,149 @@ test("director can create, update, archive and restore child profiles through sc
 
   const afterRestore = await director.listChildren();
   assert.equal(afterRestore.some((child) => asTestChild(child).id === created.id), true);
+});
+
+test("role-scoped reminders cannot be read or closed by another role", async () => {
+  const repo = new MemoryRepository();
+  const teacher = new AppDataService(demoUser("u-teacher2"), repo);
+  const parent = new AppDataService(demoUser("u-parent"), repo);
+  const director = new AppDataService(demoUser("u-admin"), repo);
+
+  const consultation = await teacher.createConsultation({
+    childId: "c-1",
+    riskLevel: "high",
+    summary: "需要三端协同复查",
+  });
+  const consultationId = consultation.consultationId;
+
+  const parentReminders = await parent.listReminders({ childId: "c-1" });
+  const teacherReminders = await teacher.listReminders({ childId: "c-1" });
+  const directorReminders = await director.listReminders({ childId: "c-1" });
+  assert.equal(
+    parentReminders
+      .filter((item) => item.sourceId === consultationId)
+      .every((item) => item.targetRole === "parent"),
+    true
+  );
+  assert.equal(
+    teacherReminders
+      .filter((item) => item.sourceId === consultationId)
+      .every((item) => item.targetRole === "teacher"),
+    true
+  );
+  assert.deepEqual(
+    [...new Set(
+      directorReminders
+        .filter((item) => item.sourceId === consultationId)
+        .map((item) => item.targetRole)
+    )].sort(),
+    ["admin", "parent", "teacher"]
+  );
+
+  const teacherReminder = directorReminders.find(
+    (item) => item.sourceId === consultationId && item.targetRole === "teacher"
+  );
+  assert.ok(teacherReminder);
+  await assert.rejects(
+    () => parent.updateReminder(teacherReminder.reminderId, { status: "done" }),
+    (error: unknown) =>
+      error instanceof ApiRouteError && error.code === "forbidden_scope"
+  );
+  await assert.rejects(
+    () =>
+      parent.createReminder({
+        childId: "c-1",
+        targetRole: "admin",
+        title: "越权提醒",
+      }),
+    (error: unknown) =>
+      error instanceof ApiRouteError && error.code === "forbidden_scope"
+  );
+});
+
+test("retrying a resolved consultation keeps server state and completed projections", async () => {
+  const repo = new MemoryRepository();
+  const teacher = new AppDataService(demoUser("u-teacher2"), repo);
+  const created = await teacher.createConsultation({
+    childId: "c-1",
+    riskLevel: "high",
+    summary: "重试前完成的会诊",
+  });
+
+  await teacher.updateConsultationStatus(created.consultationId, {
+    status: "resolved",
+  });
+  const completedSnapshot = await repo.load(demoUser("u-admin"));
+  completedSnapshot.tasks = completedSnapshot.tasks.map((task) =>
+    task.legacyRefs?.consultationId === created.consultationId
+      ? {
+          ...task,
+          status: "completed",
+          completedAt: "2026-07-25T10:00:00.000Z",
+          completionSummary: "unit-test-evidence",
+          lastEvidenceAt: "2026-07-25T10:00:00.000Z",
+        }
+      : task
+  );
+  completedSnapshot.reminders = completedSnapshot.reminders.map((reminder) =>
+    reminder.sourceId === created.consultationId
+      ? { ...reminder, status: "done" }
+      : reminder
+  );
+  await repo.save(demoUser("u-admin"), completedSnapshot);
+
+  const retried = await teacher.createConsultation({
+    ...created,
+    consultationId: created.consultationId,
+    workflowStatus: "pending",
+    status: "active",
+  });
+  assert.equal((retried as { workflowStatus?: string }).workflowStatus, "resolved");
+  assert.equal((retried as { status?: string }).status, "resolved");
+
+  const afterRetry = await repo.load(demoUser("u-admin"));
+  const relatedTasks = afterRetry.tasks.filter(
+    (task) => task.legacyRefs?.consultationId === created.consultationId
+  );
+  assert.equal(relatedTasks.every((task) => task.status === "completed"), true);
+  assert.equal(
+    relatedTasks.every(
+      (task) => task.completionSummary === "unit-test-evidence"
+    ),
+    true
+  );
+  assert.equal(
+    afterRetry.reminders
+      .filter((reminder) => reminder.sourceId === created.consultationId)
+      .every((reminder) => reminder.status === "done"),
+    true
+  );
+});
+
+test("record creation is idempotent for the same teacher source draft record", async () => {
+  const repo = new MemoryRepository();
+  const teacher = new AppDataService(demoUser("u-teacher2"), repo);
+  const input = {
+    childId: "c-1",
+    category: "情绪表现",
+    description: "语音快速记录",
+    sourceDraftId: "voice-draft-idempotent",
+    sourceRecordId: "voice-draft-idempotent-record-1",
+  };
+
+  const first = (await teacher.createRecord("growth", input)) as { id: string };
+  const second = (await teacher.createRecord("growth", input)) as { id: string };
+  assert.equal(second.id, first.id);
+
+  const records = await teacher.listRecords("growth", { childId: "c-1" });
+  assert.equal(
+    records.filter(
+      (item) =>
+        (item as { sourceDraftId?: string }).sourceDraftId ===
+        input.sourceDraftId
+    ).length,
+    1
+  );
 });
 
 test("ordinary child CRUD cannot forge a parent account binding", async () => {
@@ -460,9 +716,14 @@ test("parents may create health material metadata but cannot forge parse results
     childId: "c-1",
     filename: "parent-upload.pdf",
     fileType: "application/pdf",
+    parseStatus: "completed",
+    parseResult: { riskLevel: "high", forged: true },
+    parseError: "client-controlled",
   });
 
   assert.equal(material.parseStatus, "pending");
+  assert.equal(material.parseResult, undefined);
+  assert.equal(material.parseError, undefined);
   await assert.rejects(
     () => parent.updateHealthMaterial(material.materialId, { parseStatus: "completed", parseResult: { fake: true } }),
     assertApiError("forbidden_scope")
@@ -572,6 +833,187 @@ test("E03 attachments expose honest local demo, metadata-only, and permission-de
   assert.equal(listedLocalDemo?.storageObject?.storageMode, "local_demo");
 
   await assert.rejects(() => teacher.getAttachment(localDemo.attachmentId), assertApiError("forbidden_scope"));
+});
+
+test("normal accounts cannot persist Data URL attachment payloads through metadata API", async () => {
+  const repo = new MemoryRepository();
+  const normalParent = new AppDataService(
+    { ...demoUser("u-parent"), accountKind: "normal" },
+    repo
+  );
+
+  await assert.rejects(
+    () =>
+      normalParent.createAttachment({
+        childId: "c-1",
+        relatedType: "feedback",
+        relatedId: "feedback-normal-data-url",
+        kind: "image",
+        fileName: "oversized.png",
+        mimeType: "image/png",
+        localPreviewUrl: `data:image/png;base64,${"A".repeat(1024)}`,
+      }),
+    assertApiError("invalid_request")
+  );
+});
+
+test("client supplied feedback and consultation ids cannot overwrite another child", async () => {
+  const repo = new MemoryRepository();
+  const director = new AppDataService(demoUser("u-admin"), repo);
+
+  await director.createFeedback({
+    feedbackId: "collision-feedback",
+    childId: "c-1",
+    content: "first child feedback",
+  });
+  await assert.rejects(
+    () =>
+      director.createFeedback({
+        feedbackId: "collision-feedback",
+        childId: "c-4",
+        content: "forged overwrite",
+      }),
+    assertApiError("forbidden_scope")
+  );
+
+  const firstConsultation = await director.createConsultation({
+    childId: "c-1",
+    riskLevel: "medium",
+    summary: "first child consultation",
+  });
+  await assert.rejects(
+    () =>
+      director.createConsultation({
+        consultationId: firstConsultation.consultationId,
+        childId: "c-4",
+        riskLevel: "high",
+        summary: "forged overwrite",
+      }),
+    assertApiError("forbidden_scope")
+  );
+});
+
+test("parents cannot add internal consultation notes", async () => {
+  const repo = new MemoryRepository();
+  const director = new AppDataService(demoUser("u-admin"), repo);
+  const parent = new AppDataService(demoUser("u-parent"), repo);
+  const consultation = await director.createConsultation({
+    childId: "c-1",
+    riskLevel: "medium",
+    summary: "staff review",
+  });
+
+  await assert.rejects(
+    () => parent.addConsultationNote(consultation.consultationId, { note: "forged note" }),
+    assertApiError("forbidden_scope")
+  );
+});
+
+test("teacher can list health material attachments by type without crossing class scope", async () => {
+  const seed = createDemoSeedSnapshot("2026-05-02T00:00:00.000Z");
+  const material = seed.healthMaterials.find(
+    (item) => item.uploadedBy === "u-teacher2"
+  );
+  assert.ok(material);
+  const repo = new MemoryRepository(seed);
+  const teacher = new AppDataService(demoUser("u-teacher2"), repo);
+
+  const created = await teacher.createAttachment({
+    childId: material.childId,
+    relatedType: "health-material",
+    relatedId: material.materialId,
+    kind: "pdf",
+    fileName: "health-material.pdf",
+    mimeType: "application/pdf",
+    byteSize: 128,
+  });
+
+  const listed = await teacher.listAttachments({
+    relatedType: "health-material",
+  });
+  assert.ok(listed.some((item) => item.attachmentId === created.attachmentId));
+  assert.ok(
+    listed.every((item) =>
+      seed.children.some(
+        (child) =>
+          child.id === item.childId &&
+          child.className === demoUser("u-teacher2").className
+      )
+    )
+  );
+});
+
+test("private meal media is scoped to staff and its canonical meal record", async () => {
+  const seed = createDemoSeedSnapshot("2026-05-02T00:00:00.000Z");
+  const meal = seed.meals.find((item) => item.childId === "c-1");
+  assert.ok(meal);
+  const repo = new MemoryRepository(seed);
+  const teacher = new AppDataService(demoUser("u-teacher2"), repo);
+  const parent = new AppDataService(demoUser("u-parent"), repo);
+  const previousToken = process.env.BLOB_READ_WRITE_TOKEN;
+  try {
+    process.env.BLOB_READ_WRITE_TOKEN = "test-private-blob-token";
+    const scope = await teacher.authorizeAttachmentUpload({
+      childId: "c-1",
+      relatedType: "meal",
+      relatedId: meal.id,
+    });
+    assert.deepEqual(scope, {
+      childId: "c-1",
+      relatedType: "meal",
+      relatedId: meal.id,
+    });
+
+    const uploaded = await teacher.createUploadedAttachment(
+      {
+        childId: "c-1",
+        relatedType: "meal",
+        relatedId: meal.id,
+        fileName: "meal-photo.png",
+        mimeType: "image/png",
+        byteSize: 68,
+      },
+      {
+        storageProvider: "vercel_blob",
+        storageKey:
+          "smartchildcare/private-media/v1/institution/child/meal-photo.png",
+        storageEtag: "meal-photo-etag",
+      }
+    );
+    assert.equal(uploaded.storageMode, "object_storage");
+    assert.equal(uploaded.uploadStatus, "uploaded");
+    assert.equal(
+      uploaded.downloadUrl,
+      `/api/attachments/${uploaded.attachmentId}/content`
+    );
+    const updatedMeal = await teacher.updateRecord("meal", meal.id, {
+      photoUrls: [
+        uploaded.downloadUrl,
+        "https://tracker.example/private-child-photo.png",
+        "data:image/png;base64,unsafe-snapshot-payload",
+      ],
+    });
+    assert.deepEqual(
+      (updatedMeal as { photoUrls?: string[] } | undefined)?.photoUrls,
+      [uploaded.downloadUrl]
+    );
+
+    await assert.rejects(
+      () =>
+        parent.authorizeAttachmentUpload({
+          childId: "c-1",
+          relatedType: "meal",
+          relatedId: meal.id,
+        }),
+      assertApiError("forbidden_scope")
+    );
+  } finally {
+    if (typeof previousToken === "string") {
+      process.env.BLOB_READ_WRITE_TOKEN = previousToken;
+    } else {
+      delete process.env.BLOB_READ_WRITE_TOKEN;
+    }
+  }
 });
 
 test("E03 weekly report keeps scoped provenance when selected period is empty", async () => {

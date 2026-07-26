@@ -162,8 +162,13 @@ export default function AdminAgentPage() {
     getSmartInsights,
     getLatestConsultations,
   } = useApp();
+  const institutionName =
+    currentUser.accountKind === "demo" ? INSTITUTION_NAME : "当前机构";
   const latestConsultations = getLatestConsultations();
   const adminAgentConsultations = useMemo(() => {
+    if (currentUser.accountKind !== "demo") {
+      return latestConsultations;
+    }
     const child = visibleChildren.find((item) => item.id === "c-1");
     const existing = latestConsultations.find((item) => item.childId === "c-1");
     return [
@@ -174,7 +179,7 @@ export default function AdminAgentPage() {
       }),
       ...latestConsultations.filter((item) => item.childId !== "c-1"),
     ];
-  }, [latestConsultations, visibleChildren]);
+  }, [currentUser.accountKind, latestConsultations, visibleChildren]);
   const {
     priorityItems: consultationPriorityItems,
     notificationEvents,
@@ -188,7 +193,7 @@ export default function AdminAgentPage() {
     dispatchAvailable = true,
     dispatchStatusMessage = null,
   } = useAdminConsultationWorkspace({
-    institutionName: INSTITUTION_NAME,
+    institutionName,
     visibleChildren,
     localConsultations: adminAgentConsultations,
     consultationFeedOptions: {
@@ -213,7 +218,7 @@ export default function AdminAgentPage() {
       workflow: "daily-priority",
       currentUser: {
         name: currentUser.name,
-        institutionName: INSTITUTION_NAME,
+        institutionName,
         institutionId: currentUser.institutionId,
         role: currentUser.role,
       },
@@ -239,6 +244,7 @@ export default function AdminAgentPage() {
       growthRecords,
       guardianFeedbacks,
       healthCheckRecords,
+      institutionName,
       mealRecords,
       notificationEvents,
       visibleChildren,
@@ -271,7 +277,7 @@ export default function AdminAgentPage() {
         );
         setResult(nextResult);
         setRequestError(null);
-        setWorkflowNotice("远端 workflow 暂不可用，当前使用本地演示数据。");
+        setWorkflowNotice("远端 workflow 暂不可用，当前按机构真实数据进行本地规则分析。");
         setHistory((prev) => [
           ...prev,
           {
@@ -342,7 +348,7 @@ export default function AdminAgentPage() {
           },
         ]);
         if (data.source === "fallback") {
-          setWorkflowNotice("远端 workflow 暂不可用，当前使用本地演示数据。");
+          setWorkflowNotice("远端 workflow 暂不可用，当前按机构真实数据进行本地规则分析。");
         }
       } catch {
         commitFallbackResult("admin-agent-fetch-failed");
@@ -419,7 +425,7 @@ export default function AdminAgentPage() {
     setRequestError(null);
     try {
       const report = await createWeeklyReport({
-        title: `${INSTITUTION_NAME} 周报 ${range.start}~${range.end}`,
+        title: `${institutionName} 周报 ${range.start}~${range.end}`,
         scopeType: "institution",
         scopeId: currentUser.institutionId,
         periodStart: range.start,
@@ -572,7 +578,9 @@ export default function AdminAgentPage() {
         <EmptyState
           icon={<BrainCircuit className="h-6 w-6" />}
           title="当前没有可用于园长 AI 助手的机构数据"
-          description="请先从园长首页确认机构数据是否已经加载。"
+          description="请先创建幼儿档案并让教师写入首条业务记录，AI 助手会据此生成机构分析。"
+          actionLabel="前往幼儿档案"
+          onAction={() => router.push("/children")}
         />
       </div>
     );
@@ -588,7 +596,7 @@ export default function AdminAgentPage() {
   if (isWeeklyMode) {
     return (
       <DirectorWeeklyReportReplica
-        institutionName={INSTITUTION_NAME}
+        institutionName={institutionName}
         result={displayResult}
         loading={loading}
         requestError={requestError}
@@ -619,7 +627,7 @@ export default function AdminAgentPage() {
 
   return (
     <DirectorAgentReplica
-      institutionName={INSTITUTION_NAME}
+      institutionName={institutionName}
       result={displayResult}
       quickQuestions={quickQuestions}
       loading={loading}

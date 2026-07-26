@@ -8,9 +8,10 @@
 } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { DEMO_DATASET_VERSION } from "@/lib/demo-data/persistence";
 
 export const ARTIFACT_DIR = path.join(process.cwd(), "artifacts", "product-completion", "R02");
-export const SHARED_NAMESPACE = "demo:v5-d01-shared-demo:institution:inst-1";
+export const SHARED_NAMESPACE = `demo:${DEMO_DATASET_VERSION}:institution:inst-1`;
 export const BUCKETS = {
   children: `childcare.${SHARED_NAMESPACE}.children.v3`,
   attendance: `childcare.${SHARED_NAMESPACE}.attendance.v3`,
@@ -102,6 +103,13 @@ export async function executeVoiceCommand(
 }
 
 export async function resetDemoStorage(page: Page) {
+  const loginResponse = await page.request.post("/api/auth/demo-login", {
+    data: { accountId: "u-admin" },
+  });
+  expect(loginResponse.ok()).toBeTruthy();
+  const resetResponse = await page.request.post("/api/demo/reset");
+  expect(resetResponse.ok()).toBeTruthy();
+  await page.request.post("/api/auth/logout");
   await page.goto("/login");
   await page.evaluate(() => window.localStorage.clear());
 }

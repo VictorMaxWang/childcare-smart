@@ -68,7 +68,9 @@ test("admin feed and workflow fall back locally without admin console errors", a
   await expect(page.getByTestId("admin-family-feedback-flow")).not.toBeEmpty();
   await expect(page.getByTestId("admin-weekly-governance-summary")).toBeVisible();
   await expect(page.getByTestId("admin-weekly-governance-summary")).not.toBeEmpty();
-  await expect(page.locator("body")).toContainText(/本地演示数据|最近缓存数据|远端 feed 暂不可用/);
+  await expect(page.locator("body")).toContainText(
+    /本地演示数据|最近缓存数据|远端 feed 暂不可用|远端会诊摘要暂不可用/
+  );
 
   await page.route("**/api/ai/admin-agent", (route) => route.abort("failed"));
   await page.goto("/admin/agent");

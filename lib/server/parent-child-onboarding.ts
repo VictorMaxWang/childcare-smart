@@ -24,24 +24,7 @@ export const CHILD_ONBOARDING_CONSENT_TYPES = [
   "child_privacy_policy",
 ] as const;
 
-export const ENSURE_CONSENT_RECORDS_TABLE_SQL = `
-  create table if not exists consent_records (
-    id varchar(191) primary key,
-    institution_id varchar(191) not null,
-    user_id varchar(191) not null,
-    child_id varchar(191) not null,
-    consent_type varchar(64) not null,
-    policy_version varchar(64) not null,
-    agreed_at timestamp not null,
-    ip varchar(64) null,
-    user_agent varchar(512) null,
-    created_at timestamp not null default current_timestamp,
-    key idx_consent_records_institution_id (institution_id),
-    key idx_consent_records_user_id (user_id),
-    key idx_consent_records_child_id (child_id),
-    key idx_consent_records_user_child (user_id, child_id)
-  )
-`;
+const CONSENT_RECORDS_STORAGE_PROBE_SQL = "select 1 from consent_records limit 0";
 
 export interface ParentChildOnboardingRequestMeta {
   ip?: string | null;
@@ -328,7 +311,8 @@ let consentRecordsStorageReady: Promise<void> | null = null;
 async function defaultEnsureConsentRecordsStorage() {
   if (!consentRecordsStorageReady) {
     consentRecordsStorageReady = getDatabasePool()
-      .execute(ENSURE_CONSENT_RECORDS_TABLE_SQL)
+      // 生产应用账号只需要 DML 权限；DDL 由版本化 migration 负责。
+      .execute(CONSENT_RECORDS_STORAGE_PROBE_SQL)
       .then(() => undefined)
       .catch((error) => {
         consentRecordsStorageReady = null;
@@ -401,10 +385,20 @@ export async function createParentChildWithConsent(
         });
       const snapshot = normalizeExtendedSnapshot(rawSnapshot, session);
       const childId = dependencies.createId("c");
+      const classBinding = session.classId
+        ? {
+            classId: session.classId,
+            className: session.className || DEFAULT_PARENT_CHILD_CLASS_NAME,
+          }
+        : null;
       const child = createMinimalParentChild({
         childId,
         input: validated.payload,
-        session,
+        session: {
+          ...session,
+          classId: classBinding?.classId,
+          className: classBinding?.className || DEFAULT_PARENT_CHILD_CLASS_NAME,
+        },
         nowIso,
       });
       const childIds = uniqueStrings([...parseChildIds(parentRow.child_ids), child.id]);
@@ -415,11 +409,13 @@ export async function createParentChildWithConsent(
       snapshot.updatedAt = nowIso;
       await dependencies.saveSnapshot(connection, session.institutionId, snapshot, session.id);
       await dependencies.updateUserChildIds(connection, session.id, childIds);
-      if (session.classId) {
+      // 新注册家长尚未接受机构邀请时没有 membership/class 外键；此时只写个人家庭空间。
+      // 接受邀请后由 institution-membership 迁移逻辑补齐 child_registry 与监护关系。
+      if (classBinding) {
         await dependencies.upsertChildAuthorization(connection, {
           userId: session.id,
           institutionId: session.institutionId,
-          classId: session.classId,
+          classId: classBinding.classId,
           childId: child.id,
         });
       }

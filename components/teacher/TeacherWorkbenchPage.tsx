@@ -80,6 +80,7 @@ type WorkbenchTask = {
 };
 
 type PriorityChild = {
+  childId: string;
   name: string;
   note: string;
   tags: string[];
@@ -233,15 +234,17 @@ export default function TeacherWorkbenchPage() {
       checked: waitingMessages === 0,
     },
     {
-      title: "消毒记录",
-      detail: "当前版本暂未开放教师端消毒记录入口",
-      status: "暂未开放",
+      title: "健康材料",
+      detail: pendingRecords > 0 ? `${pendingRecords}份材料待复核` : "上传并解析幼儿健康材料",
+      status: pendingRecords > 0 ? "待复核" : "去解析",
       tone: "green",
-      disabled: true,
+      href: "/teacher/health-file-bridge",
+      checked: pendingRecords === 0,
     },
   ];
   const highPriorityChildren: PriorityChild[] = [
     ...viewModel.todayAbnormalChildren.map((item) => ({
+      childId: item.child.id,
       name: item.child.name,
       note: `体温 ${item.record.temperature}℃ · ${item.record.mood} · ${item.record.handMouthEye}`,
       tags: ["晨检异常"],
@@ -249,6 +252,7 @@ export default function TeacherWorkbenchPage() {
       avatar: item.child.gender === "女" ? "👧🏻" : "👦🏻",
     })),
     ...viewModel.pendingReviews.map((item) => ({
+      childId: item.child.id,
       name: item.child.name,
       note: item.record.followUpAction ?? item.record.description,
       tags: [item.record.category],
@@ -256,6 +260,7 @@ export default function TeacherWorkbenchPage() {
       avatar: item.child.gender === "女" ? "👧🏻" : "👦🏻",
     })),
     ...viewModel.parentsToCommunicate.map((item) => ({
+      childId: item.child.id,
       name: item.child.name,
       note: item.reason,
       tags: ["家园沟通"],
@@ -457,8 +462,14 @@ function DesktopWorkbench({
           <div className="mt-3 space-y-2.5">
             {highPriorityChildren.length > 0 ? highPriorityChildren.map((child) => (
               <Link
-                key={`${child.name}-${child.time}-${child.tags.join("-")}-${child.note}`}
-                href="/teacher/high-risk-consultation"
+                key={`${child.childId}-${child.time}-${child.tags.join("-")}-${child.note}`}
+                href={
+                  child.tags.includes("家园沟通")
+                    ? `/teacher/agent?action=communication&childId=${encodeURIComponent(child.childId)}`
+                    : `/teacher/high-risk-consultation?childId=${encodeURIComponent(child.childId)}`
+                }
+                data-testid="teacher-priority-child-link"
+                data-child-id={child.childId}
                 className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[0.9rem] border border-rose-100 bg-rose-50/35 px-3 py-2.5"
               >
                 <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl shadow-sm">{child.avatar}</span>
@@ -590,7 +601,9 @@ function MobileWorkbench({
       tag: child.tags[0] ?? "关注",
       detail: child.note,
       meta: child.time,
-      href: child.tags.includes("家园沟通") ? "/teacher/agent?action=communication" : "/teacher/high-risk-consultation",
+      href: child.tags.includes("家园沟通")
+        ? `/teacher/agent?action=communication&childId=${encodeURIComponent(child.childId)}`
+        : `/teacher/high-risk-consultation?childId=${encodeURIComponent(child.childId)}`,
     })),
     ...(pendingMorningChecks > 0
       ? [
@@ -699,7 +712,7 @@ function MobileWorkbench({
       </PixelPanel>
 
       <PixelPanel className="rounded-[1.45rem] p-5">
-        <PixelSectionTitle title="快速入口" action={<button type="button" disabled className="text-sm font-bold text-slate-400">自定义暂未开放</button>} />
+        <PixelSectionTitle title="快速入口" />
         <div className="mt-5 grid grid-cols-3 gap-4">
           <MobileQuick href="/health" icon={<Thermometer className="h-9 w-9" />} title="晨检" subtitle="体温 · 异常 · 缺勤" tone="violet" />
           <MobileQuick href="/diet" icon={<Utensils className="h-9 w-9" />} title="饮食记录" subtitle="膳食 · 过敏 · 喂养" tone="green" />

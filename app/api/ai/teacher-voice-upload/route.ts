@@ -5,6 +5,11 @@ import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import { apiError } from "@/lib/server/api-errors";
 import { VivoProviderError } from "@/lib/providers/vivo";
 import { buildVoiceUploadResponse } from "@/lib/mobile/voice-assistant-upload";
+import {
+  validateVoiceAudioFile,
+  validateVoiceDuration,
+  validateVoiceText,
+} from "@/lib/voice/audio-constraints";
 
 function toNumber(value: FormDataEntryValue | null) {
   if (typeof value !== "string") return undefined;
@@ -33,6 +38,17 @@ export async function POST(request: Request) {
     typeof formData.get("fallbackText") === "string"
       ? String(formData.get("fallbackText")).trim()
       : undefined;
+  const durationMs = toNumber(formData.get("durationMs"));
+  const validationError =
+    validateVoiceAudioFile(audio) ||
+    validateVoiceDuration(durationMs) ||
+    validateVoiceText(fallbackText);
+  if (validationError) {
+    return NextResponse.json(
+      { ok: false, code: "invalid_request", error: validationError },
+      { status: 400 }
+    );
+  }
   const asrProvider = resolveAsrProvider();
   const providerStatus = asrProvider.getStatus();
 
@@ -45,7 +61,7 @@ export async function POST(request: Request) {
         (typeof formData.get("mimeType") === "string"
           ? String(formData.get("mimeType"))
           : undefined) || audio.type || "audio/webm",
-      durationMs: toNumber(formData.get("durationMs")),
+      durationMs,
       scene:
         typeof formData.get("scene") === "string"
           ? String(formData.get("scene"))
@@ -122,7 +138,7 @@ export async function POST(request: Request) {
             typeof formData.get("childId") === "string"
               ? String(formData.get("childId"))
               : undefined,
-          durationMs: toNumber(formData.get("durationMs")),
+          durationMs,
           mimeType:
             (typeof formData.get("mimeType") === "string"
               ? String(formData.get("mimeType"))

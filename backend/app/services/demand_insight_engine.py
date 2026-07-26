@@ -8,7 +8,7 @@ from typing import Any, Iterable
 
 from app.core.config import get_settings
 from app.db.childcare_repository import ChildcareRepository
-from app.db.demo_snapshot import build_demo_consultation_feed_items
+from app.db.demo_snapshot import build_demo_consultation_feed_items, build_demo_snapshot
 from app.db.repositories import RepositoryBundle
 from app.services.high_risk_consultation_contract import normalize_high_risk_consultation_result
 from app.tools.summary_tools import safe_dict, safe_list, unique_texts
@@ -428,6 +428,8 @@ async def _load_consultation_records(
     current_snapshot: dict[str, Any],
     consultation_limit: int,
     brain_provider: str,
+    allow_demo_fallback: bool,
+    demo_now: datetime | None = None,
 ) -> tuple[list[dict[str, Any]], bool]:
     records: list[dict[str, Any]] = []
     seen_consultation_ids: set[str] = set()
@@ -486,10 +488,15 @@ async def _load_consultation_records(
     if records:
         return records, False
 
-    if current_snapshot.get("children"):
+    # 只有明确处于演示仓库时才能补演示会诊。真实机构即使暂时没有儿童，
+    # 也必须保持空数据，不能被演示风险项污染。
+    if not allow_demo_fallback:
         return [], False
 
-    return [_consultation_record_from_demo_item(item) for item in build_demo_consultation_feed_items()], True
+    return [
+        _consultation_record_from_demo_item(item)
+        for item in build_demo_consultation_feed_items(demo_now)
+    ], True
 
 
 async def _load_weekly_report_records(
@@ -530,10 +537,13 @@ def _resolve_analysis_end_date(
     consultation_records: list[dict[str, Any]],
     weekly_report_records: list[dict[str, Any]],
 ) -> date:
-    candidates: list[date] = []
     explicit_today = _parse_date(today)
     if explicit_today is not None:
-        candidates.append(explicit_today)
+        # 调用方显式指定统计日时，它就是窗口边界。若再与快照写入时间取最大值，
+        # 补录或测试产生的较新时间会把业务记录全部挤出分析窗口。
+        return explicit_today
+
+    candidates: list[date] = []
 
     updated_at = _parse_date(current_snapshot.get("updatedAt"))
     if updated_at is not None:
@@ -1184,11 +1194,20 @@ async def build_demand_insight_engine(
     brain_provider: str = "unknown",
 ) -> dict[str, Any]:
     settings = get_settings()
+    explicit_today = _parse_date(today)
+    demo_now = (
+        datetime.combine(explicit_today, datetime.min.time(), tzinfo=timezone.utc)
+        if explicit_today is not None
+        else None
+    )
     current_repository = await ChildcareRepository.create(
         app_snapshot=app_snapshot,
         institution_id=institution_id,
         database_url=settings.resolved_mysql_url,
     )
+    if current_repository.fallback and demo_now is not None:
+        # 可复现的历史演示请求需要让基线数据与统计窗口使用同一日期。
+        current_repository.snapshot = build_demo_snapshot(demo_now)
     current_snapshot = current_repository.snapshot
 
     consultation_records, consultation_fallback_used = await _load_consultation_records(
@@ -1196,6 +1215,8 @@ async def build_demand_insight_engine(
         current_snapshot=current_snapshot,
         consultation_limit=consultation_limit,
         brain_provider=brain_provider,
+        allow_demo_fallback=current_repository.fallback,
+        demo_now=demo_now,
     )
     weekly_report_records = (
         await _load_weekly_report_records(repositories=repositories, limit=12)

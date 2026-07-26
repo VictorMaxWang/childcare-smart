@@ -13,6 +13,12 @@ import {
 } from "@/lib/server/brain-client";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import { ApiRouteError, apiError } from "@/lib/server/api-errors";
+import { AppDataService } from "@/lib/server/app-data-service";
+import { DefaultAppDataRepository } from "@/lib/server/app-data-repository";
+import {
+  hydrateHealthFileAttachments,
+  stripHealthFileBinaryPayload,
+} from "@/lib/server/health-attachment-ocr";
 import {
   buildServiceScopeClaim,
   getSessionScope,
@@ -164,30 +170,39 @@ async function enrichPayloadWithOcr(payload: HealthFileBridgeRequest) {
       });
 
       if (result.source === "provider_unavailable" && isBinaryHealthFile(file) && !existingText) {
-        throw new VivoProviderError("当前未接入真实 OCR provider，请输入文字材料或配置 vivo OCR 后再解析图片/PDF。", {
-          capability: "ocr",
-          status: "provider-unavailable",
-          raw: { fileName: file.name, mimeType: file.mimeType, providerStatus: result.output.providerStatus },
-        });
+        throw new ApiRouteError(
+          "provider_unavailable",
+          "当前没有可用的真实 OCR 服务，且材料中没有可提取文字。请稍后重试或补充文字说明。",
+          503
+        );
       }
 
-      return {
+      return stripHealthFileBinaryPayload({
         ...file,
         previewText: result.output.extractedText || existingText,
-      };
+      });
     })
   );
 
   const enrichedPayload = { ...payload, files };
   const extractedText = extractedTextParts.join("\n\n");
   if (!hasTextMaterial(enrichedPayload)) {
-    throw new VivoProviderError("未获得可解析文字材料；当前不会从图片或音频伪造识别结果。", {
-      capability: "ocr",
-      status: "provider-unavailable",
-      raw: { providerStatus, fileStatuses },
-    });
+    throw new ApiRouteError(
+      "provider_unavailable",
+      "材料中没有获得可解析文字，系统不会伪造图片或 PDF 的识别结果。",
+      503
+    );
   }
 
+  const providerName = usedRealProvider
+    ? effectiveOcrStatus.providerName
+    : "local-text-fallback";
+  const source =
+    providerName === "dashscope"
+      ? ("dashscope-ocr-provider" as const)
+      : providerName === "vivo"
+        ? ("vivo-ocr-provider" as const)
+        : ("local-text-fallback" as const);
   return {
     payload: enrichedPayload,
     providerStatus: {
@@ -196,6 +211,12 @@ async function enrichPayloadWithOcr(payload: HealthFileBridgeRequest) {
     },
     extractedText,
     usedRealProvider,
+    providerName,
+    model:
+      typeof effectiveOcrStatus.model === "string"
+        ? effectiveOcrStatus.model
+        : undefined,
+    source,
     warnings: Array.from(warnings),
   };
 }
@@ -213,17 +234,20 @@ function mergeOcrProvenance(
       ? bridgeResponse.providerStatus
       : {};
 
+  const analysisIsLive =
+    bridgeResponse.live && !bridgeResponse.fallback && !bridgeResponse.mock;
+
   return {
     ...bridgeResponse,
-    source: "vivo-ocr-provider",
-    state: "live",
+    source: enriched.source,
+    state: analysisIsLive ? "live" : bridgeResponse.state,
     configured: true,
-    live: true,
-    fallback: false,
-    mock: false,
-    liveReadyButNotVerified: false,
-    provider: "vivo",
-    model: bridgeResponse.model ?? "vivo-general-ocr",
+    live: analysisIsLive,
+    fallback: bridgeResponse.fallback || !analysisIsLive,
+    mock: bridgeResponse.mock,
+    liveReadyButNotVerified: bridgeResponse.liveReadyButNotVerified,
+    provider: bridgeResponse.provider,
+    model: bridgeResponse.model,
     extractedText: enriched.extractedText || bridgeResponse.extractedText,
     providerStatus: {
       ...providerStatus,
@@ -243,7 +267,7 @@ async function persistHealthFileBridgeWriteback(
     logSecurityEvent("warn", "ai.health_file_bridge.persistence_skipped", {
       reason: "missing_brain_base_url",
     });
-    return;
+    return false;
   }
 
   try {
@@ -259,9 +283,12 @@ async function persistHealthFileBridgeWriteback(
       logSecurityEvent("error", "ai.health_file_bridge.persist_failed", {
         status: response.status,
       });
+      return false;
     }
+    return true;
   } catch (error) {
     logSecurityEvent("error", "ai.health_file_bridge.persist_exception", { error });
+    return false;
   }
 }
 
@@ -275,17 +302,25 @@ async function buildAugmentedBridgeResponse(
 ) {
   const responseWithProvenance = mergeOcrProvenance(bridgeResponse, enriched);
   const bridgeWriteback = buildHealthFileBridgeWriteback(payload, responseWithProvenance);
-  const enhancedResponse: HealthFileBridgeResponse = {
+  let enhancedResponse: HealthFileBridgeResponse = {
     ...responseWithProvenance,
     bridgeWriteback,
   };
 
   if (payload.childId && serviceScope) {
-    await persistHealthFileBridgeWriteback(request, {
+    const persisted = await persistHealthFileBridgeWriteback(request, {
       childId: payload.childId,
       traceId: payload.traceId,
       bridgeWriteback,
     }, serviceScope);
+    if (!persisted) {
+      enhancedResponse = {
+        ...enhancedResponse,
+        warnings: mergeUnique(enhancedResponse.warnings, [
+          "解析结果已生成，但健康记忆写回暂未完成；请稍后重新解析或联系管理员检查 Brain 服务。",
+        ]),
+      };
+    }
   }
 
   return buildJsonResponse(enhancedResponse, init);
@@ -377,6 +412,38 @@ export async function POST(request: Request) {
     }
   }
   const serviceScope = buildServiceScopeClaim(sessionScope);
+  if (
+    authResult.session.user.accountKind !== "demo" &&
+    payload.childId &&
+    payload.files.some((file) => file.attachmentId)
+  ) {
+    try {
+      payload = {
+        ...payload,
+        files: await hydrateHealthFileAttachments(payload.files, {
+          childId: payload.childId,
+          service: new AppDataService(
+            authResult.session.user,
+            new DefaultAppDataRepository()
+          ),
+        }),
+      };
+    } catch (error) {
+      if (error instanceof ApiRouteError) {
+        return apiError(error.code, error.message, { status: error.status });
+      }
+      logSecurityEvent(
+        "error",
+        "ai.health_file_bridge.attachment_hydration_failed",
+        { error }
+      );
+      return apiError(
+        "provider_unavailable",
+        "健康材料原文件处理失败，请稍后重试。",
+        { status: 503 }
+      );
+    }
+  }
 
   let enriched: OcrEnrichment | null = null;
   let forwardedRequest = buildPayloadRequest(request, payload);
@@ -387,6 +454,9 @@ export async function POST(request: Request) {
       forwardedRequest = buildPayloadRequest(request, payload);
     }
   } catch (error) {
+    if (error instanceof ApiRouteError) {
+      return apiError(error.code, error.message, { status: error.status });
+    }
     if (error instanceof VivoProviderError) {
       return apiError("provider_unavailable", error.message, { status: 503 });
     }
@@ -407,6 +477,12 @@ export async function POST(request: Request) {
       enriched = await enrichPayloadWithOcr(payload);
       payload = enriched.payload;
     } catch (error) {
+      if (error instanceof ApiRouteError) {
+        return apiError(error.code, error.message, {
+          status: error.status,
+          headers,
+        });
+      }
       if (error instanceof VivoProviderError) {
         return apiError("provider_unavailable", error.message, { status: 503, headers });
       }
@@ -415,15 +491,16 @@ export async function POST(request: Request) {
   }
 
   const bridgeResponse = buildHealthFileBridgeResponse(enriched.payload, {
-    source: enriched.usedRealProvider ? "vivo-ocr-provider" : "local-text-fallback",
-    state: enriched.usedRealProvider ? "live" : "fallback",
+    source: enriched.source,
+    // OCR 的 live 只证明文字提取成功；本地规则分析仍应如实标记为 fallback。
+    state: "fallback",
     configured: enriched.usedRealProvider,
-    live: enriched.usedRealProvider,
-    fallback: !enriched.usedRealProvider,
+    live: false,
+    fallback: true,
     mock: false,
     liveReadyButNotVerified: false,
-    provider: enriched.usedRealProvider ? "vivo" : "local-text-fallback",
-    model: enriched.usedRealProvider ? "vivo-general-ocr" : "local-health-rule-parser",
+    provider: "local-health-rule-parser",
+    model: "local-health-rule-parser",
     extractedText: enriched.extractedText,
     providerStatus: enriched.providerStatus,
     warnings: enriched.warnings,

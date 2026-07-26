@@ -31,6 +31,20 @@ test.describe("FRONTEND-REPLICA-R08 responsive states", () => {
     }
   });
 
+  test("medium desktop keeps teacher primary tabs and overflow menu reachable", async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await loginAs(page, "u-teacher2", "/teacher");
+
+    const desktopNav = page.getByRole("navigation", { name: "桌面主导航" });
+    await expect(desktopNav).toBeVisible();
+    await expect(desktopNav.getByRole("link", { name: "教师工作台" })).toBeVisible();
+    await page.getByRole("button", { name: "打开导航菜单" }).click();
+    const overflowNav = page.getByRole("navigation", { name: "移动端主导航" });
+    await expect(overflowNav).toBeVisible();
+    await expect(overflowNav.getByRole("link", { name: "健康材料" })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+
   test("mobile role pages keep bottom nav, voice entry, and teacher voice entries separated", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
 

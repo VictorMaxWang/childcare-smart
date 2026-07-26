@@ -47,8 +47,11 @@ test("D08 health material parse and consultation persist across teacher director
     });
     expect(parseResponse.status()).toBe(200);
     const parseBody = await parseResponse.json();
-    expect(parseBody.source).toMatch(/fallback|vivo-ocr-provider|local/i);
-    if (parseBody.source === "vivo-ocr-provider") {
+    expect(parseBody.source).toMatch(/fallback|(?:vivo|dashscope)-ocr-provider|local/i);
+    if (
+      parseBody.source === "vivo-ocr-provider" ||
+      parseBody.source === "dashscope-ocr-provider"
+    ) {
       expect(parseBody.fallback).toBe(false);
       expect(parseBody.providerStatus?.ocr?.status).toBe("ready");
       expect(parseBody.providerStatus?.ocr?.isRealProvider).toBe(true);
@@ -79,7 +82,9 @@ test("D08 health material parse and consultation persist across teacher director
     } else {
       expect(binaryOnly.status()).toBe(200);
       const body = await binaryOnly.json();
-      expect(body.source).toBe("vivo-ocr-provider");
+      expect(["vivo-ocr-provider", "dashscope-ocr-provider"]).toContain(
+        body.source
+      );
       expect(body.fallback).toBe(false);
     }
 
@@ -96,12 +101,28 @@ test("D08 health material parse and consultation persist across teacher director
           filename,
           fileType: "text/plain",
           description: materialToken,
-          parseResult: parseBody,
         },
       }),
       201
     );
-    expect(material).toMatchObject({ childId, filename, parseStatus: "completed" });
+    expect(material).toMatchObject({ childId, filename, parseStatus: "pending" });
+    const parsedMaterial = await expectOk<{
+      materialId: string;
+      parseStatus: string;
+      parseResult?: unknown;
+    }>(
+      await teacher.post(`/api/health-materials/${material.materialId}/parse`, {
+        data: {
+          parseStatus: "completed",
+          parseResult: parseBody,
+        },
+      })
+    );
+    expect(parsedMaterial).toMatchObject({
+      materialId: material.materialId,
+      parseStatus: "completed",
+    });
+    expect(JSON.stringify(parsedMaterial.parseResult)).toContain(materialToken);
 
     const consultation = await expectOk<{
       consultationId: string;

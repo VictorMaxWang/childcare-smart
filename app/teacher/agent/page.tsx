@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   AlertCircle,
@@ -77,6 +77,7 @@ import {
   isTeacherDraftSourceType,
   readTeacherDraftConfirmationState,
 } from "@/lib/mobile/teacher-draft-records";
+import { persistConfirmedTeacherDraftRecord } from "@/lib/mobile/teacher-draft-canonical-record";
 import {
   buildMockVoiceDraft,
   createTeacherVoiceDraftPayload,
@@ -87,17 +88,19 @@ import {
   formatHomeSchoolTime,
 } from "@/lib/communication/home-school";
 import {
-  createAttachment as createApiAttachment,
   listAttachments as listApiAttachments,
   listFeedback as listApiFeedback,
   listMessages as listApiMessages,
   replyMessage as replyApiMessage,
+  updateConversationStatus as updateApiConversationStatus,
   type ApiFeedback,
   type ApiMessage,
 } from "@/lib/api/communication";
+import { persistAttachmentDrafts } from "@/lib/api/attachment-persistence";
 import { updateAssignmentStatus as updateApiAssignmentStatus } from "@/lib/api/assignments";
 import type { ApiAttachment } from "@/lib/api/types";
 import { normalizeGuardianFeedbackCollection } from "@/lib/feedback/normalize";
+import { compareFeedbackRecency, feedbackRecencyTimestamp } from "@/lib/feedback/recency";
 import { useApp } from "@/lib/store";
 
 const ACTION_LABELS: Record<TeacherAgentWorkflowType, string> = {
@@ -142,6 +145,22 @@ function reminderSourceLabel(item: ReminderItem) {
 
 function reminderAssigneeRole(item: ReminderItem) {
   return item.assigneeRole ?? item.targetRole;
+}
+
+function compareTeacherReminders(left: ReminderItem, right: ReminderItem) {
+  const priority = (item: ReminderItem) => {
+    const active = item.status !== "done";
+    if (item.sourceType === "admin_dispatch" && active) return 3;
+    if (active) return 2;
+    if (item.sourceType === "admin_dispatch") return 1;
+    return 0;
+  };
+  const priorityDiff = priority(right) - priority(left);
+  if (priorityDiff !== 0) return priorityDiff;
+
+  const timestamp = (item: ReminderItem) =>
+    Date.parse(item.createdAt ?? item.updatedAt ?? item.scheduledAt) || 0;
+  return timestamp(right) - timestamp(left);
 }
 
 type TeacherAgentRunDiagnostics = {
@@ -216,22 +235,17 @@ function isWorkflow(value: string | null): value is TeacherAgentWorkflowType {
 }
 
 function feedbackTime(feedback: ApiFeedback) {
-  const record = feedback as ApiFeedback & {
-    updatedAt?: string;
-    submittedAt?: string;
-    createdAt?: string;
-    date?: string;
-  };
-  return record.updatedAt ?? record.submittedAt ?? record.createdAt ?? record.date ?? "";
+  return feedbackRecencyTimestamp(feedback);
 }
 
 function latestFeedbackForChild(feedbacks: ApiFeedback[], childId: string) {
   return feedbacks
     .filter((feedback) => feedback.childId === childId)
-    .sort((left, right) => feedbackTime(right).localeCompare(feedbackTime(left)))[0];
+    .sort(compareFeedbackRecency)[0];
 }
 
 export default function TeacherAgentPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const {
     currentUser,
@@ -246,10 +260,6 @@ export default function TeacherAgentPage() {
     mobileDrafts,
     reminders,
     saveMobileDraft,
-    markMobileDraftSyncStatus,
-    persistAppSnapshotNow,
-    replyHomeSchoolMessage,
-    updateHomeSchoolConversationStatus,
     upsertReminder,
     reloadAppSnapshotFromApi,
   } = useApp();
@@ -269,6 +279,7 @@ export default function TeacherAgentPage() {
   const queryDraftHandledRef = useRef<string | null>(null);
   const sourceDraftChildHandledRef = useRef<string | null>(null);
   const manualSelectedChildRef = useRef(false);
+  const childSelectionOpenRef = useRef(false);
   const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
   const [selectedSourceDraftId, setSelectedSourceDraftId] = useState<string | null>(
     null
@@ -278,6 +289,8 @@ export default function TeacherAgentPage() {
   const [expandedCommunicationId, setExpandedCommunicationId] = useState<string | null>(null);
   const [communicationDrafts, setCommunicationDrafts] = useState<Record<string, string>>({});
   const [communicationAttachmentDrafts, setCommunicationAttachmentDrafts] = useState<Record<string, AttachmentDraft[]>>({});
+  const [pendingCommunicationUploads, setPendingCommunicationUploads] =
+    useState<Record<string, string>>({});
   const [apiMessages, setApiMessages] = useState<ApiMessage[]>([]);
   const [apiFeedbacks, setApiFeedbacks] = useState<ApiFeedback[]>([]);
   const [apiAttachments, setApiAttachments] = useState<ApiAttachment[]>([]);
@@ -447,11 +460,14 @@ export default function TeacherAgentPage() {
   );
   const teacherReminders = useMemo(
     () =>
-      reminders.filter(
-        (item) =>
-          item.targetRole === "teacher" &&
-          (!activeChildContext || item.childId === activeChildContext.child.id)
-      ),
+      reminders
+        .filter(
+          (item) =>
+            item.targetRole === "teacher" &&
+            (!activeChildContext || item.childId === activeChildContext.child.id)
+        )
+        // 合并本地 seed 与服务端增量时数组顺序并不等于业务优先级，待处理派单必须优先露出。
+        .sort(compareTeacherReminders),
     [activeChildContext, reminders]
   );
 
@@ -482,6 +498,10 @@ export default function TeacherAgentPage() {
       })
     );
   }, [activeChildContext, saveMobileDraft]);
+
+  const openVoiceAssistant = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("smartchildcare:open-voice-orb"));
+  }, []);
 
   const createOcrDraft = useCallback(() => {
     if (!activeChildContext) return;
@@ -640,16 +660,38 @@ export default function TeacherAgentPage() {
       createTeacherDraftPersistAdapter({
         drafts: mobileDrafts,
         saveDraft: saveMobileDraft,
-        persistNow: (nextDrafts) =>
-          persistAppSnapshotNow({
-            mobileDrafts: nextDrafts,
-          }),
+        persistRecordAction: async ({ action, record, sourceDraftId }) => {
+          const persistedAt = new Date().toISOString();
+          if (action !== "confirm") {
+            return {
+              status: "local_only",
+              message:
+                action === "edit"
+                  ? "草稿编辑已保留，确认后写入业务记录。"
+                  : "草稿已丢弃，不会写入业务记录。",
+              persistedAt,
+            };
+          }
+
+          const saved = await persistConfirmedTeacherDraftRecord(record, {
+            sourceDraftId,
+          });
+          const reloadResult = await reloadAppSnapshotFromApi();
+          return {
+            status: "saved",
+            message:
+              reloadResult.status === "failed"
+                ? `已写入 ${saved.recordType} 记录，页面数据可手动刷新。`
+                : `已写入 ${saved.recordType} 业务记录。`,
+            persistedAt,
+          };
+        },
         structuredPayloadOverrides: draftPayloadOverrides,
       }),
     [
       draftPayloadOverrides,
       mobileDrafts,
-      persistAppSnapshotNow,
+      reloadAppSnapshotFromApi,
       saveMobileDraft,
     ]
   );
@@ -794,7 +836,8 @@ export default function TeacherAgentPage() {
 
   const handleSelectChild = useCallback(
     (nextChildId: string) => {
-      manualSelectedChildRef.current = true;
+      // Radix 受控值变化也可能触发回调；只有用户实际打开选择器才锁定手工目标。
+      manualSelectedChildRef.current = childSelectionOpenRef.current;
       setSelectedChildId(nextChildId);
       setSelectedSourceDraftId((current) => {
         if (!current) return null;
@@ -818,7 +861,11 @@ export default function TeacherAgentPage() {
     [availableChildIds]
   );
 
-  const runWorkflow = useCallback(async (workflow: TeacherAgentWorkflowType, explicitTargetChildId?: string) => {
+  const runWorkflow = useCallback(async (
+    workflow: TeacherAgentWorkflowType,
+    explicitTargetChildId?: string,
+    question?: string
+  ) => {
     let workflowFeedbacks = mergedGuardianFeedbacks;
     try {
       const latestApiFeedbacks = await listApiFeedback();
@@ -872,6 +919,7 @@ export default function TeacherAgentPage() {
       workflow,
       scope: nextScope,
       targetChildId,
+      question: question?.trim().slice(0, 500) || undefined,
       currentUser: {
         name: currentUser.name,
         className: currentUser.className,
@@ -934,15 +982,6 @@ export default function TeacherAgentPage() {
       }
 
       if (resultChildId) {
-        teacherRoleDrafts
-          .filter(
-            (draft) =>
-              draft.childId === resultChildId &&
-              draft.syncStatus === "local_pending" &&
-              !isLocalOnlyMobileDraft(draft)
-          )
-          .forEach((draft) => markMobileDraftSyncStatus(draft.draftId, "synced"));
-
         buildReminderItems({
           childId: resultChildId,
           targetRole: "teacher",
@@ -994,9 +1033,7 @@ export default function TeacherAgentPage() {
     presentChildren,
     seededQueryChildId,
     selectedChildId,
-    teacherRoleDrafts,
     visibleChildren,
-    markMobileDraftSyncStatus,
     upsertReminder,
   ]);
 
@@ -1037,7 +1074,11 @@ export default function TeacherAgentPage() {
         window.location.href = "/teacher/high-risk-consultation";
         return;
       }
-      void runWorkflow(workflowFromAssistantPrompt(prompt), childIdFromAssistantPrompt(prompt));
+      void runWorkflow(
+        workflowFromAssistantPrompt(prompt),
+        childIdFromAssistantPrompt(prompt),
+        prompt
+      );
     },
     [childIdFromAssistantPrompt, runWorkflow, workflowFromAssistantPrompt]
   );
@@ -1045,7 +1086,11 @@ export default function TeacherAgentPage() {
   const submitAssistantQuestion = useCallback(() => {
     const prompt = assistantQuestion.trim();
     if (!prompt || isLoading) return;
-    void runWorkflow(workflowFromAssistantPrompt(prompt), childIdFromAssistantPrompt(prompt));
+    void runWorkflow(
+      workflowFromAssistantPrompt(prompt),
+      childIdFromAssistantPrompt(prompt),
+      prompt
+    );
     setAssistantQuestion("");
   }, [assistantQuestion, childIdFromAssistantPrompt, isLoading, runWorkflow, workflowFromAssistantPrompt]);
 
@@ -1130,7 +1175,9 @@ export default function TeacherAgentPage() {
         <EmptyState
           icon={<BrainCircuit className="h-6 w-6" />}
           title="当前没有可用于教师 AI 助手的班级数据"
-          description="请先从教师首页确认当前班级是否已加载。"
+          description="请先在教师首页接受园长邀请码并加入班级；班级有幼儿档案后即可使用记录与分析。"
+          actionLabel="返回教师首页绑定"
+          onAction={() => router.push("/teacher")}
         />
       </div>
     );
@@ -1143,7 +1190,7 @@ export default function TeacherAgentPage() {
     conversations,
     children: visibleChildren,
   });
-  const allCommunicationItems: CommunicationItem[] = homeSchoolThreads.map((thread) => {
+  const threadCommunicationItems: CommunicationItem[] = homeSchoolThreads.map((thread) => {
     const latestMessage = thread.latestMessage;
     const latestParentMessage = thread.latestParentMessage ?? latestMessage;
     const latestTeacherMessage = thread.latestTeacherMessage;
@@ -1174,6 +1221,44 @@ export default function TeacherAgentPage() {
       feedbackId: latestFeedback?.feedbackId,
     };
   });
+  const threadChildIds = new Set(
+    threadCommunicationItems.map((item) => item.childId)
+  );
+  const feedbackOnlyItems: CommunicationItem[] = visibleChildren
+    .map((child) => ({
+      child,
+      feedback: latestFeedbackForChild(apiFeedbacks, child.id),
+    }))
+    .filter(
+      (
+        item
+      ): item is {
+        child: (typeof visibleChildren)[number];
+        feedback: ApiFeedback;
+      } => Boolean(item.feedback) && !threadChildIds.has(item.child.id)
+    )
+    .map(({ child, feedback }) => ({
+      id: `feedback-${feedback.feedbackId}`,
+      conversationId: "",
+      childId: child.id,
+      senderName: "家长反馈",
+      childLabel: `${child.name} · ${child.className || classContext.className}`,
+      content:
+        feedback.notes ||
+        feedback.content ||
+        feedback.freeNote ||
+        "家长已提交结构化反馈，请查看详情。",
+      status: "已处理",
+      timeLabel: formatHomeSchoolTime(feedbackTime(feedback)) || "刚刚",
+      attention: false,
+      avatar: "👪",
+      threadMessages: [],
+      feedbackId: feedback.feedbackId,
+    }));
+  const allCommunicationItems = [
+    ...threadCommunicationItems,
+    ...feedbackOnlyItems,
+  ];
   const pendingCommunicationItems = allCommunicationItems.filter((item) => item.status === "待回复");
   const handledCommunicationItems = allCommunicationItems.filter((item) => item.status !== "待回复");
   const mineCommunicationItems = allCommunicationItems.filter((item) =>
@@ -1202,14 +1287,19 @@ export default function TeacherAgentPage() {
         `您好，${item.content} 我会在园内继续观察，并在离园前同步今天的重点情况。`,
     }));
   };
-  const markCommunicationHandled = (item: CommunicationItem) => {
-    const result = updateHomeSchoolConversationStatus(item.conversationId, "closed");
-    if (result.status === "failed") {
-      setError(`沟通处理状态保存失败：${result.error ?? result.message}`);
-      return;
+  const markCommunicationHandled = async (item: CommunicationItem) => {
+    try {
+      await updateApiConversationStatus(item.conversationId, "closed");
+      setError(null);
+      setCommunicationTab("history");
+      await refreshE04CommunicationData();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? `沟通处理状态保存失败：${requestError.message}`
+          : "沟通处理状态保存失败。"
+      );
     }
-    setError(null);
-    setCommunicationTab("history");
   };
   const sendCommunicationReply = async (item: CommunicationItem) => {
     const draft = communicationDrafts[item.id]?.trim();
@@ -1224,25 +1314,41 @@ export default function TeacherAgentPage() {
       return;
     }
     try {
-      const reply = await replyApiMessage(baseMessageId, {
-        conversationId: item.conversationId,
-        content: draft || "语音/附件回复",
-      });
-      await Promise.all(
-        attachmentDrafts.map((attachment) =>
-          createApiAttachment({
-            childId: item.childId,
-            relatedType: "message",
-            relatedId: reply.messageId,
-            kind: attachment.kind,
-            fileName: attachment.fileName,
-            mimeType: attachment.mimeType,
-            byteSize: attachment.byteSize,
-            localPreviewUrl: attachment.localPreviewUrl,
-            durationMs: attachment.durationMs,
+      const pendingReplyId = pendingCommunicationUploads[item.id];
+      const replyId =
+        pendingReplyId ??
+        (
+          await replyApiMessage(baseMessageId, {
+            conversationId: item.conversationId,
+            content: draft || "语音/附件回复",
           })
-        )
-      );
+        ).messageId;
+      if (attachmentDrafts.length > 0) {
+        setPendingCommunicationUploads((current) => ({
+          ...current,
+          [item.id]: replyId,
+        }));
+        const existingAttachments = pendingReplyId
+          ? await listApiAttachments({
+              childId: item.childId,
+              relatedType: "message",
+              relatedId: replyId,
+            })
+          : [];
+        await persistAttachmentDrafts({
+          drafts: attachmentDrafts,
+          accountKind: currentUser.accountKind,
+          childId: item.childId,
+          relatedType: "message",
+          relatedId: replyId,
+          existingAttachments,
+        });
+      }
+      setPendingCommunicationUploads((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
       setError(null);
       setCommunicationDrafts((prev) => ({ ...prev, [item.id]: "" }));
       setCommunicationAttachmentDrafts((prev) => ({ ...prev, [item.id]: [] }));
@@ -1250,33 +1356,14 @@ export default function TeacherAgentPage() {
       setCommunicationTab("mine");
       await refreshE04CommunicationData();
     } catch (requestError) {
-      setError(requestError instanceof Error ? `E01 回复发送失败：${requestError.message}` : "E01 回复发送失败。");
+      setError(
+        requestError instanceof Error
+          ? `回复可能已发送，但附件尚未完成：${requestError.message}。再次点击可继续上传，不会重复回复。`
+          : "回复可能已发送，但附件尚未完成；再次点击可继续上传。"
+      );
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const sendCommunicationReplyLegacy = (item: CommunicationItem) => {
-    const draft = communicationDrafts[item.id]?.trim();
-    if (!draft) {
-      prepareCommunicationReply(item);
-      return;
-    }
-
-    const result = replyHomeSchoolMessage({
-      messageId: item.messageId,
-      conversationId: item.conversationId,
-      content: draft,
-    });
-    if (result.status === "failed") {
-      setError(`家园回复发送失败：${result.error ?? result.message}`);
-      return;
-    }
-
-    setError(null);
-    setCommunicationDrafts((prev) => ({ ...prev, [item.id]: "" }));
-    setExpandedCommunicationId(null);
-    setCommunicationTab("mine");
-  };
   const runCommunicationSuggestion = (item: CommunicationItem) => {
     setSelectedChildId(item.childId);
     setExpandedCommunicationId(item.id);
@@ -1376,7 +1463,7 @@ export default function TeacherAgentPage() {
             <RoleAssistantWorkspace
               roleLabel="教师端"
               title="教师 AI 助手"
-              description="班级待办总结、今日跟进行动和家长沟通建议统一走服务端教师 agent，demo 环境会稳定返回可展示结果。"
+              description="班级待办总结、今日跟进行动和家长沟通建议统一走服务端教师 agent；正常账号调用真实 provider，失败时会明确提示。"
               prompts={TEACHER_ASSISTANT_PROMPTS}
               value={assistantQuestion}
               onValueChange={setAssistantQuestion}
@@ -1580,7 +1667,7 @@ export default function TeacherAgentPage() {
                                   [item.id]: next,
                                 }))
                               }
-                              accept="image/*,audio/*,.pdf,.doc,.docx,.txt"
+                              accept="image/jpeg,image/png,image/webp,audio/mpeg,audio/mp4,audio/wav,audio/webm,application/pdf"
                             />
                           </div>
                           <div className="mt-3 flex justify-end">
@@ -1596,10 +1683,25 @@ export default function TeacherAgentPage() {
                           type="button"
                           variant="outline"
                           className="h-12 rounded-full border-violet-100 text-base font-bold text-violet-600"
-                          onClick={() => (item.status === "待回复" ? prepareCommunicationReply(item) : setExpandedCommunicationId((prev) => (prev === item.id ? null : item.id)))}
+                          onClick={() => {
+                            if (!item.messageId && item.threadMessages.length === 0 && item.feedbackId) {
+                              setFeedbackDetailId(item.feedbackId);
+                              setFeedbackDetailOpen(true);
+                              return;
+                            }
+                            if (item.status === "待回复") {
+                              prepareCommunicationReply(item);
+                              return;
+                            }
+                            setExpandedCommunicationId((prev) => (prev === item.id ? null : item.id));
+                          }}
                         >
                           <MessageSquareText className="mr-2 h-5 w-5" />
-                          {item.status === "待回复" ? "回复家长" : "查看记录"}
+                          {!item.messageId && item.threadMessages.length === 0
+                            ? "查看反馈"
+                            : item.status === "待回复"
+                              ? "回复家长"
+                              : "查看记录"}
                         </Button>
                         <Button type="button" variant="outline" className="h-12 rounded-full border-blue-100 bg-blue-50/40 text-base font-bold text-blue-500" onClick={() => runCommunicationSuggestion(item)} disabled={isLoading}>
                           <Lightbulb className="mr-2 h-5 w-5" />
@@ -1625,7 +1727,11 @@ export default function TeacherAgentPage() {
                           variant="outline"
                           size="icon"
                           className="h-12 w-12 rounded-full"
-                          onClick={() => (item.status === "待回复" ? markCommunicationHandled(item) : setExpandedCommunicationId((prev) => (prev === item.id ? null : item.id)))}
+                          onClick={() =>
+                            item.status === "待回复"
+                              ? void markCommunicationHandled(item)
+                              : setExpandedCommunicationId((prev) => (prev === item.id ? null : item.id))
+                          }
                           aria-label={item.status === "待回复" ? "标记已处理" : "展开沟通记录"}
                         >
                           <ChevronDown className="h-5 w-5" />
@@ -1983,7 +2089,7 @@ export default function TeacherAgentPage() {
                             </div>
                           ))}
                         </div>
-                        <Button type="button" variant="premium" className="mt-4 w-full rounded-2xl" onClick={() => void runWorkflow("follow-up")} disabled={isLoading}>一键派发给辅助</Button>
+                        <Button type="button" variant="premium" className="mt-4 w-full rounded-2xl" onClick={() => void runWorkflow("follow-up")} disabled={isLoading}>生成派发建议</Button>
                       </div>
                     </div>
                   </div>
@@ -1997,7 +2103,7 @@ export default function TeacherAgentPage() {
                           ["成长记录", ClipboardList, "/growth"],
                           ["晨检记录", CheckCircle2, "/health"],
                           ["饮食记录", FileText, "/diet"],
-                          ["消毒记录", Sparkles, "/teacher"],
+                          ["健康材料", Sparkles, "/teacher/health-file-bridge"],
                           ["家长沟通", MessageSquareText, "/teacher/agent?action=communication"],
                         ].map(([label, Icon, href]) => {
                           const QuickIcon = Icon as typeof BellRing;
@@ -2020,17 +2126,25 @@ export default function TeacherAgentPage() {
                       </div>
                       <div className="mt-3 space-y-2">
                         {["今日体温异常的幼儿有哪些？", "最近 7 天饮食偏少的幼儿是谁？", "本周未补录成长记录的幼儿有哪些？"].map((question) => (
-                          <button key={question} type="button" className="w-full rounded-2xl border border-slate-100 bg-white px-3 py-2 text-left text-xs leading-5 text-slate-500" onClick={() => void runWorkflow("follow-up")} disabled={isLoading}>
+                          <button key={question} type="button" className="w-full rounded-2xl border border-slate-100 bg-white px-3 py-2 text-left text-xs leading-5 text-slate-500" onClick={() => handleAssistantPrompt(question)} disabled={isLoading}>
                             {question}
                           </button>
                         ))}
                       </div>
-                      <div className="mt-3 flex items-center gap-2 rounded-2xl border border-indigo-100 bg-white px-3 py-2 text-xs text-slate-400">
-                        请输入您的问题...
-                        <Button type="button" size="icon" variant="premium" className="ml-auto h-9 w-9 rounded-xl" onClick={() => void runWorkflow("follow-up")} disabled={isLoading}>
+                      <button
+                        type="button"
+                        className="mt-3 flex w-full items-center gap-2 rounded-2xl border border-indigo-100 bg-white px-3 py-2 text-left text-xs text-slate-500 transition hover:bg-indigo-50"
+                        onClick={() => {
+                          document
+                            .querySelector<HTMLTextAreaElement>('[data-testid="r04-assistant-input"]')
+                            ?.focus();
+                        }}
+                      >
+                        在上方输入自定义问题
+                        <span className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white">
                           <Send className="h-4 w-4" />
-                        </Button>
-                      </div>
+                        </span>
+                      </button>
                     </div>
                   </aside>
                 </div>
@@ -2117,7 +2231,13 @@ export default function TeacherAgentPage() {
                 {scope === "child" ? (
                   <div className="max-w-md">
                     <p className="mb-2 text-sm font-semibold text-slate-900">选择目标儿童</p>
-                    <Select value={activeChildId} onValueChange={handleSelectChild}>
+                    <Select
+                      value={activeChildId}
+                      onOpenChange={(open) => {
+                        childSelectionOpenRef.current = open;
+                      }}
+                      onValueChange={handleSelectChild}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="选择目标儿童" />
                       </SelectTrigger>
@@ -2174,34 +2294,66 @@ export default function TeacherAgentPage() {
               </div>
             </SectionCard>
 
-            <SectionCard title="移动端协同入口" description="教师可先用语音速记或 OCR 形成本地草稿，工作流完成后再同步。">
+            <SectionCard
+              title="移动端协同入口"
+              description={
+                currentUser.accountKind === "demo"
+                  ? "演示账号可创建本地样例草稿；样例不会冒充真实识别结果。"
+                  : "语音速记调用真实识别链路，健康材料解析会保存结构化结果和受保护原件。"
+              }
+            >
               <div className="space-y-4">
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-full"
-                    onClick={createVoiceDraft}
-                    disabled={!activeChildContext}
-                    title="演示样例草稿，不代表真实语音识别已完成"
-                  >
-                    <Mic className="mr-2 h-4 w-4" />
-                    演示语音草稿
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-full"
-                    onClick={createOcrDraft}
-                    disabled={!activeChildContext}
-                    title="演示样例草稿，不代表真实 OCR 识别已完成"
-                  >
-                    <ScanSearch className="mr-2 h-4 w-4" />
-                    演示 OCR 草稿
-                  </Button>
+                  {currentUser.accountKind === "demo" ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={createVoiceDraft}
+                        disabled={!activeChildContext}
+                        title="演示样例草稿，不代表真实语音识别已完成"
+                      >
+                        <Mic className="mr-2 h-4 w-4" />
+                        演示语音草稿
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={createOcrDraft}
+                        disabled={!activeChildContext}
+                        title="演示样例草稿，不代表真实 OCR 识别已完成"
+                      >
+                        <ScanSearch className="mr-2 h-4 w-4" />
+                        演示 OCR 草稿
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="premium"
+                        className="rounded-full"
+                        onClick={openVoiceAssistant}
+                        disabled={!activeChildContext}
+                      >
+                        <Mic className="mr-2 h-4 w-4" />
+                        开始语音速记
+                      </Button>
+                      <Button asChild type="button" variant="outline" className="rounded-full">
+                        <Link href="/teacher/health-file-bridge">
+                          <ScanSearch className="mr-2 h-4 w-4" />
+                          上传材料解析
+                        </Link>
+                      </Button>
+                    </>
+                  )}
                 </div>
                 <p className="text-xs leading-5 text-slate-500">
-                  语音和 OCR 入口仅生成演示样例草稿，不展示为真实识别成功。
+                  {currentUser.accountKind === "demo"
+                    ? "语音和 OCR 样例只用于验证草稿确认流程。"
+                    : "识别结果会先进入可编辑草稿，确认后再写入当前机构数据。"}
                 </p>
                 <div className="grid gap-3 lg:grid-cols-2">
                   {sortedTeacherDrafts.length > 0 ? (
@@ -2329,7 +2481,11 @@ export default function TeacherAgentPage() {
                 seed={draftConfirmationSource?.seed ?? null}
                 persistAdapter={teacherDraftPersistAdapter}
                 initialExpandedRecordId={draftConfirmationSource?.initialExpandedRecordId}
-                mockPresets={draftConfirmationSource ? [] : mockDraftPresets}
+                mockPresets={
+                  draftConfirmationSource || currentUser.accountKind !== "demo"
+                    ? []
+                    : mockDraftPresets
+                }
                 onCreateMockDraft={handleCreateMockUnderstandingDraft}
               />
             </SectionCard>
@@ -2462,7 +2618,7 @@ export default function TeacherAgentPage() {
               </div>
             </SectionCard>
 
-            <SectionCard title="推荐展示顺序" description="录屏时可以直接沿这条顺序展示。">
+            <SectionCard title="推荐处理顺序" description="按风险、跟进和班级汇总依次完成今日工作。">
               <ol className="space-y-3 text-sm text-slate-600">
                 <li className="flex items-center gap-3">
                   <Sparkles className="h-4 w-4 text-amber-500" />
@@ -2479,7 +2635,7 @@ export default function TeacherAgentPage() {
               </ol>
             </SectionCard>
 
-            <SectionCard title="当前结果摘要" description="方便演示时在侧边快速回看。">
+            <SectionCard title="当前结果摘要" description="方便在侧边快速回看本次工作流结果。">
               {currentResult ? (
                 <div className="rounded-lg border border-slate-100 bg-white p-4 text-sm leading-6 text-slate-600">
                   {buildTeacherAgentResultSummary(currentResult)}

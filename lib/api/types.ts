@@ -60,7 +60,9 @@ export type AttachmentRelatedType =
   | "health-material"
   | "consultation"
   | "weekly-report"
-  | "storybook";
+  | "storybook"
+  | "meal"
+  | "growth";
 
 export type AttachmentKind = "image" | "audio" | "pdf" | "other";
 export type FeedbackStatus = "open" | "in-progress" | "resolved" | "archived";
@@ -372,6 +374,9 @@ export interface ApiAttachment {
   storageMode: StorageObjectMode;
   uploadStatus: "metadata_saved" | "uploaded" | "failed";
   localPreviewUrl?: string;
+  storageProvider?: "vercel_blob";
+  storageKey?: string;
+  storageEtag?: string;
   downloadUrl?: string;
   metadataOnly?: boolean;
   storageObject?: StorageObject;

@@ -21,6 +21,8 @@ const STORAGE_ENV_KEYS = [
   "OBJECT_STORAGE_TOKEN",
   "OBJECT_STORAGE_CONNECTION_STRING",
   "BLOB_READ_WRITE_TOKEN",
+  "VERCEL_OIDC_TOKEN",
+  "BLOB_STORE_ID",
 ] as const;
 
 function withNoObjectStorageEnv(run: () => void) {
@@ -79,6 +81,50 @@ test("absent object storage env never exposes object_storage or uploaded attachm
     assert.equal(decorated.storageObject?.storageMode, "metadata_only");
     assert.equal(decorated.storageObject?.url, null);
   });
+});
+
+test("configured private Vercel Blob exposes only the scoped app content URL", () => {
+  const previousToken = process.env.BLOB_READ_WRITE_TOKEN;
+  const previousProvider = process.env.OBJECT_STORAGE_PROVIDER;
+  try {
+    process.env.BLOB_READ_WRITE_TOKEN = "test-private-blob-token";
+    process.env.OBJECT_STORAGE_PROVIDER = "vercel-blob";
+    const decorated = decorateAttachmentStorage(
+      attachment({
+        storageProvider: "vercel_blob",
+        storageKey:
+          "smartchildcare/private-media/v1/institution/child/object.png",
+      }),
+      demoUser("u-parent")
+    );
+
+    assert.equal(decorated.storageMode, "object_storage");
+    assert.equal(decorated.uploadStatus, "uploaded");
+    assert.equal(decorated.metadataOnly, false);
+    assert.equal(
+      decorated.storageObject?.url,
+      "/api/attachments/att-storage-contract/content"
+    );
+    assert.equal(
+      decorated.downloadUrl,
+      "/api/attachments/att-storage-contract/content"
+    );
+    assert.doesNotMatch(
+      decorated.storageObject?.url ?? "",
+      /blob\.vercel-storage/u
+    );
+  } finally {
+    if (typeof previousToken === "string") {
+      process.env.BLOB_READ_WRITE_TOKEN = previousToken;
+    } else {
+      delete process.env.BLOB_READ_WRITE_TOKEN;
+    }
+    if (typeof previousProvider === "string") {
+      process.env.OBJECT_STORAGE_PROVIDER = previousProvider;
+    } else {
+      delete process.env.OBJECT_STORAGE_PROVIDER;
+    }
+  }
 });
 
 test("local demo data URLs and static storybook assets are preview-capable but not object storage", () => {

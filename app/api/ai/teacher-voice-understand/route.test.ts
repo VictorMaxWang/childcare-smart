@@ -64,3 +64,41 @@ test("teacher voice understand maps a provider audio rejection to a redacted 503
   assert.equal((body.status as Record<string, unknown>).status, "unsupported");
   assert.doesNotMatch(JSON.stringify(body), /sensitive upstream diagnostic/);
 });
+
+test("teacher voice understand rejects oversized audio before invoking ASR", async () => {
+  let providerCalls = 0;
+  const provider = providerThatRejectsBrowserAudio();
+  const formData = new FormData();
+  formData.set(
+    "audio",
+    new File([new Uint8Array(4 * 1024 * 1024 + 1)], "too-large.wav", {
+      type: "audio/wav",
+    })
+  );
+
+  const response = await handleTeacherVoiceUnderstandRequest(
+    new Request("http://localhost:3000/api/ai/teacher-voice-understand", {
+      method: "POST",
+      body: formData,
+    }),
+    {
+      async authorize() {
+        return null;
+      },
+      resolveProvider() {
+        return {
+          ...provider,
+          async transcribe(input) {
+            providerCalls += 1;
+            return provider.transcribe(input);
+          },
+        };
+      },
+    }
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 400);
+  assert.equal(body.code, "invalid_request");
+  assert.equal(providerCalls, 0);
+});

@@ -916,6 +916,7 @@ export default function DirectorDashboardReplica({
                   <article
                     key={feedback.feedbackId}
                     data-testid="admin-family-feedback-writeback"
+                    data-feedback-id={feedback.feedbackId}
                     className="rounded-[15px] border border-[#DCE5FF] bg-white p-4 shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-3">

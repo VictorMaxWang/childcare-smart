@@ -30,7 +30,6 @@ import { writeJsonStorageSafely, type StorageWriteFailure } from "@/lib/persiste
 import { materializeTasksFromLegacy, pickActiveTask } from "@/lib/tasks/task-model";
 import type { CanonicalTask, TaskOwnerRole } from "@/lib/tasks/types";
 import { buildDemoConsultationResults } from "@/lib/demo/demo-consultations";
-import { filterRemotePersistableMobileDrafts } from "@/lib/mobile/local-draft-cache";
 import {
   buildDemoNamespaceForInstitution,
   buildLegacyDemoUserNamespace,
@@ -676,16 +675,6 @@ function writeScopedSnapshot(namespace: string, snapshot: AppStateSnapshot) {
 
 function buildScopedStorageKey(namespace: string, key: keyof typeof STORAGE_KEYS) {
   return `childcare.${namespace}.${STORAGE_KEYS[key]}`;
-}
-
-function buildRemotePersistableSnapshot(snapshot: AppStateSnapshot): AppStateSnapshot {
-  const mobileDrafts = filterRemotePersistableMobileDrafts(snapshot.mobileDrafts);
-  return mobileDrafts.length === snapshot.mobileDrafts.length
-    ? snapshot
-    : {
-        ...snapshot,
-        mobileDrafts,
-      };
 }
 
 function mapDemoMutationResult(result: MutationResult<unknown>): PersistAppSnapshotResult {
@@ -4997,15 +4986,6 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     ]
   );
 
-  const remotePersistableSnapshot = useMemo(
-    () => buildRemotePersistableSnapshot(remoteSnapshot),
-    [remoteSnapshot]
-  );
-  const remoteSnapshotKey = useMemo(
-    () => JSON.stringify(remotePersistableSnapshot),
-    [remotePersistableSnapshot]
-  );
-
   useEffect(() => {
     let active = true;
     const loadSession = async () => {
@@ -5155,8 +5135,6 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const persistAppSnapshotNow = useCallback(
     async (override?: Partial<AppStateSnapshot>): Promise<PersistAppSnapshotResult> => {
       const snapshot = buildSnapshotWithOverride(override);
-      const remotePersistableSnapshot = buildRemotePersistableSnapshot(snapshot);
-      const snapshotKey = JSON.stringify(remotePersistableSnapshot);
       const persistedAt = new Date().toISOString();
 
       if (currentStorageNamespace) {
@@ -5184,45 +5162,14 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         };
       }
 
-      try {
-        const response = await fetch("/api/state", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot: remotePersistableSnapshot }),
-        });
-
-        if (response.ok) {
-          lastSyncedSnapshotKeyRef.current = snapshotKey;
-          return {
-          status: "saved",
-          syncStatus: "remote_synced",
-          message: "已确认并保存。",
-          persistedAt,
-        };
-        }
-
-        const data = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        return {
-          status: "failed",
-          syncStatus: "failed",
-          message: "远端保存失败，已保留本地。",
-          persistedAt,
-          error: data?.error ?? "remote_snapshot_save_failed",
-        };
-      } catch (error) {
-        return {
-          status: "failed",
-          syncStatus: "failed",
-          message: "远端保存失败，已保留本地。",
-          persistedAt,
-          error:
-            error instanceof Error
-              ? error.message
-              : "remote_snapshot_save_failed",
-        };
-      }
+      // normal 账号只能通过资源 API 持久化；整包快照写入会绕过角色权限并造成并发覆盖。
+      return {
+        status: "failed",
+        syncStatus: "failed",
+        message: "该操作尚未接入资源保存接口，未写入远端。",
+        persistedAt,
+        error: "snapshot_write_disabled",
+      };
     },
     [
       buildSnapshotWithOverride,
@@ -5309,32 +5256,6 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
     writeScopedSnapshot(currentStorageNamespace, remoteSnapshot);
   }, [authLoading, currentStorageNamespace, currentUser, dataLoading, isDemoUser, remoteSnapshot]);
-
-  useEffect(() => {
-    if (authLoading || dataLoading || !isNormalUser || lastSyncedSnapshotKeyRef.current === remoteSnapshotKey) {
-      return;
-    }
-
-    const timer = window.setTimeout(async () => {
-      try {
-        const response = await fetch("/api/state", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot: remotePersistableSnapshot }),
-        });
-
-        if (response.ok) {
-          lastSyncedSnapshotKeyRef.current = remoteSnapshotKey;
-        }
-      } catch {
-        // Keep local persistence available if remote sync fails.
-      }
-    }, 500);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [authLoading, dataLoading, isNormalUser, remotePersistableSnapshot, remoteSnapshotKey]);
 
   const visibleChildren = useMemo(() => filterChildrenByUser(childrenList, currentUser), [childrenList, currentUser]);
   const visibleChildIds = useMemo(() => visibleChildren.map((child) => child.id), [visibleChildren]);

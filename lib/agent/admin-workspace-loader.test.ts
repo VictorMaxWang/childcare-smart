@@ -51,7 +51,7 @@ test("getAdminConsultationFeedBadge distinguishes backend, local fallback and un
       localConsultationCount: 1,
     }),
     {
-      label: "本地兜底",
+      label: "本地规则",
       variant: "outline",
     }
   );
@@ -172,7 +172,7 @@ test("buildAdminConsultationWorkspaceView keeps board-ready fallback state stabl
   assert.equal(view.feedStatusMessage, "feed unavailable");
   assert.equal(view.feedFallbackUsed, true);
   assert.equal(view.feedFallbackReason, "test-feed-unavailable");
-  assert.equal(view.feedBadge.label, "本地兜底");
+  assert.equal(view.feedBadge.label, "本地规则");
   assert.equal(view.priorityItems.length, 1);
   assert.equal(view.priorityItems[0]?.notificationPayload?.priorityItemId, "consult-1");
 });

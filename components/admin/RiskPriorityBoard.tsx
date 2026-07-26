@@ -30,7 +30,7 @@ export default function RiskPriorityBoard({
   items,
   className,
   layoutVariant = "split",
-  emptyHref = "/teacher/high-risk-consultation",
+  emptyHref = "/admin/agent",
   isLoading = false,
   emptyTitle,
   emptyDescription,
@@ -78,7 +78,7 @@ export default function RiskPriorityBoard({
           {effectiveDispatchAvailable ? (
             <Button asChild variant="outline" className="min-h-11 rounded-xl md:self-start">
               <Link href={emptyHref} className="gap-2">
-                前往会诊入口
+                查看园长风险工作台
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>

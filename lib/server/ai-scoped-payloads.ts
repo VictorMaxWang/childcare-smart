@@ -298,7 +298,7 @@ export function buildParentMessageRequestFromScope(
 }
 
 export function buildTeacherAgentPayloadFromScope(
-  source: Pick<TeacherAgentRequestPayload, "workflow" | "scope" | "targetChildId">,
+  source: Pick<TeacherAgentRequestPayload, "workflow" | "scope" | "targetChildId" | "question">,
   scope: SessionScope
 ): TeacherAgentRequestPayload {
   const visibleChildren = scope.visibleChildren.map(childRecord);
@@ -311,6 +311,10 @@ export function buildTeacherAgentPayloadFromScope(
     workflow: source.workflow,
     scope: source.scope,
     targetChildId: source.targetChildId,
+    question:
+      typeof source.question === "string"
+        ? source.question.trim().slice(0, 500) || undefined
+        : undefined,
     currentUser: {
       name: scope.user.name,
       institutionId: scope.institutionId,

@@ -55,6 +55,9 @@ export default function TeacherDraftConfirmationPanel({
 }) {
   const [records, setRecords] = useState<TeacherDraftRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [confirmingRecordId, setConfirmingRecordId] = useState<string | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
 
   const notifyMutationResult = useCallback(
@@ -150,13 +153,26 @@ export default function TeacherDraftConfirmationPanel({
 
   const handleConfirm = useCallback(
     async (recordId: string) => {
-      if (!sourceDraftId) return;
-      const result = await persistAdapter.confirmDraft({ sourceDraftId, recordId });
-      setRecords(result.records);
-      setError(null);
-      notifyMutationResult("confirm", result.record);
+      if (!sourceDraftId || confirmingRecordId) return;
+      setConfirmingRecordId(recordId);
+      try {
+        const result = await persistAdapter.confirmDraft({
+          sourceDraftId,
+          recordId,
+        });
+        setRecords(result.records);
+        setError(null);
+        notifyMutationResult("confirm", result.record);
+      } finally {
+        setConfirmingRecordId(null);
+      }
     },
-    [notifyMutationResult, persistAdapter, sourceDraftId]
+    [
+      confirmingRecordId,
+      notifyMutationResult,
+      persistAdapter,
+      sourceDraftId,
+    ]
   );
 
   const handleDiscard = useCallback(
@@ -190,15 +206,20 @@ export default function TeacherDraftConfirmationPanel({
   );
 
   if (!sourceDraftId || !seed) {
+    const demoPresetsAvailable = mockPresets.length > 0 && Boolean(onCreateMockDraft);
     return (
       <div className="space-y-4">
         <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-5">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="warning">演示理解结果</Badge>
+            <Badge variant={demoPresetsAvailable ? "warning" : "outline"}>
+              {demoPresetsAvailable ? "演示理解结果" : "等待真实草稿"}
+            </Badge>
             {childName ? <Badge variant="secondary">{childName}</Badge> : null}
           </div>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            当前还没有可确认的教师草稿。可以先用下面的演示话术生成一条本地草稿，用来演示确认、编辑与丢弃流程。
+            {demoPresetsAvailable
+              ? "当前还没有可确认的教师草稿。可以用下面的演示话术验证确认、编辑与丢弃流程。"
+              : "当前还没有可确认的教师草稿。请先使用语音速记或健康材料解析生成结构化草稿。"}
           </p>
         </div>
 
@@ -301,6 +322,7 @@ export default function TeacherDraftConfirmationPanel({
           items={visibleItems}
           discardedCount={discardedCount}
           initialExpandedRecordId={initialExpandedRecordId}
+          confirmingRecordId={confirmingRecordId}
           onConfirm={handleConfirm}
           onDiscard={handleDiscard}
           onSaveEdit={handleSaveEdit}

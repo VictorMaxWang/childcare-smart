@@ -120,7 +120,9 @@ test.describe("E11 full user journey regression", () => {
       await page.goto(`/parent/storybook?child=${CHILD_PARENT}`);
       await expect(page.getByTestId("e10-storybook-export-markdown")).toBeEnabled({ timeout: 30_000 });
       await page.getByTestId("e10-storybook-export-markdown").click();
-      await expect(page.getByTestId("e10-storybook-action-status")).toContainText(/export|local|本地|瀵煎嚭/i);
+      await expect(page.getByTestId("e10-storybook-action-status")).toContainText(
+        /export|local|本地|导出|下载/i
+      );
       await page.getByTestId("e10-storybook-share-local").click();
       await expect(page.getByTestId("e10-storybook-action-status")).toContainText(/share|copy|local|分享|复制|本地/i);
       await expect(page.getByTestId("voice-orb-button")).toBeVisible();

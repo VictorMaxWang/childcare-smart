@@ -14,6 +14,12 @@ import type {
   HealthFileBridgeSource,
   HealthFileBridgeWriteback,
 } from "../ai/types";
+import {
+  HEALTH_FILE_MAX_COUNT,
+  HEALTH_FILE_MAX_UPLOAD_BYTES,
+  isBoundedHealthFileText,
+  isBoundedOcrBase64,
+} from "../health/health-file-constraints";
 
 const HEALTH_FILE_BRIDGE_DISCLAIMER =
   "T9 bridge returns structured facts plus conservative childcare action suggestions from file metadata and text hints. It does not perform verified binary OCR, medical diagnosis, medication authorization, clearance decisions, writeback, or escalation dispatch.";
@@ -49,7 +55,32 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isValidFile(value: unknown): value is HealthFileBridgeFile {
   if (!isRecord(value)) return false;
-  return typeof value.name === "string" && value.name.trim().length > 0;
+  if (
+    typeof value.name !== "string" ||
+    value.name.trim().length === 0 ||
+    value.name.length > 180
+  ) {
+    return false;
+  }
+  if (
+    value.sizeBytes !== undefined &&
+    (typeof value.sizeBytes !== "number" ||
+      !Number.isFinite(value.sizeBytes) ||
+      value.sizeBytes < 0 ||
+      value.sizeBytes > HEALTH_FILE_MAX_UPLOAD_BYTES)
+  ) {
+    return false;
+  }
+  if (!isBoundedHealthFileText(value.previewText)) return false;
+  if (!isBoundedOcrBase64(value.imageBase64)) return false;
+  if (!isBoundedOcrBase64(value.dataUrl)) return false;
+  if (
+    isRecord(value.meta) &&
+    !isBoundedOcrBase64(value.meta.imageBase64)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function isValidHealthFileBridgeRequest(payload: unknown): payload is HealthFileBridgeRequest {
@@ -58,7 +89,14 @@ export function isValidHealthFileBridgeRequest(payload: unknown): payload is Hea
   if (typeof payload.requestSource !== "string" || payload.requestSource.trim().length === 0) {
     return false;
   }
-  if (!Array.isArray(payload.files) || payload.files.length === 0) return false;
+  if (
+    !Array.isArray(payload.files) ||
+    payload.files.length === 0 ||
+    payload.files.length > HEALTH_FILE_MAX_COUNT
+  ) {
+    return false;
+  }
+  if (!isBoundedHealthFileText(payload.optionalNotes)) return false;
   return payload.files.every(isValidFile);
 }
 

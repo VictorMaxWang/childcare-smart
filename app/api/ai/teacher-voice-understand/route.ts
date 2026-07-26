@@ -5,6 +5,11 @@ import { buildTeacherVoiceUnderstandFallback } from "@/lib/ai/teacher-voice-unde
 import { VivoProviderError } from "@/lib/providers/vivo";
 import { createBrainTransportHeaders } from "@/lib/server/brain-client";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import {
+  validateVoiceAudioFile,
+  validateVoiceDuration,
+  validateVoiceText,
+} from "@/lib/voice/audio-constraints";
 
 const TEACHER_VOICE_UNDERSTAND_TARGET = "/api/v1/agents/teacher/voice-understand";
 
@@ -102,6 +107,18 @@ export async function handleTeacherVoiceUnderstandRequest(
     const audio = formData.get("audio");
     const transcript = toOptionalString(formData.get("transcript"));
     const fallbackText = toOptionalString(formData.get("fallbackText"));
+    const durationMs = toOptionalNumber(formData.get("durationMs"));
+    const validationError =
+      (audio instanceof File ? validateVoiceAudioFile(audio) : null) ||
+      validateVoiceDuration(durationMs) ||
+      validateVoiceText(transcript) ||
+      validateVoiceText(fallbackText);
+    if (validationError) {
+      return NextResponse.json(
+        { ok: false, code: "invalid_request", error: validationError },
+        { status: 400, headers }
+      );
+    }
 
     if (!(audio instanceof File) && !transcript && !fallbackText) {
       return NextResponse.json(
@@ -118,7 +135,6 @@ export async function handleTeacherVoiceUnderstandRequest(
       toOptionalString(formData.get("mimeType")) ||
       (audio instanceof File ? audio.type : undefined) ||
       "audio/webm";
-    const durationMs = toOptionalNumber(formData.get("durationMs"));
     const scene = toOptionalString(formData.get("scene")) || "teacher-global-fab";
 
     let asrResult;
@@ -211,6 +227,20 @@ export async function handleTeacherVoiceUnderstandRequest(
   const payload = body as Record<string, unknown>;
   const transcript = toOptionalString(payload.transcript);
   const fallbackText = toOptionalString(payload.fallbackText);
+  const durationMs =
+    typeof payload.durationMs === "number" && Number.isFinite(payload.durationMs)
+      ? payload.durationMs
+      : undefined;
+  const validationError =
+    validateVoiceDuration(durationMs) ||
+    validateVoiceText(transcript) ||
+    validateVoiceText(fallbackText);
+  if (validationError) {
+    return NextResponse.json(
+      { ok: false, code: "invalid_request", error: validationError },
+      { status: 400, headers }
+    );
+  }
   if (!transcript && !fallbackText) {
     return NextResponse.json(
       { error: "Missing transcript or audio input" },
@@ -225,10 +255,7 @@ export async function handleTeacherVoiceUnderstandRequest(
       fallbackText,
       transcript,
       mimeType: toOptionalString(payload.mimeType),
-      durationMs:
-        typeof payload.durationMs === "number" && Number.isFinite(payload.durationMs)
-          ? payload.durationMs
-          : undefined,
+      durationMs,
       scene: toOptionalString(payload.scene) || "teacher-global-fab",
     });
   } catch (error) {
@@ -245,10 +272,7 @@ export async function handleTeacherVoiceUnderstandRequest(
       childName: toOptionalString(payload.childName),
       attachmentName: toOptionalString(payload.attachmentName),
       mimeType: toOptionalString(payload.mimeType),
-      durationMs:
-        typeof payload.durationMs === "number" && Number.isFinite(payload.durationMs)
-          ? payload.durationMs
-          : undefined,
+      durationMs,
       scene: toOptionalString(payload.scene) || "teacher-global-fab",
       traceId: toOptionalString(payload.traceId),
       inputMode: "json",

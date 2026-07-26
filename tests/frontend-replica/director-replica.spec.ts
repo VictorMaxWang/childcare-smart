@@ -102,6 +102,19 @@ test.describe("FRONTEND-REPLICA-R05 director replica", () => {
     await expectNoPageProblems(page, guards);
   });
 
+  test("director dashboard can create a consultation-scoped dispatch", async ({ page }) => {
+    await loginAs(page, "u-admin", "/admin");
+
+    const consultationDispatch = page
+      .locator('[data-testid^="admin-create-consultation-dispatch-"]')
+      .first();
+    await expect(consultationDispatch).toBeVisible();
+    if (await consultationDispatch.isEnabled()) {
+      await consultationDispatch.click();
+    }
+    await expect(consultationDispatch).toContainText("已创建会诊派单");
+  });
+
   test("director AI assistant keeps R04 provider state and real dispatch controls", async ({ page }) => {
     const guards = installPageGuards(page);
 

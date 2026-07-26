@@ -60,6 +60,7 @@ import {
   type ConsultationTraceMode,
   type FollowUp48hCardData,
 } from "@/lib/consultation/trace-types";
+import { apiPatch, apiPost } from "@/lib/api/client";
 import { listFeedback as listApiFeedback, type ApiFeedback } from "@/lib/api/communication";
 import { normalizeGuardianFeedbackCollection } from "@/lib/feedback/normalize";
 import { getDraftSyncStatusLabel } from "@/lib/mobile/local-draft-cache";
@@ -208,7 +209,7 @@ function ResultCorePanel({ result }: { result: ConsultationApiResult }) {
 
   return (
     <SectionCard
-      title="会诊总览 · 答辩核心结果"
+      title="会诊总览 · 核心结论"
       description="风险、证据、动作和承接状态集中展示，便于现场讲解。"
       actions={<Badge variant={result.shouldEscalateToAdmin ? "warning" : "outline"}>{adminHandoff}</Badge>}
     >
@@ -348,9 +349,10 @@ function ResultCorePanel({ result }: { result: ConsultationApiResult }) {
               <p className="mt-2 text-xs leading-5 text-amber-700">{safetyWarnings.join("；")}</p>
             ) : null}
           </div>
-          <Button asChild variant="premium" className="h-full min-h-20 rounded-2xl">
-            <Link href="/admin">去管理端查看风险承接</Link>
-          </Button>
+          <div className="flex min-h-20 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800">
+            <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+            会诊结果已同步给园长端
+          </div>
         </div>
       </div>
     </SectionCard>
@@ -461,14 +463,11 @@ export default function TeacherHighRiskConsultationPage() {
     growthRecords,
     guardianFeedbacks,
     consultations,
+    healthMaterials,
     mobileDrafts,
     saveMobileDraft,
     markMobileDraftSyncStatus,
-    saveConsultationRecord,
-    addConsultationRecordNote,
-    updateConsultationRecordStatus,
-    upsertInterventionCard,
-    saveReminderRecord,
+    reloadAppSnapshotFromApi,
   } = useApp();
   const { start, isStreaming, stop } = useAgentStream();
   const searchParams = useSearchParams();
@@ -507,7 +506,6 @@ export default function TeacherHighRiskConsultationPage() {
   const [consultationFilter, setConsultationFilter] = useState<ConsultationFilter>("all");
   const [discussionInput, setDiscussionInput] = useState("");
   const [discussionNotes, setDiscussionNotes] = useState<string[]>([]);
-  const [sideActionMessage, setSideActionMessage] = useState<string | null>(null);
   const [setupFocusMessage, setSetupFocusMessage] = useState<string | null>(null);
   const [apiFeedbacks, setApiFeedbacks] = useState<ApiFeedback[]>([]);
 
@@ -562,6 +560,13 @@ export default function TeacherHighRiskConsultationPage() {
         .slice(0, 3),
     [storedConsultationsForChild]
   );
+  const healthMaterialNameById = useMemo(
+    () =>
+      new Map(
+        healthMaterials.map((material) => [material.materialId, material.filename] as const)
+      ),
+    [healthMaterials]
+  );
   const draftId = selectedChild ? `high-risk-consultation-${selectedChild.id}` : "";
   const existingDraft = useMemo(() => mobileDrafts.find((draft) => draft.draftId === draftId), [draftId, mobileDrafts]);
   const existingDraftPayload = useMemo(
@@ -595,8 +600,18 @@ export default function TeacherHighRiskConsultationPage() {
         ? (latestStored.providerTrace as ConsultationProviderTrace)
         : null
     );
-    setStreamMessage("已从 D01 演示数据恢复最近一次会诊，刷新后仍可查看。");
-  }, [isStreaming, queryConsultationId, result?.consultationId, storedConsultationsForChild]);
+    setStreamMessage(
+      currentUser.accountKind === "demo"
+        ? "已从共享演示数据恢复最近一次会诊，刷新后仍可查看。"
+        : "已从当前机构数据恢复最近一次会诊，刷新后仍可查看。"
+    );
+  }, [
+    currentUser.accountKind,
+    isStreaming,
+    queryConsultationId,
+    result?.consultationId,
+    storedConsultationsForChild,
+  ]);
   const debugFixtureViewModel = useMemo(() => {
     if (
       traceMode !== "debug" ||
@@ -684,7 +699,10 @@ export default function TeacherHighRiskConsultationPage() {
     });
   }
 
-  function applyConsultationResult(rawResult: unknown, successMessagePrefix = "证据链生成完成") {
+  async function applyConsultationResult(
+    rawResult: unknown,
+    successMessagePrefix = "证据链生成完成"
+  ) {
     if (!selectedChild) return false;
 
     if (!isRenderableConsultationApiResult(rawResult)) {
@@ -694,59 +712,33 @@ export default function TeacherHighRiskConsultationPage() {
       return false;
     }
 
-    const saveResult = saveConsultationRecord({
-      childId: selectedChild.id,
-      consultation: rawResult,
-      workflowStatus: "pending",
-    });
-    if (saveResult.status === "failed") {
-      const message = saveResult.error ?? saveResult.message ?? "会诊结果保存失败。";
+    try {
+      const completedResult = await apiPost<ConsultationApiResult>("/api/consultations", {
+        ...rawResult,
+        childId: selectedChild.id,
+        workflowStatus: "pending",
+      });
+      const reloadResult = await reloadAppSnapshotFromApi();
+      if (reloadResult.status === "failed") {
+        throw new Error(reloadResult.error ?? reloadResult.message);
+      }
+
+      resultMountedRef.current = true;
+      setResult(completedResult);
+      setShowSetupSections(false);
+      setInvalidResultReason(null);
+      markMobileDraftSyncStatus(draftId, "synced");
+      setStreamMessage(
+        `${successMessagePrefix}：会诊、干预卡与三端提醒已写入当前机构数据，刷新页面后仍会保留。`
+      );
+      return true;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "会诊结果未能写入当前机构数据。";
       setStreamError(message);
       setStreamMessage(message);
       return false;
     }
-
-    const completedResult = (saveResult.data as ConsultationApiResult | undefined) ?? rawResult;
-    resultMountedRef.current = true;
-    setResult(completedResult);
-    setShowSetupSections(false);
-    upsertInterventionCard(rawResult.interventionCard);
-    const reminderResults = [
-      ...buildReminderItems({
-        childId: selectedChild.id,
-        targetRole: "teacher",
-        targetId: selectedChild.id,
-        childName: selectedChild.name,
-        interventionCard: rawResult.interventionCard,
-        consultation: rawResult,
-      }),
-      ...buildReminderItems({
-        childId: selectedChild.id,
-        targetRole: "parent",
-        targetId: selectedChild.id,
-        childName: selectedChild.name,
-        interventionCard: rawResult.interventionCard,
-        consultation: rawResult,
-      }),
-    ].map((item) => saveReminderRecord(item));
-    const failedReminder = reminderResults.find((item) => item.status === "failed");
-    if (failedReminder) {
-      const message = failedReminder.error ?? failedReminder.message ?? "后续提醒保存失败。";
-      setStreamError(message);
-      setStreamMessage(`会诊结果已保存，但后续提醒未保存：${message}`);
-      return true;
-    }
-    markMobileDraftSyncStatus(draftId, "synced");
-    const reminderPersistenceText =
-      reminderResults.length === 0
-        ? "本次复查计划已保留在会诊结果中。"
-        : reminderResults.some((item) => item.status === "local_only")
-          ? "后续提醒已写入共享演示数据，刷新后保留。"
-          : "后续提醒已写入当前数据层，刷新后保留。";
-    setStreamMessage(
-      `${successMessagePrefix}：会诊结果已保存到 D01 演示数据，教师端、家长端和园长端可从同一记录读取。${reminderPersistenceText}`
-    );
-    return true;
   }
 
   async function runForcedLocalFallback(
@@ -786,7 +778,7 @@ export default function TeacherHighRiskConsultationPage() {
     setProviderTrace(nextProviderTrace);
     setMemoryMeta(nextMemoryMeta);
     setStreamError(null);
-    applyConsultationResult(rawResult, "证据链生成完成");
+    await applyConsultationResult(rawResult, "证据链生成完成");
   }
 
   async function runConsultation(form: {
@@ -840,6 +832,7 @@ export default function TeacherHighRiskConsultationPage() {
 
     let streamTimedOut = false;
     let streamFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    let resultPersistencePromise: Promise<boolean> | null = null;
 
     try {
       streamFallbackTimer = setTimeout(() => {
@@ -945,11 +938,14 @@ export default function TeacherHighRiskConsultationPage() {
           setTraceId(data.traceId);
           setProviderTrace(nextProviderTrace);
           setMemoryMeta(nextMemoryMeta);
-          applyConsultationResult(rawResult);
+          resultPersistencePromise = applyConsultationResult(rawResult);
           return;
         }
       });
 
+      if (resultPersistencePromise) {
+        await resultPersistencePromise;
+      }
       if (!resultMountedRef.current) {
         setStreamEndedUnexpectedly(true);
         await runForcedLocalFallback(
@@ -1012,52 +1008,85 @@ export default function TeacherHighRiskConsultationPage() {
     </div>
   );
 
-  function addFollowUpReminder() {
+  async function addFollowUpReminder() {
     if (!selectedChild || !result) return;
-    const reminderResults = buildReminderItems({
+    const reminderItems = buildReminderItems({
       childId: selectedChild.id,
       targetRole: "teacher",
       targetId: selectedChild.id,
       childName: selectedChild.name,
       interventionCard: result.interventionCard,
       consultation: result,
-    }).map((item) =>
-      saveReminderRecord({
-        ...item,
-        reminderId: `${item.reminderId}-manual-follow-up`,
-        title: `${item.title}（后续提醒）`,
-        status: "pending",
-      })
-    );
-    if (reminderResults.length === 0) {
+    }).filter((item) => item.targetRole === "teacher");
+    if (reminderItems.length === 0) {
       setStreamMessage("当前会诊已包含 48 小时复查计划，可继续在结果卡和管理端查看。");
       return;
     }
 
-    const failedReminder = reminderResults.find((item) => item.status === "failed");
-    if (failedReminder) {
-      const message = failedReminder.error ?? failedReminder.message ?? "后续提醒保存失败。";
+    try {
+      await Promise.all(
+        reminderItems.map((item) =>
+          apiPost("/api/reminders", {
+            ...item,
+            title: `${item.title}（后续提醒）`,
+            sourceId: result.consultationId,
+          })
+        )
+      );
+      const reloadResult = await reloadAppSnapshotFromApi();
+      if (reloadResult.status === "failed") {
+        throw new Error(reloadResult.error ?? reloadResult.message);
+      }
+      setStreamMessage("后续提醒已写入当前机构数据，教师端刷新后仍会保留。");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "后续提醒保存失败。";
       setStreamError(message);
       setStreamMessage(`后续提醒未保存：${message}`);
-      return;
     }
-
-    const persistenceText = reminderResults.some((item) => item.status === "local_only")
-      ? "已加入后续提醒，并写入共享演示数据，刷新后保留。"
-      : "已加入后续提醒，并写入当前数据层，刷新后保留。";
-    setStreamMessage(persistenceText);
   }
 
   if (visibleChildren.length === 0 || !selectedChild || !childContext || !autoContext) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-        <EmptyState icon={<ShieldAlert className="h-6 w-6" />} title="请进入周老师演示账号" description="高风险会诊主案例需要教师账号可见林小雨所在班级。" />
+        <EmptyState
+          icon={<ShieldAlert className="h-6 w-6" />}
+          title="当前班级暂无可会诊幼儿"
+          description="请先确认教师已绑定班级且班级内已有幼儿档案，再发起高风险会诊。"
+        />
       </div>
     );
   }
 
   const consultationStatus: ConsultationFilter = isStreaming ? "active" : result ? "completed" : "pending";
   const showConsultationCard = consultationFilter === "all" || consultationFilter === consultationStatus;
+  const consultationInsights = result
+    ? [...result.keyFindings, ...result.triggerReasons].filter(Boolean).slice(0, 3)
+    : autoContext.focusReasons.filter(Boolean).slice(0, 3);
+  const nextActions = result
+    ? [
+        {
+          title: result.todayInSchoolActions[0],
+          status: "待记录",
+          action: "记录执行",
+          href: `/growth?child=${encodeURIComponent(selectedChild.id)}`,
+        },
+        {
+          title: result.tonightAtHomeActions[0],
+          status: "待沟通",
+          action: "发送家长",
+          href: `/teacher/agent?action=communication&childId=${encodeURIComponent(selectedChild.id)}`,
+        },
+        {
+          title: result.followUp48h[0],
+          status: "待复查",
+          action: "记录复查",
+          href: `/health?child=${encodeURIComponent(selectedChild.id)}`,
+        },
+      ].filter(
+        (item): item is { title: string; status: string; action: string; href: string } =>
+          Boolean(item.title)
+      )
+    : [];
   const participants = [
     { name: currentUser.name, role: "发起人" },
     ...(selectedChild.guardians ?? []).slice(0, 2).map((guardian) => ({
@@ -1074,58 +1103,68 @@ export default function TeacherHighRiskConsultationPage() {
     ...persistedDiscussionNotes,
     ...discussionNotes,
   ];
-  const sendDiscussionNote = () => {
+  const sendDiscussionNote = async () => {
     const note = discussionInput.trim();
     if (!note) return;
     if (result) {
-      const saved = addConsultationRecordNote({
-        consultationId: result.consultationId,
-        note,
-      });
-      if (saved.status === "failed") {
-        setStreamError(saved.error ?? saved.message ?? "会诊备注保存失败。");
-        return;
+      try {
+        const saved = await apiPost<ConsultationApiResult>(
+          `/api/consultations/${encodeURIComponent(result.consultationId)}/notes`,
+          { note }
+        );
+        const reloadResult = await reloadAppSnapshotFromApi();
+        if (reloadResult.status === "failed") {
+          throw new Error(reloadResult.error ?? reloadResult.message);
+        }
+        if (isRenderableConsultationApiResult(saved)) {
+          setResult(saved);
+        }
+        setStreamMessage("会诊备注已写入当前机构数据，三端刷新后可继续查看。");
+        setDiscussionInput("");
+      } catch (error) {
+        setStreamError(error instanceof Error ? error.message : "会诊备注保存失败。");
       }
-      if (saved.data && isRenderableConsultationApiResult(saved.data)) {
-        setResult(saved.data);
-      }
-      setStreamMessage(
-        saved.status === "local_only"
-          ? "会诊备注已写入共享演示数据，刷新后仍可查看。"
-          : "会诊备注已保存到当前数据层，刷新后仍可查看。"
-      );
-      setDiscussionInput("");
       return;
     }
     setDiscussionNotes((prev) => [`${currentUser.name}：${note}`, ...prev]);
     setDiscussionInput("");
   };
 
-  const updateWorkflowStatus = (status: "pending" | "in-progress" | "resolved") => {
+  const updateWorkflowStatus = async (
+    status: "pending" | "in-progress" | "resolved"
+  ) => {
     if (!result) return;
-    const saved = updateConsultationRecordStatus({
-      consultationId: result.consultationId,
-      status,
-    });
-    if (saved.status === "failed") {
-      setStreamError(saved.error ?? saved.message ?? "会诊状态更新失败。");
-      return;
+    try {
+      const saved = await apiPatch<ConsultationApiResult>(
+        `/api/consultations/${encodeURIComponent(result.consultationId)}/status`,
+        { status }
+      );
+      const reloadResult = await reloadAppSnapshotFromApi();
+      if (reloadResult.status === "failed") {
+        throw new Error(reloadResult.error ?? reloadResult.message);
+      }
+      if (isRenderableConsultationApiResult(saved)) {
+        setResult(saved);
+      }
+      setStreamMessage(
+        `会诊状态已更新为${
+          status === "pending"
+            ? "待处理"
+            : status === "in-progress"
+              ? "处理中"
+              : "已解决"
+        }，并写入当前机构数据。`
+      );
+    } catch (error) {
+      setStreamError(error instanceof Error ? error.message : "会诊状态更新失败。");
     }
-    if (saved.data && isRenderableConsultationApiResult(saved.data)) {
-      setResult(saved.data);
-    }
-    setStreamMessage(
-      `会诊状态已更新为 ${status === "pending" ? "待处理" : status === "in-progress" ? "处理中" : "已解决"}。${
-        saved.status === "local_only" ? "已写入共享演示数据，刷新后保留。" : "已写入当前数据层，刷新后保留。"
-      }`
-    );
   };
 
   return (
     <RolePageShell
       badge={`重点会诊 · ${classContext.className}`}
       title="重点儿童支持会诊"
-      description="按长期画像、最近会诊、当前建议分阶段流式展示，适合移动端录屏。"
+      description="按长期画像、最近会诊与当前建议分阶段整理园内动作、家庭任务和复查计划。"
       testId="r06-high-risk-consultation-page"
       actions={
         <>
@@ -1151,7 +1190,7 @@ export default function TeacherHighRiskConsultationPage() {
                       </div>
                       <h1 className="mt-4 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">重点儿童支持会诊</h1>
                       <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                        按长期画像、最近会诊、当前建议分阶段流式展示，适合移动端录屏。
+                        按长期画像、最近会诊和当前建议分阶段展示，便于教师核对证据与行动。
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -1165,7 +1204,7 @@ export default function TeacherHighRiskConsultationPage() {
                         onClick={openConsultationSetup}
                         aria-controls="consultation-setup"
                       >
-                        发起会诊 / 邀请专家
+                        发起会诊
                       </Button>
                     </div>
                   </div>
@@ -1180,8 +1219,8 @@ export default function TeacherHighRiskConsultationPage() {
                     <div className="mt-4 grid gap-3 sm:grid-cols-4">
                       {[
                         ["1", "发起会诊"],
-                        ["2", "专家响应"],
-                        ["3", "方案讨论"],
+                        ["2", "证据汇总"],
+                        ["3", "跨角色分析"],
                         ["4", "生成建议"],
                       ].map(([step, label], index) => (
                         <div key={step} className="relative rounded-2xl bg-slate-50 px-4 py-3">
@@ -1299,12 +1338,20 @@ export default function TeacherHighRiskConsultationPage() {
                           </div>
                         </div>
                         <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4">
-                          <p className="text-sm font-semibold text-indigo-900">AI 助诊建议</p>
-                          <ul className="mt-3 space-y-2 text-sm leading-6 text-indigo-800">
-                            <li>先确认走廊声响、门口过渡和退缩反应的触发关系；</li>
-                            <li>今日园内用“预告声音 + 可选择小步目标”降低压力；</li>
-                            <li>今晚家庭用共读绘本承接“我害怕”的勇敢表达。</li>
-                          </ul>
+                          <p className="text-sm font-semibold text-indigo-900">
+                            {result ? "AI 助诊建议" : "待核对数据线索"}
+                          </p>
+                          {consultationInsights.length > 0 ? (
+                            <ul className="mt-3 space-y-2 text-sm leading-6 text-indigo-800">
+                              {consultationInsights.map((item) => (
+                                <li key={item}>- {item}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-3 text-sm leading-6 text-indigo-800">
+                              当前记录不足，请补充真实观察后再生成会诊建议。
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1312,7 +1359,7 @@ export default function TeacherHighRiskConsultationPage() {
                       <EmptyState
                         icon={<ClipboardList className="h-6 w-6" />}
                         title="当前筛选未命中会诊"
-                        description="切回全部即可查看林小雨主案例，也可以直接发起一次新的会诊。"
+                        description="切回全部即可查看当前幼儿的会诊，也可以直接发起一次新的会诊。"
                       />
                     )}
                   </div>
@@ -1321,40 +1368,36 @@ export default function TeacherHighRiskConsultationPage() {
                 <aside className="space-y-4">
                   <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
                     <p className="text-sm font-semibold text-slate-950">下一步行动</p>
-                    <div className="mt-4 space-y-3">
-                      {[
-                        ["家长沟通与知情同意", "进行中", "去沟通"],
-                        ["走廊小步尝试", "待执行", "去执行"],
-                        ["今晚家庭共读", "待安排", "去安排"],
-                        ["48 小时复查承接", "待安排", "去跟踪"],
-                      ].map(([title, status, action], index) => (
-                        <div key={title} className="grid grid-cols-[1fr_auto] gap-3 rounded-2xl bg-slate-50 px-3 py-3">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-950">{title}</p>
-                            <p className="mt-1 text-xs text-slate-500">{status}</p>
-                          </div>
-                          {index === 0 ? (
+                    {nextActions.length > 0 ? (
+                      <div className="mt-4 space-y-3">
+                        {nextActions.map((item) => (
+                          <div key={`${item.status}-${item.title}`} className="grid grid-cols-[1fr_auto] gap-3 rounded-2xl bg-slate-50 px-3 py-3">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-950">{item.title}</p>
+                              <p className="mt-1 text-xs text-slate-500">{item.status}</p>
+                            </div>
                             <Button asChild type="button" variant="outline" size="sm" className="rounded-full">
-                              <Link href={`/teacher/agent?action=communication&childId=${selectedChild.id}`}>{action}</Link>
+                              <Link href={item.href}>{item.action}</Link>
                             </Button>
-                          ) : (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="rounded-full"
-                              onClick={() => {
-                                openConsultationSetup();
-                                setSideActionMessage(`${title}已定位到会诊输入区，请补充信息后生成方案。`);
-                              }}
-                            >
-                              {action}
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    {sideActionMessage ? <p className="mt-3 rounded-xl bg-indigo-50 px-3 py-2 text-xs text-indigo-700">{sideActionMessage}</p> : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                        <p className="text-sm leading-6 text-slate-600">
+                          生成会诊后，这里会显示来自真实结果的园内、家庭和复查动作。
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-3 rounded-full"
+                          onClick={openConsultationSetup}
+                        >
+                          补充资料并生成
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
                     <p className="text-sm font-semibold text-slate-950">会议讨论与记录</p>
@@ -1431,34 +1474,47 @@ export default function TeacherHighRiskConsultationPage() {
                   <Badge variant="warning">{pendingConsultationRecords.length} 条待完善</Badge>
                 </div>
                 <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                  {pendingConsultationRecords.map((consultation) => (
-                    <article
-                      key={consultation.consultationId}
-                      className="rounded-lg border border-amber-100 bg-white p-4 shadow-sm"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <Badge variant="outline">
-                          {consultation.riskLevel === "high" ? "高风险" : consultation.riskLevel === "medium" ? "中风险" : "低风险"}
-                        </Badge>
-                        <span className="text-xs text-slate-500">
-                          {formatDisplayDate((consultation as { updatedAt?: string }).updatedAt ?? consultation.generatedAt)}
-                        </span>
-                      </div>
-                      <p className="mt-3 line-clamp-3 text-sm font-medium leading-6 text-slate-900">
-                        {consultation.summary}
-                      </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="mt-4 w-full gap-2"
-                        onClick={openConsultationSetup}
+                  {pendingConsultationRecords.map((consultation) => {
+                    const sourceMaterialId = (
+                      consultation as unknown as { sourceMaterialId?: string }
+                    ).sourceMaterialId;
+                    const sourceMaterialName = sourceMaterialId
+                      ? healthMaterialNameById.get(sourceMaterialId)
+                      : undefined;
+                    return (
+                      <article
+                        key={consultation.consultationId}
+                        className="rounded-lg border border-amber-100 bg-white p-4 shadow-sm"
                       >
-                        <ClipboardList className="h-4 w-4" />
-                        补充并生成完整方案
-                      </Button>
-                    </article>
-                  ))}
+                        <div className="flex items-center justify-between gap-3">
+                          <Badge variant="outline">
+                            {consultation.riskLevel === "high" ? "高风险" : consultation.riskLevel === "medium" ? "中风险" : "低风险"}
+                          </Badge>
+                          <span className="text-xs text-slate-500">
+                            {formatDisplayDate((consultation as { updatedAt?: string }).updatedAt ?? consultation.generatedAt)}
+                          </span>
+                        </div>
+                        <p className="mt-3 line-clamp-3 text-sm font-medium leading-6 text-slate-900">
+                          {consultation.summary}
+                        </p>
+                        {sourceMaterialName ? (
+                          <p className="mt-2 break-all text-xs text-slate-500">
+                            来源材料：{sourceMaterialName}
+                          </p>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-4 w-full gap-2"
+                          onClick={openConsultationSetup}
+                        >
+                          <ClipboardList className="h-4 w-4" />
+                          补充并生成完整方案
+                        </Button>
+                      </article>
+                    );
+                  })}
                 </div>
               </section>
             ) : null}
@@ -1572,7 +1628,9 @@ export default function TeacherHighRiskConsultationPage() {
                   isStreaming={isStreaming}
                   onStart={(form) => void runConsultation(form)}
                   startButtonRef={consultationStartButtonRef}
-                  isPrimaryDemoCase={isLinXiaoyuCase(selectedChild)}
+                  isPrimaryDemoCase={
+                    currentUser.accountKind === "demo" && isLinXiaoyuCase(selectedChild)
+                  }
                 />
               </div>
             ) : null}
@@ -1588,7 +1646,7 @@ export default function TeacherHighRiskConsultationPage() {
             <div id="consultation-trace">
               <SectionCard
                 title="3. 流式会诊展示"
-                description="这里会按阶段展示会诊过程，适合老师讲解与录屏。"
+                description="这里按阶段展示会诊过程，便于教师核对证据、结论与后续动作。"
                 actions={activeStage ? <Badge variant="info">{getConsultationStageLabel(activeStage)}</Badge> : <Badge variant="outline">待启动</Badge>}
               >
                 <div className="space-y-4">
@@ -1710,7 +1768,7 @@ export default function TeacherHighRiskConsultationPage() {
         }
         aside={
           <div className="space-y-6">
-            <SectionCard title="会诊说明" description="适合移动端竖屏录屏的三步演示。">
+            <SectionCard title="会诊说明" description="在移动端也可完整查看三阶段会诊流程。">
               <ol className="space-y-3 text-sm text-slate-600">
                 <li className="flex items-center gap-3"><ShieldAlert className="h-4 w-4 text-amber-500" />先锁定需要升级关注的儿童</li>
                 <li className="flex items-center gap-3"><BrainCircuit className="h-4 w-4 text-indigo-500" />再让系统按阶段推送会诊流</li>
@@ -1726,7 +1784,7 @@ export default function TeacherHighRiskConsultationPage() {
             </SectionCard>
             <SectionCard title="展示视角" description="页面支持常规展示与详细查看两种视角。">
               <div className="space-y-3 text-sm text-slate-600">
-                <div className="rounded-lg border border-slate-100 bg-white p-4">常规展示会优先保留三阶段故事线、同步去向和必要异常提示，适合评委录屏与教师讲解。</div>
+                <div className="rounded-lg border border-slate-100 bg-white p-4">会诊记录保留三阶段证据链、同步去向和必要异常提示，便于教师复核和机构追踪。</div>
                 <div className="rounded-lg border border-slate-100 bg-white p-4">详细查看会额外展开更细的过程信息，便于需要时核对发生在哪个阶段。</div>
               </div>
             </SectionCard>

@@ -277,6 +277,7 @@ export default function DirectorDecisionCard({
                 type="button"
                 size="sm"
                 variant="premium"
+                data-testid={`admin-create-consultation-dispatch-${item.consultationId}`}
                 onClick={() => void onCreateConsultationNotification?.(item)}
                 disabled={!canCreateConsultationNotification}
               >

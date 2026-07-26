@@ -288,3 +288,71 @@ test("teacher-agent route returns demo-ready fallback content for three workflow
     globalThis.fetch = originalFetch;
   }
 });
+
+test("teacher-agent route forwards the teacher question after rebuilding trusted scope", async () => {
+  const originalFetch = globalThis.fetch;
+  let forwardedPayload: Record<string, unknown> | null = null;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (!url.endsWith("/api/v1/agents/teacher/run")) {
+      throw new Error(`Unexpected fetch url: ${url}`);
+    }
+    const rawBody =
+      init?.body instanceof ArrayBuffer
+        ? new TextDecoder().decode(init.body)
+        : String(init?.body ?? "");
+    forwardedPayload = JSON.parse(rawBody) as Record<string, unknown>;
+    return new Response(
+      JSON.stringify({
+        workflow: "follow-up",
+        mode: "child",
+        title: "Question-aware result",
+        summary: "Answer based on the requested child and teacher question.",
+        targetLabel: "Target child",
+        highlights: [],
+        actionItems: [],
+        source: "ai",
+        provider: "vivo",
+        fallback: false,
+        generatedAt: "2026-07-25T00:00:00.000Z",
+      }),
+      {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "x-smartchildcare-transport": "remote-brain-proxy",
+        },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    await withEnv({ BRAIN_API_BASE_URL: "http://brain.example.com" }, async () => {
+      const payload = buildPayload("follow-up", "c-1");
+      payload.question = "请只分析今天午睡惊醒后需要如何复查";
+      const response = await POST(
+        new Request("http://localhost:3000/api/ai/teacher-agent", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-demo-account-id": "u-admin",
+          },
+          body: JSON.stringify(payload),
+        })
+      );
+
+      assert.equal(response.status, 200);
+      assert.ok(forwardedPayload);
+      assert.equal(
+        forwardedPayload.question,
+        "请只分析今天午睡惊醒后需要如何复查"
+      );
+      assert.notEqual(
+        (forwardedPayload.currentUser as { institutionId?: string }).institutionId,
+        "inst-forged"
+      );
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

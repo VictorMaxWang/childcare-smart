@@ -90,14 +90,15 @@ test("E04 feedback details and scoped media attachments close the parent-teacher
   await screenshot(page, "parent-feedback-detail.png");
 
   await page.keyboard.press("Escape");
-  await page.getByTestId("parent-message-input").fill("E04 林妈妈发送一条带图片附件的家园消息。");
+  const parentMessage = "E04 林妈妈发送一条带图片附件的家园消息。";
+  await page.getByTestId("parent-message-input").fill(parentMessage);
   await page.getByTestId("parent-send-message").click();
-  await expect(page.getByTestId("parent-communication-panel")).toContainText("E01 API 已保存");
+  await expect(page.getByTestId("parent-communication-panel")).toContainText("消息与附件已保存，刷新后仍可见");
   await page.reload();
   await expect(page.getByTestId("parent-message-list")).toContainText("E04 林妈妈发送一条带图片附件");
   await screenshot(page, "parent-message-attachment-after-refresh.png");
 
-  await loginAs(page, "u-teacher", "/teacher/agent?action=communication");
+  await loginAs(page, "u-teacher2", "/teacher/agent?action=communication");
   await expect(page.getByTestId("communication-thread-card").first()).toBeVisible();
   const teacherDetailButton = page.locator(`[data-testid="teacher-open-feedback-detail"][data-feedback-id="${feedbackId}"]`).first();
   await expect(teacherDetailButton).toBeEnabled();
@@ -107,9 +108,10 @@ test("E04 feedback details and scoped media attachments close the parent-teacher
   await screenshot(page, "teacher-feedback-detail.png");
   await page.keyboard.press("Escape");
 
-  await page.getByTestId("communication-thread-card").first().getByRole("button").first().click();
+  const targetCommunicationCard = page.locator('[data-testid="communication-thread-card"][data-child-id="c-1"]').first();
+  await targetCommunicationCard.getByRole("button").first().click();
   await page.getByTestId("teacher-reply-input").fill("E04 李老师回复：已查看图片，语音附件同步给家长。");
-  await page.getByTestId("communication-thread-card").first().locator("input[type='file']").first().setInputFiles(audioPath);
+  await targetCommunicationCard.locator("input[type='file']").first().setInputFiles(audioPath);
   await Promise.all([
     page.waitForResponse(
       (response) =>
@@ -142,7 +144,7 @@ test("E04 feedback details and scoped media attachments close the parent-teacher
   await expect(page.getByTestId("feedback-detail-dialog")).toContainText("状态已保存");
   await screenshot(page, "admin-feedback-status-resolved.png");
 
-  await loginAs(page, "u-teacher2", "/teacher/agent?action=communication");
+  await loginAs(page, "u-teacher", "/teacher/agent?action=communication");
   const forbiddenDetail = await page.request.get(`/api/attachments/${parentAttachmentId}`);
   expect(forbiddenDetail.status()).toBe(403);
   const forbiddenContent = await page.request.get(`/api/attachments/${parentAttachmentId}/content`);

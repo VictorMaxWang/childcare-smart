@@ -76,8 +76,11 @@ export interface PixelParentHomeReplicaProps {
   careMode: boolean;
   onCareModeChange: (nextValue: boolean) => void;
   agentHref: string;
+  messageHref: string;
+  remindersHref: string;
   storybookHref: string;
   switchChildHref: string;
+  switchChildLabel: string;
   reminderSpeechText: string;
   statusItems: ParentPixelStatusItem[];
   reminders: ParentPixelReminderItem[];
@@ -120,8 +123,11 @@ export default function PixelParentHomeReplica({
   careMode,
   onCareModeChange,
   agentHref,
+  messageHref,
+  remindersHref,
   storybookHref,
   switchChildHref,
+  switchChildLabel,
   reminderSpeechText,
   statusItems,
   reminders,
@@ -223,9 +229,9 @@ export default function PixelParentHomeReplica({
               <div className="flex flex-wrap items-center gap-3">
                 <CareModeToggle careMode={careMode} onChange={onCareModeChange} variant="compact" />
                 <Button asChild variant="outline" className="h-10 rounded-full px-4 text-sm sm:h-12 sm:px-5 sm:text-base">
-                  <Link href={switchChildHref}>
+                  <Link href={switchChildHref} data-testid="parent-switch-child">
                     <Repeat2 className="mr-2 h-5 w-5" />
-                    切换孩子
+                    {switchChildLabel}
                   </Link>
                 </Button>
               </div>
@@ -282,7 +288,11 @@ export default function PixelParentHomeReplica({
                 <Bell className="h-6 w-6 text-violet-500" />
                 <h2 className="text-2xl font-black tracking-normal text-slate-950">今日重点提醒</h2>
               </div>
-              <Link href={agentHref} className="flex items-center gap-1 text-sm font-semibold text-violet-600">
+              <Link
+                href={remindersHref}
+                data-testid="parent-reminders-link"
+                className="flex items-center gap-1 text-sm font-semibold text-violet-600"
+              >
                 查看全部
                 <ChevronRight className="h-4 w-4" />
               </Link>
@@ -512,7 +522,7 @@ export default function PixelParentHomeReplica({
 
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
             <Link
-              href={agentHref}
+              href={messageHref}
               className="rounded-[24px] border border-violet-100 bg-[linear-gradient(135deg,#f4f0ff,#fff)] p-5 shadow-sm"
             >
               <div className="flex items-center justify-between gap-3">

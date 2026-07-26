@@ -147,6 +147,9 @@ export default function ParentHomePage() {
   const feed = parentFeed.find((item) => item.child.id === resolvedChildId);
   const viewModel = buildParentHomeViewModel(feed);
   const [previewResult, setPreviewResult] = useState<ParentAgentResult | null>(null);
+  const [previewProvenance, setPreviewProvenance] = useState<
+    "loading" | "ai" | "local-rule"
+  >("loading");
   const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
   const [weeklyReport, setWeeklyReport] = useState<WeeklyReportResponse | null>(null);
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
@@ -260,6 +263,8 @@ export default function ParentHomePage() {
     const controller = new AbortController();
     const context = previewContext;
     const snapshotPayload = snapshot;
+    setPreviewResult(null);
+    setPreviewProvenance("loading");
 
     async function fetchPreview() {
       try {
@@ -277,11 +282,19 @@ export default function ParentHomePage() {
         const data = (await response.json()) as AiSuggestionResponse;
         if (!cancelled) {
           setPreviewResult(buildParentAgentSuggestionResult({ context, suggestion: data }));
+          const trace = data as AiSuggestionResponse & {
+            fallback?: boolean;
+            source?: string;
+          };
+          setPreviewProvenance(
+            trace.fallback || trace.source === "fallback" ? "local-rule" : "ai"
+          );
         }
       } catch {
         if (!cancelled) {
           const fallback = buildFallbackSuggestion(snapshotPayload);
           setPreviewResult(buildParentAgentSuggestionResult({ context, suggestion: fallback }));
+          setPreviewProvenance("local-rule");
         }
       }
     }
@@ -381,8 +394,27 @@ export default function ParentHomePage() {
   }
 
   const agentHref = `/parent/agent?child=${feed.child.id}`;
+  const messageHref = `${agentHref}#feedback`;
+  const remindersHref = `/parent/reminders?child=${feed.child.id}`;
   const storybookHref = `/parent/storybook?child=${feed.child.id}`;
+  const currentFeedIndex = parentFeed.findIndex(
+    (item) => item.child.id === feed.child.id
+  );
+  const nextFeed =
+    parentFeed.length > 1
+      ? parentFeed[(currentFeedIndex + 1) % parentFeed.length]
+      : undefined;
+  const switchChildHref = nextFeed
+    ? `/parent?child=${nextFeed.child.id}`
+    : "/parent/onboarding/child";
+  const switchChildLabel = nextFeed ? "切换孩子" : "添加孩子";
   const primaryAgentLabel = previewResult ? "继续追问" : "进入 AI 助手";
+  const previewHeading =
+    previewProvenance === "local-rule"
+      ? "基于记录的本地提示"
+      : previewProvenance === "loading"
+        ? "正在生成今日提示"
+        : "AI 今日提醒";
   const displayInterventionCard = latestInterventionCard ?? previewResult?.interventionCard;
   const displayTonightTaskTitle = displayInterventionCard?.title ?? viewModel.tonightTask.title;
   const displayTonightTaskDescription =
@@ -409,7 +441,7 @@ export default function ParentHomePage() {
     outro: "浏览器播报，仅用于当前设备预览，不是后端真实语音。",
   });
   const reminderSpeechText = buildParentSpeechScript({
-    title: "AI 今日提醒",
+    title: previewHeading,
     sections: [
       { label: "提醒", text: previewResult?.title ?? viewModel.aiReminder.title },
       { label: "为什么现在看", text: displayPreviewWhyNow },
@@ -476,7 +508,9 @@ export default function ParentHomePage() {
     {
       id: "health-material",
       title: "健康材料摘要",
-      meta: latestHealthMaterial ? "本地演示解析 · 已保存" : "暂无健康材料解析",
+      meta: latestHealthMaterial
+        ? `${currentUser.accountKind === "demo" ? "演示解析" : "机构健康档案"} · 已保存`
+        : "暂无健康材料解析",
       description: latestHealthMaterial
         ? `${latestHealthMaterialSummary || "老师已保存健康材料摘要。"}${latestHealthMaterialFollowUp ? ` · 复查建议：${latestHealthMaterialFollowUp}` : ""}`
         : "老师保存健康材料解析后，这里会展示家长可见摘要。",
@@ -987,7 +1021,9 @@ export default function ParentHomePage() {
         : latestMeal
           ? latestMealFoodSummary || "饮食记录"
           : todayMenu
-            ? "演示餐谱"
+            ? currentUser.accountKind === "demo"
+              ? "演示餐谱"
+              : "今日餐谱"
             : "无饮食记录",
       tone: latestMeal?.allergyReaction ? "orange" : "orange",
     },
@@ -1013,7 +1049,7 @@ export default function ParentHomePage() {
             id: "health-material",
             time: new Date(latestHealthMaterial.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
             author: "健康材料",
-            content: `健康材料摘要：${latestHealthMaterialSummary || "本地演示解析结果已保存。"}${latestHealthMaterialFollowUp ? ` 复查建议：${latestHealthMaterialFollowUp}` : ""}`,
+            content: `健康材料摘要：${latestHealthMaterialSummary || "解析结果已保存。"}${latestHealthMaterialFollowUp ? ` 复查建议：${latestHealthMaterialFollowUp}` : ""}`,
             unread: false,
           },
         ]
@@ -1071,8 +1107,11 @@ export default function ParentHomePage() {
           careMode={careMode}
           onCareModeChange={setCareMode}
           agentHref={agentHref}
+          messageHref={messageHref}
+          remindersHref={remindersHref}
           storybookHref={storybookHref}
-          switchChildHref={`/parent?child=${feed.child.id}`}
+          switchChildHref={switchChildHref}
+          switchChildLabel={switchChildLabel}
           reminderSpeechText={reminderSpeechText}
           statusItems={pixelStatusItems}
           reminders={pixelReminders}
@@ -1202,7 +1241,11 @@ export default function ParentHomePage() {
                         <Sparkles className="h-5 w-5" aria-hidden="true" />
                       </div>
                       <div>
-                        <p className="text-base font-semibold text-slate-950">AI 今晚建议</p>
+                        <p className="text-base font-semibold text-slate-950">
+                          {previewProvenance === "local-rule"
+                            ? "基于记录的今晚提示"
+                            : "AI 今晚建议"}
+                        </p>
                         <p className="mt-1 text-xs text-slate-500">只保留一件可执行的家庭动作</p>
                       </div>
                     </div>
@@ -1263,11 +1306,19 @@ export default function ParentHomePage() {
             </div>
 
             <SectionCard
-              title="AI 今日提醒"
-              description="优先看当前最值得家长马上处理的一条提示。"
+              title={previewHeading}
+              description={
+                previewProvenance === "local-rule"
+                  ? "AI 服务暂不可用时，系统会明确展示基于现有记录生成的本地规则提示。"
+                  : "优先看当前最值得家长马上处理的一条提示。"
+              }
               actions={
                 <Badge variant={viewModel.aiReminder.level === "warning" ? "warning" : "info"}>
-                  {viewModel.aiReminder.level === "warning" ? "需关注" : "今日建议"}
+                  {previewProvenance === "local-rule"
+                    ? "本地规则"
+                    : viewModel.aiReminder.level === "warning"
+                      ? "需关注"
+                      : "今日建议"}
                 </Badge>
               }
             >

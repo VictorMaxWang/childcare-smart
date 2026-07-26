@@ -414,10 +414,29 @@ function buildSourceDraftWithState(params: {
     activeRecordId: pickNextActiveRecordId(nextRecords, params.activeRecordId),
     records: nextRecords,
   };
+  const hasPersistFailure = nextRecords.some(
+    (record) => record.persistStatus === "failed"
+  );
+  const hasSavedRecord = nextRecords.some(
+    (record) =>
+      record.status === "confirmed" && record.persistStatus === "saved"
+  );
+  const allSavedOrDiscarded =
+    nextRecords.length > 0 &&
+    nextRecords.every(
+      (record) =>
+        record.status === "discarded" ||
+        (record.status === "confirmed" && record.persistStatus === "saved")
+    );
 
   return {
     ...params.sourceDraft,
     updatedAt: params.now,
+    syncStatus: hasPersistFailure
+      ? "failed"
+      : hasSavedRecord && allSavedOrDiscarded
+        ? "synced"
+        : params.sourceDraft.syncStatus,
     structuredPayload: {
       ...(payload ?? {}),
       t5State: nextState,
@@ -514,6 +533,10 @@ function applyPersistResultToRecord(params: {
 }) {
   return {
     ...params.record,
+    status:
+      params.action === "confirm" && params.result.status === "failed"
+        ? ("pending" as const)
+        : params.record.status,
     lastAction: params.action,
     persistStatus: params.result.status,
     persistMessage: getPersistMessageForAction(params.action, params.result),
@@ -532,11 +555,20 @@ export function createTeacherDraftPersistAdapter(params: {
   drafts: MobileDraft[];
   saveDraft: (draft: MobileDraft) => void;
   persistNow?: (nextDrafts: MobileDraft[]) => Promise<TeacherDraftPersistResult>;
+  persistRecordAction?: (params: {
+    action: TeacherDraftRecordAction;
+    record: TeacherDraftRecord;
+    sourceDraftId: string;
+  }) => Promise<TeacherDraftPersistResult>;
   structuredPayloadOverrides?: Record<string, Record<string, unknown>>;
   now?: () => string;
 }): TeacherDraftPersistAdapter {
   const findSourceDraft = (sourceDraftId: string) =>
     params.drafts.find((draft) => draft.draftId === sourceDraftId);
+  const confirmationRequests = new Map<
+    string,
+    Promise<TeacherDraftMutationResult>
+  >();
 
   const mutateRecord = async (input: {
     sourceDraftId: string;
@@ -580,8 +612,42 @@ export function createTeacherDraftPersistAdapter(params: {
 
     let finalRecords = nextRecords;
     const shouldPersistRemote = !isLocalOnlyMobileDraft(nextSourceDraft);
+    const changedRecord =
+      nextRecords.find((record) => record.recordId === input.recordId) ?? null;
 
-    if (!shouldPersistRemote) {
+    if (params.persistRecordAction && changedRecord) {
+      let persistResult: TeacherDraftPersistResult;
+      try {
+        persistResult = await params.persistRecordAction({
+          action: input.action,
+          record: changedRecord,
+          sourceDraftId: input.sourceDraftId,
+        });
+      } catch (error) {
+        persistResult = buildFailedPersistResult(
+          error,
+          params.now?.() ?? new Date().toISOString()
+        );
+      }
+      finalRecords = nextRecords.map((record) =>
+        record.recordId === input.recordId
+          ? applyPersistResultToRecord({
+              record,
+              action: input.action,
+              result: persistResult,
+            })
+          : record
+      );
+      params.saveDraft(
+        buildSourceDraftWithState({
+          sourceDraft: nextSourceDraft,
+          records: finalRecords,
+          activeRecordId: input.activeRecordId,
+          structuredPayloadOverrides: params.structuredPayloadOverrides,
+          now: persistResult.persistedAt,
+        })
+      );
+    } else if (!shouldPersistRemote) {
       const persistResult = buildLocalOnlyPersistResult(updatedAt);
       finalRecords = nextRecords.map((record) =>
         record.recordId === input.recordId
@@ -686,7 +752,11 @@ export function createTeacherDraftPersistAdapter(params: {
       });
     },
     async confirmDraft({ sourceDraftId, recordId }) {
-      return mutateRecord({
+      const key = `${sourceDraftId}:${recordId}`;
+      const inFlight = confirmationRequests.get(key);
+      if (inFlight) return inFlight;
+
+      const request = mutateRecord({
         sourceDraftId,
         recordId,
         activeRecordId: recordId,
@@ -695,7 +765,11 @@ export function createTeacherDraftPersistAdapter(params: {
           ...record,
           status: "confirmed" as const,
         }),
+      }).finally(() => {
+        confirmationRequests.delete(key);
       });
+      confirmationRequests.set(key, request);
+      return request;
     },
     async discardDraft({ sourceDraftId, recordId }) {
       return mutateRecord({

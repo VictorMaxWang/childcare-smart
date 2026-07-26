@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 type AssistantSource = "ai" | "fallback" | "mock" | string | null | undefined;
 
 function sourceText(source: AssistantSource) {
-  if (source === "ai") return "vivo Chat";
+  if (source === "ai") return "真实模型";
   if (source === "fallback") return "显式 fallback";
   if (source === "mock") return "mock";
   return source ? String(source) : "等待生成";

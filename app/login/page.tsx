@@ -464,7 +464,8 @@ export default function LoginPage() {
                   onChange={(event) => setAgreementAccepted(event.target.checked)}
                 />
                 <span>
-                  我已阅读并同意 <a href="#">《用户服务协议》</a> 和 <a href="#">《隐私政策》</a>
+                  我已阅读并同意 <Link href="/terms">《用户服务协议》</Link> 和{" "}
+                  <Link href="/privacy">《隐私政策》</Link>
                 </span>
               </label>
 

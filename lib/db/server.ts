@@ -20,6 +20,17 @@ export class DatabaseConfigError extends Error {
   }
 }
 
+/**
+ * 仅识别 MySQL 明确返回的缺表错误，供可选兼容层降级使用。
+ * 不能根据错误消息猜测，避免把权限、连接或查询错误误当成尚未迁移。
+ */
+export function isMissingDatabaseTableError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const code = (error as { code?: unknown }).code;
+  const errno = (error as { errno?: unknown }).errno;
+  return code === "ER_NO_SUCH_TABLE" || errno === 1146;
+}
+
 export type DatabaseConnection = PoolConnection;
 
 type DatabaseRow = Record<string, unknown>;

@@ -32,18 +32,17 @@ async function submitAssistantQuestion(page: Page, question: string) {
   await page.getByTestId("r04-assistant-send").click();
 }
 
-test("teacher agent prompt chips generate demo-ready workflow results", async ({ page }) => {
+test("teacher agent prompt chips generate class-scoped workflow results", async ({ page }) => {
   await resetDemoStorage(page);
   await loginAs(page, "u-teacher", "/teacher/agent");
   await expect(page.getByTestId("r04-prompt-chip")).toHaveCount(3);
 
   await clickPromptChip(page, "班级待办总结 / 本周观察总结");
   await waitForWorkflowResult(page, "weekly-summary", [
-    /林小雨/,
+    /向阳班/,
     /高远舟/,
-    /陈安安/,
-    /走廊活动/,
-    /48 小时复查/,
+    /待复查/,
+    /家长反馈/,
   ]);
   await expect(page.getByTestId("teacher-agent-history-item")).toHaveCount(1, { timeout: 45_000 });
 
@@ -52,7 +51,7 @@ test("teacher agent prompt chips generate demo-ready workflow results", async ({
   await expect(page.getByTestId("teacher-agent-history-item")).toHaveCount(2, { timeout: 45_000 });
 
   await clickPromptChip(page, "生成家长沟通建议");
-  await waitForWorkflowResult(page, "communication", [/陈安安/, /午餐进食偏少/, /家园同步饮食观察/]);
+  await waitForWorkflowResult(page, "communication", [/高远舟/, /家长沟通建议/, /饮水/]);
   await expect(page.getByTestId("teacher-agent-history-item")).toHaveCount(3, { timeout: 45_000 });
 });
 
@@ -61,13 +60,13 @@ test("teacher agent composer routes typed prompts to the correct workflow", asyn
   await loginAs(page, "u-teacher", "/teacher/agent");
 
   await submitAssistantQuestion(page, "请生成本周观察总结，覆盖班级待办和 48 小时复查。");
-  await waitForWorkflowResult(page, "weekly-summary", [/班级层面/, /48 小时复查/]);
+  await waitForWorkflowResult(page, "weekly-summary", [/向阳班/, /待复查/]);
 
   await submitAssistantQuestion(page, "请生成高远舟今日跟进行动，重点看午睡和饮水。");
   await waitForWorkflowResult(page, "follow-up", [/高远舟/, /午睡前焦虑/, /饮水偏少/]);
 
-  await submitAssistantQuestion(page, "帮我生成陈安安家长沟通建议，说明午餐进食偏少。");
-  await waitForWorkflowResult(page, "communication", [/陈安安/, /午餐进食偏少/, /家园同步饮食观察/]);
+  await submitAssistantQuestion(page, "帮我生成高远舟家长沟通建议，说明午睡和饮水情况。");
+  await waitForWorkflowResult(page, "communication", [/高远舟/, /家长沟通建议/, /饮水/]);
 
   await expect(page.getByTestId("teacher-agent-history-item")).toHaveCount(3, { timeout: 45_000 });
 });

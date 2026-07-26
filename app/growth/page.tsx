@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   BookHeart,
+  Camera,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
@@ -15,6 +16,7 @@ import {
   ShieldAlert,
   Utensils,
   Workflow,
+  X,
 } from "lucide-react";
 import {
   BEHAVIOR_CATEGORIES,
@@ -49,7 +51,13 @@ import { buildRecentLocalDateRange, normalizeLocalDate } from "@/lib/date";
 import { DEMO_MEDIA_FALLBACKS } from "@/lib/demo-media/assets";
 import { OBSERVATION_INDICATOR_MAP, type ObservationIndicatorOption } from "@/lib/mock/observation";
 import { toast } from "sonner";
-import { createRecord } from "@/lib/api/records";
+import { createRecord, updateRecord } from "@/lib/api/records";
+import { uploadAttachmentFile } from "@/lib/api/communication";
+import {
+  clampImageDataUrl,
+  imageDataUrlToFile,
+  readImageFileAsDataUrl,
+} from "@/lib/media/image-client";
 
 export default function GrowthPage() {
   const router = useRouter();
@@ -77,6 +85,15 @@ export default function GrowthPage() {
   const [reviewDate, setReviewDate] = useState("");
   const [showFormOnMobile, setShowFormOnMobile] = useState(false);
   const [parentDetailRecordId, setParentDetailRecordId] = useState<string | null>(null);
+  const [growthPhoto, setGrowthPhoto] = useState<{
+    file: File;
+    previewUrl: string;
+  } | null>(null);
+  const [growthPhotoProcessing, setGrowthPhotoProcessing] = useState(false);
+  const [pendingMediaRecord, setPendingMediaRecord] = useState<{
+    recordId: string;
+    childId: string;
+  } | null>(null);
 
   const isTeacher = currentUser.role === "教师";
   const isParent = currentUser.role === "家长";
@@ -206,6 +223,72 @@ export default function GrowthPage() {
     [reviewChartData]
   );
 
+  function clearGrowthForm() {
+    setDescription("");
+    setTags("");
+    setNeedsAttention(false);
+    setFollowUpAction("");
+    setReviewDate("");
+    setSelectedIndicators([]);
+    setGrowthPhoto(null);
+    setPendingMediaRecord(null);
+  }
+
+  async function handleGrowthPhotoChange(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!/^image\/(?:jpeg|png|webp)$/iu.test(file.type)) {
+      toast.error("成长照片格式不支持", {
+        description: "请选择 JPEG、PNG 或 WebP 图片。",
+      });
+      return;
+    }
+
+    setGrowthPhotoProcessing(true);
+    try {
+      const source = await readImageFileAsDataUrl(file);
+      const compressed = await clampImageDataUrl(source, 1280, 0.82);
+      const compressedFile = imageDataUrlToFile(
+        compressed,
+        `growth-${Date.now()}.jpg`
+      );
+      if (compressedFile.size > 4 * 1024 * 1024) {
+        throw new Error("压缩后照片仍超过 4 MB，请选择尺寸更小的图片。");
+      }
+      setGrowthPhoto({ file: compressedFile, previewUrl: compressed });
+    } catch (error) {
+      toast.error("成长照片处理失败", {
+        description:
+          error instanceof Error ? error.message : "请更换图片后重试。",
+      });
+    } finally {
+      setGrowthPhotoProcessing(false);
+    }
+  }
+
+  async function persistGrowthPhoto(recordId: string, childId: string) {
+    if (!growthPhoto) return null;
+    const attachment = await uploadAttachmentFile({
+      file: growthPhoto.file,
+      childId,
+      relatedType: "growth",
+      relatedId: recordId,
+    });
+    const protectedUrl =
+      attachment.downloadUrl ?? attachment.storageObject?.url;
+    if (!protectedUrl) {
+      throw new Error("媒体服务未返回受保护的读取地址。");
+    }
+    await updateRecord("growth", recordId, {
+      mediaUrls: [protectedUrl],
+      mediaRefs: [protectedUrl],
+    });
+    return protectedUrl;
+  }
+
   async function submitRecord() {
     if (!selectedChildId || !description.trim()) {
       toast.warning("请先补充观察描述。", {
@@ -230,8 +313,46 @@ export default function GrowthPage() {
     if (currentUser.accountKind === "normal") {
       setSavingGrowthRecord(true);
       try {
-        await createRecord("growth", payload);
+        if (pendingMediaRecord) {
+          if (!growthPhoto) {
+            toast.warning("请重新选择照片后再重试上传。");
+            return;
+          }
+          await persistGrowthPhoto(
+            pendingMediaRecord.recordId,
+            pendingMediaRecord.childId
+          );
+          await reloadAppSnapshotFromApi();
+          toast.success("成长照片已补充保存", {
+            description: "照片已绑定到此前保存的成长记录，家长端刷新后可见。",
+          });
+          clearGrowthForm();
+          return;
+        }
+
+        const created = await createRecord("growth", payload);
+        let mediaErrorMessage = "";
+        if (growthPhoto) {
+          try {
+            await persistGrowthPhoto(created.id, created.childId);
+          } catch (mediaError) {
+            mediaErrorMessage =
+              mediaError instanceof Error
+                ? mediaError.message
+                : "照片上传失败，请稍后重试。";
+            setPendingMediaRecord({
+              recordId: created.id,
+              childId: created.childId,
+            });
+          }
+        }
         const reloadResult = await reloadAppSnapshotFromApi();
+        if (mediaErrorMessage) {
+          toast.warning("成长记录已保存，照片尚未保存", {
+            description: `${mediaErrorMessage} 当前表单会保留，点击“重试保存照片”即可继续。`,
+          });
+          return;
+        }
         if (reloadResult.status === "failed") {
           toast.warning("成长记录已写入服务端", {
             description: "页面刷新暂时失败，请手动刷新后查看最新记录。",
@@ -241,12 +362,7 @@ export default function GrowthPage() {
             description: `${childName} 的${category}观察已同步到服务端，可用于后续 AI 绘本分析。`,
           });
         }
-        setDescription("");
-        setTags("");
-        setNeedsAttention(false);
-        setFollowUpAction("");
-        setReviewDate("");
-        setSelectedIndicators([]);
+        clearGrowthForm();
       } catch (requestError) {
         toast.error("成长记录保存失败", {
           description:
@@ -271,14 +387,13 @@ export default function GrowthPage() {
     toast.success("成长记录已保存", {
       description: `${childName} 的${category}观察已加入台账。${
         saveResult.status === "local_only" ? "已写入共享演示数据，刷新后保留。" : "已写入当前数据层，刷新后保留。"
+      }${
+        growthPhoto
+          ? " 演示账号仅保存结构化观察，不上传幼儿原始照片。"
+          : ""
       }`,
     });
-    setDescription("");
-    setTags("");
-    setNeedsAttention(false);
-    setFollowUpAction("");
-    setReviewDate("");
-    setSelectedIndicators([]);
+    clearGrowthForm();
   }
 
   if (isParent) {
@@ -718,7 +833,7 @@ export default function GrowthPage() {
         <Card className={`h-fit overflow-hidden rounded-2xl border-indigo-100 shadow-sm ${showFormOnMobile ? "block" : "hidden xl:block"}`}>
           <CardHeader>
             <CardTitle className="text-lg">新增观察记录</CardTitle>
-            <CardDescription>家长和教师均可补充观察，机构管理员可做复盘。</CardDescription>
+            <CardDescription>教师可补充图文观察，机构管理员可做复盘。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <FormField label="记录对象" htmlFor="growth-child" required>
@@ -797,6 +912,74 @@ export default function GrowthPage() {
                 placeholder="请记录具体表现、触发场景和处理方式。"
               />
             </FormField>
+            <FormField
+              label="成长照片"
+              description="可选。普通账号照片会保存到受权限保护的私有媒体存储。"
+            >
+              <div className="space-y-3">
+                <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-200 bg-indigo-50/60 px-3 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50">
+                  <Camera className="h-4 w-4" aria-hidden="true" />
+                  {growthPhotoProcessing
+                    ? "正在压缩照片..."
+                    : growthPhoto
+                      ? "更换照片"
+                      : "拍照 / 从相册选择"}
+                  <input
+                    data-testid="growth-photo-input"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    capture="environment"
+                    className="hidden"
+                    disabled={
+                      growthPhotoProcessing || savingGrowthRecord
+                    }
+                    onChange={handleGrowthPhotoChange}
+                  />
+                </label>
+
+                {growthPhoto ? (
+                  <figure
+                    className="relative overflow-hidden rounded-xl border border-slate-100 bg-slate-100"
+                    data-testid="growth-photo-preview"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={growthPhoto.previewUrl}
+                      alt="待保存的成长照片预览"
+                      className="h-36 w-full object-cover"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      className="absolute right-2 top-2"
+                      aria-label="移除成长照片"
+                      onClick={() => setGrowthPhoto(null)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </figure>
+                ) : null}
+
+                {pendingMediaRecord ? (
+                  <div
+                    className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800"
+                    data-testid="growth-photo-retry-state"
+                  >
+                    本条成长记录已经保存，照片尚未保存。重新选择照片后点击下方按钮，只会重试照片，不会重复创建记录。
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2 h-8 px-2 text-amber-800"
+                      onClick={clearGrowthForm}
+                    >
+                      跳过照片，完成本条记录
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </FormField>
             <FormField label="跟进行动" htmlFor="growth-follow-up">
               <Input
                 id="growth-follow-up"
@@ -817,9 +1000,15 @@ export default function GrowthPage() {
                 {needsAttention ? "需要关注" : "正常观察"}
               </Button>
             </div>
-            <Button className="w-full gap-2" onClick={() => void submitRecord()} loading={savingGrowthRecord} data-testid="r05-growth-save-record">
+            <Button
+              className="w-full gap-2"
+              onClick={() => void submitRecord()}
+              loading={savingGrowthRecord}
+              disabled={Boolean(pendingMediaRecord && !growthPhoto)}
+              data-testid="r05-growth-save-record"
+            >
               <PlusCircle className="h-4 w-4" />
-              保存记录
+              {pendingMediaRecord ? "重试保存照片" : "保存记录"}
             </Button>
           </CardContent>
         </Card>
@@ -1111,6 +1300,11 @@ function readStringList(value: unknown) {
 function normalizeGrowthMediaPath(value: string) {
   const trimmed = value.trim();
   if (!trimmed.startsWith("/") || trimmed.includes("\\") || /^[A-Za-z]:/.test(trimmed)) return null;
+  if (
+    /^\/api\/attachments\/[a-z0-9_-]+\/content$/iu.test(trimmed)
+  ) {
+    return trimmed;
+  }
   if (trimmed.startsWith("/demo-media/gpt-image2/growth/")) return trimmed;
   if (trimmed.startsWith("/demo-media/growth/")) return trimmed;
   return null;
@@ -1127,10 +1321,14 @@ function getGrowthMediaSources(record?: GrowthMediaSourceRecord | null) {
       .filter((source): source is string => Boolean(source))
   );
 
-  return sources.length > 0 ? sources : [GROWTH_MEDIA_FALLBACK];
+  return sources;
 }
 
 function growthImageFallbackChain(initialSrc: string) {
+  const isDemoSource =
+    initialSrc.startsWith("/demo-media/") ||
+    initialSrc.startsWith("/demo-growth/");
+  if (!isDemoSource) return [initialSrc];
   return initialSrc === GROWTH_MEDIA_FALLBACK
     ? [GROWTH_MEDIA_FALLBACK]
     : uniqueMediaSources([initialSrc, GROWTH_MEDIA_FALLBACK]);
@@ -1176,14 +1374,17 @@ function GrowthRecordImage({
         }}
       />
       <figcaption className="absolute right-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-slate-500 shadow-sm">
-        示例素材
+        {src.startsWith("/api/attachments/")
+          ? "成长照片"
+          : "演示素材"}
       </figcaption>
     </figure>
   );
 }
 
 function GrowthRecordMediaStrip({ sources, alt, recordId, childId, compact = false }: GrowthRecordMediaStripProps) {
-  const displaySources = (sources.length > 0 ? sources : [GROWTH_MEDIA_FALLBACK]).slice(0, compact ? 1 : 3);
+  const displaySources = sources.slice(0, compact ? 1 : 3);
+  if (displaySources.length === 0) return null;
 
   return (
     <div className={`mt-3 grid gap-2 ${compact ? "grid-cols-1" : displaySources.length > 1 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-1 sm:max-w-64"}`}>

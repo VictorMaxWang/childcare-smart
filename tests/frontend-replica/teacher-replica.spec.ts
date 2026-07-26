@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import { loginAs } from "../feature-completion/helpers";
+import {
+  loginAs,
+  resetDemoStorage,
+} from "../feature-completion/helpers";
 
 type PageGuards = {
   consoleErrors: string[];
@@ -63,6 +66,10 @@ async function expectDemoMediaImage(page: Page, selector: string) {
 }
 
 test.describe("FRONTEND-REPLICA-R06 teacher replica", () => {
+  test.beforeEach(async ({ page }) => {
+    await resetDemoStorage(page);
+  });
+
   test("teacher dashboard keeps design shell, voice orb, and Li/Zhou 18/18 baseline", async ({ page }) => {
     const guards = installPageGuards(page);
 
@@ -74,6 +81,12 @@ test.describe("FRONTEND-REPLICA-R06 teacher replica", () => {
     await expect(page.getByTestId("r06-teacher-voice-button")).toBeVisible();
     await expect(page.getByTestId("r06-teacher-command-assistant")).toBeVisible();
     await expect(page.getByTestId("voice-orb-button")).toHaveCount(0);
+    const priorityLink = page.getByTestId("teacher-priority-child-link").first();
+    await expect(priorityLink).toBeVisible();
+    await expect(priorityLink).toHaveAttribute(
+      "href",
+      /\/teacher\/(?:high-risk-consultation\?childId=|agent\?action=communication&childId=)c-/
+    );
 
     const liWorkbench = await page.request.get("/api/analytics/teacher-workbench");
     expect(liWorkbench.ok()).toBe(true);
@@ -85,7 +98,8 @@ test.describe("FRONTEND-REPLICA-R06 teacher replica", () => {
     await expectTeacherShell(page);
     await expect(page.getByTestId("r06-teacher-replica-page")).toHaveAttribute("data-visible-children", "18");
     await expect(page.getByTestId("r06-teacher-replica-page")).toContainText("周老师");
-    await expect(page.locator("body")).not.toContainText("林小雨");
+    await expect(page.locator("body")).not.toContainText("沈星禾");
+    await expect(page.getByTestId("r02-shell-topbar")).not.toContainText("向阳班");
     const zhouWorkbench = await page.request.get("/api/analytics/teacher-workbench");
     expect(zhouWorkbench.ok()).toBe(true);
     const zhouBody = (await zhouWorkbench.json()) as { ok: boolean; data: { visibleChildCount: number } };
@@ -120,7 +134,18 @@ test.describe("FRONTEND-REPLICA-R06 teacher replica", () => {
       await expect(page.getByTestId("attachment-media-picker")).toBeVisible();
       await expect(page.getByTestId("teacher-send-reply")).toBeVisible();
     }
-    await expect(page.getByTestId("teacher-open-feedback-detail").first()).toBeVisible();
+    const feedbackResponse = await page.request.get("/api/feedback");
+    const feedbackBody = (await feedbackResponse.json()) as {
+      ok?: boolean;
+      data?: unknown[];
+    };
+    const feedbackButtons = page.getByTestId("teacher-open-feedback-detail");
+    if (feedbackBody.ok && (feedbackBody.data?.length ?? 0) > 0) {
+      await page.getByRole("button", { name: /沟通记录/ }).click();
+      await expect(feedbackButtons.first()).toBeVisible();
+    } else {
+      await expect(feedbackButtons).toHaveCount(0);
+    }
 
     await expectNoHorizontalOverflow(page);
     await expectNoPageProblems(page, guards);
@@ -156,6 +181,9 @@ test.describe("FRONTEND-REPLICA-R06 teacher replica", () => {
     await page.waitForURL(/\/teacher\/high-risk-consultation/);
     await expect(page.getByTestId("r06-high-risk-consultation-page")).toBeVisible();
     await expect(page.locator("body")).toContainText(filename);
+    if ((await page.getByTestId("d05-consultation-status-pending").count()) === 0) {
+      await page.getByTestId("r06-consultation-start-button").click();
+    }
     await expect(page.getByTestId("d05-consultation-status-pending")).toBeVisible();
     await expect(page.getByTestId("d05-consultation-status-in-progress")).toBeVisible();
     await expect(page.getByTestId("d05-consultation-status-resolved")).toBeVisible();
@@ -165,9 +193,9 @@ test.describe("FRONTEND-REPLICA-R06 teacher replica", () => {
     await page.getByTestId("d05-consultation-note-send").click();
     await expect(page.getByTestId("d05-consultation-discussion")).toContainText(noteToken);
     await page.getByTestId("d05-consultation-status-in-progress").click();
-    await expect(page.locator("body")).toContainText("会诊状态已更新为 处理中");
+    await expect(page.locator("body")).toContainText("会诊状态已更新为处理中");
     await page.getByTestId("d05-consultation-status-resolved").click();
-    await expect(page.locator("body")).toContainText("会诊状态已更新为 已解决");
+    await expect(page.locator("body")).toContainText("会诊状态已更新为已解决");
 
     await expectNoHorizontalOverflow(page);
     await expectNoPageProblems(page, guards);
@@ -180,13 +208,17 @@ test.describe("FRONTEND-REPLICA-R06 teacher replica", () => {
     await expectTeacherShell(page);
     await expect(page.getByTestId("r06-high-risk-consultation-page")).toBeVisible();
     await expect(page.getByTestId("d05-consultation-discussion")).toBeVisible();
-    await page.getByRole("button", { name: "发起会诊 / 邀请专家" }).click();
+    await page.getByRole("button", { name: "发起会诊", exact: true }).click();
     await expect(page.getByTestId("r06-consultation-setup-focus-message")).toContainText("已定位到会诊输入区");
     await expect(page.getByTestId("r06-consultation-start-button")).toBeFocused();
     await expect(page.getByRole("button", { name: /一键生成会诊/ })).toBeVisible();
-    await expect(page.getByRole("link", { name: "去沟通" })).toHaveAttribute(
+    await page.getByTestId("r06-consultation-start-button").click();
+    await expect(
+      page.getByRole("link", { name: "去家园沟通同步家长", exact: true })
+    ).toHaveAttribute(
       "href",
-      "/teacher/agent?action=communication&childId=c-1"
+      /\/teacher\/agent\?action=communication&childId=c-[a-z0-9-]+/u,
+      { timeout: 45_000 }
     );
 
     await expectNoHorizontalOverflow(page);

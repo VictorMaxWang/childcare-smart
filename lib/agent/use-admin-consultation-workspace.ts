@@ -103,14 +103,14 @@ export function getAdminConsultationFeedBadge(params: {
 
   if (params.feedStatus === "ready" && params.fallbackUsed) {
     return {
-      label: "演示兜底",
+      label: "本地规则",
       variant: "outline",
     };
   }
 
   if (params.feedStatus === "unavailable" && params.localConsultationCount > 0) {
     return {
-      label: "本地兜底",
+      label: "本地规则",
       variant: "outline",
     };
   }
@@ -175,7 +175,7 @@ export function buildAdminConsultationWorkspaceView(params: {
     feedStatusMessage:
       params.consultationFeed.message ??
       (fallbackUsed && localConsultations.length > 0
-        ? "当前使用本地演示数据；远端 feed 暂不可用。"
+        ? "远端会诊摘要暂不可用，当前按机构内已保存会诊进行本地规则归纳。"
         : null),
     feedFallbackUsed: fallbackUsed,
     feedFallbackReason: params.consultationFeed.fallbackReason,

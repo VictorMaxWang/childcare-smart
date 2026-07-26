@@ -470,6 +470,7 @@ export interface InstitutionSuggestionSnapshot {
 export interface AiSuggestionPayload {
   scope?: "child" | "institution";
   snapshot: ChildSuggestionSnapshot | InstitutionSuggestionSnapshot;
+  question?: string;
 }
 
 export interface AiActionPlan {
@@ -1006,6 +1007,7 @@ export interface WeeklyReportPayload {
   role?: WeeklyReportRole;
   scopeType?: "institution" | "class" | "child";
   scopeId?: string;
+  question?: string;
   snapshot: WeeklyReportSnapshot;
 }
 
@@ -1034,7 +1036,8 @@ export type HealthFileBridgeSource =
   | "backend-text-fallback"
   | "next-local-extractor"
   | "local-text-fallback"
-  | "vivo-ocr-provider";
+  | "vivo-ocr-provider"
+  | "dashscope-ocr-provider";
 export type ProviderCapabilityState = "configured" | "live" | "fallback" | "mock";
 export type HealthFileBridgeRiskLevel = "low" | "medium" | "high";
 export type HealthFileBridgeFileType =
@@ -1047,6 +1050,7 @@ export type HealthFileBridgeFileType =
 
 export interface HealthFileBridgeFile {
   fileId?: string;
+  attachmentId?: string;
   name: string;
   mimeType?: string;
   sizeBytes?: number;

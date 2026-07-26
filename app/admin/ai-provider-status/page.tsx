@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BrainCircuit,
+  Camera,
   FileScan,
   Image as ImageIcon,
   Mic,
@@ -24,6 +25,7 @@ import type {
 
 type CapabilityKey =
   | "llm"
+  | "vision"
   | "ocr"
   | "asr"
   | "tts"
@@ -36,6 +38,7 @@ const CAPABILITIES: Array<{
   icon: LucideIcon;
 }> = [
   { key: "llm", label: "LLM", icon: BrainCircuit },
+  { key: "vision", label: "meal vision", icon: Camera },
   { key: "ocr", label: "OCR", icon: FileScan },
   { key: "asr", label: "ASR", icon: Mic },
   { key: "tts", label: "TTS", icon: Volume2 },
@@ -182,7 +185,7 @@ export default function AdminAiProviderStatusPage() {
                 secret values redacted
               </Badge>
               <Badge variant={fallbackCount ? "warning" : "success"}>
-                {readyCount}/6 configured or live
+                {readyCount}/{visibleCapabilities.length} configured or live
               </Badge>
             </div>
             <div>
@@ -190,7 +193,7 @@ export default function AdminAiProviderStatusPage() {
                 AI Provider Status
               </h1>
               <p className="mt-1 max-w-3xl text-sm text-slate-600">
-                LLM, OCR, ASR, TTS, storybook image and storybook audio use the same provider trace contract.
+                LLM, meal vision, OCR, ASR, TTS and storybook media use the same provider trace contract.
               </p>
             </div>
           </div>

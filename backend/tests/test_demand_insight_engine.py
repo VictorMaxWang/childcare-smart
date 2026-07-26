@@ -363,7 +363,42 @@ def test_demand_insight_engine_marks_demo_fallback_when_snapshot_and_memory_are_
     assert body["consultationTriggerHeat"]
     assert all(item["source"]["demoOnly"] for item in body["consultationTriggerHeat"])
     assert body["dataQuality"]["demoOnly"] is True
-    assert any("demo" in warning or "fallback" in warning for warning in body["warnings"])
+    assert any("演示" in warning or "兜底" in warning for warning in body["warnings"])
+
+
+def test_demand_insight_engine_keeps_a_real_empty_snapshot_free_of_demo_risks(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "demand-insight-real-empty.db"
+    configure_memory_backend(monkeypatch, backend="sqlite", sqlite_path=str(sqlite_path))
+
+    result = asyncio.run(
+        build_orchestrator().demand_insights(
+            {
+                "appSnapshot": {
+                    "children": [],
+                    "attendance": [],
+                    "meals": [],
+                    "growth": [],
+                    "feedback": [],
+                    "health": [],
+                    "taskCheckIns": [],
+                    "interventionCards": [],
+                    "consultations": [],
+                    "mobileDrafts": [],
+                    "reminders": [],
+                    "updatedAt": "2026-04-10T00:00:00Z",
+                },
+                "windowDays": 14,
+                "today": "2026-04-10",
+            }
+        )
+    )
+    body = DemandInsightResponse.model_validate(result).model_dump(mode="json", by_alias=True)
+
+    assert body["source"] == "request_snapshot"
+    assert body["fallback"] is False
+    assert body["sourceSummary"]["consultationFallbackUsed"] is False
+    assert body["consultationTriggerHeat"] == []
+    assert body["dataQuality"]["demoOnly"] is False
 
 
 def test_demand_insight_endpoint_returns_structured_payload(tmp_path, monkeypatch):

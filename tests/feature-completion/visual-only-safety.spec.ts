@@ -68,8 +68,18 @@ test("D08 visual-only actions are disabled or explicitly labeled and demo drafts
   await capture(page, "visual-02-login-disabled.png");
 
   await loginAs(page, "u-admin", "/admin");
-  await expect(page.getByTestId("e10-notification-disabled")).toBeDisabled();
-  await expect(page.getByTestId("e10-message-disabled")).toBeDisabled();
+  await expect(page.getByTestId("global-search-trigger")).toBeEnabled();
+  await expect(page.getByTestId("notification-center-trigger")).toBeEnabled();
+  await expect(page.getByTestId("message-center-trigger")).toBeEnabled();
+  await page.getByTestId("global-search-trigger").click();
+  await expect(page.getByTestId("global-search-dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByTestId("notification-center-trigger").click();
+  await expect(page.getByTestId("notification-center-dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByTestId("message-center-trigger").click();
+  await expect(page.getByTestId("message-center-dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
   await loginAs(page, "u-admin", "/admin/agent");
   await expect(page.locator("body")).toContainText(/周报|weekly|派单|风险|weekly-report/i);
   await capture(page, "visual-03-admin-current-mvp-controls.png");

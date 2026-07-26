@@ -4,23 +4,6 @@ import { getDatabasePool } from "@/lib/db/server";
 
 const MAX_STORYBOOK_MEDIA_BYTES = 4 * 1024 * 1024;
 
-export const ENSURE_STORYBOOK_MEDIA_ASSETS_TABLE_SQL = `
-  create table if not exists storybook_media_assets (
-    institution_id varchar(191) not null,
-    media_key varchar(64) character set ascii collate ascii_bin not null,
-    child_id varchar(191) not null,
-    storybook_id varchar(191) not null,
-    content_type varchar(128) not null,
-    media_bytes mediumblob not null,
-    byte_length int unsigned not null,
-    created_at timestamp not null default current_timestamp,
-    updated_at timestamp not null default current_timestamp on update current_timestamp,
-    primary key (institution_id, media_key),
-    key idx_storybook_media_child (institution_id, child_id),
-    key idx_storybook_media_storybook (institution_id, storybook_id)
-  ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci
-`;
-
 type StorybookMediaRow = {
   child_id: string;
   storybook_id: string;
@@ -40,8 +23,6 @@ export interface UpsertStorybookMediaAssetInput
   institutionId: string;
   mediaKey: string;
 }
-
-let ensuredTablePromise: Promise<void> | null = null;
 
 function assertSafeIdentifier(value: string, field: string) {
   const normalized = value.trim();
@@ -80,20 +61,6 @@ function assertMediaBytes(value: Buffer) {
   return value;
 }
 
-export async function ensureStorybookMediaAssetsTable() {
-  if (!ensuredTablePromise) {
-    // 生产库通过首次真实媒体写入自举；SQL 文件仍保留给显式发布和审计流程。
-    ensuredTablePromise = getDatabasePool()
-      .execute(ENSURE_STORYBOOK_MEDIA_ASSETS_TABLE_SQL)
-      .then(() => undefined)
-      .catch((error) => {
-        ensuredTablePromise = null;
-        throw error;
-      });
-  }
-  await ensuredTablePromise;
-}
-
 export async function upsertStorybookMediaAsset(
   input: UpsertStorybookMediaAssetInput
 ) {
@@ -107,7 +74,6 @@ export async function upsertStorybookMediaAsset(
   const contentType = assertContentType(input.contentType);
   const bytes = assertMediaBytes(input.bytes);
 
-  await ensureStorybookMediaAssetsTable();
   await getDatabasePool().execute(
     `
       insert into storybook_media_assets (
@@ -149,7 +115,6 @@ export async function getStorybookMediaAsset(input: {
   );
   const mediaKey = assertMediaKey(input.mediaKey);
 
-  await ensureStorybookMediaAssetsTable();
   const [rows] = await getDatabasePool().execute(
     `
       select child_id, storybook_id, content_type, media_bytes
@@ -173,4 +138,3 @@ export async function getStorybookMediaAsset(input: {
       : Buffer.from(row.media_bytes),
   };
 }
-

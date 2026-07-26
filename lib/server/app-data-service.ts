@@ -1,4 +1,9 @@
 import { DEMO_ACCOUNTS, type SessionUser } from "@/lib/auth/accounts";
+import {
+  buildInterventionCardFromConsultation,
+  type InterventionCard,
+} from "@/lib/agent/intervention-card";
+import type { ConsultationResult, ReminderItem } from "@/lib/ai/types";
 import type {
   AdminDispatchCreatePayload,
   AdminDispatchEvent,
@@ -28,6 +33,10 @@ import type {
   StorybookExportFormat,
   WeeklyReportExportFormat,
 } from "@/lib/api/types";
+import {
+  ATTACHMENT_MAX_FILES,
+  ATTACHMENT_MAX_UPLOAD_BYTES,
+} from "@/lib/attachments/constraints";
 import { normalizeParentStructuredFeedback } from "@/lib/feedback/normalize";
 import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
 import type { AppDataRepository } from "@/lib/server/app-data-repository";
@@ -42,6 +51,7 @@ import {
 } from "@/lib/server/analytics-aggregates";
 import {
   canAccessChild,
+  canReplyConversation,
   canAccessReport,
   canManageDirectorResource,
   canViewFeedback,
@@ -61,6 +71,11 @@ import {
   decorateAttachmentStorage,
   isLocalDemoPreviewUrl,
 } from "@/lib/server/storage-contract";
+import {
+  buildConsultationAdminTask,
+  buildInterventionTasksFromCard,
+  buildReminderFromTask,
+} from "@/lib/tasks/task-model";
 
 type Archivable<T> = T & {
   archivedAt?: string;
@@ -91,8 +106,6 @@ type SnapshotAdminDispatchTask = SnapshotTask & {
 type HealthMaterialParseStatus = AppStateSnapshot["healthMaterials"][number]["parseStatus"];
 
 const FEEDBACK_STATUSES: FeedbackStatus[] = ["open", "in-progress", "resolved", "archived"];
-const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
-const ATTACHMENT_MAX_PER_RELATED_ENTITY = 3;
 const ATTACHMENT_RELATED_TYPES: AttachmentRelatedType[] = [
   "message",
   "feedback",
@@ -100,7 +113,15 @@ const ATTACHMENT_RELATED_TYPES: AttachmentRelatedType[] = [
   "consultation",
   "weekly-report",
   "storybook",
+  "meal",
+  "growth",
 ];
+
+export interface UploadedAttachmentStorage {
+  storageProvider: "vercel_blob";
+  storageKey: string;
+  storageEtag?: string;
+}
 
 function nowIso() {
   return new Date().toISOString();
@@ -108,6 +129,11 @@ function nowIso() {
 
 function readString(value: unknown, fallback = "") {
   return typeof value === "string" ? value : fallback;
+}
+
+function readCreatedBy(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+  return readString((value as Record<string, unknown>).createdBy);
 }
 
 function readParseStatus(value: unknown, fallback: HealthMaterialParseStatus): HealthMaterialParseStatus {
@@ -128,6 +154,20 @@ function readBoolean(value: unknown, fallback: boolean) {
 
 function readArray<T = unknown>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function readRecordMediaUrls(value: unknown) {
+  return uniqueStrings(
+    readArray<unknown>(value)
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(
+        (item) =>
+          /^\/api\/attachments\/[a-z0-9_-]+\/content$/iu.test(item) ||
+          item.startsWith("/demo-media/") ||
+          item.startsWith("/demo-growth/")
+      )
+  ).slice(0, 3);
 }
 
 function roleToMessageRole(role: SessionUser["role"]): SnapshotMessage["senderRole"] {
@@ -452,7 +492,7 @@ function buildRichConsultation(input: {
       notes: readString(input.payload.notes)
         ? [{ note: readString(input.payload.notes), createdAt: now, createdBy: input.session.id }]
         : readArray(input.payload.notes),
-      createdBy: readString(input.payload.createdBy) || input.session.id,
+      createdBy: input.session.id,
       sourceMaterialId: readString(input.payload.sourceMaterialId) || undefined,
       updatedAt: now,
     } as AppStateSnapshot["consultations"][number];
@@ -463,6 +503,92 @@ function buildRichConsultation(input: {
       `完整高风险会诊结果缺少必要字段，未保存 shell 记录：${message}`
     );
   }
+}
+
+function buildConsultationProjections(input: {
+  consultation: ConsultationResult;
+  childName: string;
+}) {
+  const rawCard = isRecordLike(
+    (input.consultation as ConsultationResult & { interventionCard?: unknown }).interventionCard
+  )
+    ? ((input.consultation as ConsultationResult & { interventionCard: AnyRecord }).interventionCard)
+    : {};
+  const generatedCard = buildInterventionCardFromConsultation({
+    targetChildId: input.consultation.childId,
+    childName: input.childName,
+    consultation: input.consultation,
+    generatedAt: input.consultation.generatedAt,
+  });
+  const readCardList = (value: unknown, fallback: string[]) => {
+    const items = readArray<string>(value).filter((item) => typeof item === "string" && item.trim());
+    return items.length > 0 ? items : fallback;
+  };
+  const source =
+    rawCard.source === "ai" ||
+    rawCard.source === "fallback" ||
+    rawCard.source === "mock" ||
+    rawCard.source === "vivo"
+      ? rawCard.source
+      : generatedCard.source;
+  const card: InterventionCard = {
+    ...generatedCard,
+    id: readString(rawCard.id, generatedCard.id),
+    title: readString(rawCard.title, generatedCard.title),
+    riskLevel: input.consultation.riskLevel,
+    targetChildId: input.consultation.childId,
+    triggerReason: readString(rawCard.triggerReason, generatedCard.triggerReason),
+    summary: readString(rawCard.summary, generatedCard.summary),
+    todayInSchoolAction: readString(rawCard.todayInSchoolAction, generatedCard.todayInSchoolAction),
+    tonightHomeAction: readString(rawCard.tonightHomeAction, generatedCard.tonightHomeAction),
+    homeSteps: readCardList(rawCard.homeSteps, generatedCard.homeSteps),
+    observationPoints: readCardList(rawCard.observationPoints, generatedCard.observationPoints),
+    tomorrowObservationPoint: readString(
+      rawCard.tomorrowObservationPoint,
+      generatedCard.tomorrowObservationPoint
+    ),
+    reviewIn48h: readString(rawCard.reviewIn48h, generatedCard.reviewIn48h),
+    parentMessageDraft: readString(rawCard.parentMessageDraft, generatedCard.parentMessageDraft),
+    teacherFollowupDraft: readString(
+      rawCard.teacherFollowupDraft,
+      generatedCard.teacherFollowupDraft
+    ),
+    consultationMode: true,
+    consultationId: input.consultation.consultationId,
+    consultationSummary: input.consultation.coordinatorSummary.finalConclusion,
+    participants: input.consultation.participants.map((item) => item.label),
+    shouldEscalateToAdmin: input.consultation.shouldEscalateToAdmin,
+    source,
+    model:
+      readString(
+        rawCard.model,
+        input.consultation.model ?? generatedCard.model ?? ""
+      ) || undefined,
+    createdAt: readString(rawCard.createdAt, generatedCard.createdAt ?? nowIso()),
+    updatedAt: nowIso(),
+  };
+
+  const interventionTasks = buildInterventionTasksFromCard(card, {
+    consultationId: input.consultation.consultationId,
+  }).tasks;
+  const adminTask = buildConsultationAdminTask(input.consultation);
+  const tasks = adminTask ? [...interventionTasks, adminTask] : interventionTasks;
+  const reminders = tasks
+    .map((task) =>
+      buildReminderFromTask(task, {
+        childName: input.childName,
+        targetId: input.consultation.childId,
+      })
+    )
+    .filter((item): item is ReminderItem => Boolean(item))
+    .map((item) => ({
+      ...item,
+      // 三端均可用同一个 consultationId 查到本次会诊的投影，同时 taskId 仍保持
+      // 与规范任务模型一致，便于后续完成态和证据回写。
+      sourceId: input.consultation.consultationId,
+    }));
+
+  return { card, tasks, reminders };
 }
 
 export class AppDataService {
@@ -632,20 +758,59 @@ export class AppDataService {
   async listMessages(options: { childId?: string } = {}) {
     const snapshot = await this.load();
     if (options.childId) requireChildAccess(this.session, snapshot, options.childId);
+    const conversationById = new Map(
+      snapshot.conversations.map((conversation) => [
+        conversation.conversationId,
+        conversation,
+      ])
+    );
     return snapshot.messages
       .filter((message) => (!options.childId || message.childId === options.childId))
       .filter((message) => canAccessChild(this.session, findChild(snapshot, message.childId)))
+      .filter(
+        (message) =>
+          this.session.role === "机构管理员" ||
+          canReplyConversation(
+            this.session,
+            snapshot,
+            conversationById.get(message.conversationId)
+          )
+      )
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   }
 
   async sendMessage(input: AnyRecord) {
     const childId = readString(input.childId);
     if (!childId) throw new ApiRouteError("invalid_request", "发送消息必须提供 childId。");
+    const content = readString(input.content).trim();
+    if (!content) throw new ApiRouteError("invalid_request", "消息内容不能为空。");
     return this.mutate("message", "new", "send", (snapshot) => {
       const child = requireChildAccess(this.session, snapshot, childId);
       const now = nowIso();
-      const conversationId = readString(input.conversationId, `conv-${childId}-home-school`);
+      const requestedConversationId = readString(input.conversationId);
+      const canonicalConversationId = `conv-${childId}-home-school`;
+      const requestedConversation = requestedConversationId
+        ? snapshot.conversations.find(
+            (conversation) => conversation.conversationId === requestedConversationId
+          )
+        : undefined;
+      const conversationId =
+        this.session.accountKind === "demo" && requestedConversationId
+          ? requestedConversationId
+          : requestedConversation?.childId === childId
+            ? requestedConversationId
+            : canonicalConversationId;
+      const existingConversation = snapshot.conversations.find(
+        (conversation) => conversation.conversationId === conversationId
+      );
+      if (existingConversation?.childId !== undefined && existingConversation.childId !== childId) {
+        throw new ApiRouteError("conflict", "该会话已绑定到其他幼儿，不能复用。");
+      }
+      if (existingConversation) {
+        requireConversationReplyAccess(this.session, snapshot, existingConversation);
+      }
       const senderRole = roleToMessageRole(this.session.role);
+      const receiverRole = senderRole === "parent" ? "teacher" : "parent";
       const message = {
         messageId: createApiId("msg"),
         conversationId,
@@ -654,20 +819,25 @@ export class AppDataService {
         senderRole,
         senderId: this.session.id,
         senderName: this.session.name,
-        receiverRole: senderRole === "parent" ? "teacher" : "parent",
-        targetRole: senderRole === "parent" ? "teacher" : "parent",
-        content: readString(input.content),
+        receiverRole,
+        targetRole: receiverRole,
+        content,
         createdAt: now,
         readBy: [this.session.id],
         status: "sent",
       } satisfies SnapshotMessage;
-      const existingConversation = snapshot.conversations.find((conversation) => conversation.conversationId === conversationId);
       const conversation = {
         conversationId,
         childId,
         classId: child.className,
         participantIds: Array.from(new Set([this.session.id, ...(existingConversation?.participantIds ?? [])])),
-        participantRoles: Array.from(new Set([senderRole, ...(existingConversation?.participantRoles ?? [])])),
+        participantRoles: Array.from(
+          new Set([
+            senderRole,
+            receiverRole,
+            ...(existingConversation?.participantRoles ?? []),
+          ])
+        ),
         status: "open",
         createdAt: existingConversation?.createdAt ?? now,
         updatedAt: now,
@@ -684,14 +854,24 @@ export class AppDataService {
   async replyMessage(messageId: string, input: AnyRecord) {
     return this.mutate("message", messageId, "reply", (snapshot) => {
       const baseMessage = snapshot.messages.find((message) => message.messageId === messageId);
+      if (!baseMessage) throw new ApiRouteError("not_found", "未找到原消息。");
+      const requestedConversationId = readString(input.conversationId);
+      if (
+        requestedConversationId &&
+        requestedConversationId !== baseMessage.conversationId
+      ) {
+        throw new ApiRouteError("conflict", "回复必须保留在原消息会话中。");
+      }
       const conversation = snapshot.conversations.find(
-        (item) => item.conversationId === (readString(input.conversationId) || baseMessage?.conversationId)
+        (item) => item.conversationId === baseMessage.conversationId
       );
       requireConversationReplyAccess(this.session, snapshot, conversation);
       if (!conversation) throw new ApiRouteError("not_found", "Message conversation was not found.");
       const child = requireChildAccess(this.session, snapshot, conversation.childId);
       const now = nowIso();
       const senderRole = roleToMessageRole(this.session.role);
+      const content = readString(input.content).trim();
+      if (!content) throw new ApiRouteError("invalid_request", "回复内容不能为空。");
       const reply = {
         messageId: createApiId("msg"),
         conversationId: conversation.conversationId,
@@ -702,14 +882,25 @@ export class AppDataService {
         senderName: this.session.name,
         receiverRole: baseMessage?.senderRole ?? (senderRole === "parent" ? "teacher" : "parent"),
         targetRole: baseMessage?.senderRole ?? (senderRole === "parent" ? "teacher" : "parent"),
-        content: readString(input.content),
+        content,
         createdAt: now,
         readBy: [this.session.id],
         status: "sent",
       } satisfies SnapshotMessage;
       snapshot.messages = [...snapshot.messages, reply];
       snapshot.conversations = snapshot.conversations.map((item) =>
-        item.conversationId === conversation.conversationId ? { ...item, updatedAt: now } : item
+        item.conversationId === conversation.conversationId
+          ? {
+              ...item,
+              participantIds: Array.from(
+                new Set([...item.participantIds, this.session.id])
+              ),
+              participantRoles: Array.from(
+                new Set([...item.participantRoles, senderRole])
+              ),
+              updatedAt: now,
+            }
+          : item
       );
       return reply;
     });
@@ -719,11 +910,38 @@ export class AppDataService {
     return this.mutate("message", messageId, "mark_read", (snapshot) => {
       const message = snapshot.messages.find((item) => item.messageId === messageId);
       if (!message) throw new ApiRouteError("not_found", "未找到消息。");
-      requireChildAccess(this.session, snapshot, message.childId);
+      const conversation = snapshot.conversations.find(
+        (item) => item.conversationId === message.conversationId
+      );
+      requireConversationReplyAccess(this.session, snapshot, conversation);
       snapshot.messages = snapshot.messages.map((item) =>
         item.messageId === messageId ? { ...item, readBy: Array.from(new Set([...item.readBy, this.session.id])) } : item
       );
       return snapshot.messages.find((item) => item.messageId === messageId);
+    });
+  }
+
+  async updateConversationStatus(conversationId: string, input: AnyRecord) {
+    const status = readString(input.status);
+    if (status !== "open" && status !== "closed" && status !== "archived") {
+      throw new ApiRouteError(
+        "invalid_request",
+        "会话状态必须为 open、closed 或 archived。"
+      );
+    }
+    return this.mutate("conversation", conversationId, "update_status", (snapshot) => {
+      const conversation = snapshot.conversations.find(
+        (item) => item.conversationId === conversationId
+      );
+      requireConversationReplyAccess(this.session, snapshot, conversation);
+      snapshot.conversations = snapshot.conversations.map((item) =>
+        item.conversationId === conversationId
+          ? { ...item, status, updatedAt: nowIso() }
+          : item
+      );
+      return snapshot.conversations.find(
+        (item) => item.conversationId === conversationId
+      );
     });
   }
 
@@ -829,6 +1047,19 @@ export class AppDataService {
     const feedbackId = readString(input.feedbackId, readString(input.id)) || createApiId("feedback");
     return this.mutate("feedback", feedbackId, "create", (snapshot) => {
       requireChildAccess(this.session, snapshot, childId);
+      const existing = snapshot.feedback.find(
+        (item) => feedbackIdOf(item as SnapshotFeedback) === feedbackId
+      ) as SnapshotFeedback | undefined;
+      if (
+        existing &&
+        (existing.childId !== childId ||
+          (readCreatedBy(existing) && readCreatedBy(existing) !== this.session.id))
+      ) {
+        throw new ApiRouteError(
+          "forbidden_scope",
+          "该反馈编号已属于其他幼儿或创建者。"
+        );
+      }
       const now = nowIso();
       const sourceRole = roleToFeedbackSourceRole(this.session.role);
       const normalized = normalizeParentStructuredFeedback(
@@ -946,7 +1177,32 @@ export class AppDataService {
     if (!childId) throw new ApiRouteError("invalid_request", "创建记录必须提供 childId。");
     return this.mutate("record", "new", `create_${type}`, (snapshot) => {
       requireChildAccess(this.session, snapshot, childId);
+      const sourceDraftId = readString(input.sourceDraftId);
+      const sourceRecordId = readString(input.sourceRecordId);
+      const records = this.getRecords(snapshot, type);
+      if (sourceDraftId && sourceRecordId) {
+        const existing = records.find(
+          (record) =>
+            readString((record as unknown as AnyRecord).sourceDraftId) ===
+              sourceDraftId &&
+            readString((record as unknown as AnyRecord).sourceRecordId) ===
+              sourceRecordId
+        );
+        if (existing) {
+          if (existing.childId !== childId) {
+            throw new ApiRouteError(
+              "conflict",
+              "同一语音草稿记录不能写入不同幼儿档案。"
+            );
+          }
+          return existing;
+        }
+      }
       const now = nowIso();
+      const sourceMetadata =
+        sourceDraftId && sourceRecordId
+          ? { sourceDraftId, sourceRecordId }
+          : {};
       let record: object;
       if (type === "attendance") {
         record = {
@@ -957,6 +1213,7 @@ export class AppDataService {
           checkInAt: readString(input.checkInAt) || undefined,
           checkOutAt: readString(input.checkOutAt) || undefined,
           absenceReason: readString(input.absenceReason) || undefined,
+          ...sourceMetadata,
         };
       } else if (type === "health") {
         record = {
@@ -970,6 +1227,7 @@ export class AppDataService {
           remark: readString(input.remark) || undefined,
           checkedBy: this.session.name,
           checkedByRole: this.session.role,
+          ...sourceMetadata,
         };
       } else if (type === "meal") {
         record = {
@@ -987,8 +1245,11 @@ export class AppDataService {
             input.aiEvaluation && typeof input.aiEvaluation === "object"
               ? input.aiEvaluation
               : undefined,
+          photoUrls: readRecordMediaUrls(input.photoUrls),
+          mediaRefs: readRecordMediaUrls(input.mediaRefs),
           recordedBy: this.session.name,
           recordedByRole: this.session.role,
+          ...sourceMetadata,
         };
       } else {
         record = {
@@ -1005,10 +1266,11 @@ export class AppDataService {
           reviewDate: readString(input.reviewDate) || undefined,
           reviewStatus: readString(input.reviewStatus, "已完成"),
           selectedIndicators: readArray<string>(input.selectedIndicators).filter((item) => typeof item === "string"),
-          mediaUrls: readArray<string>(input.mediaUrls).filter((item) => typeof item === "string"),
+          mediaUrls: readRecordMediaUrls(input.mediaUrls),
+          mediaRefs: readRecordMediaUrls(input.mediaRefs),
+          ...sourceMetadata,
         };
       }
-      const records = this.getRecords(snapshot, type);
       this.setRecords(snapshot, type, [record, ...records] as Array<Archivable<object>>);
       return record;
     });
@@ -1030,6 +1292,22 @@ export class AppDataService {
         delete safeInput.archivedBy;
         delete safeInput.archiveReason;
         delete safeInput.restoredBy;
+        if (type === "meal") {
+          if (Object.prototype.hasOwnProperty.call(input, "photoUrls")) {
+            safeInput.photoUrls = readRecordMediaUrls(input.photoUrls);
+          }
+          if (Object.prototype.hasOwnProperty.call(input, "mediaRefs")) {
+            safeInput.mediaRefs = readRecordMediaUrls(input.mediaRefs);
+          }
+        }
+        if (type === "growth") {
+          if (Object.prototype.hasOwnProperty.call(input, "mediaUrls")) {
+            safeInput.mediaUrls = readRecordMediaUrls(input.mediaUrls);
+          }
+          if (Object.prototype.hasOwnProperty.call(input, "mediaRefs")) {
+            safeInput.mediaRefs = readRecordMediaUrls(input.mediaRefs);
+          }
+        }
         return { ...record, ...safeInput, id: record.id, childId: record.childId, updatedAt: nowIso() };
       });
       this.setRecords(snapshot, type, next as Array<Archivable<object>>);
@@ -1071,8 +1349,10 @@ export class AppDataService {
         filename: readString(input.filename, "material"),
         fileType: readString(input.fileType, "application/octet-stream"),
         description: readString(input.description) || undefined,
-        parseStatus: input.parseResult ? "completed" : "pending",
-        parseResult: input.parseResult && typeof input.parseResult === "object" ? (input.parseResult as Record<string, unknown>) : undefined,
+        // 解析状态只能由受保护的解析写回接口推进，创建请求不得自报 AI 结果。
+        parseStatus: "pending",
+        parseResult: undefined,
+        parseError: undefined,
         createdAt: nowIso(),
         updatedAt: nowIso(),
       } satisfies AppStateSnapshot["healthMaterials"][number];
@@ -1115,7 +1395,26 @@ export class AppDataService {
     const childId = readString(input.childId);
     if (!childId) throw new ApiRouteError("invalid_request", "会诊必须提供 childId。");
     return this.mutate("consultation", "new", "create", (snapshot) => {
-      requireChildAccess(this.session, snapshot, childId);
+      const child = requireChildAccess(this.session, snapshot, childId);
+      const requestedConsultationId = readString(input.consultationId);
+      const existing = requestedConsultationId
+        ? snapshot.consultations.find(
+            (item) => item.consultationId === requestedConsultationId
+          )
+        : undefined;
+      if (
+        existing &&
+        (existing.childId !== childId ||
+          (readCreatedBy(existing) && readCreatedBy(existing) !== this.session.id))
+      ) {
+        throw new ApiRouteError(
+          "forbidden_scope",
+          "该会诊编号已属于其他幼儿或创建者。"
+        );
+      }
+      // POST 可能因流式连接超时而携带稳定 consultationId 重试。已有记录直接返回，
+      // 后续状态只允许通过 PATCH 改变，避免 resolved/completed 被重建为 pending。
+      if (existing) return existing;
       const consultation = isRichConsultationPayload(input)
         ? buildRichConsultation({
             session: this.session,
@@ -1130,12 +1429,45 @@ export class AppDataService {
             notes: readString(input.notes) || undefined,
             sourceMaterialId: readString(input.sourceMaterialId) || undefined,
           });
-      snapshot.consultations = [consultation, ...snapshot.consultations];
+      const projections = buildConsultationProjections({
+        consultation,
+        childName: child.name,
+      });
+
+      // 会诊、干预卡、任务和提醒必须在同一次机构快照变更中提交。
+      // 流式接口重试时按稳定 ID 覆盖，避免“会诊一条、提醒多条”的半成功数据。
+      snapshot.consultations = [
+        consultation,
+        ...snapshot.consultations.filter(
+          (item) => item.consultationId !== consultation.consultationId
+        ),
+      ];
+      snapshot.interventionCards = [
+        projections.card,
+        ...snapshot.interventionCards.filter((item) => item.id !== projections.card.id),
+      ];
+      const projectedTaskIds = new Set(projections.tasks.map((item) => item.taskId));
+      snapshot.tasks = [
+        ...projections.tasks,
+        ...snapshot.tasks.filter((item) => !projectedTaskIds.has(item.taskId)),
+      ];
+      const projectedReminderIds = new Set(
+        projections.reminders.map((item) => item.reminderId)
+      );
+      snapshot.reminders = [
+        ...projections.reminders,
+        ...snapshot.reminders.filter(
+          (item) =>
+            !projectedReminderIds.has(item.reminderId) &&
+            item.sourceId !== consultation.consultationId
+        ),
+      ];
       return consultation;
     });
   }
 
   async addConsultationNote(consultationId: string, input: AnyRecord) {
+    requireStaff(this.session);
     return this.mutate("consultation", consultationId, "add_note", (snapshot) => {
       const consultation = snapshot.consultations.find((item) => item.consultationId === consultationId);
       if (!consultation) throw new ApiRouteError("not_found", "未找到会诊。");
@@ -1624,50 +1956,103 @@ export class AppDataService {
   }
 
   private resolveAttachmentScope(snapshot: ApiExtendedSnapshot, input: { childId?: string; relatedType?: AttachmentRelatedType; relatedId?: string }) {
-    if (input.childId) {
-      requireChildAccess(this.session, snapshot, input.childId);
-      return input.childId;
+    const assertRequestedChild = (resolvedChildId?: string) => {
+      if (
+        input.childId &&
+        resolvedChildId &&
+        input.childId !== resolvedChildId
+      ) {
+        throw new ApiRouteError(
+          "forbidden_scope",
+          "附件 childId 与关联业务记录不一致。"
+        );
+      }
+      return resolvedChildId;
+    };
+
+    if (input.relatedType === "meal" || input.relatedType === "growth") {
+      requireStaff(this.session);
+      if (input.relatedId) {
+        const type: RecordType =
+          input.relatedType === "meal" ? "meal" : "growth";
+        const record = this.getRecords(snapshot, type).find(
+          (item) => item.id === input.relatedId
+        );
+        requireRecordModifyAccess(this.session, snapshot, record);
+        return assertRequestedChild(record?.childId);
+      }
     }
     if (input.relatedType === "message" && input.relatedId) {
       const message = snapshot.messages.find((item) => item.messageId === input.relatedId);
       if (!message) throw new ApiRouteError("not_found", "未找到消息。");
       requireChildAccess(this.session, snapshot, message.childId);
-      return message.childId;
+      return assertRequestedChild(message.childId);
     }
     if (input.relatedType === "feedback" && input.relatedId) {
       const feedback = snapshot.feedback.find((item) => feedbackIdOf(item as SnapshotFeedback) === input.relatedId) as SnapshotFeedback | undefined;
       requireFeedbackViewAccess(this.session, snapshot, feedback);
-      return feedback?.childId;
+      return assertRequestedChild(feedback?.childId);
     }
     if (input.relatedType === "health-material" && input.relatedId) {
       const material = snapshot.healthMaterials.find((item) => item.materialId === input.relatedId);
       if (!material) throw new ApiRouteError("not_found", "未找到健康材料。");
       requireChildAccess(this.session, snapshot, material.childId);
-      return material.childId;
+      return assertRequestedChild(material.childId);
     }
     if (input.relatedType === "consultation" && input.relatedId) {
       const consultation = snapshot.consultations.find((item) => item.consultationId === input.relatedId);
       if (!consultation) throw new ApiRouteError("not_found", "未找到会诊。");
       requireChildAccess(this.session, snapshot, consultation.childId);
-      return consultation.childId;
+      return assertRequestedChild(consultation.childId);
     }
     if (input.relatedType === "weekly-report" && input.relatedId) {
       const report = snapshot.weeklyReports.find((item) => item.reportId === input.relatedId);
       if (!report) throw new ApiRouteError("not_found", "未找到周报。");
       requireReportAccess(this.session, snapshot, report);
-      return report.scopeType === "child" ? report.scopeId : undefined;
+      return assertRequestedChild(
+        report.scopeType === "child" ? report.scopeId : undefined
+      );
     }
     if (input.relatedType === "storybook" && input.relatedId) {
       const storybook = snapshot.storybooks.find((item) => item.storybookId === input.relatedId);
       if (!storybook) throw new ApiRouteError("not_found", "Storybook was not found.");
       requireChildAccess(this.session, snapshot, storybook.childId);
-      return storybook.childId;
+      return assertRequestedChild(storybook.childId);
+    }
+    if (input.childId) {
+      requireChildAccess(this.session, snapshot, input.childId);
+      return input.childId;
     }
     requireDirector(this.session);
     return undefined;
   }
 
-  async createAttachment(input: AnyRecord) {
+  async authorizeAttachmentUpload(input: {
+    childId?: string;
+    relatedType?: unknown;
+    relatedId?: string;
+  }) {
+    const snapshot = await this.load();
+    const relatedType = readAttachmentRelatedType(input.relatedType);
+    const relatedId = readString(input.relatedId) || undefined;
+    const childId = this.resolveAttachmentScope(snapshot, {
+      childId: readString(input.childId) || undefined,
+      relatedType,
+      relatedId,
+    });
+    return { childId, relatedType, relatedId };
+  }
+
+  private async createAttachmentInternal(
+    input: AnyRecord,
+    uploadedStorage?: UploadedAttachmentStorage
+  ) {
+    if (this.session.accountKind === "normal" && !uploadedStorage) {
+      throw new ApiRouteError(
+        "invalid_request",
+        "普通账号附件必须通过私有文件上传接口保存。"
+      );
+    }
     return this.mutate("attachment", "new", "create_metadata", (snapshot) => {
       const relatedType = readAttachmentRelatedType(input.relatedType);
       const relatedId = readString(input.relatedId) || undefined;
@@ -1681,7 +2066,23 @@ export class AppDataService {
       const byteSize = typeof input.byteSize === "number" ? input.byteSize : undefined;
       const requestedPreviewUrl = readString(input.localPreviewUrl) || undefined;
       const localPreviewUrl = isLocalDemoPreviewUrl(requestedPreviewUrl) ? requestedPreviewUrl : undefined;
-      if (typeof byteSize === "number" && (byteSize < 0 || byteSize > ATTACHMENT_MAX_BYTES)) {
+      const storageKey = uploadedStorage?.storageKey.trim();
+      if (
+        uploadedStorage &&
+        (!storageKey ||
+          storageKey.length > 1024 ||
+          storageKey.includes("..") ||
+          !/^[a-z0-9/_\-.]+$/iu.test(storageKey))
+      ) {
+        throw new ApiRouteError(
+          "invalid_request",
+          "对象存储键格式无效。"
+        );
+      }
+      if (
+        typeof byteSize === "number" &&
+        (byteSize < 0 || byteSize > ATTACHMENT_MAX_UPLOAD_BYTES)
+      ) {
         throw new ApiRouteError("invalid_request", "Attachment must be 5MB or smaller.");
       }
       if (relatedType && relatedId) {
@@ -1691,7 +2092,7 @@ export class AppDataService {
             item.relatedType === relatedType &&
             item.relatedId === relatedId
         ).length;
-        if (existingRelatedCount >= ATTACHMENT_MAX_PER_RELATED_ENTITY) {
+        if (existingRelatedCount >= ATTACHMENT_MAX_FILES) {
           throw new ApiRouteError("invalid_request", "Each message, feedback, or media item supports at most 3 attachments.");
         }
       }
@@ -1705,9 +2106,16 @@ export class AppDataService {
         fileName,
         mimeType,
         byteSize,
-        storageMode: localPreviewUrl ? "local_demo" : "metadata_only",
-        uploadStatus: "metadata_saved",
+        storageMode: uploadedStorage
+          ? "object_storage"
+          : localPreviewUrl
+            ? "local_demo"
+            : "metadata_only",
+        uploadStatus: uploadedStorage ? "uploaded" : "metadata_saved",
         localPreviewUrl,
+        storageProvider: uploadedStorage?.storageProvider,
+        storageKey,
+        storageEtag: uploadedStorage?.storageEtag,
         durationMs: typeof input.durationMs === "number" ? input.durationMs : undefined,
         createdBy: this.session.id,
         createdAt: nowIso(),
@@ -1718,10 +2126,23 @@ export class AppDataService {
     });
   }
 
+  async createAttachment(input: AnyRecord) {
+    return this.createAttachmentInternal(input);
+  }
+
+  async createUploadedAttachment(
+    input: AnyRecord,
+    uploadedStorage: UploadedAttachmentStorage
+  ) {
+    return this.createAttachmentInternal(input, uploadedStorage);
+  }
+
   async listAttachments(options: { childId?: string; relatedType?: AttachmentRelatedType; relatedId?: string } = {}) {
     const snapshot = await this.load();
     if (options.childId) requireChildAccess(this.session, snapshot, options.childId);
-    if (options.relatedType || options.relatedId) this.resolveAttachmentScope(snapshot, options);
+    // 仅按类型查询时由下方逐条做儿童可见性过滤；严格业务关联校验只用于指定记录，
+    // 否则教师查询自己班级的健康材料也会被误判成机构级无 childId 请求。
+    if (options.relatedId) this.resolveAttachmentScope(snapshot, options);
     const attachments = snapshot.attachments.filter((attachment) => {
       if (attachment.institutionId !== this.session.institutionId) return false;
       if (options.childId && attachment.childId !== options.childId) return false;
@@ -1755,9 +2176,6 @@ export class AppDataService {
       ? snapshot.children.find((child) => child.institutionId === this.session.institutionId && child.className === className)
       : null;
     if (classChild) return requireChildAccess(this.session, snapshot, classChild.id);
-
-    const fallbackChild = snapshot.children.find((child) => child.institutionId === this.session.institutionId);
-    if (fallbackChild) return requireChildAccess(this.session, snapshot, fallbackChild.id);
 
     throw new ApiRouteError("invalid_request", "Admin dispatch must resolve to a child anchor.");
   }
@@ -1887,6 +2305,32 @@ export class AppDataService {
     };
   }
 
+  private assignedTeacherForTask(
+    snapshot: ApiExtendedSnapshot,
+    task: SnapshotTask
+  ) {
+    const taskRecord = task as SnapshotAdminDispatchTask;
+    const teacherId =
+      readString(taskRecord.assignedTeacherId) ||
+      readString(taskRecord.assigneeId);
+    return snapshot.teachers.find(
+      (item) => item.teacherId === teacherId || item.userId === teacherId
+    );
+  }
+
+  private taskBelongsToCurrentTeacher(
+    snapshot: ApiExtendedSnapshot,
+    task: SnapshotTask
+  ) {
+    if (this.session.role !== "教师") return true;
+    const taskRecord = task as SnapshotAdminDispatchTask;
+    const assignedId =
+      readString(taskRecord.assignedTeacherId) ||
+      readString(taskRecord.assigneeId);
+    const teacher = this.assignedTeacherForTask(snapshot, task);
+    return assignedId === this.session.id || teacher?.userId === this.session.id;
+  }
+
   async listAssignments(options: { childId?: string; teacherId?: string; status?: ApiAssignmentStatus } = {}) {
     const snapshot = await this.load();
     if (this.session.role === "家长") {
@@ -1900,16 +2344,25 @@ export class AppDataService {
       );
     }
 
+    const requestedTeacher = options.teacherId
+      ? snapshot.teachers.find(
+          (item) =>
+            item.teacherId === options.teacherId ||
+            item.userId === options.teacherId
+        )
+      : undefined;
+    const requestedTeacherId = requestedTeacher?.teacherId ?? options.teacherId;
+
     return snapshot.tasks
       .filter(isAdminDispatchTask)
       .filter((task) => canAccessChild(this.session, findChild(snapshot, task.childId)))
+      .filter((task) => this.taskBelongsToCurrentTeacher(snapshot, task))
       .map((task) => this.buildAssignment(snapshot, task))
       .filter((assignment) => !options.childId || assignment.childId === options.childId)
-      .filter((assignment) => !options.teacherId || assignment.teacherId === options.teacherId)
-      .filter((assignment) => {
-        if (this.session.role !== "教师") return true;
-        return assignment.teacherId === this.session.id;
-      })
+      .filter(
+        (assignment) =>
+          !requestedTeacherId || assignment.teacherId === requestedTeacherId
+      )
       .filter((assignment) => !options.status || assignment.status === options.status)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
@@ -2015,7 +2468,6 @@ export class AppDataService {
 
   async updateAdminDispatchStatus(dispatchId: string, input: AdminDispatchUpdatePayload) {
     requireDirector(this.session);
-    const nextStatus = readAssignmentStatus(input.status, "in_progress");
     return this.mutate("admin-dispatch", dispatchId, "update_status", (snapshot) => {
       const task = snapshot.tasks.find(
         (item) =>
@@ -2024,23 +2476,60 @@ export class AppDataService {
       );
       if (!task) throw new ApiRouteError("not_found", "Admin dispatch was not found.");
       const now = nowIso();
+      const taskRecord = task as SnapshotAdminDispatchTask;
+      const nextStatus = input.status
+        ? readAssignmentStatus(input.status, "pending")
+        : readAssignmentStatus(task.status, "pending");
+      const nextCompletedAt =
+        input.completedAt === null
+          ? undefined
+          : typeof input.completedAt === "string"
+            ? input.completedAt
+            : input.status === "completed"
+              ? task.completedAt ?? now
+              : input.status
+                ? undefined
+                : task.completedAt;
+      const nextPayload = taskRecord.adminDispatchPayload
+        ? {
+            ...taskRecord.adminDispatchPayload,
+            summary:
+              input.summary ?? taskRecord.adminDispatchPayload.summary,
+            recommendedOwnerName:
+              input.recommendedOwnerName ??
+              taskRecord.adminDispatchPayload.recommendedOwnerName,
+          }
+        : undefined;
       snapshot.tasks = snapshot.tasks.map((item) =>
         item.taskId === task.taskId
           ? ({
               ...item,
               status: nextStatus,
-              statusChangedAt: now,
-              completedAt: nextStatus === "completed" ? now : item.completedAt,
+              statusChangedAt: input.status ? now : item.statusChangedAt,
+              completedAt: nextCompletedAt,
               completionSummary: readString(input.completionSummary, item.completionSummary),
+              assigneeName:
+                input.recommendedOwnerName ??
+                (item as SnapshotAdminDispatchTask).assigneeName,
+              assignedTeacherName:
+                input.recommendedOwnerName ??
+                (item as SnapshotAdminDispatchTask).assignedTeacherName,
+              adminDispatchPayload: nextPayload,
               updatedAt: now,
-            } as SnapshotTask)
+            } as SnapshotAdminDispatchTask)
           : item
       );
-      snapshot.reminders = snapshot.reminders.map((item) =>
-        item.taskId === task.taskId || item.sourceId === assignmentIdOfTask(task)
-          ? ({ ...item, status: assignmentReminderStatus(nextStatus), updatedAt: now } as SnapshotReminder)
-          : item
-      );
+      if (input.status) {
+        snapshot.reminders = snapshot.reminders.map((item) =>
+          item.taskId === task.taskId || item.sourceId === assignmentIdOfTask(task)
+            ? ({
+                ...item,
+                status: assignmentReminderStatus(nextStatus),
+                updatedAt: now,
+              } as SnapshotReminder)
+            : item
+        );
+      }
       const updatedTask = snapshot.tasks.find((item) => item.taskId === task.taskId);
       if (!updatedTask) throw new ApiRouteError("not_found", "Updated admin dispatch was not found.");
       return this.buildAdminDispatchEvent(snapshot, updatedTask);
@@ -2132,7 +2621,10 @@ export class AppDataService {
       if (this.session.role === "家长") {
         throw new ApiRouteError("forbidden_scope", "家长无权更新园长派单。");
       }
-      if (this.session.role === "教师" && assignment.teacherId !== this.session.id) {
+      if (
+        this.session.role === "教师" &&
+        !this.taskBelongsToCurrentTeacher(snapshot, task)
+      ) {
         throw new ApiRouteError("forbidden_scope", "当前教师无权更新该派单。");
       }
       if (this.session.role !== "教师") {
@@ -2167,19 +2659,40 @@ export class AppDataService {
     if (options.childId) requireChildAccess(this.session, snapshot, options.childId);
     return snapshot.reminders.filter((reminder) => {
       const childId = reminder.childId ?? reminder.targetId;
-      return (!options.childId || childId === options.childId) && canAccessChild(this.session, findChild(snapshot, childId));
+      return (
+        (!options.childId || childId === options.childId) &&
+        canAccessChild(this.session, findChild(snapshot, childId)) &&
+        canAccessReminderForRole(this.session, reminder)
+      );
     });
   }
 
   async createReminder(input: AnyRecord) {
     const childId = readString(input.childId, readString(input.targetId));
     if (!childId) throw new ApiRouteError("invalid_request", "提醒必须提供 childId。");
+    const targetRole = readReminderTargetRole(input.targetRole);
+    if (this.session.role === "家长" && targetRole !== "parent") {
+      throw new ApiRouteError(
+        "forbidden_scope",
+        "家长只能为自己的家庭任务创建家长提醒。"
+      );
+    }
+    if (
+      this.session.role === "教师" &&
+      targetRole !== "teacher" &&
+      targetRole !== "parent"
+    ) {
+      throw new ApiRouteError(
+        "forbidden_scope",
+        "教师只能创建教师复查或家长协同提醒。"
+      );
+    }
     return this.mutate("reminder", "new", "create", (snapshot) => {
       requireChildAccess(this.session, snapshot, childId);
       const reminder = {
         reminderId: createApiId("reminder"),
         reminderType: readString(input.reminderType, "family-task"),
-        targetRole: readString(input.targetRole, "parent"),
+        targetRole,
         targetId: childId,
         childId,
         title: readString(input.title, "提醒"),
@@ -2201,6 +2714,12 @@ export class AppDataService {
       if (!reminder) throw new ApiRouteError("not_found", "未找到提醒。");
       const childId = reminder.childId ?? reminder.targetId;
       requireChildAccess(this.session, snapshot, childId);
+      if (!canAccessReminderForRole(this.session, reminder)) {
+        throw new ApiRouteError(
+          "forbidden_scope",
+          "当前账号无权更新其他角色的提醒。"
+        );
+      }
       snapshot.reminders = snapshot.reminders.map((item) =>
         item.reminderId === reminderId
           ? ({ ...item, status: readString(input.status, item.status), readAt: nowIso(), updatedAt: nowIso() } as SnapshotReminder)
@@ -2213,6 +2732,30 @@ export class AppDataService {
 
 function isRecordLike(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function readReminderTargetRole(value: unknown): "parent" | "teacher" | "admin" {
+  if (value === "teacher" || value === "教师") return "teacher";
+  if (
+    value === "admin" ||
+    value === "director" ||
+    value === "机构管理员" ||
+    value === "园长"
+  ) {
+    return "admin";
+  }
+  return "parent";
+}
+
+function canAccessReminderForRole(
+  session: SessionUser,
+  reminder: SnapshotReminder
+) {
+  if (session.role === "机构管理员") return true;
+  const role = readReminderTargetRole(
+    reminder.targetRole ?? reminder.assigneeRole
+  );
+  return session.role === "教师" ? role === "teacher" : role === "parent";
 }
 
 function readReportScopeType(value: unknown, fallback: ReportScopeType): ReportScopeType {

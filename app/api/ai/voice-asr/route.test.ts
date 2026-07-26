@@ -69,3 +69,26 @@ test("voice-asr text fallback returns complete provider trace", async () => {
     }
   );
 });
+
+test("voice-asr rejects oversized audio before provider work", async () => {
+  const formData = new FormData();
+  formData.set(
+    "audio",
+    new File([new Uint8Array(4 * 1024 * 1024 + 1)], "too-large.wav", {
+      type: "audio/wav",
+    })
+  );
+
+  const response = await POST(
+    new Request("http://localhost:3000/api/ai/voice-asr", {
+      method: "POST",
+      headers: { "x-demo-account-id": "u-parent" },
+      body: formData,
+    })
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 400);
+  assert.equal(body.ok, false);
+  assert.equal(body.code, "invalid_request");
+});

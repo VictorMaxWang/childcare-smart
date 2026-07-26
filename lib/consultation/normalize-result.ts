@@ -367,6 +367,7 @@ function validateNormalizedResult(result: Record<string, unknown>) {
 
   [
     "triggerReasons",
+    "agentFindings",
     "keyFindings",
     "todayInSchoolActions",
     "tonightAtHomeActions",
@@ -495,6 +496,7 @@ export function normalizeHighRiskConsultationResult(
 ) {
   const result = { ...rawResult };
   const participants = normalizeParticipants(result.participants);
+  const agentFindings = Array.isArray(result.agentFindings) ? result.agentFindings : [];
   const triggerReasons = asStringArray(result.triggerReasons, 12);
   const keyFindings = asStringArray(result.keyFindings, 12);
   const todayInSchoolActions = asStringArray(result.todayInSchoolActions, 12);
@@ -575,6 +577,9 @@ export function normalizeHighRiskConsultationResult(
     humanReviewRequired: manualReviewSummary.required,
     manualReviewSummary,
     participants,
+    // 某些模型在没有独立 Agent 命中时会省略该字段；快照契约要求始终保留数组，
+    // 否则一次成功响应会导致整个机构快照在后续读取时被判为无效。
+    agentFindings,
     shouldEscalateToAdmin,
     coordinatorSummary,
     directorDecisionCard,

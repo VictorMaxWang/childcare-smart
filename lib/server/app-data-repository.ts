@@ -36,6 +36,22 @@ function getDemoSnapshotMap() {
   return globalWithSnapshots.__childcareSmartApiDemoSnapshots;
 }
 
+/**
+ * 重置当前演示机构的服务端快照。
+ *
+ * 演示资源 API 会在同一 Node 进程中共享状态；仅清理浏览器 localStorage 无法避免
+ * 重复验收持续累积记录。该入口严格限制为 demo session，绝不触碰真实机构数据。
+ */
+export function resetDemoRepositorySnapshot(session: SessionUser) {
+  if (session.accountKind !== "demo") {
+    throw new ApiRouteError("forbidden_scope", "demo session required.");
+  }
+
+  const seeded = normalizeExtendedSnapshot(createDemoSeedSnapshot(), session);
+  getDemoSnapshotMap().set(`${DEMO_DATASET_VERSION}:${session.institutionId}`, seeded);
+  return seeded;
+}
+
 export class DefaultAppDataRepository implements AppDataRepository {
   async load(session: SessionUser) {
     if (session.accountKind === "demo") {

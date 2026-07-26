@@ -1,4 +1,8 @@
 import {
+  requestDashscopeAsr,
+  resolveBailianAsrModel,
+} from "@/lib/ai/dashscope";
+import {
   getVivoProviderStatus,
   requestVivoAsr,
   type VivoProviderStatus,
@@ -14,6 +18,10 @@ export interface AsrProviderInput {
   audioBytes?: Buffer;
 }
 
+export interface AsrProviderStatus extends VivoProviderStatus<"asr"> {
+  model?: string;
+}
+
 export interface AsrProviderOutput {
   transcript: string;
   source: string;
@@ -27,24 +35,33 @@ export interface AsrProviderOutput {
   mock: boolean;
   isRealProvider: boolean;
   warnings: string[];
-  providerStatus: VivoProviderStatus<"asr">;
+  providerStatus: AsrProviderStatus;
 }
 
 export interface AsrProviderResult<T> {
   provider: string;
   mode: "fallback" | "mock" | "live";
-  source: "provider" | "provided_transcript" | "text_fallback" | "provider_unavailable";
+  source:
+    | "provider"
+    | "provided_transcript"
+    | "text_fallback"
+    | "provider_unavailable";
   model?: string;
   output: T;
 }
 
 export interface AsrProvider {
-  getStatus(): VivoProviderStatus<"asr">;
+  getStatus(): AsrProviderStatus;
   transcribe(input: AsrProviderInput): Promise<AsrProviderResult<AsrProviderOutput>>;
 }
 
 function normalizeText(value?: string) {
   return value?.trim() || "";
+}
+
+function hasDashscopeKey() {
+  const value = process.env.DASHSCOPE_API_KEY?.trim() ?? "";
+  return Boolean(value) && !/^(?:placeholder|changeme|your[_-].*key)$/i.test(value);
 }
 
 function buildMeta(input: AsrProviderInput, reason: string) {
@@ -57,51 +74,178 @@ function buildMeta(input: AsrProviderInput, reason: string) {
   };
 }
 
-class LocalTextAsrFallbackProvider implements AsrProvider {
-  getStatus() {
-    return {
-      ...getVivoProviderStatus("asr"),
-      state: "fallback" as const,
-      configured: false,
-      live: false,
+export function getDashscopeAsrProviderStatus(): AsrProviderStatus {
+  const configured = hasDashscopeKey();
+  return {
+    providerName: "dashscope",
+    capability: "asr",
+    state: configured ? "configured" : "fallback",
+    configured,
+    live: false,
+    fallback: !configured,
+    mock: false,
+    supported: true,
+    isRealProvider: configured,
+    status: configured ? "ready" : "missing-env",
+    reason: configured
+      ? undefined
+      : "Missing required env for DashScope ASR: DASHSCOPE_API_KEY",
+    warnings: [
+      "百炼 ASR 状态仅表示配置可用；只有成功转写后才会标记为 live。",
+      "单次语音记录限制为 90 秒和 4 MB，供应商请求不会持久化原始音频。",
+    ],
+    requiredEnv: ["DASHSCOPE_API_KEY"],
+    model: resolveBailianAsrModel(),
+  };
+}
+
+export function getEffectiveAsrProviderStatus(): AsrProviderStatus {
+  const vivo = getVivoProviderStatus("asr");
+  if (vivo.status === "ready") return vivo;
+
+  const dashscope = getDashscopeAsrProviderStatus();
+  if (dashscope.status === "ready") return dashscope;
+
+  return {
+    ...vivo,
+    providerName: "vivo / dashscope",
+    requiredEnv: Array.from(
+      new Set([...vivo.requiredEnv, ...dashscope.requiredEnv])
+    ),
+    warnings: [...vivo.warnings, ...dashscope.warnings],
+    reason: "No real ASR provider is configured.",
+  };
+}
+
+function buildFallbackResult(
+  input: AsrProviderInput,
+  status: AsrProviderStatus,
+  warning?: string
+): AsrProviderResult<AsrProviderOutput> {
+  const transcript =
+    normalizeText(input.transcript) || normalizeText(input.fallbackText);
+  const source: AsrProviderResult<AsrProviderOutput>["source"] = transcript
+    ? "provided_transcript"
+    : "provider_unavailable";
+  const requestStatus: AsrProviderStatus = {
+    ...status,
+    state: "fallback",
+    live: false,
+    fallback: true,
+    mock: false,
+    isRealProvider: false,
+    status: transcript ? status.status : "provider-unavailable",
+  };
+
+  return {
+    provider: "local-text-asr-fallback",
+    mode: "fallback",
+    source,
+    model: "local-text-fallback",
+    output: {
+      transcript,
+      source,
+      confidence: transcript ? null : 0,
+      raw: { path: source },
+      meta: buildMeta(
+        input,
+        transcript ? "provided-transcript" : "provider-unavailable"
+      ),
       fallback: true,
+      providerName: "local-text-asr-fallback",
+      state: "fallback",
+      live: false,
       mock: false,
       isRealProvider: false,
-      warnings: ["当前未配置 vivo ASR，音频文件不会被伪造转写；可使用浏览器语音识别或文本输入 fallback。"],
-    };
+      warnings: [
+        warning ??
+          (transcript
+            ? "未调用真实 ASR provider，使用用户提供的转写文本。"
+            : "当前没有获得真实语音转写，系统不会伪造转写内容。"),
+        ...status.warnings,
+      ],
+      providerStatus: requestStatus,
+    },
+  };
+}
+
+class LocalTextAsrFallbackProvider implements AsrProvider {
+  getStatus() {
+    return getEffectiveAsrProviderStatus();
   }
 
-  async transcribe(input: AsrProviderInput): Promise<AsrProviderResult<AsrProviderOutput>> {
-    const transcript = normalizeText(input.transcript) || normalizeText(input.fallbackText);
-    const status = this.getStatus();
-    const source: AsrProviderResult<AsrProviderOutput>["source"] = transcript
-      ? "provided_transcript"
-      : "provider_unavailable";
+  async transcribe(input: AsrProviderInput) {
+    return buildFallbackResult(input, this.getStatus());
+  }
+}
 
+class DashscopeAsrProvider implements AsrProvider {
+  getStatus() {
+    return getDashscopeAsrProviderStatus();
+  }
+
+  async transcribe(input: AsrProviderInput) {
+    if (normalizeText(input.transcript) || normalizeText(input.fallbackText)) {
+      return buildFallbackResult(input, this.getStatus());
+    }
+    if (!input.audioBytes || !input.mimeType) {
+      return buildFallbackResult(
+        input,
+        this.getStatus(),
+        "语音请求缺少有效音频内容或 MIME 类型。"
+      );
+    }
+
+    const result = await requestDashscopeAsr({
+      audioBytes: input.audioBytes,
+      mimeType: input.mimeType,
+    });
+    if (!result) {
+      return buildFallbackResult(
+        input,
+        {
+          ...this.getStatus(),
+          status: "provider-unavailable",
+          reason: "DashScope ASR request failed or returned an empty transcript.",
+        },
+        "百炼 ASR 未返回可用转写。"
+      );
+    }
+
+    const providerStatus: AsrProviderStatus = {
+      ...this.getStatus(),
+      state: "live",
+      configured: true,
+      live: true,
+      fallback: false,
+      mock: false,
+      isRealProvider: true,
+      status: "ready",
+      model: result.model,
+    };
     return {
-      provider: "local-text-asr-fallback",
-      mode: "fallback" as const,
-      source,
-      model: "local-text-fallback",
+      provider: "dashscope",
+      mode: "live" as const,
+      source: "provider" as const,
+      model: result.model,
       output: {
-        transcript,
-        source,
-        confidence: transcript ? null : 0,
-        raw: { path: source },
-        meta: buildMeta(input, transcript ? "provided-transcript" : "provider-unavailable"),
-        fallback: true,
-        providerName: "local-text-asr-fallback",
-        state: "fallback" as const,
-        live: false,
+        transcript: result.transcript,
+        source: "provider",
+        confidence: result.confidence,
+        raw: result.rawResponse,
+        meta: {
+          ...buildMeta(input, "dashscope-asr"),
+          language: result.language,
+          emotion: result.emotion,
+        },
+        fallback: false,
+        providerName: "dashscope",
+        state: "live" as const,
+        live: true,
         mock: false,
-        isRealProvider: false,
-        warnings: [
-          transcript
-            ? "未调用真实 ASR provider，使用用户提供的转写文本。"
-            : "当前未接入真实 ASR provider，音频材料不会被伪造转写成功。",
-          ...status.warnings,
-        ],
-        providerStatus: status,
+        isRealProvider: true,
+        warnings: [],
+        providerStatus,
       },
     };
   }
@@ -112,7 +256,7 @@ class VivoAsrProvider implements AsrProvider {
     return getVivoProviderStatus("asr");
   }
 
-  async transcribe(input: AsrProviderInput): Promise<AsrProviderResult<AsrProviderOutput>> {
+  async transcribe(input: AsrProviderInput) {
     const result = await requestVivoAsr({
       attachmentName: input.attachmentName,
       audioBytes: input.audioBytes,
@@ -136,7 +280,10 @@ class VivoAsrProvider implements AsrProvider {
         source: result.isRealProvider ? "provider" : "provided_transcript",
         confidence: result.confidence,
         raw: result.rawResponse as Record<string, unknown> | undefined,
-        meta: buildMeta(input, result.isRealProvider ? "vivo-asr-http" : "provided-transcript"),
+        meta: buildMeta(
+          input,
+          result.isRealProvider ? "vivo-asr-http" : "provided-transcript"
+        ),
         fallback: !result.isRealProvider,
         providerName: result.providerName,
         state: result.state,
@@ -151,6 +298,11 @@ class VivoAsrProvider implements AsrProvider {
 }
 
 export function resolveAsrProvider(): AsrProvider {
-  const status = getVivoProviderStatus("asr");
-  return status.status === "ready" ? new VivoAsrProvider() : new LocalTextAsrFallbackProvider();
+  // Vivo 配置完整时保持原路径；否则复用现有百炼 Key，让普通账号的录音按钮具备真实转写能力。
+  const vivoStatus = getVivoProviderStatus("asr");
+  if (vivoStatus.status === "ready") return new VivoAsrProvider();
+  if (getDashscopeAsrProviderStatus().status === "ready") {
+    return new DashscopeAsrProvider();
+  }
+  return new LocalTextAsrFallbackProvider();
 }

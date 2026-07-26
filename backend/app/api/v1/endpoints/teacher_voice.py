@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from starlette.datastructures import UploadFile
 
 from app.core.config import Settings, get_settings
+from app.core.service_auth import ServiceScope, require_child_in_service_scope, require_internal_service
 from app.schemas.teacher_voice import TeacherVoiceUnderstandRequest, TeacherVoiceUnderstandResponse
 from app.services.teacher_voice_understand import understand_teacher_voice
 
@@ -71,6 +72,7 @@ async def _parse_request_payload(request: Request) -> tuple[dict[str, object], b
 async def teacher_voice_understand(
     request: Request,
     settings: Settings = Depends(get_settings_dependency),
+    service_scope: ServiceScope = Depends(require_internal_service),
 ):
     payload_data, audio_bytes, input_mode = await _parse_request_payload(request)
 
@@ -78,6 +80,9 @@ async def teacher_voice_understand(
         payload = TeacherVoiceUnderstandRequest.model_validate(payload_data)
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=exc.errors()) from exc
+
+    if payload.child_id:
+        require_child_in_service_scope(service_scope, payload.child_id)
 
     has_transcript = bool((payload.transcript or "").strip())
     has_fallback_text = bool((payload.fallback_text or "").strip())

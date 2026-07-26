@@ -8,6 +8,56 @@ import {
 } from "./health-file-bridge.ts";
 import type { HealthFileBridgeRequest } from "../ai/types";
 
+test("health-file-bridge validation caps file count, file size, text, and image payloads", () => {
+  const baseRequest: HealthFileBridgeRequest = {
+    childId: "child-validation",
+    sourceRole: "teacher",
+    files: [
+      {
+        name: "health-note.png",
+        mimeType: "image/png",
+        sizeBytes: 1024,
+        previewText: "temperature 38.1, recheck tomorrow",
+        imageBase64: "aGVhbHRoLW5vdGU=",
+      },
+    ],
+    requestSource: "unit-test",
+  };
+
+  assert.equal(isValidHealthFileBridgeRequest(baseRequest), true);
+  assert.equal(
+    isValidHealthFileBridgeRequest({
+      ...baseRequest,
+      files: Array.from({ length: 4 }, (_, index) => ({
+        name: `health-note-${index}.png`,
+        mimeType: "image/png",
+      })),
+    }),
+    false
+  );
+  assert.equal(
+    isValidHealthFileBridgeRequest({
+      ...baseRequest,
+      files: [{ ...baseRequest.files[0], sizeBytes: 4 * 1024 * 1024 + 1 }],
+    }),
+    false
+  );
+  assert.equal(
+    isValidHealthFileBridgeRequest({
+      ...baseRequest,
+      files: [{ ...baseRequest.files[0], previewText: "x".repeat(20_001) }],
+    }),
+    false
+  );
+  assert.equal(
+    isValidHealthFileBridgeRequest({
+      ...baseRequest,
+      files: [{ ...baseRequest.files[0], imageBase64: "x".repeat(2_000_001) }],
+    }),
+    false
+  );
+});
+
 test("health-file-bridge helper returns extraction-only output for metadata-heavy files", () => {
   const request: HealthFileBridgeRequest = {
     childId: "child-1",

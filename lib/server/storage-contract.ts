@@ -30,6 +30,23 @@ function normalizeProvider(value: string | undefined) {
 
 export function isObjectStorageConfigured(env: StorageEnv = process.env) {
   const provider = normalizeProvider(env.OBJECT_STORAGE_PROVIDER ?? env.STORAGE_PROVIDER);
+  const hasVercelBlobCredentials = Boolean(
+    env.BLOB_READ_WRITE_TOKEN ||
+      (env.VERCEL_OIDC_TOKEN && env.BLOB_STORE_ID)
+  );
+  if (
+    hasVercelBlobCredentials &&
+    (!provider ||
+      provider === "vercel" ||
+      provider === "vercel-blob" ||
+      provider === "vercel_blob")
+  ) {
+    const explicitEnabled =
+      env.OBJECT_STORAGE_UPLOAD_ENABLED ?? env.OBJECT_STORAGE_ENABLED;
+    return typeof explicitEnabled === "undefined"
+      ? true
+      : readEnvFlag(explicitEnabled);
+  }
   if (!provider || provider === "none" || provider === "local" || provider === "demo") return false;
   if (!readEnvFlag(env.OBJECT_STORAGE_UPLOAD_ENABLED ?? env.OBJECT_STORAGE_ENABLED)) return false;
   return Boolean(
@@ -118,14 +135,20 @@ export function buildAttachmentStorageObject(
     | "kind"
     | "storageMode"
     | "localPreviewUrl"
+    | "storageKey"
     | "createdBy"
   >,
   session?: SessionUser
 ): StorageObject {
   const mode = resolveAttachmentStorageMode(attachment);
   const previewUrl = isLocalDemoPreviewUrl(attachment.localPreviewUrl) ? attachment.localPreviewUrl ?? null : null;
-  const canPreview = Boolean(previewUrl);
-  const canDownload = canServeAttachmentLocalPreview(previewUrl);
+  const protectedContentUrl =
+    mode === "object_storage" && attachment.storageKey
+      ? `/api/attachments/${encodeURIComponent(attachment.attachmentId)}/content`
+      : null;
+  const canPreview = Boolean(previewUrl || protectedContentUrl);
+  const canDownload =
+    Boolean(protectedContentUrl) || canServeAttachmentLocalPreview(previewUrl);
   const metadataOnly = mode === "metadata_only";
 
   return {
@@ -143,7 +166,7 @@ export function buildAttachmentStorageObject(
     },
     kind: "attachment",
     storageMode: mode,
-    url: storageUrlFor(mode, previewUrl),
+    url: protectedContentUrl ?? storageUrlFor(mode, previewUrl),
     localPreviewUrl: previewUrl,
     metadataOnly,
     expiresAt: null,
@@ -154,6 +177,8 @@ export function buildAttachmentStorageObject(
       canShare: false,
       reason: metadataOnly
         ? "metadata_only_waiting_object_storage"
+        : protectedContentUrl
+          ? "scoped_private_object_storage"
         : canDownload
           ? "scoped_local_demo_preview"
           : "local_demo_preview_only",
@@ -172,6 +197,9 @@ export function decorateAttachmentStorage(attachment: ApiAttachment, session?: S
     storageMode: storageObject.storageMode,
     uploadStatus: storageObject.storageMode === "object_storage" ? attachment.uploadStatus : "metadata_saved",
     localPreviewUrl: storageObject.localPreviewUrl ?? undefined,
+    storageProvider: attachment.storageProvider,
+    storageKey: attachment.storageKey,
+    storageEtag: attachment.storageEtag,
     downloadUrl,
     metadataOnly: storageObject.metadataOnly,
     storageObject,

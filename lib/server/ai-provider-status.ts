@@ -1,6 +1,14 @@
 import "server-only";
 
 import type { AiCapabilityMode } from "@/lib/ai/provider-trace";
+import {
+  resolveBailianRuntimeConfig,
+  resolveBailianVisionModel,
+} from "@/lib/ai/dashscope";
+import {
+  getEffectiveAsrProviderStatus,
+  getEffectiveOcrProviderStatus,
+} from "@/lib/ai/providers";
 import { getVivoProviderStatus, type VivoProviderStatus } from "@/lib/providers/vivo";
 import type {
   AssistantProviderStatus,
@@ -10,6 +18,7 @@ import type {
 type ProviderStatusCapability =
   | "llm"
   | "chat"
+  | "vision"
   | "ocr"
   | "asr"
   | "tts"
@@ -44,7 +53,7 @@ const PLACEHOLDER_VALUES = new Set([
 
 function readConfiguredEnv(name: string) {
   const value = process.env[name]?.trim() ?? "";
-  if (value.startsWith("濉叆")) return "";
+  if (value.startsWith("填入")) return "";
   return PLACEHOLDER_VALUES.has(value.toLowerCase()) ? "" : value;
 }
 
@@ -103,14 +112,89 @@ function buildStorybookMediaStatus(input: {
   };
 }
 
+function buildBailianStatus(
+  capability: "chat" | "vision"
+): UnifiedCapabilityStatus {
+  const configured = Boolean(readConfiguredEnv("DASHSCOPE_API_KEY"));
+  const model =
+    capability === "vision"
+      ? resolveBailianVisionModel()
+      : resolveBailianRuntimeConfig().model;
+
+  return {
+    providerName: "dashscope",
+    capability,
+    state: configured ? "configured" : "fallback",
+    configured,
+    supported: true,
+    isRealProvider: configured,
+    live: false,
+    fallback: !configured,
+    mock: false,
+    mode: configured ? "configured" : "fallback",
+    status: configured ? "ready" : "missing-env",
+    reason: configured
+      ? undefined
+      : "Missing required env for DashScope: DASHSCOPE_API_KEY",
+    model,
+    warnings: [
+      "Status is config-based; live is reported only after a successful provider request.",
+    ],
+    requiredEnv: ["DASHSCOPE_API_KEY"],
+  };
+}
+
+function resolveEffectiveChatStatus(
+  vivo: UnifiedCapabilityStatus,
+  bailian: UnifiedCapabilityStatus
+): UnifiedCapabilityStatus {
+  if (vivo.configured && vivo.supported) {
+    return {
+      ...vivo,
+      warnings: [
+        ...vivo.warnings,
+        ...(bailian.configured
+          ? [`DashScope ${bailian.model ?? ""} is configured as the secondary chat provider.`]
+          : []),
+      ],
+    };
+  }
+
+  if (bailian.configured) {
+    return {
+      ...bailian,
+      warnings: [
+        ...bailian.warnings,
+        "Vivo chat is unavailable; real requests use DashScope instead of local mock data.",
+      ],
+    };
+  }
+
+  return {
+    ...vivo,
+    providerName: "vivo / dashscope",
+    requiredEnv: Array.from(
+      new Set([...(vivo.requiredEnv ?? []), ...(bailian.requiredEnv ?? [])])
+    ),
+    warnings: [...vivo.warnings, ...bailian.warnings],
+    reason:
+      vivo.reason ??
+      bailian.reason ??
+      "No real chat provider is configured.",
+  };
+}
+
 export function getUnifiedAiProviderStatus(): AssistantProviderStatus {
-  const chat = toUnifiedCapability(getVivoProviderStatus("chat"), "chat");
+  const vivoChat = toUnifiedCapability(getVivoProviderStatus("chat"), "chat");
+  const bailianChat = buildBailianStatus("chat");
+  const chat = resolveEffectiveChatStatus(vivoChat, bailianChat);
   const llm = {
     ...chat,
     capability: "llm" as const,
   };
-  const ocr = toUnifiedCapability(getVivoProviderStatus("ocr"), "ocr");
-  const asr = toUnifiedCapability(getVivoProviderStatus("asr"), "asr");
+  const vision = buildBailianStatus("vision");
+  const ocr = toUnifiedCapability(getEffectiveOcrProviderStatus(), "ocr");
+  const asr = toUnifiedCapability(getEffectiveAsrProviderStatus(), "asr");
   const tts = toUnifiedCapability(getVivoProviderStatus("tts"), "tts");
   const storybookImage = buildStorybookMediaStatus({
     capability: "storybook-image",
@@ -128,6 +212,7 @@ export function getUnifiedAiProviderStatus(): AssistantProviderStatus {
   });
   const capabilities = {
     llm,
+    vision,
     ocr,
     asr,
     tts,
@@ -141,6 +226,7 @@ export function getUnifiedAiProviderStatus(): AssistantProviderStatus {
   return {
     chat,
     llm,
+    vision,
     ocr,
     asr,
     tts,
@@ -148,9 +234,9 @@ export function getUnifiedAiProviderStatus(): AssistantProviderStatus {
     storybookAudio,
     capabilities,
     fallbackText: allConfigured
-      ? "vivo providers are configured; live is reported only by request results."
+      ? "AI providers are configured; live is reported only by request results."
       : anyConfigured
-        ? "some vivo capabilities are configured; unavailable capabilities use explicit fallback/mock paths."
-        : "vivo provider missing-env; text/local fallback and storybook preview paths are available.",
+        ? "Some AI capabilities are configured; unavailable capabilities use explicit fallback/mock paths."
+        : "No real AI provider is configured; only explicit local fallback and preview paths are available.",
   };
 }

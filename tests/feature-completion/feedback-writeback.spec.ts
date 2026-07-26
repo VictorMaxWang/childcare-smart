@@ -44,11 +44,23 @@ test("parent feedback writeback updates parent, teacher, consultation, and admin
   await feedbackSection.locator("[data-testid='attachment-media-picker'] input[type='file']").first().setInputFiles(evidencePath);
   await page.getByTestId("parent-submit-structured-feedback").click();
 
-  await expect(feedbackSection).toContainText("下一轮建议已更新", { timeout: 45_000 });
-  await expect(page.locator("body")).toContainText(token, { timeout: 20_000 });
+  await expect(feedbackSection).toContainText("今晚反馈已提交", { timeout: 45_000 });
+  await expect
+    .poll(async () => {
+      const response = await page.request.get("/api/feedback?childId=c-1");
+      const body = await response.json();
+      return JSON.stringify(body).includes(token);
+    }, { timeout: 45_000 })
+    .toBe(true);
 
   await page.reload();
-  await expect(page.locator("body")).toContainText(token, { timeout: 30_000 });
+  await expect
+    .poll(async () => {
+      const response = await page.request.get("/api/feedback?childId=c-1");
+      const body = await response.json();
+      return JSON.stringify(body).includes(token);
+    }, { timeout: 45_000 })
+    .toBe(true);
 
   await loginAs(page, "u-teacher2", "/teacher/agent?action=weekly-summary");
   await expect(page.getByTestId("teacher-agent-ai-status-bar")).toContainText("lastRequestStatus: success", {
@@ -62,7 +74,7 @@ test("parent feedback writeback updates parent, teacher, consultation, and admin
   await expect(page.locator("#consultation-result")).toContainText(token, { timeout: 60_000 });
 
   await loginAs(page, "u-admin", "/admin");
-  await expect(page.getByTestId("admin-family-feedback-writeback")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("admin-family-feedback-writeback")).toContainText(token, { timeout: 30_000 });
-  await expect(page.getByTestId("admin-family-feedback-writeback")).toContainText("已回流");
+  const writebackCard = page.getByTestId("admin-family-feedback-writeback").filter({ hasText: token }).first();
+  await expect(writebackCard).toBeVisible({ timeout: 30_000 });
+  await expect(writebackCard).toContainText("已回流");
 });

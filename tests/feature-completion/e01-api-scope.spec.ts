@@ -36,14 +36,14 @@ test.describe("E01 API scope foundation", () => {
   test("denies parent and cross-class teacher child access", async ({ request: _request }, testInfo) => {
     void _request;
     const parent = await demoContext(testInfo, "u-parent");
-    const teacher2 = await demoContext(testInfo, "u-teacher2");
+    const otherClassTeacher = await demoContext(testInfo, "u-teacher");
 
     try {
       await expectFailure(await parent.get("/api/children/c-3"), 403, "forbidden_scope");
-      await expectFailure(await teacher2.get("/api/children/c-1"), 403, "forbidden_scope");
+      await expectFailure(await otherClassTeacher.get("/api/children/c-1"), 403, "forbidden_scope");
     } finally {
       await parent.dispose();
-      await teacher2.dispose();
+      await otherClassTeacher.dispose();
     }
   });
 
@@ -62,8 +62,8 @@ test.describe("E01 API scope foundation", () => {
 
   test("creates, reads, updates and archives records without mutating denied writes", async ({ request: _request }, testInfo) => {
     void _request;
-    const teacher = await demoContext(testInfo, "u-teacher");
-    const teacher2 = await demoContext(testInfo, "u-teacher2");
+    const teacher = await demoContext(testInfo, "u-teacher2");
+    const otherClassTeacher = await demoContext(testInfo, "u-teacher");
     const token = `e01-api-${Date.now()}`;
     const deniedToken = `${token}-denied`;
 
@@ -101,7 +101,7 @@ test.describe("E01 API scope foundation", () => {
       expect(updated.remark).toBe(`${token}-updated`);
 
       await expectFailure(
-        await teacher2.post("/api/records", {
+        await otherClassTeacher.post("/api/records", {
           data: {
             type: "health",
             childId: "c-1",
@@ -132,7 +132,7 @@ test.describe("E01 API scope foundation", () => {
       expect(includeArchived.some((record: { id: string; archivedAt?: string }) => record.id === recordId && record.archivedAt)).toBe(true);
     } finally {
       await teacher.dispose();
-      await teacher2.dispose();
+      await otherClassTeacher.dispose();
     }
   });
 });

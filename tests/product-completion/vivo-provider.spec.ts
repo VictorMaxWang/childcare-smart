@@ -25,8 +25,13 @@ test.describe("E11 vivo provider status regression", () => {
         fallbackText: string;
       }>(await parent.get("/api/ai/provider-status"));
 
+      expect(["vivo", "dashscope", "vivo / dashscope"]).toContain(
+        status.chat.providerName
+      );
+      expect(["vivo", "dashscope", "vivo / dashscope"]).toContain(
+        status.asr.providerName
+      );
       for (const capability of [status.chat, status.asr]) {
-        expect(capability.providerName).toBe("vivo");
         expect(capability.supported).toBe(true);
         expect(["ready", "missing-env", "unsupported", "provider-unavailable", "error"]).toContain(capability.status);
         expect(Array.isArray(capability.requiredEnv)).toBe(true);
@@ -73,9 +78,8 @@ test.describe("E11 vivo provider status regression", () => {
       if (body.source !== "vivo-ocr-provider") {
         expect(body.fallback).toBe(true);
         expect(body.providerStatus?.ocr?.status).toMatch(/ready|missing-env|provider-unavailable|unsupported/);
-        if (body.providerStatus?.ocr?.status === "ready") {
-          expect(body.providerStatus?.ocr?.isRealProvider).toBe(true);
-        }
+        expect(body.providerStatus?.ocr?.live).toBe(false);
+        expect(body.providerStatus?.ocr?.isRealProvider).toBe(false);
       }
       expect(JSON.stringify(body)).toContain(token);
       expect(JSON.stringify(body)).not.toMatch(/Bearer\s+\S+/i);

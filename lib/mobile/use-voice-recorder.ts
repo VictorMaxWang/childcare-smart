@@ -8,6 +8,11 @@ import {
   normalizeTeacherVoiceMimeType,
   type TeacherVoiceRecorderPlatform,
 } from "@/lib/mobile/teacher-voice-audio";
+import {
+  VOICE_AUDIO_MAX_BYTES,
+  VOICE_AUDIO_MAX_DURATION_MS,
+} from "@/lib/voice/audio-constraints";
+import { normalizeRecordedAudioForAsr } from "@/lib/voice/wav";
 
 export type VoiceRecorderSupportState = "checking" | "supported" | "unsupported";
 export type VoiceRecorderPermissionState = "unknown" | "granted" | "denied";
@@ -313,7 +318,7 @@ export function useVoiceRecorder() {
           setLastError("voice_recorder_stream_error");
         };
 
-        recorder.onstop = () => {
+        recorder.onstop = async () => {
           const elapsedMs = startedAtRef.current ? Date.now() - startedAtRef.current : durationMs;
           const resolvedMimeType = resolveNormalizedMimeType({
             platform: recorderPlatform,
@@ -323,25 +328,47 @@ export function useVoiceRecorder() {
           const mergedBlob = new Blob(chunksRef.current, {
             type: resolvedMimeType || fallbackMimeType,
           });
-          const shouldDiscard = discardOnStopRef.current || mergedBlob.size === 0;
+          if (discardOnStopRef.current || mergedBlob.size === 0) {
+            stopResolverRef.current?.(null);
+            stopResolverRef.current = null;
+            resetRecorderState();
+            return;
+          }
 
-          const result = shouldDiscard
-            ? null
-            : {
-                blob: mergedBlob,
-                file: createRecordingFile(
-                  mergedBlob,
-                  pendingFileNameRef.current,
-                  resolvedMimeType || fallbackMimeType
-                ),
-                durationMs: elapsedMs,
-                mimeType: resolveNormalizedMimeType({
-                  platform: recorderPlatform,
-                  mimeType: mergedBlob.type || recorder.mimeType || nextMimeType,
-                  attachmentName: pendingFileNameRef.current,
-                }),
-                size: mergedBlob.size,
-              } satisfies VoiceRecordingResult;
+          let normalizedBlob: Blob;
+          try {
+            normalizedBlob = await normalizeRecordedAudioForAsr(mergedBlob);
+          } catch {
+            setLastError("voice_audio_conversion_failed");
+            stopResolverRef.current?.(null);
+            stopResolverRef.current = null;
+            resetRecorderState();
+            return;
+          }
+          if (normalizedBlob.size > VOICE_AUDIO_MAX_BYTES) {
+            setLastError("voice_recording_too_large");
+            stopResolverRef.current?.(null);
+            stopResolverRef.current = null;
+            resetRecorderState();
+            return;
+          }
+
+          const normalizedMimeType = resolveNormalizedMimeType({
+            platform: recorderPlatform,
+            mimeType: normalizedBlob.type,
+            attachmentName: pendingFileNameRef.current,
+          });
+          const result = {
+            blob: normalizedBlob,
+            file: createRecordingFile(
+              normalizedBlob,
+              pendingFileNameRef.current,
+              normalizedMimeType
+            ),
+            durationMs: Math.min(elapsedMs, VOICE_AUDIO_MAX_DURATION_MS),
+            mimeType: normalizedMimeType,
+            size: normalizedBlob.size,
+          } satisfies VoiceRecordingResult;
 
           stopResolverRef.current?.(result);
           stopResolverRef.current = null;
@@ -354,7 +381,13 @@ export function useVoiceRecorder() {
 
         timerRef.current = window.setInterval(() => {
           if (!startedAtRef.current) return;
-          setDurationMs(Date.now() - startedAtRef.current);
+          const elapsedMs = Date.now() - startedAtRef.current;
+          setDurationMs(
+            Math.min(elapsedMs, VOICE_AUDIO_MAX_DURATION_MS)
+          );
+          if (elapsedMs >= VOICE_AUDIO_MAX_DURATION_MS) {
+            interruptRecording("voice_recorder_max_duration");
+          }
         }, 120);
       } catch (error) {
         const nextError = toRecorderErrorMessage(error);

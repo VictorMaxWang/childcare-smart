@@ -178,7 +178,6 @@ export function readTeacherVoiceDraftPayload(
 
 export function getVoiceDraftSyncStatus(result: TeacherVoiceGlueResult) {
   if (result.upload.status === "failed") return "failed" as const;
-  if (result.upload.status === "processing") return "local_pending" as const;
-  if (!result.understanding) return "local_pending" as const;
-  return "synced" as const;
+  // ASR/理解成功只代表草稿准备完成，人工确认并写入资源 API 后才算真正同步。
+  return "local_pending" as const;
 }

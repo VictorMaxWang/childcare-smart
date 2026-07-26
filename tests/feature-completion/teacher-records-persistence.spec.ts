@@ -23,8 +23,8 @@ test("D08 teacher records persist after refresh and are visible to parent", asyn
   const growthToken = `R02-GROWTH-${suffix}`;
   const deniedToken = `R02-DENIED-${suffix}`;
 
-  const teacher = await demoContext(testInfo, "u-teacher");
-  const teacher2 = await demoContext(testInfo, "u-teacher2");
+  const teacher = await demoContext(testInfo, "u-teacher2");
+  const otherClassTeacher = await demoContext(testInfo, "u-teacher");
   const parent = await demoContext(testInfo, "u-parent");
 
   try {
@@ -77,7 +77,7 @@ test("D08 teacher records persist after refresh and are visible to parent", asyn
     expect(growth).toMatchObject({ childId, description: growthToken });
 
     await expectFailure(
-      await teacher2.post("/api/records", {
+      await otherClassTeacher.post("/api/records", {
         data: {
           type: "health",
           childId,
@@ -109,14 +109,14 @@ test("D08 teacher records persist after refresh and are visible to parent", asyn
     );
     expect(parentGrowth.some((record) => record.id === growth.id && record.description === growthToken)).toBe(true);
 
-    await expectFailure(await teacher2.get(`/api/records?type=health&childId=${childId}&includeArchived=1`), 403, "forbidden_scope");
+    await expectFailure(await otherClassTeacher.get(`/api/records?type=health&childId=${childId}&includeArchived=1`), 403, "forbidden_scope");
 
-    await loginAs(page, "u-teacher", "/teacher");
+    await loginAs(page, "u-teacher2", "/teacher");
     await expect(page.locator("body")).not.toHaveText("");
     await capture(page, "records-01-teacher-records-api-persisted.png");
   } finally {
     await teacher.dispose();
-    await teacher2.dispose();
+    await otherClassTeacher.dispose();
     await parent.dispose();
   }
 });

@@ -2,7 +2,10 @@ import { expect, test, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
-import { loginAs } from "../feature-completion/helpers";
+import {
+  loginAs,
+  resetDemoStorage,
+} from "../feature-completion/helpers";
 import {
   LIN_XIAOYU_FIXED_STORYBOOK_PAGES,
   LIN_XIAOYU_FIXED_STORYBOOK_TITLE,
@@ -92,6 +95,10 @@ async function expectLoadedDemoImage(page: Page, selector: string) {
 }
 
 test.describe("FRONTEND-REPLICA-R07 parent replica", () => {
+  test.beforeEach(async ({ page }) => {
+    await resetDemoStorage(page);
+  });
+
   test("parent dashboard keeps Lin Mom scope, child status, trends, media, AI entry, and voice orb", async ({ page }) => {
     const guards = installPageGuards(page);
 
@@ -117,6 +124,14 @@ test.describe("FRONTEND-REPLICA-R07 parent replica", () => {
     await expectLoadedDemoImage(page, "[data-testid='r07-parent-growth-image']");
     await expect(page.locator(`a[href*="/parent/agent?child=${CHILD_ID}"]`).first()).toBeVisible();
     await expect(page.locator(`a[href*="/parent/storybook?child=${CHILD_ID}"]`).first()).toBeVisible();
+    await expect(page.getByTestId("parent-switch-child")).toHaveAttribute(
+      "href",
+      /\/parent\?child=(?!c-1(?:&|$))[^&]+/
+    );
+    await expect(page.getByTestId("parent-reminders-link")).toHaveAttribute(
+      "href",
+      `/parent/reminders?child=${CHILD_ID}`
+    );
     await expect(page.getByTestId("voice-orb-button")).toBeVisible();
 
     await expectNoHorizontalOverflow(page);
@@ -141,6 +156,9 @@ test.describe("FRONTEND-REPLICA-R07 parent replica", () => {
     await expect(page.getByTestId("r03-parent-agent-trend")).toBeVisible();
 
     await page.getByTestId("r04-prompt-chip").first().click();
+    await expect(page.getByTestId("r04-assistant-loading").first()).toBeHidden({
+      timeout: 30_000,
+    });
     await page.getByTestId("r04-assistant-input").first().fill("请用一句话说明今晚先做什么");
     await expect(page.getByTestId("r04-assistant-send").first()).toBeEnabled();
     await page.getByTestId("r04-assistant-send").first().click();
@@ -179,6 +197,20 @@ test.describe("FRONTEND-REPLICA-R07 parent replica", () => {
 
     await expectNoHorizontalOverflow(page);
     await expectNoPageProblems(page, guards);
+  });
+
+  test("care mode keeps the simplified feedback composer interactive", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginParent(page, `/parent/agent?child=${CHILD_ID}#feedback`);
+
+    await page.getByRole("button", { name: "关怀", exact: true }).first().click();
+    const feedbackSection = page.getByTestId("r07-parent-agent-feedback-section").first();
+    await expect(feedbackSection).toBeVisible();
+    await feedbackSection.scrollIntoViewIfNeeded();
+    await expect(feedbackSection.getByRole("button", { name: "打开补充情况" })).toBeVisible();
+    await expect(feedbackSection.getByRole("button", { name: "已做" })).toBeEnabled();
+    await expect(page.getByTestId("parent-submit-structured-feedback")).toBeEnabled();
+    await expectNoHorizontalOverflow(page);
   });
 
   test("fixed Lin Xiaoyu storybook keeps title, real images, alias route, and narration controls", async ({ page }) => {

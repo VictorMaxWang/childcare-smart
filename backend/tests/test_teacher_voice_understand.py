@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.v1.endpoints.teacher_voice import router as teacher_voice_router
+from app.core.service_auth import ServiceScope, require_internal_service
 from app.providers.base import AsrProviderInput, AsrSegment, AsrTranscription, ProviderResult
 import app.services.teacher_voice_understand as teacher_voice_understand
 
@@ -21,6 +22,26 @@ class StubAsrProvider:
     def transcribe(self, input: AsrProviderInput) -> ProviderResult[AsrTranscription]:
         self.last_input = input
         return self.result
+
+
+def test_teacher_voice_understand_rejects_child_outside_signed_scope():
+    app.dependency_overrides[require_internal_service] = lambda: ServiceScope(
+        institution_id="inst-1",
+        role="教师",
+        child_ids=("allowed-child",),
+    )
+    try:
+        response = client.post(
+            "/api/v1/agents/teacher/voice-understand",
+            json={
+                "transcript": "记录一条体温观察",
+                "childId": "other-child",
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(require_internal_service, None)
+
+    assert response.status_code == 403
 
 
 def test_teacher_voice_understand_transcript_only():

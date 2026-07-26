@@ -1,4 +1,10 @@
-import { apiGet, apiPatch, apiPost, type ApiClientOptions } from "@/lib/api/client";
+import {
+  apiGet,
+  apiPatch,
+  apiPost,
+  apiRequest,
+  type ApiClientOptions,
+} from "@/lib/api/client";
 import type {
   ApiAttachment,
   ApiFeedbackDetail,
@@ -9,6 +15,7 @@ import type {
 import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
 
 export type ApiMessage = AppStateSnapshot["messages"][number];
+export type ApiConversation = AppStateSnapshot["conversations"][number];
 export type ApiFeedback = AppStateSnapshot["feedback"][number] & { status?: FeedbackStatus | string };
 
 export interface ApiSendMessageInput {
@@ -67,6 +74,22 @@ export function replyMessage(messageId: string, input: { conversationId?: string
   return apiPost<ApiMessage>(`/api/messages/${messageId}/reply`, input, options);
 }
 
+export function markMessageRead(messageId: string, options?: ApiClientOptions) {
+  return apiPost<ApiMessage>(`/api/messages/${messageId}/read`, undefined, options);
+}
+
+export function updateConversationStatus(
+  conversationId: string,
+  status: ApiConversation["status"],
+  options?: ApiClientOptions
+) {
+  return apiPatch<ApiConversation>(
+    `/api/conversations/${encodeURIComponent(conversationId)}/status`,
+    { status },
+    options
+  );
+}
+
 export function listFeedback(childId?: string, options?: ApiClientOptions) {
   return apiGet<ApiFeedback[]>(withParams("/api/feedback", { childId }), options);
 }
@@ -99,4 +122,25 @@ export function listAttachments(
 
 export function createAttachment(input: ApiCreateAttachmentInput, options?: ApiClientOptions) {
   return apiPost<ApiAttachment>("/api/attachments", input, options);
+}
+
+export function uploadAttachmentFile(
+  input: {
+    file: File;
+    childId?: string;
+    relatedType: AttachmentRelatedType;
+    relatedId?: string;
+  },
+  options?: ApiClientOptions
+) {
+  const formData = new FormData();
+  formData.set("file", input.file);
+  if (input.childId) formData.set("childId", input.childId);
+  formData.set("relatedType", input.relatedType);
+  if (input.relatedId) formData.set("relatedId", input.relatedId);
+  return apiRequest<ApiAttachment>("/api/attachments/upload", {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
 }

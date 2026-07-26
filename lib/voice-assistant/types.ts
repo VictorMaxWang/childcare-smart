@@ -175,7 +175,15 @@ export interface AssistantCommandApiRequest {
 
 export interface VoiceProviderCapabilityStatus {
   providerName: string;
-  capability: "chat" | "llm" | "asr" | "ocr" | "tts" | "storybook-image" | "storybook-audio";
+  capability:
+    | "chat"
+    | "llm"
+    | "vision"
+    | "asr"
+    | "ocr"
+    | "tts"
+    | "storybook-image"
+    | "storybook-audio";
   state: "configured" | "live" | "fallback" | "mock";
   configured: boolean;
   supported: boolean;
@@ -186,6 +194,7 @@ export interface VoiceProviderCapabilityStatus {
   mode?: AiCapabilityMode;
   status: "ready" | "missing-env" | "unsupported" | "provider-unavailable" | "error";
   reason?: string;
+  model?: string;
   warnings: string[];
   requiredEnv?: string[];
 }
@@ -193,6 +202,7 @@ export interface VoiceProviderCapabilityStatus {
 export interface AssistantProviderStatus {
   chat: VoiceProviderCapabilityStatus;
   llm?: VoiceProviderCapabilityStatus;
+  vision?: VoiceProviderCapabilityStatus;
   ocr: VoiceProviderCapabilityStatus;
   asr: VoiceProviderCapabilityStatus;
   tts: VoiceProviderCapabilityStatus;

@@ -45,7 +45,17 @@ function runStep(step) {
 
 const steps = [
   { label: "npm run lint", command: npmBin, args: ["run", "lint"], shell: process.platform === "win32" },
+  { label: "npm run typecheck", command: npmBin, args: ["run", "typecheck"], shell: process.platform === "win32" },
+  { label: "npm run test:node", command: npmBin, args: ["run", "test:node"], shell: process.platform === "win32" },
+  { label: "npm run test:python", command: npmBin, args: ["run", "test:python"], shell: process.platform === "win32" },
+  { label: "npm run db:check", command: npmBin, args: ["run", "db:check"], shell: process.platform === "win32" },
   { label: "npm run build", command: npmBin, args: ["run", "build"], shell: process.platform === "win32" },
+  {
+    label: "npm run test:browser:release",
+    command: npmBin,
+    args: ["run", "test:browser:release"],
+    shell: process.platform === "win32",
+  },
   {
     label: "node scripts/release-check.mjs",
     command: process.execPath,

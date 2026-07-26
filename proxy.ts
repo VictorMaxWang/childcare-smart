@@ -138,12 +138,15 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/_next") ||
     PUBLIC_ASSET_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) ||
     pathname.startsWith("/api/auth") ||
+    pathname === "/api/health" ||
     API_ROUTE_HANDLED_AUTH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) ||
     pathname === "/favicon.ico" ||
     pathname === "/login" ||
     pathname === "/auth/login" ||
     pathname === "/register" ||
-    pathname === "/auth/register"
+    pathname === "/auth/register" ||
+    pathname === "/terms" ||
+    pathname === "/privacy"
   ) {
     return NextResponse.next();
   }

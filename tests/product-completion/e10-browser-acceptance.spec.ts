@@ -107,9 +107,10 @@ test.describe("E10 cleanup acceptance", () => {
       expect(shared.share?.localText).toContain(report.reportId);
 
       await loginAs(page, "u-admin", "/admin");
-      await expect(page.getByTestId("e10-notification-disabled")).toBeDisabled();
-      await expect(page.getByTestId("e10-message-disabled")).toBeDisabled();
-      await capture(page, "01-admin-provider-status-disabled-nav.png");
+      await expect(page.getByTestId("global-search-trigger")).toBeEnabled();
+      await expect(page.getByTestId("notification-center-trigger")).toBeEnabled();
+      await expect(page.getByTestId("message-center-trigger")).toBeEnabled();
+      await capture(page, "01-admin-provider-status-enabled-utilities.png");
 
       await page.goto("/admin/agent?action=weekly-report");
       await expect(page.getByTestId("weekly-history-list")).toBeVisible();

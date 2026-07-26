@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { flushSync } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import { BrainCircuit, CheckCircle2, Clock3, MessageSquareText, MoonStar, Send, ShieldCheck, Sparkles } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
@@ -74,8 +73,6 @@ import type {
   ParentMessageReflexionResponse,
   ParentTrendQueryResponse,
 } from "@/lib/ai/types";
-import { getLocalToday } from "@/lib/date";
-import { buildReminderItems } from "@/lib/mobile/reminders";
 import { getHydrationDisplayState } from "@/lib/hydration-display";
 import { useCareMode } from "@/lib/care-mode";
 import { buildParentSpeechScript } from "@/lib/voice/browser-tts";
@@ -83,7 +80,7 @@ import { sanitizeParentFacingText } from "@/lib/agent/parent-copy";
 import { cn } from "@/lib/utils";
 import { formatParentFeedbackStatusLabel } from "@/lib/feedback/consumption";
 import {
-  createAttachment as createApiAttachment,
+  markMessageRead as markApiMessageRead,
   createFeedback as createApiFeedback,
   listAttachments as listApiAttachments,
   listFeedback as listApiFeedback,
@@ -92,11 +89,12 @@ import {
   type ApiFeedback,
   type ApiMessage,
 } from "@/lib/api/communication";
+import { persistAttachmentDrafts } from "@/lib/api/attachment-persistence";
+import { apiPatch } from "@/lib/api/client";
 import type { ApiAttachment } from "@/lib/api/types";
 import {
   buildHomeSchoolThreads,
   buildStructuredFeedbackMessageContent,
-  formatHomeSchoolPersistStatus,
   formatHomeSchoolTime,
   getHomeSchoolConversationId,
 } from "@/lib/communication/home-school";
@@ -156,21 +154,14 @@ export default function ParentAgentPage() {
     growthRecords,
     guardianFeedbacks,
     taskCheckInRecords,
-    addGuardianFeedback,
-    checkInTask,
     interventionCards,
     consultations,
     reminders,
     mobileDrafts,
     messages,
-    conversations,
     markMobileDraftSyncStatus,
-    persistAppSnapshotNow,
-    sendHomeSchoolMessage,
-    markHomeSchoolMessageRead,
-    markParentReminderRead,
     updateParentReminderStatus,
-    upsertReminder,
+    reloadAppSnapshotFromApi,
     getChildInterventionCard,
     getLatestConsultationForChild,
   } = useApp();
@@ -203,6 +194,14 @@ export default function ParentAgentPage() {
   const [homeSchoolMessageStatus, setHomeSchoolMessageStatus] = useState<string | null>(null);
   const [homeSchoolMessageSending, setHomeSchoolMessageSending] = useState(false);
   const [homeSchoolAttachmentDrafts, setHomeSchoolAttachmentDrafts] = useState<AttachmentDraft[]>([]);
+  const [pendingHomeSchoolUpload, setPendingHomeSchoolUpload] = useState<{
+    childId: string;
+    messageId: string;
+  } | null>(null);
+  const [pendingFeedbackUpload, setPendingFeedbackUpload] = useState<{
+    childId: string;
+    feedbackId: string;
+  } | null>(null);
   const [apiMessages, setApiMessages] = useState<ApiMessage[]>([]);
   const [apiFeedbacks, setApiFeedbacks] = useState<ApiFeedback[]>([]);
   const [apiAttachments, setApiAttachments] = useState<ApiAttachment[]>([]);
@@ -252,14 +251,24 @@ export default function ParentAgentPage() {
   const communicationMessages = apiMessages.length > 0 ? apiMessages : messages;
   const selectedHomeSchoolThread = useMemo(() => {
     if (!selectedFeed) return null;
+    const childId = selectedFeed.child.id;
+    const canonicalConversationId = getHomeSchoolConversationId(childId);
+
+    // 历史数据可能为同一幼儿保留多个 conversationId；家长页按幼儿合并，
+    // 避免新消息已落库却被另一条旧会话的时间戳遮住。
     return (
       buildHomeSchoolThreads({
-        messages: communicationMessages,
-        conversations,
+        messages: communicationMessages
+          .filter((message) => message.childId === childId)
+          .map((message) => ({
+            ...message,
+            conversationId: canonicalConversationId,
+          })),
+        conversations: [],
         children: [selectedFeed.child],
-      }).find((thread) => thread.childId === selectedFeed.child.id) ?? null
+      })[0] ?? null
     );
-  }, [communicationMessages, conversations, selectedFeed]);
+  }, [communicationMessages, selectedFeed]);
   const displayedTrendQuestion = latestTrendQuery;
   const displayedTrendResult = latestTrendResult;
   const displayedTrendError = trendError;
@@ -534,28 +543,23 @@ export default function ParentAgentPage() {
 
   useEffect(() => {
     if (!selectedHomeSchoolThread) return;
-    selectedHomeSchoolThread.messages
+    const unreadMessageIds = selectedHomeSchoolThread.messages
       .filter((message) => message.senderRole === "teacher" && !message.readBy.includes(currentUser.id))
-      .forEach((message) => markHomeSchoolMessageRead(message.messageId));
-  }, [currentUser.id, markHomeSchoolMessageRead, selectedHomeSchoolThread]);
+      .map((message) => message.messageId);
+    if (unreadMessageIds.length === 0) return;
+    void Promise.all(unreadMessageIds.map((messageId) => markApiMessageRead(messageId)))
+      .then(() => refreshE04CommunicationData())
+      .catch((error) => {
+        setHomeSchoolMessageStatus(
+          error instanceof Error ? `消息已读回执失败：${error.message}` : "消息已读回执失败。"
+        );
+      });
+  }, [currentUser.id, refreshE04CommunicationData, selectedHomeSchoolThread]);
 
   useEffect(() => {
     if (!careMode) return;
     setShowMoreContent(false);
   }, [careMode, resolvedChildId]);
-
-  useEffect(() => {
-    if (!selectedFeed || !currentResult) return;
-
-    buildReminderItems({
-      childId: selectedFeed.child.id,
-      targetRole: "parent",
-      targetId: selectedFeed.child.id,
-      childName: selectedFeed.child.name,
-      interventionCard: currentResult.interventionCard,
-      consultation: currentResult.consultation,
-    }).forEach((item) => upsertReminder(item));
-  }, [currentResult, selectedFeed, upsertReminder]);
 
   async function sendParentFreeHomeSchoolMessage() {
     const content = homeSchoolMessageDraft.trim();
@@ -567,66 +571,60 @@ export default function ParentAgentPage() {
     }
 
     setHomeSchoolMessageSending(true);
-    setHomeSchoolMessageStatus("正在通过 E01 API 发送给老师...");
+    const pendingMessageId =
+      pendingHomeSchoolUpload?.childId === selectedFeed.child.id
+        ? pendingHomeSchoolUpload.messageId
+        : null;
+    setHomeSchoolMessageStatus(
+      pendingMessageId
+        ? "正在重试未完成的附件上传..."
+        : "正在发送给老师..."
+    );
     try {
-      const message = await sendApiMessage({
-        childId: selectedFeed.child.id,
-        conversationId: getHomeSchoolConversationId(selectedFeed.child.id),
-        content: content || "附件消息",
-      });
-      await Promise.all(
-        homeSchoolAttachmentDrafts.map((draft) =>
-          createApiAttachment({
+      const messageId =
+        pendingMessageId ??
+        (
+          await sendApiMessage({
             childId: selectedFeed.child.id,
-            relatedType: "message",
-            relatedId: message.messageId,
-            kind: draft.kind,
-            fileName: draft.fileName,
-            mimeType: draft.mimeType,
-            byteSize: draft.byteSize,
-            localPreviewUrl: draft.localPreviewUrl,
-            durationMs: draft.durationMs,
+            conversationId: getHomeSchoolConversationId(selectedFeed.child.id),
+            content: content || "附件消息",
           })
-        )
-      );
+        ).messageId;
+      if (homeSchoolAttachmentDrafts.length > 0) {
+        setPendingHomeSchoolUpload({
+          childId: selectedFeed.child.id,
+          messageId,
+        });
+        const existingAttachments = pendingMessageId
+          ? await listApiAttachments({
+              childId: selectedFeed.child.id,
+              relatedType: "message",
+              relatedId: messageId,
+            })
+          : [];
+        await persistAttachmentDrafts({
+          drafts: homeSchoolAttachmentDrafts,
+          accountKind: currentUser.accountKind,
+          childId: selectedFeed.child.id,
+          relatedType: "message",
+          relatedId: messageId,
+          existingAttachments,
+        });
+      }
+      setPendingHomeSchoolUpload(null);
       setHomeSchoolMessageDraft("");
       setHomeSchoolAttachmentDrafts([]);
       await refreshE04CommunicationData();
-      setHomeSchoolMessageStatus("E01 API 已保存，刷新后仍可见。");
+      setHomeSchoolMessageStatus("消息与附件已保存，刷新后仍可见。");
     } catch (error) {
-      setHomeSchoolMessageStatus(error instanceof Error ? `发送失败：${error.message}` : "发送失败。");
+      setHomeSchoolMessageStatus(
+        error instanceof Error
+          ? `消息可能已发送，但附件尚未完成：${error.message}。再次点击可继续上传，不会重复发消息。`
+          : "消息可能已发送，但附件尚未完成；再次点击可继续上传。"
+      );
     } finally {
       setHomeSchoolMessageSending(false);
     }
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async function sendParentFreeHomeSchoolMessageLegacy() {
-    const content = homeSchoolMessageDraft.trim();
-    if (!selectedFeed) return;
-
-    if (!content) {
-      setHomeSchoolMessageStatus("请输入要同步给老师的内容。");
-      return;
-    }
-
-    setHomeSchoolMessageSending(true);
-    setHomeSchoolMessageStatus("正在发送给老师...");
-    const result = sendHomeSchoolMessage({
-      childId: selectedFeed.child.id,
-      classId: selectedFeed.child.className,
-      conversationId: getHomeSchoolConversationId(selectedFeed.child.id),
-      content,
-    });
-    setHomeSchoolMessageSending(false);
-
-    if (result.status === "failed") {
-      setHomeSchoolMessageStatus(`发送失败：${result.error ?? result.message}`);
-      return;
-    }
-
-    setHomeSchoolMessageDraft("");
-    setHomeSchoolMessageStatus(`${formatHomeSchoolPersistStatus(result.status)}，老师刷新后可见。`);
   }
 
   const readRouteError = useCallback(
@@ -1022,6 +1020,24 @@ export default function ParentAgentPage() {
     };
   }, [baseContext, enrichParentMessageResult, snapshot, suggestionRefreshNonce]);
 
+  async function persistFamilyTaskReminderStatus(
+    reminderId: string,
+    status: "acknowledged" | "snoozed"
+  ) {
+    if (currentUser.accountKind === "demo") {
+      // 演示家庭提醒由客户端叙事脚手架派生，不存在远端主键，必须留在 demo snapshot 内更新。
+      const result = updateParentReminderStatus(reminderId, status);
+      if (result.status === "failed") {
+        throw new Error(result.error ?? result.message);
+      }
+      return;
+    }
+
+    await apiPatch(`/api/reminders/${encodeURIComponent(reminderId)}`, {
+      status,
+    });
+  }
+
   async function submitStructuredFeedback(
     input: ParentStructuredFeedbackComposerSubmitInput
   ) {
@@ -1037,8 +1053,11 @@ export default function ParentAgentPage() {
 
     setFeedbackStatus("正在提交今晚反馈...");
 
-    let savedFeedbackId = "";
-    let savedFeedback: ApiFeedback | null = null;
+    let savedFeedbackId =
+      pendingFeedbackUpload?.childId === input.childId
+        ? pendingFeedbackUpload.feedbackId
+        : "";
+    const isRetryingFeedback = Boolean(savedFeedbackId);
     const feedbackContent = buildStructuredFeedbackMessageContent({
       childName: selectedFeed.child.name,
       executionStatus: input.executionStatus,
@@ -1047,34 +1066,63 @@ export default function ParentAgentPage() {
       notes: input.notes,
       barriers: input.barriers,
     });
+    let reminderAcknowledgementWarning: string | null = null;
     try {
-      const detail = await createApiFeedback({
-        ...input,
-        sourceChannel: "parent-agent",
-        content: feedbackContent,
-      });
-      savedFeedbackId = detail.feedback.feedbackId;
-      savedFeedback = detail.feedback;
-      await sendApiMessage({
-        childId: input.childId,
-        conversationId: getHomeSchoolConversationId(input.childId),
-        content: detail.feedback.content,
-      });
-      await Promise.all(
-        (input.attachmentDrafts ?? []).map((draft) =>
-          createApiAttachment({
-            childId: input.childId,
-            relatedType: "feedback",
-            relatedId: savedFeedbackId,
-            kind: draft.kind,
-            fileName: draft.fileName,
-            mimeType: draft.mimeType,
-            byteSize: draft.byteSize,
-            localPreviewUrl: draft.localPreviewUrl,
-            durationMs: draft.durationMs,
-          })
-        )
-      );
+      if (!savedFeedbackId) {
+        const { attachmentDrafts, ...feedbackInput } = input;
+        void attachmentDrafts;
+        const detail = await createApiFeedback({
+          ...feedbackInput,
+          attachments:
+            currentUser.accountKind === "demo" ? input.attachments : {},
+          sourceChannel: "parent-agent",
+          content: feedbackContent,
+        });
+        savedFeedbackId = detail.feedback.feedbackId;
+        await sendApiMessage({
+          childId: input.childId,
+          conversationId: getHomeSchoolConversationId(input.childId),
+          content: detail.feedback.content,
+        });
+      }
+      const attachmentDrafts = input.attachmentDrafts ?? [];
+      if (attachmentDrafts.length > 0) {
+        setPendingFeedbackUpload({
+          childId: input.childId,
+          feedbackId: savedFeedbackId,
+        });
+        const existingAttachments = isRetryingFeedback
+          ? await listApiAttachments({
+              childId: input.childId,
+              relatedType: "feedback",
+              relatedId: savedFeedbackId,
+            })
+          : [];
+        await persistAttachmentDrafts({
+          drafts: attachmentDrafts,
+          accountKind: currentUser.accountKind,
+          childId: input.childId,
+          relatedType: "feedback",
+          relatedId: savedFeedbackId,
+          existingAttachments,
+        });
+      }
+      setPendingFeedbackUpload(null);
+      if (familyTaskReminder) {
+        try {
+          await persistFamilyTaskReminderStatus(
+            familyTaskReminder.reminderId,
+            "acknowledged"
+          );
+        } catch {
+          // 反馈与附件已经落库时，旧提醒失效只能降级提示，不能把整次提交误报为失败。
+          reminderAcknowledgementWarning = "家庭任务提醒状态暂未同步，不影响本次反馈保存。";
+        }
+      }
+      const reloadResult = await reloadAppSnapshotFromApi();
+      if (reloadResult.status === "failed") {
+        throw new Error(reloadResult.error ?? reloadResult.message);
+      }
       await refreshE04CommunicationData();
       setFeedbackDetailId(savedFeedbackId);
     } catch (error) {
@@ -1082,81 +1130,11 @@ export default function ParentAgentPage() {
       return false;
     }
 
-    flushSync(() => {
-      addGuardianFeedback({
-        ...(savedFeedback ?? {}),
-        feedbackId: savedFeedbackId,
-        id: savedFeedbackId,
-        childId: input.childId,
-        executionStatus: input.executionStatus,
-        executionCount: input.executionCount,
-        executorRole: input.executorRole,
-        childReaction: input.childReaction,
-        improvementStatus: input.improvementStatus,
-        barriers: input.barriers,
-        notes: input.notes,
-        content: savedFeedback?.content ?? feedbackContent,
-        date: savedFeedback?.date,
-        submittedAt: savedFeedback?.submittedAt,
-        status: savedFeedback?.status,
-        sourceRole: savedFeedback?.sourceRole,
-        relatedTaskId: input.relatedTaskId,
-        relatedConsultationId: input.relatedConsultationId,
-        interventionCardId: input.interventionCardId ?? displayInterventionCard.id,
-        attachments: savedFeedback?.attachments ?? input.attachments,
-        sourceChannel: savedFeedback?.sourceChannel ?? "parent-agent",
-        source: savedFeedback?.source,
-        fallback: savedFeedback?.fallback,
-        createdBy: savedFeedback?.createdBy,
-        createdByRole: savedFeedback?.createdByRole,
-      });
-
-      if (input.executionStatus !== "not_started") {
-        checkInTask(
-          selectedFeed.child.id,
-          input.relatedTaskId ?? displayInterventionCard.id,
-          getLocalToday()
-        );
-      }
-
-      parentDrafts
-        .filter((draft) => draft.syncStatus === "local_pending")
-        .forEach((draft) => markMobileDraftSyncStatus(draft.draftId, "synced"));
-
-    });
-
-    const persistResult = await persistAppSnapshotNow();
+    parentDrafts
+      .filter((draft) => draft.syncStatus === "local_pending")
+      .forEach((draft) => markMobileDraftSyncStatus(draft.draftId, "synced"));
     setFeedbackNotePrefill(null);
     setSuggestionRefreshNonce((current) => current + 1);
-
-    if (persistResult.status === "failed") {
-      setFeedbackStatus("反馈已记在当前设备，但远端保存还没成功，请稍后再试。");
-      return false;
-    }
-
-    const messageResult = sendHomeSchoolMessage({
-      childId: input.childId,
-      classId: selectedFeed.child.className,
-      conversationId: getHomeSchoolConversationId(input.childId),
-      content: feedbackContent,
-    });
-
-    if (messageResult.status === "failed") {
-      setFeedbackStatus(
-        `今晚反馈已保存，但家园沟通写入失败：${messageResult.error ?? messageResult.message}`
-      );
-      return false;
-    }
-
-    if (familyTaskReminder) {
-      const reminderResult = markParentReminderRead(familyTaskReminder.reminderId);
-      if (reminderResult.status === "failed") {
-        setFeedbackStatus(
-          `今晚反馈和家园沟通已保存，但提醒已读状态保存失败：${reminderResult.error ?? reminderResult.message}`
-        );
-        return false;
-      }
-    }
 
     if (latestTrendQuery) {
       setPendingFeedbackTrendRefresh({
@@ -1165,33 +1143,41 @@ export default function ParentAgentPage() {
         feedbackId: savedFeedbackId,
       });
       setFeedbackStatus(
-        `${formatHomeSchoolPersistStatus(messageResult.status)}：今晚反馈已提交，并已写入家园沟通和演示快照；已纳入反馈，正在刷新趋势解释。`
+        `今晚反馈已提交，并已写入家园沟通与当前机构数据；正在基于最新反馈刷新趋势解释。${
+          reminderAcknowledgementWarning ? ` ${reminderAcknowledgementWarning}` : ""
+        }`
       );
     } else {
       setFeedbackStatus(
-        `${formatHomeSchoolPersistStatus(messageResult.status)}：今晚反馈已提交，并已写入家园沟通和演示快照；已纳入反馈，下一次趋势解释会基于最新反馈生成。`
+        `今晚反馈已提交，并已写入家园沟通与当前机构数据；下一次趋势解释会使用这条反馈。${
+          reminderAcknowledgementWarning ? ` ${reminderAcknowledgementWarning}` : ""
+        }`
       );
     }
     return true;
   }
 
-  function snoozeFamilyReminder() {
+  async function snoozeFamilyReminder() {
     if (!familyTaskReminder) {
       setFeedbackStatus("当前没有可稍后提醒的家庭任务提醒。");
       return;
     }
 
-    const result = updateParentReminderStatus(familyTaskReminder.reminderId, "snoozed");
-    if (result.status === "failed") {
-      setFeedbackStatus(`稍后提醒保存失败：${result.error ?? result.message}`);
-      return;
+    try {
+      await persistFamilyTaskReminderStatus(
+        familyTaskReminder.reminderId,
+        "snoozed"
+      );
+      const reloadResult = await reloadAppSnapshotFromApi();
+      if (reloadResult.status === "failed") {
+        throw new Error(reloadResult.error ?? reloadResult.message);
+      }
+      setFeedbackStatus("已设置稍后提醒，并写入当前机构数据。");
+    } catch (error) {
+      setFeedbackStatus(
+        `稍后提醒保存失败：${error instanceof Error ? error.message : "请稍后再试。"}`
+      );
     }
-
-    setFeedbackStatus(
-      result.status === "local_only"
-        ? "已设置稍后提醒，并写入 D01 本地演示持久化。"
-        : "已设置稍后提醒。"
-    );
   }
 
   if (!selectedFeed || !baseContext || !snapshot) {
@@ -1200,7 +1186,9 @@ export default function ParentAgentPage() {
         <EmptyState
           icon={<BrainCircuit className="h-6 w-6" />}
           title="当前没有可展示的孩子数据"
-          description="请先从家长首页确认当前孩子档案是否可见。"
+          description="请先返回家长首页接受机构邀请码，或在个人家庭空间完成监护人同意后创建幼儿档案。"
+          actionLabel="返回家长首页建档"
+          onAction={() => router.push("/parent")}
         />
       </div>
     );
@@ -1274,7 +1262,9 @@ export default function ParentAgentPage() {
             })
           ) : (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-500">
-              当前孩子还没有家园沟通记录，发送后会保存在演示持久层并同步给对应老师。
+              {currentUser.accountKind === "demo"
+                ? "当前孩子还没有家园沟通记录，发送后会保存在共享演示空间。"
+                : "当前孩子还没有家园沟通记录，发送后会保存到机构空间并同步给对应老师。"}
             </div>
           )}
         </div>
@@ -1317,7 +1307,7 @@ export default function ParentAgentPage() {
           <AttachmentMediaPicker
             value={homeSchoolAttachmentDrafts}
             onChange={setHomeSchoolAttachmentDrafts}
-            accept="image/*,audio/*,.pdf,.doc,.docx,.txt"
+            accept="image/jpeg,image/png,image/webp,audio/mpeg,audio/mp4,audio/wav,audio/webm,application/pdf"
             disabled={homeSchoolMessageSending}
           />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1764,7 +1754,7 @@ export default function ParentAgentPage() {
                 >
                   <ParentStructuredFeedbackComposer
                     careMode
-                    key={`${selectedFeed.child.id}-${displayInterventionCard?.id ?? "no-card"}-${feedbackNotePrefill?.token ?? "no-prefill"}-care`}
+                    key={`${selectedFeed.child.id}-care`}
                     childId={selectedFeed.child.id}
                     childName={selectedFeed.child.name}
                     childClassName={selectedFeed.child.className}
@@ -2573,7 +2563,7 @@ export default function ParentAgentPage() {
             >
               <SectionCard title="提交今晚反馈" description="把今晚做了没有、孩子反应和补充情况记下来，下一轮建议会继续参考。">
                 <ParentStructuredFeedbackComposer
-                  key={`${selectedFeed.child.id}-${displayInterventionCard?.id ?? "no-card"}-${feedbackNotePrefill?.token ?? "no-prefill"}`}
+                  key={selectedFeed.child.id}
                   childId={selectedFeed.child.id}
                   childName={selectedFeed.child.name}
                   childClassName={selectedFeed.child.className}

@@ -346,7 +346,12 @@ async function checkHealthMaterial(page: Page) {
       if (ocr.status === "missing-env") {
         pushError("health-material:ocr", "vercel-env-missing", { status: ocr.status });
       }
-      if (result.source !== "vivo-ocr-provider" && result.fallback !== true) {
+      if (
+        !["vivo-ocr-provider", "dashscope-ocr-provider"].includes(
+          String(result.source)
+        ) &&
+        result.fallback !== true
+      ) {
         pushError("health-material:provenance", "unknown", { status: evidence.healthMaterialSource });
       }
     }

@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
-from app.core.service_auth import require_internal_service
+from app.core.service_auth import ServiceScope, require_internal_service
 from app.schemas.agent import WeeklyReportRequest, WeeklyReportResponse
 from app.schemas.admin_quality_metrics import AdminQualityMetricsRequest, AdminQualityMetricsResponse
 from app.schemas.demand_insight import DemandInsightRequest, DemandInsightResponse
@@ -242,9 +242,22 @@ async def demand_insights(
 async def admin_quality_metrics(
     payload: AdminQualityMetricsRequest,
     orchestrator: Orchestrator = Depends(get_orchestrator),
+    service_scope: ServiceScope = Depends(require_internal_service),
 ):
+    if not service_scope.unsigned_dev:
+        if service_scope.role not in {"机构管理员", "admin", "director"}:
+            raise HTTPException(status_code=403, detail="admin role is required")
+        if not service_scope.institution_id:
+            raise HTTPException(status_code=403, detail="institution scope is required")
+        if payload.institution_id and payload.institution_id != service_scope.institution_id:
+            raise HTTPException(status_code=403, detail="institution is outside service scope")
+
+    trusted_payload = payload.model_dump(mode="json", by_alias=True)
+    if service_scope.institution_id:
+        # 即使 Next 层已覆盖机构，Brain 仍以签名 scope 为最终可信来源。
+        trusted_payload["institutionId"] = service_scope.institution_id
     try:
-        result = await orchestrator.admin_quality_metrics(payload.model_dump(mode="json", by_alias=True))
+        result = await orchestrator.admin_quality_metrics(trusted_payload)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return AdminQualityMetricsResponse.model_validate(result)

@@ -47,6 +47,11 @@ import type {
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { resolvePrimaryNavChildId } from "@/lib/navigation/primary-nav";
+import {
+  VOICE_AUDIO_MAX_BYTES,
+  VOICE_AUDIO_MAX_DURATION_MS,
+} from "@/lib/voice/audio-constraints";
+import { normalizeRecordedAudioForAsr } from "@/lib/voice/wav";
 
 type VoiceOrbPhase = "idle" | "planning" | "awaiting-confirmation" | "executing" | "done" | "error";
 
@@ -174,6 +179,8 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
     null
   );
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingTimeoutRef = useRef<number | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const recordingStartedAtRef = useRef<number>(0);
 
@@ -234,9 +241,22 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
   }, [currentUser.id, role]);
 
   useEffect(() => {
-    const openVoiceOrb = () => {
+    const openVoiceOrb = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{ text?: string; childId?: string }>
+      ).detail;
       setExpanded(true);
       setMinimized(false);
+      if (detail?.text?.trim()) {
+        setText(detail.text.trim());
+        setRecognizedText(detail.text.trim());
+      }
+      if (detail?.childId) {
+        setObjectRefs((current) => ({
+          ...current,
+          childId: detail.childId,
+        }));
+      }
     };
     window.addEventListener("smartchildcare:open-voice-orb", openVoiceOrb);
     return () => window.removeEventListener("smartchildcare:open-voice-orb", openVoiceOrb);
@@ -290,6 +310,25 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
       recognizerRef.current = null;
     };
   }, [speechSupport?.recognitionSupported]);
+
+  useEffect(
+    () => () => {
+      if (recordingTimeoutRef.current !== null) {
+        window.clearTimeout(recordingTimeoutRef.current);
+      }
+      const recorder = recorderRef.current;
+      if (recorder && recorder.state !== "inactive") {
+        recorder.onstop = null;
+        recorder.stop();
+      }
+      recordingStreamRef.current
+        ?.getTracks()
+        .forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+      recorderRef.current = null;
+    },
+    []
+  );
 
   const executeCommand = useCallback(
     async (nextCommand: AssistantCommand, confirmed = false) => {
@@ -438,6 +477,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
       recordedChunksRef.current = [];
       const recorder = new MediaRecorder(stream);
       recorderRef.current = recorder;
@@ -446,12 +486,47 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
         if (event.data.size > 0) recordedChunksRef.current.push(event.data);
       };
       recorder.onstop = async () => {
+        if (recordingTimeoutRef.current !== null) {
+          window.clearTimeout(recordingTimeoutRef.current);
+          recordingTimeoutRef.current = null;
+        }
         stream.getTracks().forEach((track) => track.stop());
-        const audio = new Blob(recordedChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        recordingStreamRef.current = null;
+        recorderRef.current = null;
+        const recordedAudio = new Blob(recordedChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        let audio: Blob;
+        try {
+          audio = await normalizeRecordedAudioForAsr(recordedAudio);
+        } catch (conversionError) {
+          setError(errorMessage(conversionError));
+          setPhase("error");
+          return;
+        }
+        if (audio.size <= 0 || audio.size > VOICE_AUDIO_MAX_BYTES) {
+          setError("录音超过 4 MB，请缩短后重试。");
+          setPhase("error");
+          return;
+        }
         const formData = new FormData();
-        formData.set("audio", new File([audio], "voice-orb.webm", { type: audio.type || "audio/webm" }));
-        formData.set("durationMs", String(Date.now() - recordingStartedAtRef.current));
-        formData.set("mimeType", audio.type || "audio/webm");
+        const extension = audio.type === "audio/wav" ? "wav" : "audio";
+        formData.set(
+          "audio",
+          new File([audio], `voice-orb.${extension}`, {
+            type: audio.type || "audio/wav",
+          })
+        );
+        formData.set(
+          "durationMs",
+          String(
+            Math.min(
+              Date.now() - recordingStartedAtRef.current,
+              VOICE_AUDIO_MAX_DURATION_MS
+            )
+          )
+        );
+        formData.set("mimeType", audio.type || "audio/wav");
         formData.set("scene", "voice-orb");
         if (activeChildId) formData.set("childId", activeChildId);
         setPhase("planning");
@@ -473,6 +548,12 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
         }
       };
       recorder.start();
+      recordingTimeoutRef.current = window.setTimeout(() => {
+        if (recorder.state !== "inactive") {
+          recorder.stop();
+          setSpeechStatus("stopping");
+        }
+      }, VOICE_AUDIO_MAX_DURATION_MS);
       setSpeechStatus("listening");
     } catch (err) {
       setError(errorMessage(err));
@@ -481,8 +562,11 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
   }
 
   function stopProviderRecording() {
+    if (recordingTimeoutRef.current !== null) {
+      window.clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
+    }
     recorderRef.current?.stop();
-    recorderRef.current = null;
     setSpeechStatus("stopping");
   }
 

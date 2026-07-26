@@ -16,7 +16,6 @@ import {
   MessageCircle,
   Monitor,
   Salad,
-  Search,
   ShieldCheck,
   Sparkles,
   Stethoscope,
@@ -24,6 +23,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import MobileNav from "@/components/MobileNav";
+import { GlobalUtilityCenter } from "@/components/layout/GlobalUtilityCenter";
 import {
   MobileBottomNav,
   ShellBrandMark,
@@ -309,13 +309,19 @@ function ShellTopbar({
   roleMeta: (typeof ROLE_META)[AccountRole];
 }) {
   const topNavItems = roleMeta.shellMode === "top-tabs" ? navItems.slice(0, 7) : navItems.slice(0, 5);
-  const unavailableReason = "MVP 暂未接入真实业务消息与全局检索服务，E10 已记录为产品缺口。";
+  const contextualShortDescription =
+    currentUser.role === "教师" && currentUser.className
+      ? `${currentUser.className}工作台`
+      : roleMeta.shortDescription;
 
   return (
     <header data-testid="r02-shell-topbar" className="pixel-topbar sticky top-0 z-50 border-b border-slate-200/80 bg-white/94 shadow-[0_1px_0_rgb(15_23_42_/_0.03),0_10px_34px_rgb(79_70_229_/_0.06)] backdrop-blur-xl">
-      <div className="flex min-h-[86px] items-center justify-between gap-3 px-4 sm:min-h-[72px] sm:px-6 lg:min-h-20 lg:px-8">
-        <div className="flex min-w-0 shrink-0 items-center gap-3">
-          <MobileNav onLogout={onLogout} />
+      <div className="flex min-h-[86px] items-center justify-between gap-2 px-3 sm:min-h-[72px] sm:gap-3 sm:px-6 lg:min-h-20 lg:px-8">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:shrink-0 sm:gap-3">
+          <MobileNav
+            onLogout={onLogout}
+            keepAtLarge={roleMeta.shellMode === "top-tabs"}
+          />
           <Link href="/" className="hidden min-w-0 shrink-0 items-center gap-3 sm:flex">
             <BrandMark compact={roleMeta.shellMode === "sidebar"} />
             <div className="min-w-0">
@@ -323,11 +329,11 @@ function ShellTopbar({
               <p className="mt-0.5 truncate text-xs font-medium text-slate-500">SmartChildcare Agent</p>
             </div>
           </Link>
-          <Link href="/" className="flex min-w-0 items-center gap-2 sm:hidden">
+          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2 sm:hidden">
             <BrandMark compact />
             <div className="min-w-0">
               <p className="truncate text-base font-bold leading-tight text-slate-950">慧育童行</p>
-              <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">{roleMeta.shortDescription}</p>
+              <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">{contextualShortDescription}</p>
             </div>
           </Link>
         </div>
@@ -340,41 +346,8 @@ function ShellTopbar({
           <ShellBreadcrumb cue={roleMeta.navCue} active={activeItem?.label ?? pageTitle} />
         )}
 
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            disabled
-            aria-disabled="true"
-            data-testid="e10-mobile-notification-disabled"
-            className="relative flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-2xl bg-white text-slate-400 opacity-70 shadow-[0_10px_24px_rgb(15_23_42_/_0.08)] ring-1 ring-slate-200/80 sm:hidden"
-            aria-label="通知"
-            title={`通知中心暂未开放：${unavailableReason}`}
-          >
-            <Bell className="h-5 w-5" aria-hidden="true" />
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
-              3
-            </span>
-          </button>
-          <button
-            type="button"
-            disabled
-            aria-disabled="true"
-            data-testid="e10-mobile-message-disabled"
-            className="flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-2xl bg-white text-slate-400 opacity-70 shadow-[0_10px_24px_rgb(15_23_42_/_0.08)] ring-1 ring-slate-200/80 sm:hidden"
-            aria-label="消息"
-            title={`消息中心暂未开放：${unavailableReason}`}
-          >
-            <MessageCircle className="h-5 w-5" aria-hidden="true" />
-          </button>
-          <ShellIconButton label="搜索" reason={unavailableReason} testId="e10-global-search-disabled">
-            <Search className="h-4 w-4" aria-hidden="true" />
-          </ShellIconButton>
-          <ShellIconButton label="通知" badge="6" reason={unavailableReason} testId="e10-notification-disabled">
-            <Bell className="h-4 w-4" aria-hidden="true" />
-          </ShellIconButton>
-          <ShellIconButton label="消息" reason={unavailableReason} testId="e10-message-disabled">
-            <MessageCircle className="h-4 w-4" aria-hidden="true" />
-          </ShellIconButton>
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <GlobalUtilityCenter navItems={navItems} />
           <div className="hidden items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-[0_10px_26px_rgb(15_23_42_/_0.07)] sm:flex">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-50 to-cyan-50 text-lg">
               {currentUser.avatar}
@@ -591,39 +564,6 @@ function buildMobileBottomNavItems(role: RoleBadgeRole, childId?: string): Mobil
 
 function stripLocationPath(value: string) {
   return (value.split("#")[0] ?? value).split("?")[0] || "/";
-}
-
-function ShellIconButton({
-  badge,
-  children,
-  label,
-  reason,
-  testId,
-}: {
-  badge?: string;
-  children: ReactNode;
-  label: string;
-  reason: string;
-  testId?: string;
-}) {
-  return (
-    <button
-      type="button"
-      disabled
-      aria-disabled="true"
-      data-testid={testId}
-      className="relative hidden h-10 w-10 cursor-not-allowed items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-400 opacity-70 shadow-sm sm:flex"
-      aria-label={label}
-      title={`${label}暂未开放：${reason}`}
-    >
-      {children}
-      {badge ? (
-        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
-          {badge}
-        </span>
-      ) : null}
-    </button>
-  );
 }
 
 function BrandMark({ compact = false }: { compact?: boolean }) {

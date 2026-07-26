@@ -16,7 +16,7 @@ test.describe.configure({ mode: "serial" });
 test.describe("E11 parent voice command regression", () => {
   test("parent commands confirm writes, preserve child scope, and support local storybook export/share", async ({}, testInfo) => {
     const parent = await demoContext(testInfo, "u-parent");
-    const teacher = await demoContext(testInfo, "u-teacher");
+    const teacher = await demoContext(testInfo, "u-teacher2");
     const token = `E11-parent-${Date.now()}`;
 
     try {
@@ -69,7 +69,7 @@ test.describe("E11 parent voice command regression", () => {
           },
         })
       );
-      expect(JSON.stringify(exported)).toMatch(/download|storybook|绘本|缁樻湰/i);
+      expect(JSON.stringify(exported)).toMatch(/download|storybook|绘本/i);
       const shareCommand = await planExistingVoiceCommand(
         parent,
         assistantCommand("share_storybook", "parent", { childId: CHILD_PARENT, storybookId }),
@@ -85,7 +85,7 @@ test.describe("E11 parent voice command regression", () => {
           },
         })
       );
-      expect(JSON.stringify(shared)).toMatch(/share|copy|分享|鍒嗕韩/i);
+      expect(JSON.stringify(shared)).toMatch(/share|copy|分享/i);
 
       await expectFailure(
         await parent.post("/api/voice-assistant/commands", {

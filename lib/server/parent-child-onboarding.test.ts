@@ -213,7 +213,7 @@ test("parent child onboarding creates child, child_ids, and three consent record
   ]);
 });
 
-test("parent child onboarding creates a registration snapshot when the parent snapshot is missing", async () => {
+test("unbound parent creates a personal child snapshot without institution foreign-key writes", async () => {
   const fixture = createFixture({ snapshot: null });
 
   const child = await createParentChildWithConsent(
@@ -226,10 +226,13 @@ test("parent child onboarding creates a registration snapshot when the parent sn
 
   assert.equal(child.id, "c-1");
   assert.equal(snapshot.children[0].id, "c-1");
+  assert.equal(child.className, "待分班");
+  assert.equal(child.classId, undefined);
   assert.equal(snapshot.meta?.workspace?.institutionId, "inst-family");
   assert.equal(snapshot.meta?.workspace?.ownerUserId, "u-parent");
   assert.deepEqual(fixture.state().userRow.child_ids, ["c-1"]);
   assert.equal(fixture.state().consents.length, 3);
+  assert.deepEqual(fixture.state().childAuthorizations, []);
 });
 
 test("parent child onboarding rejects demo, non-parent, and cross-institution attempts", async () => {

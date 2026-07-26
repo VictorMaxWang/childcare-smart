@@ -12,6 +12,7 @@ import type {
 import { apiOk, readJsonBody, withApiErrors, ApiRouteError } from "@/lib/server/api-errors";
 import { AppDataService } from "@/lib/server/app-data-service";
 import { DefaultAppDataRepository } from "@/lib/server/app-data-repository";
+import { getPrivateAttachment } from "@/lib/server/private-blob";
 import { requireSession, resolveRequestSession } from "@/lib/server/session";
 import { resolveLinXiaoyuChildId } from "@/lib/storybooks/lin-xiaoyu-bravery";
 
@@ -106,7 +107,9 @@ function relatedTypeFrom(value: string | null): AttachmentRelatedType | undefine
     value === "health-material" ||
     value === "consultation" ||
     value === "weekly-report" ||
-    value === "storybook"
+    value === "storybook" ||
+    value === "meal" ||
+    value === "growth"
   ) {
     return value;
   }
@@ -219,6 +222,18 @@ export function handleMessageRead(request: Request, messageId: string) {
   return withApiErrors(async () => {
     const { service } = await serviceFor(request);
     return apiOk(await service.markMessageRead(messageId));
+  });
+}
+
+export function handleConversationStatus(request: Request, conversationId: string) {
+  return withApiErrors(async () => {
+    const { service } = await serviceFor(request);
+    return apiOk(
+      await service.updateConversationStatus(
+        conversationId,
+        await readJsonBody(request)
+      )
+    );
   });
 }
 
@@ -494,24 +509,89 @@ export function handleAttachment(request: Request, attachmentId: string) {
   });
 }
 
+export async function buildAttachmentContentResponse(
+  request: Request,
+  attachment: Awaited<ReturnType<AppDataService["getAttachment"]>>,
+  readPrivate = getPrivateAttachment
+) {
+  const dispositionMode =
+    new URL(request.url).searchParams.get("download") === "1"
+      ? "attachment"
+      : "inline";
+  const encodedFileName = encodeURIComponent(attachment.fileName);
+
+  if (
+    attachment.storageMode === "object_storage" &&
+    attachment.storageProvider === "vercel_blob" &&
+    attachment.storageKey
+  ) {
+    let result;
+    try {
+      result = await readPrivate(attachment.storageKey, {
+        ifNoneMatch: request.headers.get("if-none-match") ?? undefined,
+      });
+    } catch {
+      throw new ApiRouteError(
+        "provider_unavailable",
+        "私有媒体读取失败，请稍后重试。",
+        503
+      );
+    }
+    if (!result) {
+      throw new ApiRouteError("not_found", "私有媒体文件不存在。");
+    }
+    const commonHeaders = {
+      etag: result.blob.etag,
+      "cache-control": "private, no-store, max-age=0",
+      vary: "Cookie",
+      "x-content-type-options": "nosniff",
+    };
+    if (result.statusCode === 304) {
+      return new Response(null, {
+        status: 304,
+        headers: commonHeaders,
+      });
+    }
+    return new Response(result.stream, {
+      status: 200,
+      headers: {
+        ...commonHeaders,
+        "content-type":
+          result.blob.contentType ||
+          attachment.mimeType ||
+          "application/octet-stream",
+        "content-length": String(result.blob.size),
+        "content-disposition": `${dispositionMode}; filename*=UTF-8''${encodedFileName}`,
+      },
+    });
+  }
+
+  if (!attachment.localPreviewUrl) {
+    throw new ApiRouteError(
+      "not_found",
+      "Attachment content is metadata-only and has no local preview payload."
+    );
+  }
+  const { body, mimeType } = attachmentContentFromDataUrl(
+    attachment.localPreviewUrl,
+    attachment.mimeType
+  );
+  return new Response(body, {
+    headers: {
+      "content-type": mimeType,
+      "content-length": String(body.byteLength),
+      "content-disposition": `${dispositionMode}; filename*=UTF-8''${encodedFileName}`,
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
 export function handleAttachmentContent(request: Request, attachmentId: string) {
   return withApiErrors(async () => {
     const { service } = await serviceFor(request);
     const attachment = await service.getAttachment(attachmentId);
-    if (!attachment.localPreviewUrl) {
-      throw new ApiRouteError("not_found", "Attachment content is metadata-only and has no local preview payload.");
-    }
-    const { body, mimeType } = attachmentContentFromDataUrl(attachment.localPreviewUrl, attachment.mimeType);
-    const dispositionMode = new URL(request.url).searchParams.get("download") === "1" ? "attachment" : "inline";
-    const encodedFileName = encodeURIComponent(attachment.fileName);
-    return new Response(body, {
-      headers: {
-        "content-type": mimeType,
-        "content-length": String(body.byteLength),
-        "content-disposition": `${dispositionMode}; filename*=UTF-8''${encodedFileName}`,
-        "cache-control": "no-store",
-      },
-    });
+    return buildAttachmentContentResponse(request, attachment);
   });
 }
 

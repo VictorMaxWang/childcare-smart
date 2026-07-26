@@ -17,18 +17,20 @@ function contextFor(accountId: string): AssistantParseContext {
   const user = demoUser(accountId);
   const role = accountRoleToAssistantRole(user.role);
   const allChildren = [
-    { id: "c-1", name: "林小雨", className: "向阳班", guardianNames: ["林妈妈"] },
-    { id: "c-2", name: "张浩然", className: "向阳班" },
-    { id: "c-4", name: "林小明", nickname: "小明", className: "向阳班", guardianNames: ["林妈妈"] },
-    { id: "c-5", name: "赵安安", className: "晨曦班" },
-    { id: "c-6", name: "钱晨晨", className: "晨曦班" },
+    { id: "c-1", name: "林小雨", className: "晨曦班", guardianNames: ["林妈妈"] },
+    { id: "c-2", name: "高远舟", className: "晨曦班" },
+    { id: "c-4", name: "赵一诺", className: "晨曦班", guardianNames: ["林妈妈"] },
+    { id: "c-7", name: "沈星禾", className: "向阳班" },
+    { id: "c-8", name: "何知远", className: "向阳班" },
   ];
   const children =
-    accountId === "u-teacher2"
-      ? allChildren.filter((child) => child.className === "晨曦班")
-      : accountId === "u-parent"
-        ? allChildren.filter((child) => child.id === "c-1" || child.id === "c-4")
-        : allChildren.filter((child) => child.className === "向阳班");
+    accountId === "u-parent"
+      ? allChildren.filter((child) => child.id === "c-1" || child.id === "c-4")
+      : accountId === "u-teacher2"
+        ? allChildren.filter((child) => child.className === "晨曦班")
+        : accountId === "u-teacher"
+          ? allChildren.filter((child) => child.className === "向阳班")
+          : allChildren;
 
   return {
     role,
@@ -36,7 +38,10 @@ function contextFor(accountId: string): AssistantParseContext {
     user,
     children,
     allChildren,
-    teachers: [{ id: "u-teacher", name: "李老师", className: "向阳班" }],
+    teachers: [
+      { id: "u-teacher", name: "李老师", className: "向阳班" },
+      { id: "u-teacher2", name: "周老师", className: "晨曦班" },
+    ],
     reminders: [
       {
         id: "reminder-c1-daily-feedback",
@@ -110,6 +115,7 @@ test("parses E09 parent voice commands", () => {
     ["导出成长绘本", "export_storybook", "needs_confirmation"],
     ["查看老师回复", "query_teacher_replies", "ready"],
     ["查看今天的提醒", "query_today_tasks", "ready"],
+    ["show reminders", "query_today_tasks", "ready"],
   ];
 
   for (const [text, intent, status] of cases) {
@@ -127,7 +133,7 @@ test("parses E09 parent voice commands", () => {
 
 test("E09 parent child scope rejects forged child and deeplink", () => {
   const context = contextFor("u-parent");
-  const command = parseAssistantCommand(context, { text: "查看张浩然今天状态", inputMode: "text" });
+  const command = parseAssistantCommand(context, { text: "查看高远舟今天状态", inputMode: "text" });
   const permission = validateAssistantCommandPermission(command, context);
   assert.equal(command.params.childId, "c-2");
   assert.equal(permission.ok, false);
@@ -184,7 +190,7 @@ test("parses E07 director commands", () => {
 });
 
 test("non-director E07 commands are forbidden", () => {
-  const cases = ["查看未处理反馈", "给李老师派单，跟进小明晨检异常", "打开园长首页"];
+  const cases = ["查看未处理反馈", "给周老师派单，跟进林小雨晨检异常", "打开园长首页"];
   for (const text of cases) {
     const context = contextFor("u-parent");
     const command = parseAssistantCommand(context, { text, inputMode: "text", transcriptSource: "test" });
@@ -195,24 +201,24 @@ test("non-director E07 commands are forbidden", () => {
 
 test("parses E08 teacher commands", () => {
   const cases: Array<[string, string, string]> = [
-    ["给小明记录晨检，体温三十六点八，状态正常", "create_morning_check", "needs_confirmation"],
-    ["小明今天晨检咳嗽，提醒家长关注", "create_morning_check", "needs_confirmation"],
-    ["记录小明午餐吃完了", "create_diet_record", "needs_confirmation"],
-    ["记录晨曦班午餐大部分孩子吃完", "create_diet_record", "forbidden"],
-    ["给小明新增成长记录，今天会自己穿鞋", "create_growth_record", "needs_confirmation"],
-    ["回复林妈妈，今天小明午睡很好", "reply_message", "needs_confirmation"],
+    ["给赵一诺记录晨检，体温三十六点八，状态正常", "create_morning_check", "needs_confirmation"],
+    ["赵一诺今天晨检咳嗽，提醒家长关注", "create_morning_check", "needs_confirmation"],
+    ["记录赵一诺午餐吃完了", "create_diet_record", "needs_confirmation"],
+    ["记录向阳班午餐大部分孩子吃完", "create_diet_record", "forbidden"],
+    ["给赵一诺新增成长记录，今天会自己穿鞋", "create_growth_record", "needs_confirmation"],
+    ["回复林妈妈，今天赵一诺午睡很好", "reply_message", "needs_confirmation"],
     ["打开家园沟通", "navigate", "ready"],
     ["打开健康材料解析", "navigate", "ready"],
-    ["给小明创建高风险会诊", "create_consultation", "needs_confirmation"],
+    ["给赵一诺创建高风险会诊", "create_consultation", "needs_confirmation"],
     ["查看今天的任务", "query_today_tasks", "ready"],
     ["把园长派单标记为跟进中", "update_dispatch_status", "needs_confirmation"],
     ["把这个派单标记为已完成", "update_dispatch_status", "needs_confirmation"],
-    ["打开小明档案", "open_child_profile", "ready"],
+    ["打开赵一诺档案", "open_child_profile", "ready"],
     ["查看未回复家长消息", "query_parent_messages", "ready"],
   ];
 
   for (const [text, intent, status] of cases) {
-    const context = contextFor("u-teacher");
+    const context = contextFor("u-teacher2");
     const command = parseAssistantCommand(context, { text, inputMode: "text", transcriptSource: "test" });
     const permission = validateAssistantCommandPermission(command, context);
     assert.equal(command.intent, intent, text);
@@ -221,9 +227,9 @@ test("parses E08 teacher commands", () => {
 });
 
 test("teacher parser prefers spoken child over current page child", () => {
-  const context = contextFor("u-teacher");
+  const context = contextFor("u-teacher2");
   const command = parseAssistantCommand(context, {
-    text: "给小明记录晨检，体温三十六点八，状态正常",
+    text: "给赵一诺记录晨检，体温三十六点八，状态正常",
     inputMode: "text",
     transcriptSource: "test",
   });
@@ -231,9 +237,9 @@ test("teacher parser prefers spoken child over current page child", () => {
 });
 
 test("teacher cross-class child access is forbidden", () => {
-  const context = contextFor("u-teacher2");
+  const context = contextFor("u-teacher");
   const command = parseAssistantCommand(context, {
-    text: "给小明记录晨检，体温三十六点八，状态正常",
+    text: "给赵一诺记录晨检，体温三十六点八，状态正常",
     inputMode: "text",
     transcriptSource: "test",
   });
@@ -241,4 +247,16 @@ test("teacher cross-class child access is forbidden", () => {
   assert.equal(command.intent, "create_morning_check");
   assert.equal(command.params.childId, "c-4");
   assert.equal(permission.status, "forbidden");
+});
+
+test("director assignment prefers an explicitly spoken full teacher name", () => {
+  const context = contextFor("u-admin");
+  const command = parseAssistantCommand(context, {
+    text: "给周老师派单，跟进林小雨晨检异常",
+    inputMode: "text",
+    transcriptSource: "test",
+  });
+
+  assert.equal(command.intent, "assign_task");
+  assert.equal(command.params.teacherId, "u-teacher2");
 });

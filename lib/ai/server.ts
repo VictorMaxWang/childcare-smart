@@ -478,7 +478,10 @@ export async function executeSuggestion(
     if (!isAiProviderUnavailableError(error) || !isBailianConfigured()) throw error;
 
     // vivo 失败时才尝试百炼，保证真实账号仍能得到真实模型结果，而不是直接退回 mock。
-    const bailianResult = await requestDashscopeSuggestion(payload.snapshot);
+    const bailianResult = await requestDashscopeSuggestion(
+      payload.snapshot,
+      payload.question
+    );
     if (!bailianResult) throw error;
     return {
       ...bailianResult,
@@ -616,7 +619,11 @@ export async function executeWeeklyReport(
   } catch (error) {
     if (!isAiProviderUnavailableError(error) || !isBailianConfigured()) throw error;
 
-    const bailianResult = await requestDashscopeWeeklyReport(payload.snapshot, role);
+    const bailianResult = await requestDashscopeWeeklyReport(
+      payload.snapshot,
+      role,
+      payload.question
+    );
     if (!bailianResult) throw error;
     return {
       ...bailianResult,

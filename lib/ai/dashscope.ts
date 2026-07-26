@@ -16,6 +16,8 @@ import { logSecurityEvent } from "@/lib/server/security-log";
 const DEFAULT_DASHSCOPE_ENDPOINT =
   "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 const DEFAULT_BAILIAN_MODEL = "qwen3.7-plus";
+const DEFAULT_BAILIAN_OCR_MODEL = "qwen3.5-ocr";
+const DEFAULT_BAILIAN_ASR_MODEL = "qwen3-asr-flash";
 const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
 const MIN_REQUEST_TIMEOUT_MS = 250;
 const MAX_REQUEST_TIMEOUT_MS = 120000;
@@ -47,8 +49,25 @@ export function resolveBailianRuntimeConfig(): BailianRuntimeConfig {
   };
 }
 
+export function resolveBailianVisionModel() {
+  return process.env.AI_VISION_MODEL?.trim() || resolveBailianRuntimeConfig().model;
+}
+
+export function resolveBailianOcrModel() {
+  return process.env.AI_OCR_MODEL?.trim() || DEFAULT_BAILIAN_OCR_MODEL;
+}
+
+export function resolveBailianAsrModel() {
+  return process.env.AI_ASR_MODEL?.trim() || DEFAULT_BAILIAN_ASR_MODEL;
+}
+
 type DashscopeTextPart = { type: "text"; text: string };
-type DashscopeImagePart = { type: "image_url"; image_url: { url: string } };
+type DashscopeImagePart = {
+  type: "image_url";
+  image_url: { url: string };
+  min_pixels?: number;
+  max_pixels?: number;
+};
 type DashscopeContent = string | Array<DashscopeTextPart | DashscopeImagePart>;
 
 export interface VisionDetectedFood {
@@ -75,6 +94,15 @@ export interface DietEvaluationResult {
   recentScore: number;
   recentComment: string;
   suggestions: string[];
+}
+
+export interface HealthOcrResult {
+  extractedText: string;
+  confidence: number | null;
+  documentType?: string;
+  warnings: string[];
+  model: string;
+  rawResponse: Record<string, unknown>;
 }
 
 function safeJsonParse(text: string): unknown {
@@ -243,8 +271,9 @@ function normalizeFollowUpOutput(raw: unknown): Omit<AiFollowUpResponse, "source
   };
 }
 
-function buildPrompt(snapshot: ChildSuggestionSnapshot): string {
+function buildPrompt(snapshot: ChildSuggestionSnapshot, question?: string): string {
   const modelInput = {
+    userQuestion: question?.trim() || undefined,
     child: {
       id: snapshot.child.id,
       name: snapshot.child.name,
@@ -264,6 +293,9 @@ function buildPrompt(snapshot: ChildSuggestionSnapshot): string {
     "你是托育机构的风险归纳与建议助手。",
     "你只能做托育建议和风险归纳，不做医疗诊断，不修改业务数据，不触发任何通知。",
     "请根据输入的7天聚合summary和recentDetails输出严格JSON，不要输出任何额外文本。",
+    question?.trim()
+      ? "必须直接回答 input.userQuestion；记录摘要只作为回答依据，不能把问题替换成通用建议。"
+      : "",
     "先给出约100字的个性化总结，再给出带时间粒度的详细行动方案。",
     "JSON字段必须为: riskLevel, summary, highlights, concerns, actions, actionPlan, disclaimer。",
     "riskLevel只能是low|medium|high。",
@@ -282,7 +314,7 @@ function buildPrompt(snapshot: ChildSuggestionSnapshot): string {
   ].join("\n");
 }
 
-function buildInstitutionPrompt(snapshot: InstitutionSuggestionSnapshot): string {
+function buildInstitutionPrompt(snapshot: InstitutionSuggestionSnapshot, question?: string): string {
   return [
     "你是托育机构的园长运营决策助手。",
     "你只做机构级风险归因、优先级判断和动作建议，不做医疗诊断，不输出任何额外文本。",
@@ -295,15 +327,23 @@ function buildInstitutionPrompt(snapshot: InstitutionSuggestionSnapshot): string
     "actionPlan.schoolActions 写园内教师/班级动作，familyActions 写家长协同动作，reviewActions 写园长复盘动作。",
     "如果 priorityTopItems 已经给出明确排序，优先顺着排序解释，不要重新发明完全不同的结论。",
     "disclaimer 必须强调非医疗诊断。",
+    question?.trim()
+      ? "必须直接回答 userQuestion；机构摘要只作为回答依据，不能忽略问题正文。"
+      : "",
     "输入:",
     JSON.stringify({
       ...snapshot,
+      userQuestion: question?.trim() || undefined,
       memoryContext: normalizePromptMemoryContext(snapshot.memoryContext),
     }),
   ].join("\n");
 }
 
-function buildWeeklyReportPrompt(snapshot: WeeklyReportSnapshot, role: WeeklyReportRole): string {
+function buildWeeklyReportPrompt(
+  snapshot: WeeklyReportSnapshot,
+  role: WeeklyReportRole,
+  question?: string
+): string {
   return [
     `role=${role}`,
     "你是托育机构周报分析助手。",
@@ -317,9 +357,13 @@ function buildWeeklyReportPrompt(snapshot: WeeklyReportSnapshot, role: WeeklyRep
     "请优先分析出勤率、饮食均衡、饮水、健康异常、待复查和家园反馈执行情况。",
     "nextWeekActions写3到5条可执行动作，尽量具体到机构管理或班级执行层面。",
     "disclaimer必须强调非医疗诊断。",
+    question?.trim()
+      ? "必须围绕 userQuestion 组织周报重点，并直接回应问题正文。"
+      : "",
     "输入:",
     JSON.stringify({
       ...snapshot,
+      userQuestion: question?.trim() || undefined,
       memoryContext: normalizePromptMemoryContext(snapshot.memoryContext),
     }),
   ].join("\n");
@@ -477,6 +521,8 @@ async function requestDashscopeJsonWithMessages({
       },
       body: JSON.stringify({
         model,
+        // 百炼的结构化输出需要在非思考模式下使用，避免视觉/营养接口返回推理文本而不是 JSON。
+        enable_thinking: false,
         response_format: { type: "json_object" },
         temperature: 0.2,
         messages,
@@ -576,7 +622,7 @@ function normalizeDietEvaluation(raw: unknown): DietEvaluationResult | null {
 }
 
 export async function requestDashscopeMealVision(imageDataUrl: string): Promise<VisionDetectedFood[] | null> {
-  const model = process.env.AI_VISION_MODEL || "qwen3-vl-plus";
+  const model = resolveBailianVisionModel();
   const prompt = [
     "你是托育饮食识别助手。",
     "请识别图片中可见食物并输出严格JSON。",
@@ -603,6 +649,217 @@ export async function requestDashscopeMealVision(imageDataUrl: string): Promise<
   });
 
   return normalizeVisionFoods(parsed);
+}
+
+export async function requestDashscopeHealthOcr(
+  imageDataUrl: string
+): Promise<HealthOcrResult | null> {
+  const maxExtractedTextLength = 20_000;
+  const apiKey = process.env.DASHSCOPE_API_KEY || "";
+  const { endpoint, timeoutMs } = resolveBailianRuntimeConfig();
+  const model = resolveBailianOcrModel();
+  if (!apiKey) {
+    logSecurityEvent("warn", "ai.dashscope.missing_env", {
+      provider: "dashscope",
+      capability: "ocr",
+    });
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    // OCR 专用模型使用纯文本转录协议，避免通用 JSON schema 让文档模型只返回空壳字段。
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.01,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: imageDataUrl },
+                min_pixels: 3072,
+                max_pixels: 8_388_608,
+              },
+              {
+                type: "text",
+                text: "请只按图片阅读顺序完整输出所有可辨认文字，不要总结、解释或使用 JSON；看不清的字符用 ? 表示。",
+              },
+            ],
+          },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      await response.text().catch(() => "");
+      logSecurityEvent("error", "ai.dashscope.request_failed", {
+        provider: "dashscope",
+        capability: "ocr",
+        status: response.status,
+      });
+      return null;
+    }
+
+    const raw = (await response.json()) as Record<string, unknown>;
+    const choice = (raw.choices as Array<Record<string, unknown>> | undefined)?.[0];
+    const message = choice?.message as Record<string, unknown> | undefined;
+    const content = typeof message?.content === "string" ? message.content.trim() : "";
+    if (!content) return null;
+    const finishReason =
+      typeof choice?.finish_reason === "string" ? choice.finish_reason : null;
+    if (finishReason && finishReason !== "stop") {
+      // 健康材料不能把被 token 上限截断的半份结果标记为成功。
+      logSecurityEvent("warn", "ai.dashscope.ocr_incomplete", {
+        provider: "dashscope",
+        capability: "ocr",
+        finishReason,
+        characterCount: content.length,
+      });
+      return null;
+    }
+    if (content.length > maxExtractedTextLength) {
+      logSecurityEvent("warn", "ai.dashscope.ocr_over_limit", {
+        provider: "dashscope",
+        capability: "ocr",
+        characterCount: content.length,
+        limit: maxExtractedTextLength,
+      });
+      return null;
+    }
+
+    return {
+      extractedText: content,
+      confidence: null,
+      warnings: [],
+      model,
+      // 健康材料可能含隐私，provenance 只保留调用元数据，不复制供应商原文。
+      rawResponse: {
+        finishReason,
+        characterCount: content.length,
+      },
+    };
+  } catch (error) {
+    logSecurityEvent("error", "ai.dashscope.request_exception", {
+      provider: "dashscope",
+      capability: "ocr",
+      error,
+    });
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export interface BailianAsrResult {
+  transcript: string;
+  confidence: number | null;
+  language?: string;
+  emotion?: string;
+  model: string;
+  rawResponse: Record<string, unknown>;
+}
+
+export async function requestDashscopeAsr(input: {
+  audioBytes: Buffer | Uint8Array;
+  mimeType: string;
+}): Promise<BailianAsrResult | null> {
+  const apiKey = process.env.DASHSCOPE_API_KEY || "";
+  const { endpoint, timeoutMs } = resolveBailianRuntimeConfig();
+  const model = resolveBailianAsrModel();
+  const mimeType = input.mimeType.split(";")[0]?.trim().toLowerCase();
+  if (!apiKey || input.audioBytes.byteLength === 0 || !mimeType.startsWith("audio/")) {
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const dataUri = `data:${mimeType};base64,${Buffer.from(input.audioBytes).toString("base64")}`;
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_audio",
+                input_audio: { data: dataUri },
+              },
+            ],
+          },
+        ],
+        stream: false,
+        asr_options: {
+          language: "zh",
+          enable_itn: true,
+        },
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      await response.text().catch(() => "");
+      logSecurityEvent("error", "ai.dashscope.request_failed", {
+        provider: "dashscope",
+        capability: "asr",
+        status: response.status,
+      });
+      return null;
+    }
+
+    const raw = (await response.json()) as Record<string, unknown>;
+    const choice = (raw.choices as Array<Record<string, unknown>> | undefined)?.[0];
+    const message = choice?.message as Record<string, unknown> | undefined;
+    const transcript =
+      typeof message?.content === "string" ? message.content.trim() : "";
+    if (!transcript) return null;
+
+    const annotations = Array.isArray(message?.annotations)
+      ? (message.annotations as Array<Record<string, unknown>>)
+      : [];
+    const audioInfo = annotations.find((item) => item.type === "audio_info");
+    return {
+      transcript: transcript.slice(0, 10_000),
+      confidence: null,
+      language:
+        typeof audioInfo?.language === "string" ? audioInfo.language : undefined,
+      emotion:
+        typeof audioInfo?.emotion === "string" ? audioInfo.emotion : undefined,
+      model,
+      // 不保留音频、转写原文或完整供应商响应，避免语音记录在诊断元数据中二次扩散。
+      rawResponse: {
+        finishReason: choice?.finish_reason ?? null,
+        language: audioInfo?.language ?? null,
+        emotion: audioInfo?.emotion ?? null,
+        characterCount: transcript.length,
+      },
+    };
+  } catch (error) {
+    logSecurityEvent("error", "ai.dashscope.request_exception", {
+      provider: "dashscope",
+      capability: "asr",
+      error,
+    });
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function requestDashscopeDietEvaluation(
@@ -638,11 +895,14 @@ export async function requestDashscopeDietEvaluation(
 }
 
 export async function requestDashscopeSuggestion(
-  snapshot: ChildSuggestionSnapshot | InstitutionSuggestionSnapshot
+  snapshot: ChildSuggestionSnapshot | InstitutionSuggestionSnapshot,
+  question?: string
 ): Promise<Omit<AiSuggestionResponse, "source"> | null> {
   try {
     const parsed = await requestDashscopeJson(
-      "institutionName" in snapshot ? buildInstitutionPrompt(snapshot) : buildPrompt(snapshot)
+      "institutionName" in snapshot
+        ? buildInstitutionPrompt(snapshot, question)
+        : buildPrompt(snapshot, question)
     );
     const normalized = normalizeAiOutput(parsed);
     if (!normalized) {
@@ -656,10 +916,11 @@ export async function requestDashscopeSuggestion(
 
 export async function requestDashscopeWeeklyReport(
   snapshot: WeeklyReportSnapshot,
-  role: WeeklyReportRole
+  role: WeeklyReportRole,
+  question?: string
 ): Promise<Omit<WeeklyReportResponse, "source"> | null> {
   try {
-    const parsed = await requestDashscopeJson(buildWeeklyReportPrompt(snapshot, role));
+    const parsed = await requestDashscopeJson(buildWeeklyReportPrompt(snapshot, role, question));
     const normalized = normalizeWeeklyReportOutput(parsed, snapshot, role);
     if (!normalized) {
       logSecurityEvent("error", "ai.dashscope.weekly_report_normalize_failed", { provider: "dashscope" });

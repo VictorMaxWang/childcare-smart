@@ -1,5 +1,10 @@
 import { normalizeTeacherVoiceMimeType } from "@/lib/mobile/teacher-voice-audio";
 import type { AiProviderTrace } from "@/lib/ai/provider-trace";
+import {
+  validateVoiceAudioFile,
+  validateVoiceDuration,
+  validateVoiceText,
+} from "@/lib/voice/audio-constraints";
 
 export type VoiceCaptureStatus =
   | "uploaded"
@@ -139,6 +144,23 @@ export async function uploadTeacherVoiceCapture(
     mimeType: request.mimeType,
     attachmentName,
   });
+  const validationError =
+    validateVoiceAudioFile(request.file) ||
+    validateVoiceDuration(request.durationMs) ||
+    validateVoiceText(request.fallbackText);
+  if (validationError) {
+    return {
+      status: "failed",
+      attachmentName,
+      draftContent: "",
+      provider: "client-validation",
+      fallback: false,
+      fallbackReason: "invalid-request",
+      source: "local-text-fallback",
+      nextAction: "none",
+      raw: { error: validationError },
+    };
+  }
   const formData = new FormData();
   formData.set("audio", request.file);
   formData.set("attachmentName", attachmentName);

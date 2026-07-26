@@ -142,6 +142,7 @@ export interface AdminGovernanceDemoViewModel {
 }
 
 export interface BuildAdminGovernanceDemoInput {
+  mode?: "demo" | "live";
   priorityItems: AdminConsultationPriorityItem[];
   home: AdminHomeViewModel;
   adminSummary: ApiAdminSummary | null;
@@ -581,7 +582,208 @@ function buildTrendRows(input: BuildAdminGovernanceDemoInput, highRiskCount: num
   }));
 }
 
+function buildLiveGovernanceActions(
+  input: BuildAdminGovernanceDemoInput,
+  reviewTasks48h: AdminGovernanceReviewTask[]
+) {
+  const actions: AdminGovernanceActionItem[] = [];
+  const growthRecords = input.growthRecords.filter(
+    (record) => record.needsAttention || record.reviewStatus?.includes("待")
+  );
+  const pendingFeedbacks = input.familyFeedbacks.filter(
+    (feedback) => feedback.status !== "resolved"
+  );
+  const pendingMaterials = input.healthMaterials.filter(
+    (material) => material.parseStatus !== "completed"
+  );
+
+  if (growthRecords.length > 0) {
+    actions.push({
+      id: "governance-growth-backfill",
+      title: "成长记录补录",
+      targetName: "班级层面",
+      ownerLabel: "班主任",
+      statusLabel: "待处理",
+      detail: `${growthRecords.length} 条成长观察仍需复核或补录。`,
+      href: "/growth",
+      tone: "orange",
+      sourceIds: growthRecords.map((record) => record.id),
+    });
+  }
+  if (pendingFeedbacks.length > 0) {
+    actions.push({
+      id: "governance-feedback-writeback",
+      title: "家长反馈待处理",
+      targetName: "家园共育",
+      ownerLabel: "园长/教师",
+      statusLabel: "待消化",
+      detail: `${pendingFeedbacks.length} 条家庭反馈尚未完成闭环。`,
+      href: "#admin-family-feedback-flow",
+      tone: "green",
+      sourceIds: pendingFeedbacks.map((feedback) => feedback.feedbackId || feedback.id),
+    });
+  }
+  if (pendingMaterials.length > 0) {
+    actions.push({
+      id: "governance-health-material",
+      title: "健康材料待解析",
+      targetName: "健康档案",
+      ownerLabel: "保健老师",
+      statusLabel: "待解析",
+      detail: `${pendingMaterials.length} 份健康材料仍待解析并写回证据链。`,
+      tone: "purple",
+      sourceIds: pendingMaterials.map((material) => material.materialId),
+    });
+  }
+  if (reviewTasks48h.length > 0) {
+    actions.push({
+      id: "governance-review-48h",
+      title: "48 小时复查任务",
+      targetName: "高风险个案",
+      ownerLabel: "园长",
+      statusLabel: "跟进中",
+      detail: `${reviewTasks48h.length} 项复查任务仍在处理。`,
+      href: "#admin-review-48h-tasks",
+      tone: "red",
+      sourceIds: reviewTasks48h.map((task) => task.id),
+    });
+  }
+
+  return actions;
+}
+
+function buildLiveAdminGovernanceViewModel(
+  input: BuildAdminGovernanceDemoInput
+): AdminGovernanceDemoViewModel {
+  const childMap = new Map(input.children.map((child) => [child.id, child]));
+  const feedbackByChild = buildFeedbackByChild(input.familyFeedbacks);
+  const riskItems = sortRiskItems(
+    input.priorityItems.map((item) =>
+      buildPriorityRiskItem(item, childMap, feedbackByChild)
+    )
+  );
+  const familyFeedbackItems = buildFamilyFeedbackItems(input.familyFeedbacks, childMap);
+  const reviewTasks48h = buildReviewTasks48h(input, childMap);
+  const governanceActions = buildLiveGovernanceActions(input, reviewTasks48h);
+  const highRiskCount = Math.max(
+    input.adminSummary?.highRiskConsultationCount ?? 0,
+    input.priorityItems.filter((item) => item.riskLevel === "high").length
+  );
+  const feedbackCount = Math.max(
+    input.adminSummary?.unresolvedFeedbackCount ?? 0,
+    input.familyFeedbacks.filter((feedback) => feedback.status !== "resolved").length
+  );
+  const hasEvidence =
+    input.children.length +
+      input.priorityItems.length +
+      input.familyFeedbacks.length +
+      input.tasks.length +
+      input.healthMaterials.length +
+      input.growthRecords.length +
+      input.mealRecords.length >
+    0;
+  const labels =
+    input.home.trendLabels.length > 0
+      ? input.home.trendLabels.slice(-7)
+      : ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+  const startIndex = Math.max(0, input.home.trendLabels.length - labels.length);
+  const trendRows = labels.map((label, index) => ({
+    label,
+    risk: hasEvidence
+      ? Math.max(0, input.home.healthTrendSeries[startIndex + index] ?? 0)
+      : 0,
+    feedback: 0,
+    action: hasEvidence
+      ? Math.max(0, input.home.growthTrendSeries[startIndex + index] ?? 0)
+      : 0,
+  }));
+  const qualityMetrics: AdminGovernanceQualityMetric[] = [
+    {
+      key: "consultation_bridge",
+      label: "会诊承接",
+      value: `${highRiskCount}项`,
+      numericValue: highRiskCount,
+      unit: "项",
+      detail: "当前真实高风险会诊承接数",
+      trend: "来自会诊与园长汇总",
+      tone: "red",
+    },
+    {
+      key: "review_48h",
+      label: "48 小时复查",
+      value: `${reviewTasks48h.length}项`,
+      numericValue: reviewTasks48h.length,
+      unit: "项",
+      detail: "当前真实复查任务数",
+      trend: "来自任务中心",
+      tone: "orange",
+    },
+    {
+      key: "feedback_writeback",
+      label: "家长反馈回流",
+      value: `${feedbackCount}条`,
+      numericValue: feedbackCount,
+      unit: "条",
+      detail: "当前未完成闭环的家庭反馈",
+      trend: "来自反馈记录",
+      tone: "green",
+    },
+    {
+      key: "governance_actions",
+      label: "园内治理动作",
+      value: `${governanceActions.length}项`,
+      numericValue: governanceActions.length,
+      unit: "项",
+      detail: "由当前真实待办拆解",
+      trend: "不包含演示占位",
+      tone: "purple",
+    },
+  ];
+  const weeklySummary: AdminGovernanceWeeklySummary =
+    hasEvidence || input.weeklyReport
+      ? {
+          summary:
+            input.weeklyReport?.summary ||
+            input.home.weeklySummary ||
+            "当前记录尚不足以生成周度治理摘要。",
+          highlights: takeUnique(
+            [
+              ...(input.weeklyReport?.highlights ?? []),
+              ...input.home.weeklyHighlights,
+              ...input.home.adminContext.highlights,
+            ],
+            4
+          ),
+          risks: takeUnique(input.weeklyReport?.risks ?? [], 4),
+          nextWeekActions: takeUnique(input.weeklyReport?.nextWeekActions ?? [], 4),
+        }
+      : {
+          summary: "暂无可汇总的真实业务记录。",
+          highlights: [],
+          risks: [],
+          nextWeekActions: [],
+        };
+
+  return {
+    riskItems,
+    qualityMetrics,
+    trendRows,
+    weeklySummary,
+    reviewTasks48h,
+    familyFeedbackItems,
+    governanceActions,
+    bridgeSummary:
+      governanceActions.length > 0
+        ? `已从真实记录中识别 ${riskItems.length} 个风险信号和 ${governanceActions.length} 项治理动作。`
+        : "当前没有需要承接的真实治理动作。",
+  };
+}
+
 export function buildAdminGovernanceDemoViewModel(input: BuildAdminGovernanceDemoInput): AdminGovernanceDemoViewModel {
+  if (input.mode === "live") {
+    return buildLiveAdminGovernanceViewModel(input);
+  }
+
   const childMap = new Map(input.children.map((child) => [child.id, child]));
   const feedbackByChild = buildFeedbackByChild(input.familyFeedbacks);
   const requiredPriorityItems = input.priorityItems.filter((item) =>

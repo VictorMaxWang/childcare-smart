@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Archive,
   BookOpenCheck,
@@ -157,6 +158,9 @@ function buildPayload(form: ChildFormState): ApiChildInput {
 }
 
 export default function ChildrenPage() {
+  const searchParams = useSearchParams();
+  const queryChildId = searchParams.get("child");
+  const openedQueryChildIdRef = useRef<string | null>(null);
   const { currentUser } = useApp();
   const [children, setChildren] = useState<ApiChild[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -208,6 +212,19 @@ export default function ChildrenPage() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (
+      !queryChildId ||
+      openedQueryChildIdRef.current === queryChildId ||
+      !children.some((child) => child.id === queryChildId)
+    ) {
+      return;
+    }
+    // 查询结果跳转只自动打开一次，避免用户手动关闭详情后被 URL 参数反复拉回。
+    openedQueryChildIdRef.current = queryChildId;
+    setSelectedDetailId(queryChildId);
+  }, [children, queryChildId]);
 
   const todayAttendance = useMemo(
     () => attendance.filter((item) => item.date === today && !item.archivedAt),

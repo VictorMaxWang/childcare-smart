@@ -34,7 +34,7 @@ def build_settings(**overrides) -> Settings:
     return Settings(**defaults)
 
 
-def test_resolve_asr_provider_without_vivo_credentials_uses_mock():
+def test_resolve_asr_provider_without_vivo_credentials_reports_unavailable_fallback():
     provider = resolve_asr_provider(build_settings(vivo_app_id=None, vivo_app_key=None), prefer_vivo=True)
     assert isinstance(provider, MockAsrProvider)
 
@@ -48,9 +48,9 @@ def test_resolve_asr_provider_without_vivo_credentials_uses_mock():
     )
 
     assert result.provider == "mock-asr"
-    assert result.mode == "mock"
-    assert result.source == "mock"
-    assert result.output.transcript
+    assert result.mode == "fallback"
+    assert result.source == "provider_unavailable"
+    assert result.output.transcript == ""
     assert result.output.fallback is True
 
 
@@ -64,7 +64,7 @@ def test_vivo_asr_provided_transcript_short_circuits_network(monkeypatch):
     result = provider.transcribe(AsrProviderInput(transcript="小明今天体温37.6度，需要继续观察。"))
 
     assert result.provider == "vivo-asr"
-    assert result.mode == "mock"
+    assert result.mode == "fallback"
     assert result.source == "provided_transcript"
     assert result.model == vivo_asr.ASR_MODEL_NAME
     assert result.output.transcript == "小明今天体温37.6度，需要继续观察。"
@@ -201,8 +201,8 @@ def test_vivo_asr_timeout_falls_back_when_enabled(monkeypatch):
     )
 
     assert result.provider == "vivo-asr"
-    assert result.mode == "mock"
-    assert result.source == "mock"
+    assert result.mode == "fallback"
+    assert result.source == "provided_fallback_text"
     assert result.output.transcript == "备用转写"
     assert result.output.fallback is True
     assert result.output.meta["reason"] == "timeout"
@@ -221,7 +221,8 @@ def test_vivo_asr_business_error_falls_back_when_enabled(monkeypatch):
         AsrProviderInput(audio_bytes=b"audio", attachment_name="voice.wav", mime_type="audio/wav")
     )
 
-    assert result.source == "mock"
+    assert result.source == "provider_unavailable"
+    assert result.output.transcript == ""
     assert result.output.fallback is True
     assert result.output.meta["reason"] == "business-error"
     assert result.output.meta["business_code"] == 10001
@@ -234,7 +235,8 @@ def test_vivo_asr_missing_configuration_falls_back_when_enabled():
     )
 
     assert result.provider == "vivo-asr"
-    assert result.source == "mock"
+    assert result.source == "provider_unavailable"
+    assert result.output.transcript == ""
     assert result.output.fallback is True
     assert result.output.meta["reason"] == "missing-configuration"
 
@@ -273,7 +275,8 @@ def test_vivo_asr_invalid_result_falls_back_when_enabled(monkeypatch):
         AsrProviderInput(audio_bytes=b"audio", attachment_name="voice.wav", mime_type="audio/wav")
     )
 
-    assert result.source == "mock"
+    assert result.source == "provider_unavailable"
+    assert result.output.transcript == ""
     assert result.output.fallback is True
     assert result.output.meta["reason"] == "empty-transcript"
     assert result.output.raw["stage"] == "result"

@@ -5,6 +5,7 @@ import asyncio
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
+from app.core.service_auth import ServiceScope, require_internal_service
 from app.db.repositories import reset_repository_bundle_cache
 from app.main import app
 from app.providers.mock import build_mock_high_risk_bundle
@@ -517,3 +518,26 @@ def test_admin_quality_metrics_endpoint_returns_structured_payload(tmp_path, mon
     assert body["consultationClosureRate"]["id"] == "consultationClosureRate"
     assert body["followUp48hCompletionRate"]["coverage"]["eligibleCount"] >= 1
     assert body["sourceSummary"]["consultationSnapshotCount"] == 2
+
+
+def test_admin_quality_metrics_endpoint_rejects_forged_institution_scope(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "admin-quality-forged-tenant.db"
+    configure_memory_backend(monkeypatch, backend="sqlite", sqlite_path=str(sqlite_path))
+    app.dependency_overrides[require_internal_service] = lambda: ServiceScope(
+        institution_id="inst-trusted",
+        role="机构管理员",
+        child_ids=(),
+    )
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/agents/metrics/admin-quality",
+                json={
+                    "institutionId": "inst-other",
+                    "windowDays": 7,
+                },
+            )
+    finally:
+        app.dependency_overrides.pop(require_internal_service, None)
+
+    assert response.status_code == 403

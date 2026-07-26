@@ -292,6 +292,12 @@ function foodNames(foods: unknown) {
     .filter(Boolean);
 }
 
+function hasArrived(createdAt: string) {
+  const timestamp = Date.parse(createdAt);
+  // 演示场景会预置当天晚些时候的消息；“最新回复”不能让未来记录盖过用户刚收到的真实消息。
+  return !Number.isFinite(timestamp) || timestamp <= Date.now() + 60_000;
+}
+
 function summarizeChildStatus(result: Awaited<ReturnType<AppDataService["getParentHome"]>>, section: string) {
   const childName = result.child.name;
   const today = todayKey();
@@ -878,7 +884,7 @@ export async function executeAssistantCommand(session: SessionUser, command: Ass
     if (!childId) throw new ApiRouteError("invalid_request", "查看老师回复需要 childId。");
     const messages = await service.listMessages({ childId });
     const replies = messages
-      .filter((message) => message.senderRole === "teacher")
+      .filter((message) => message.senderRole === "teacher" && hasArrived(message.createdAt))
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
     const latest = replies[0];
     return {

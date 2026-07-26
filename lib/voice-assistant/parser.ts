@@ -79,10 +79,12 @@ function readTemperature(text: string) {
 }
 
 function findByName<T extends { name: string; className?: string }>(items: T[] | undefined, text: string) {
-  return (items ?? [])
-    .slice()
-    .sort((left, right) => right.name.length - left.name.length)
-    .find((item) => text.includes(item.name) || (item.name.length > 1 && text.includes(item.name.slice(1))));
+  const sorted = (items ?? []).slice().sort((left, right) => right.name.length - left.name.length);
+  // “李老师”和“周老师”共享“老师”后缀，必须先尝试完整姓名，避免总是误选列表第一人。
+  return (
+    sorted.find((item) => text.includes(item.name)) ??
+    sorted.find((item) => item.name.length > 1 && text.includes(item.name.slice(1)))
+  );
 }
 
 function childAliases(child: AssistantChildRef) {
@@ -922,7 +924,11 @@ export function parseAssistantCommand(context: AssistantParseContext, utterance:
     });
   }
 
-  if (/查看|查询/.test(text) && /(今天的提醒|今天提醒|提醒|任务|待办)/.test(text)) {
+  const queriesTodayTasks =
+    (/查看|查询/.test(text) &&
+      /(今天的提醒|今天提醒|提醒|任务|待办)/.test(text)) ||
+    /(?:show|list)(?:today'?s?)?(?:reminders?|tasks?|todos?)/i.test(text);
+  if (queriesTodayTasks) {
     return commandBase({
       context,
       utterance,

@@ -20,11 +20,25 @@ export function listRecords<T extends RecordType>(type: T, options: { childId?: 
   return apiGet<ApiRecordMap[T][]>(recordsPath(type, options));
 }
 
-export function createRecord<T extends RecordType>(type: T, input: Omit<Partial<ApiRecordMap[T]>, "id"> & { childId: string }) {
+export function createRecord<T extends RecordType>(
+  type: T,
+  input: Omit<Partial<ApiRecordMap[T]>, "id"> & {
+    childId: string;
+    sourceDraftId?: string;
+    sourceRecordId?: string;
+  }
+) {
   return apiPost<ApiRecordMap[T]>("/api/records", { ...input, type });
 }
 
-export function updateRecord<T extends RecordType>(type: T, recordId: string, input: Partial<ApiRecordMap[T]>) {
+export function updateRecord<T extends RecordType>(
+  type: T,
+  recordId: string,
+  input: Partial<ApiRecordMap[T]> & {
+    sourceDraftId?: string;
+    sourceRecordId?: string;
+  }
+) {
   return apiPatch<ApiRecordMap[T]>(`/api/records/${encodeURIComponent(recordId)}`, { ...input, type });
 }
 

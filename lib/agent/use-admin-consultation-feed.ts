@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 
 export type AdminConsultationFeedStatus = "loading" | "ready" | "unavailable";
-export type AdminConsultationFeedSource = "remote-brain" | "local-demo" | "cache" | "unknown";
+export type AdminConsultationFeedSource =
+  | "remote-brain"
+  | "session-scope"
+  | "local-demo"
+  | "cache"
+  | "unknown";
 
 export interface AdminConsultationFeedState {
   items: unknown[];
@@ -63,10 +68,10 @@ function buildUnavailableFeedState(
     items: [],
     status: "unavailable",
     error,
-    source: "local-demo",
+    source: "unknown",
     fallback: true,
     fallbackReason,
-    message: "当前使用本地演示数据；远端 feed 暂不可用。",
+    message: "远端会诊摘要暂不可用，当前展示会话权限内已保存的会诊。",
     lastUpdatedAt: null,
   };
 }
@@ -142,7 +147,9 @@ export function useAdminConsultationFeed(
           fallbackReason: payload.fallbackReason ?? null,
           message:
             payload.message ??
-            (payload.fallback ? "当前使用本地演示数据；远端 feed 暂不可用。" : null),
+            (payload.fallback
+              ? "远端会诊摘要暂不可用，当前展示会话权限内已保存的会诊。"
+              : null),
           lastUpdatedAt: new Date().toISOString(),
         });
       } catch {

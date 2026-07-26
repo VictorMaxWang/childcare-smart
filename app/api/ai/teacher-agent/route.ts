@@ -77,6 +77,8 @@ function isValidPayload(payload: unknown): payload is TeacherAgentRequestPayload
   return (
     isValidWorkflow(payload.workflow) &&
     (payload.scope === "class" || payload.scope === "child") &&
+    (payload.question === undefined ||
+      (typeof payload.question === "string" && payload.question.length <= 500)) &&
     isRecord(payload.currentUser) &&
     isRecordArray(payload.visibleChildren) &&
     isRecordArray(payload.presentChildren) &&
@@ -279,7 +281,7 @@ async function runLocalTeacherAgent(params: {
       ? await buildMemoryContextForPrompt({
           childId: childContext.child.id,
           workflowType: "teacher-agent",
-          query: childContext.focusReasons.join(" "),
+          query: params.payload.question || childContext.focusReasons.join(" "),
           request: params.request,
           serviceScope: params.serviceScope,
         })
@@ -310,10 +312,18 @@ async function runLocalTeacherAgent(params: {
       );
     }
 
-    const aiResponse = await executeFollowUp(
-      buildTeacherCommunicationFollowUpPayloadWithMemory(childContext, memoryContext),
-      params.runtimeOptions
+    const followUpPayload = buildTeacherCommunicationFollowUpPayloadWithMemory(
+      childContext,
+      memoryContext
     );
+    if (params.payload.question) {
+      followUpPayload.question = params.payload.question;
+      followUpPayload.history = [
+        ...(followUpPayload.history ?? []),
+        { role: "user", content: params.payload.question },
+      ];
+    }
+    const aiResponse = await executeFollowUp(followUpPayload, params.runtimeOptions);
     const baseResult = buildTeacherCommunicationResultWithMemory({
       context: childContext,
       response: aiResponse,
@@ -353,7 +363,10 @@ async function runLocalTeacherAgent(params: {
     }
 
     const aiSuggestion = await executeSuggestion(
-      { snapshot: buildTeacherChildSuggestionSnapshotWithMemory(childContext, memoryContext) },
+      {
+        snapshot: buildTeacherChildSuggestionSnapshotWithMemory(childContext, memoryContext),
+        question: params.payload.question,
+      },
       params.runtimeOptions
     );
     const baseResult = buildTeacherFollowUpResultWithMemory({
@@ -390,6 +403,7 @@ async function runLocalTeacherAgent(params: {
   const aiReport = await executeWeeklyReport(
     {
       role: "teacher",
+      question: params.payload.question,
       snapshot: buildTeacherWeeklyReportSnapshotWithMemory(classContext, weeklyMemoryContexts),
     },
     params.runtimeOptions
@@ -418,7 +432,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!isRecord(payload) || !isValidWorkflow(payload.workflow) || (payload.scope !== "class" && payload.scope !== "child")) {
+  if (
+    !isRecord(payload) ||
+    !isValidWorkflow(payload.workflow) ||
+    (payload.scope !== "class" && payload.scope !== "child") ||
+    (payload.question !== undefined && typeof payload.question !== "string")
+  ) {
     return NextResponse.json({ error: "Invalid teacher-agent payload" }, { status: 400 });
   }
 

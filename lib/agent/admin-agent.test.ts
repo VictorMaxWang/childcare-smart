@@ -371,7 +371,7 @@ test("buildAdminWeeklyReportResultWithMemory keeps clean report continuity and d
     },
   });
 
-  assert.equal(result.continuityNotes?.some((item) => item.includes("上周延续问题：向阳班需继续跟进待复查积压。")), true);
+  assert.equal(result.continuityNotes?.some((item) => item.includes("上周延续问题：向阳班需继续跟进待复查积压")), true);
   result.continuityNotes?.forEach((item) => {
     assert.match(item, /^(上周延续问题|当前连续风险|本周承接动作)：/);
     assert.doesNotMatch(item, /teacher-agent|workflow|objectScope|targetChildId|actionItems/i);

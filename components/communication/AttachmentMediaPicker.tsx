@@ -5,6 +5,11 @@ import Image from "next/image";
 import { Download, FileText, ImageIcon, Mic, Paperclip, Square, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ApiAttachment, AttachmentKind } from "@/lib/api/types";
+import {
+  ATTACHMENT_MAX_FILES,
+  ATTACHMENT_MAX_UPLOAD_BYTES,
+  isAllowedAttachmentMimeType,
+} from "@/lib/attachments/constraints";
 import { useVoiceRecorder } from "@/lib/mobile/use-voice-recorder";
 import { cn } from "@/lib/utils";
 
@@ -15,11 +20,11 @@ export interface AttachmentDraft {
   mimeType: string;
   byteSize: number;
   localPreviewUrl: string;
+  file?: File;
   durationMs?: number;
 }
 
-export const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
-export const ATTACHMENT_MAX_FILES = 3;
+export const ATTACHMENT_MAX_BYTES = ATTACHMENT_MAX_UPLOAD_BYTES;
 
 function createId(prefix: string) {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -66,6 +71,7 @@ async function fileToDraft(file: File, durationMs?: number): Promise<AttachmentD
     mimeType: file.type || "application/octet-stream",
     byteSize: file.size,
     localPreviewUrl: await fileToDataUrl(file),
+    file,
     durationMs,
   };
 }
@@ -86,9 +92,10 @@ function itemUrl(item: ApiAttachment | AttachmentDraft) {
 
 function savedAttachmentStorageLabel(item: ApiAttachment) {
   const mode = item.storageObject?.storageMode ?? item.storageMode;
+  if (mode === "object_storage") return "私有文件 · 按账号权限读取";
   if (mode === "local_demo" || mode === "cached_media") return "本地演示预览";
-  if (item.metadataOnly || mode === "metadata_only") return "仅保存元数据，待接入对象存储";
-  return "待接入对象存储";
+  if (item.metadataOnly || mode === "metadata_only") return "仅保存元数据";
+  return "附件";
 }
 
 export function AttachmentPreviewList({
@@ -135,7 +142,7 @@ export function AttachmentPreviewList({
                     className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600"
                   >
                     <Paperclip className="h-3 w-3" />
-                    本地演示预览
+                    {isSavedAttachment(item) ? "查看附件" : "预览附件"}
                   </a>
                   <a
                     href={isSavedAttachment(item) ? `${url}?download=1` : url}
@@ -143,7 +150,7 @@ export function AttachmentPreviewList({
                     className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600"
                   >
                     <Download className="h-3 w-3" />
-                    保存本地副本
+                    下载副本
                   </a>
                 </div>
               ) : null}
@@ -191,6 +198,15 @@ export default function AttachmentMediaPicker({
     const oversize = nextFiles.find((file) => file.size > maxBytes);
     if (oversize) {
       setMessage(`${oversize.name} 超过 ${Math.round(maxBytes / 1024 / 1024)}MB，未保存。`);
+      return;
+    }
+    const unsupported = nextFiles.find(
+      (file) => !isAllowedAttachmentMimeType(file.type)
+    );
+    if (unsupported) {
+      setMessage(
+        `${unsupported.name} 格式不支持；请选择 JPEG、PNG、WebP、PDF 或常见音频文件。`
+      );
       return;
     }
     try {

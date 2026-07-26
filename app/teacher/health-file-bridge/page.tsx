@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
-import { AlertTriangle, ArrowLeft, ClipboardList, FileText, Home, MessageCircle, Settings, ShieldAlert, Sparkles, Stethoscope, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ClipboardList, Download, FileText, Home, MessageCircle, Settings, ShieldAlert, Sparkles, Stethoscope, Upload } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { TeacherContextStrip, TeacherMiniPanel } from "@/components/teacher/TeacherOperationKit";
 import {
@@ -25,7 +25,12 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { apiPost } from "@/lib/api/client";
+import {
+  listAttachments,
+  uploadAttachmentFile,
+} from "@/lib/api/communication";
 import { ApiClientError } from "@/lib/api/errors";
+import type { ApiAttachment } from "@/lib/api/types";
 import type {
   HealthFileBridgeContraindication,
   HealthFileBridgeFact,
@@ -36,6 +41,16 @@ import type {
   HealthFileBridgeRiskItem,
   HealthFileBridgeSourceRole,
 } from "@/lib/ai/types";
+import {
+  HEALTH_FILE_MAX_COUNT,
+  HEALTH_FILE_MAX_OCR_BASE64_LENGTH,
+  HEALTH_FILE_MAX_UPLOAD_BYTES,
+  isSupportedHealthFileMimeType,
+} from "@/lib/health/health-file-constraints";
+import {
+  clampImageDataUrl,
+  readImageFileAsDataUrl,
+} from "@/lib/media/image-client";
 import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
 import { useApp } from "@/lib/store";
 
@@ -77,13 +92,26 @@ function formatResultBadge(label: string, active: boolean) {
   return <Badge variant={active ? "warning" : "secondary"}>{`${label}：${active ? "是" : "否"}`}</Badge>;
 }
 
-async function fileToBase64(file: File) {
+async function fileToOcrBase64(file: File) {
   if (!file.type.toLowerCase().startsWith("image/")) return undefined;
-  const buffer = await file.arrayBuffer();
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
+  const source = await readImageFileAsDataUrl(file);
+  const attempts = [
+    { width: 1400, quality: 0.8 },
+    { width: 1100, quality: 0.68 },
+    { width: 850, quality: 0.58 },
+  ];
+  for (const attempt of attempts) {
+    const dataUrl = await clampImageDataUrl(
+      source,
+      attempt.width,
+      attempt.quality
+    );
+    const imageBase64 = dataUrl.split(",")[1] ?? "";
+    if (imageBase64.length <= HEALTH_FILE_MAX_OCR_BASE64_LENGTH) {
+      return imageBase64;
+    }
+  }
+  throw new Error("图片压缩后仍然过大，请裁剪关键区域后重新上传。");
 }
 
 function toUploadMeta(file: File, index: number, previewText: string, imageBase64?: string): HealthFileBridgeFile {
@@ -102,25 +130,32 @@ function toUploadMeta(file: File, index: number, previewText: string, imageBase6
     imageBase64,
     meta: {
       lastModified: file.lastModified,
-      imageBase64,
     },
   };
 }
 
 function getProviderLabel(result: HealthFileBridgeResponse) {
   if (result.provider === "vivo" && !result.fallback && !result.mock) return "vivo OCR provider";
-  if (result.source === "local-text-fallback") return "本地文本 fallback";
+  if (result.provider === "dashscope" && !result.fallback && !result.mock) {
+    return "百炼视觉 OCR";
+  }
+  if (result.source === "local-text-fallback") return "本地文本解析";
   if (result.fallback) return "本地规则解析";
   return result.provider ?? "provider";
 }
 
 function getOcrStatusLabel(result: HealthFileBridgeResponse) {
-  const ocrStatus = (result.providerStatus?.ocr as { status?: string; reason?: string } | undefined)?.status;
-  if (!ocrStatus) return "provider 状态未知";
-  if (ocrStatus === "ready") return "vivo OCR ready";
-  if (ocrStatus === "missing-env") return "vivo OCR missing-env";
-  if (ocrStatus === "unsupported") return "当前未接入真实 OCR provider";
-  return `vivo OCR ${ocrStatus}`;
+  const ocr = result.providerStatus?.ocr as
+    | { status?: string; reason?: string; providerName?: string; model?: string }
+    | undefined;
+  if (!ocr?.status) return "OCR 状态未知";
+  const provider = ocr.providerName === "dashscope" ? "百炼" : ocr.providerName ?? "OCR";
+  if (ocr.status === "ready") {
+    return `${provider} OCR 可用${ocr.model ? ` · ${ocr.model}` : ""}`;
+  }
+  if (ocr.status === "missing-env") return "OCR 未配置";
+  if (ocr.status === "unsupported") return "当前材料格式不受 OCR 支持";
+  return `${provider} OCR ${ocr.status}`;
 }
 
 function riskVariant(level: HealthFileBridgeRiskItem["severity"]) {
@@ -185,6 +220,7 @@ function buildSavedParseResult(result: HealthFileBridgeResponse, files: HealthFi
       warnings: result.warnings,
       generatedAt: result.generatedAt,
       files: files.map((file) => ({
+        attachmentId: file.attachmentId,
         name: file.name,
         mimeType: file.mimeType,
         sizeBytes: file.sizeBytes,
@@ -227,15 +263,13 @@ function DetailCard({
 
 export default function TeacherHealthFileBridgePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryChildId = searchParams.get("childId") ?? searchParams.get("child");
   const {
     currentUser,
     visibleChildren,
     healthMaterials,
-    createHealthMaterialTask,
-    updateHealthMaterialTaskStatus,
-    saveHealthMaterialParseResult,
-    failHealthMaterialParseResult,
-    createConsultationRecord,
+    reloadAppSnapshotFromApi,
   } = useApp();
   const [childId, setChildId] = useState<string>(NONE_CHILD_VALUE);
   const [sourceRole, setSourceRole] = useState<HealthFileBridgeSourceRole>("teacher");
@@ -243,6 +277,8 @@ export default function TeacherHealthFileBridgePage() {
   const [previewText, setPreviewText] = useState("");
   const [optionalNotes, setOptionalNotes] = useState("");
   const [files, setFiles] = useState<HealthFileBridgeFile[]>([]);
+  const [sourceFiles, setSourceFiles] = useState<File[]>([]);
+  const [materialAttachments, setMaterialAttachments] = useState<ApiAttachment[]>([]);
   const [result, setResult] = useState<HealthFileBridgeResponse | null>(null);
   const [pendingParseResult, setPendingParseResult] = useState<Record<string, unknown> | null>(null);
   const [activeMaterialId, setActiveMaterialId] = useState<string | null>(null);
@@ -264,16 +300,47 @@ export default function TeacherHealthFileBridgePage() {
   );
 
   useEffect(() => {
+    if (
+      queryChildId &&
+      visibleChildren.some((child) => child.id === queryChildId)
+    ) {
+      if (childId !== queryChildId) setChildId(queryChildId);
+      return;
+    }
     if (childId !== NONE_CHILD_VALUE && visibleChildren.some((child) => child.id === childId)) {
       return;
     }
     setChildId(visibleChildren[0]?.id ?? NONE_CHILD_VALUE);
-  }, [childId, visibleChildren]);
+  }, [childId, queryChildId, visibleChildren]);
 
   const selectedChild = useMemo(
     () => visibleChildren.find((child) => child.id === childId) ?? null,
     [childId, visibleChildren]
   );
+  const isDemoAccount = currentUser.accountKind === "demo";
+
+  useEffect(() => {
+    let active = true;
+    if (childId === NONE_CHILD_VALUE) {
+      setMaterialAttachments([]);
+      return () => {
+        active = false;
+      };
+    }
+    void listAttachments({
+      childId,
+      relatedType: "health-material",
+    })
+      .then((items) => {
+        if (active) setMaterialAttachments(items);
+      })
+      .catch(() => {
+        if (active) setMaterialAttachments([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [childId]);
 
   useEffect(() => {
     if (result || activeMaterialId) return;
@@ -285,7 +352,7 @@ export default function TeacherHealthFileBridgePage() {
     setResult(savedResponse);
     setPendingParseResult(null);
     setActiveMaterialId(latestSaved.materialId);
-    setActiveApiMaterialId(null);
+    setActiveApiMaterialId(latestSaved.materialId);
     setSaveMessage(`已恢复 ${latestSaved.filename} 的保存结果。`);
   }, [activeMaterialId, childMaterials, result]);
 
@@ -303,20 +370,60 @@ export default function TeacherHealthFileBridgePage() {
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const selectedFiles = Array.from(event.target.files ?? []);
-    const nextFiles = await Promise.all(
-      selectedFiles.map(async (file, index) =>
-        toUploadMeta(file, index, previewText.trim(), await fileToBase64(file))
-      )
+    setError(null);
+    if (selectedFiles.length > HEALTH_FILE_MAX_COUNT) {
+      setFiles([]);
+      setSourceFiles([]);
+      event.target.value = "";
+      setError(`每次最多上传 ${HEALTH_FILE_MAX_COUNT} 份健康材料。`);
+      return;
+    }
+    const invalidFile = selectedFiles.find(
+      (file) =>
+        !isSupportedHealthFileMimeType(file.type) ||
+        file.type.toLowerCase() === "text/plain" ||
+        file.size <= 0 ||
+        file.size > HEALTH_FILE_MAX_UPLOAD_BYTES
     );
-    setFiles(nextFiles);
+    if (invalidFile) {
+      setFiles([]);
+      setSourceFiles([]);
+      event.target.value = "";
+      setError(
+        `${invalidFile.name} 不符合要求：仅支持 JPEG、PNG、WebP、PDF，且单份不超过 4 MB。`
+      );
+      return;
+    }
+    try {
+      const nextFiles = await Promise.all(
+        selectedFiles.map(async (file, index) =>
+          toUploadMeta(
+            file,
+            index,
+            previewText.trim(),
+            isDemoAccount ? await fileToOcrBase64(file) : undefined
+          )
+        )
+      );
+      setFiles(nextFiles);
+      setSourceFiles(selectedFiles);
+    } catch (fileError) {
+      setFiles([]);
+      setSourceFiles([]);
+      event.target.value = "";
+      setError(
+        fileError instanceof Error
+          ? fileError.message
+          : "健康材料读取失败，请重新选择。"
+      );
+      return;
+    }
     setResult(null);
     setPendingParseResult(null);
     setActiveMaterialId(null);
     setActiveApiMaterialId(null);
-    setActiveApiMaterialId(null);
     setSaveMessage(null);
     setConsultationMessage(null);
-    setError(null);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -338,9 +445,12 @@ export default function TeacherHealthFileBridgePage() {
     }
 
     setIsSubmitting(true);
-    const requestFiles =
+    let requestFiles =
       files.length > 0
-        ? files
+        ? files.map((file) => ({
+            ...file,
+            mimeType: file.imageBase64 ? "image/jpeg" : file.mimeType,
+          }))
         : [
             {
               fileId: `manual-${Date.now()}`,
@@ -351,40 +461,65 @@ export default function TeacherHealthFileBridgePage() {
             } satisfies HealthFileBridgeFile,
           ];
 
-    const createdMaterial = createHealthMaterialTask({
-      childId,
-      filename: requestFiles[0]?.name ?? "manual-health-material-note.txt",
-      fileType: requestFiles[0]?.mimeType ?? "text/plain",
-      description: manualText || requestFiles.map((file) => file.name).join("、"),
-    });
-
-    if (createdMaterial.status === "failed" || !createdMaterial.data) {
-      setIsSubmitting(false);
-      setError(createdMaterial.error ?? createdMaterial.message ?? "创建解析任务失败。");
-      return;
-    }
-
-    const materialId = createdMaterial.data.materialId;
-    setActiveMaterialId(materialId);
-    let apiMaterialId: string | null = null;
+    let materialId = "";
     try {
       const apiMaterial = await apiPost<AppStateSnapshot["healthMaterials"][number]>("/api/health-materials", {
         childId,
         filename: requestFiles[0]?.name ?? "manual-health-material-note.txt",
-        fileType: requestFiles[0]?.mimeType ?? "text/plain",
+        fileType: sourceFiles[0]?.type || requestFiles[0]?.mimeType || "text/plain",
         description: manualText || requestFiles.map((file) => file.name).join("、"),
       });
-      apiMaterialId = apiMaterial.materialId;
-      setActiveApiMaterialId(apiMaterialId);
-    } catch (apiCreateError) {
-      setActiveApiMaterialId(null);
-      setSaveMessage(
-        apiCreateError instanceof ApiClientError
-          ? `E01 health materials API 暂未保存任务：${apiCreateError.message}`
-          : "E01 health materials API 暂未保存任务。"
+      materialId = apiMaterial.materialId;
+      setActiveMaterialId(materialId);
+      setActiveApiMaterialId(materialId);
+      await apiPost<AppStateSnapshot["healthMaterials"][number]>(
+        `/api/health-materials/${encodeURIComponent(materialId)}/parse`,
+        { parseStatus: "processing" }
       );
+      if (!isDemoAccount && sourceFiles.length > 0) {
+        const uploaded: ApiAttachment[] = [];
+        for (const sourceFile of sourceFiles) {
+          uploaded.push(
+            await uploadAttachmentFile({
+              file: sourceFile,
+              childId,
+              relatedType: "health-material",
+              relatedId: materialId,
+            })
+          );
+        }
+        requestFiles = requestFiles.map((file, index) => ({
+          ...file,
+          attachmentId: uploaded[index]?.attachmentId,
+          imageBase64: undefined,
+          dataUrl: undefined,
+          meta: undefined,
+        }));
+        setMaterialAttachments((current) => [...uploaded, ...current]);
+      }
+      await reloadAppSnapshotFromApi();
+    } catch (apiCreateError) {
+      if (materialId) {
+        await apiPost<AppStateSnapshot["healthMaterials"][number]>(
+          `/api/health-materials/${encodeURIComponent(materialId)}/parse`,
+          {
+            parseStatus: "failed",
+            parseError: "原始健康材料上传失败，未开始解析。",
+          }
+        ).catch(() => undefined);
+      }
+      setIsSubmitting(false);
+      setActiveMaterialId(null);
+      setActiveApiMaterialId(null);
+      setError(
+        apiCreateError instanceof ApiClientError
+          ? `${materialId ? "原始健康材料上传失败" : "健康材料任务创建失败"}：${apiCreateError.message}`
+          : materialId
+            ? "原始健康材料上传失败，解析尚未开始，请稍后重试。"
+            : "健康材料任务创建失败，请稍后重试。"
+      );
+      return;
     }
-    updateHealthMaterialTaskStatus({ materialId, status: "processing" });
 
     const requestPayload: HealthFileBridgeRequest = {
       childId,
@@ -421,50 +556,61 @@ export default function TeacherHealthFileBridgePage() {
       const nextResult = body as HealthFileBridgeResponse;
       setResult(nextResult);
       setPendingParseResult(buildSavedParseResult(nextResult, requestFiles));
-      setSaveMessage("解析已完成，请核对后保存到健康材料记录。");
+      setSaveMessage(
+        isDemoAccount
+          ? "解析已完成。演示账号只保存结构化结果，不上传原始文件。"
+          : sourceFiles.length > 0
+            ? `解析已完成，${sourceFiles.length} 份原始材料已私密保存；请核对后保存结果。`
+            : "解析已完成，请核对后保存到健康材料记录。"
+      );
       setResultSheetOpen(true);
     } catch (submissionError) {
-      failHealthMaterialParseResult({
-        materialId,
-        error: submissionError instanceof Error ? submissionError.message : "health_file_parse_failed",
-      });
-      setError(
-        submissionError instanceof Error ? submissionError.message : "健康文件解析失败，请稍后重试。"
-      );
+      const message =
+        submissionError instanceof Error ? submissionError.message : "健康文件解析失败，请稍后重试。";
+      try {
+        await apiPost<AppStateSnapshot["healthMaterials"][number]>(
+          `/api/health-materials/${encodeURIComponent(materialId)}/parse`,
+          {
+            parseStatus: "failed",
+            parseError: message,
+          }
+        );
+        await reloadAppSnapshotFromApi();
+      } catch {
+        // 原始解析错误优先展示；状态回写失败会在刷新后表现为 processing，便于后续重试。
+      }
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }
   }
 
   async function handleSaveParseResult() {
-    if (!activeMaterialId || !pendingParseResult) {
+    const materialId = activeApiMaterialId ?? activeMaterialId;
+    if (!materialId || !pendingParseResult) {
       setError("当前没有待保存的解析结果。");
       return;
     }
-    if (activeApiMaterialId) {
-      try {
-        await apiPost<AppStateSnapshot["healthMaterials"][number]>(
-          `/api/health-materials/${encodeURIComponent(activeApiMaterialId)}/parse`,
-          {
-            parseStatus: "completed",
-            parseResult: pendingParseResult,
-          }
-        );
-      } catch (apiSaveError) {
-        setError(
-          apiSaveError instanceof ApiClientError
-            ? `E01 health materials API 保存失败：${apiSaveError.message}`
-            : "E01 health materials API 保存失败。"
-        );
-        return;
+    try {
+      await apiPost<AppStateSnapshot["healthMaterials"][number]>(
+        `/api/health-materials/${encodeURIComponent(materialId)}/parse`,
+        {
+          parseStatus: "completed",
+          parseResult: pendingParseResult,
+        }
+      );
+      const reloadResult = await reloadAppSnapshotFromApi();
+      if (reloadResult.status === "failed") {
+        throw new Error("解析结果已写入服务端，但页面刷新失败，请手动刷新查看。");
       }
-    }
-    const saved = saveHealthMaterialParseResult({
-      materialId: activeMaterialId,
-      parseResult: pendingParseResult,
-    });
-    if (saved.status === "failed") {
-      setError(saved.error ?? saved.message ?? "保存解析结果失败。");
+    } catch (apiSaveError) {
+      setError(
+        apiSaveError instanceof ApiClientError
+          ? `健康材料保存失败：${apiSaveError.message}`
+          : apiSaveError instanceof Error
+            ? apiSaveError.message
+            : "健康材料保存失败。"
+      );
       return;
     }
     setPendingParseResult(null);
@@ -492,31 +638,29 @@ export default function TeacherHealthFileBridgePage() {
       ].join("\n"),
       workflowStatus: "pending",
     };
+    let consultation: AppStateSnapshot["consultations"][number];
     try {
-      await apiPost<AppStateSnapshot["consultations"][number]>("/api/consultations", consultationPayload);
+      consultation = await apiPost<AppStateSnapshot["consultations"][number]>(
+        "/api/consultations",
+        consultationPayload
+      );
+      const reloadResult = await reloadAppSnapshotFromApi();
+      if (reloadResult.status === "failed") {
+        throw new Error("会诊已写入服务端，但页面刷新失败，请手动刷新查看。");
+      }
     } catch (apiConsultationError) {
       setError(
         apiConsultationError instanceof ApiClientError
-          ? `E01 consultations API 创建失败：${apiConsultationError.message}`
-          : "E01 consultations API 创建失败。"
+          ? `会诊创建失败：${apiConsultationError.message}`
+          : apiConsultationError instanceof Error
+            ? apiConsultationError.message
+            : "会诊创建失败。"
       );
-      return;
-    }
-    const consultation = createConsultationRecord({
-      childId: selectedChild.id,
-      riskLevel,
-      sourceMaterialId: activeMaterialId ?? undefined,
-      summary: consultationPayload.summary,
-      notes: consultationPayload.notes,
-      workflowStatus: "pending",
-    });
-    if (consultation.status === "failed" || !consultation.data) {
-      setError(consultation.error ?? consultation.message ?? "创建会诊失败。");
       return;
     }
     setConsultationMessage("已创建高风险会诊，可在教师端和园长端查看。");
     router.push(
-      `/teacher/high-risk-consultation?childId=${selectedChild.id}&consultationId=${consultation.data.consultationId}`
+      `/teacher/high-risk-consultation?childId=${selectedChild.id}&consultationId=${consultation.consultationId}`
     );
   }
 
@@ -601,14 +745,22 @@ export default function TeacherHealthFileBridgePage() {
                       <Upload className="h-8 w-8" />
                     </span>
                     <span className="mt-4 text-base font-semibold text-slate-950">点击选择健康材料</span>
-                    <span className="mt-2 text-sm text-slate-500">支持图片与 PDF；图片进入 OCR，PDF 结合文件信息与预览文字解析</span>
-                    <input type="file" accept="image/*,.pdf" multiple onChange={handleFileChange} className="sr-only" />
+                    <span className="mt-2 text-sm text-slate-500">
+                      最多 3 份、单份 4 MB；图片进入 OCR，文本型 PDF 会直接提取文字
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      multiple
+                      onChange={handleFileChange}
+                      className="sr-only"
+                    />
                   </label>
 
                   <div className="rounded-2xl border border-slate-100 bg-white/90 p-4 shadow-sm">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-slate-950">最近上传记录</p>
-                  <Button type="button" variant="ghost" size="sm" className="rounded-full" disabled>全部文件</Button>
+                  <Badge variant="outline" className="rounded-full px-3 py-1.5">全部文件</Badge>
                 </div>
                     {files.length > 0 ? (
                     <div className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100">
@@ -778,12 +930,14 @@ export default function TeacherHealthFileBridgePage() {
                     <Input
                       data-testid="d05-health-file-input"
                       type="file"
-                      accept="image/*,.pdf"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
                       multiple
                       onChange={handleFileChange}
                     />
                     <p className="text-xs leading-5 text-slate-500">
-                      当前会先结合文件信息与补充文字整理重点内容，最终仍建议老师结合原始材料复核。
+                      {isDemoAccount
+                        ? "演示账号仅验证解析流程，不保存原始文件；最终仍建议老师结合原始材料复核。"
+                        : "普通账号会先私密保存原始文件，再提取重点内容；仅有权限的园长、教师和家长可读取。"}
                     </p>
                   </div>
                 </div>
@@ -849,6 +1003,7 @@ export default function TeacherHealthFileBridgePage() {
                       setPreviewText("");
                       setOptionalNotes("");
                       setFiles([]);
+                      setSourceFiles([]);
                       setResult(null);
                       setPendingParseResult(null);
                       setActiveMaterialId(null);
@@ -1020,7 +1175,10 @@ export default function TeacherHealthFileBridgePage() {
                     <p className="mt-3 text-xs leading-5 text-slate-500">{result.disclaimer}</p>
                   </div>
                   {saveMessage ? (
-                    <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 p-3 text-sm text-emerald-700">
+                    <div
+                      data-testid="d05-health-save-message"
+                      className="rounded-lg border border-emerald-100 bg-emerald-50/70 p-3 text-sm text-emerald-700"
+                    >
                       {saveMessage}
                     </div>
                   ) : null}
@@ -1068,40 +1226,75 @@ export default function TeacherHealthFileBridgePage() {
 
             <SectionCard
               title="历史解析任务"
-              description="这些任务来自 D01 共享演示数据，刷新后仍会保留。"
+              description={
+                isDemoAccount
+                  ? "演示任务保存在共享演示空间，原始文件不会上传。"
+                  : "解析结果和原始材料均按机构与幼儿权限保存，刷新后仍可复核。"
+              }
             >
               <div data-testid="d05-health-history" className="space-y-3">
                 {childMaterials.length > 0 ? (
                   childMaterials.slice(0, 5).map((material) => {
                     const savedResponse = readSavedRawResponse(material.parseResult);
+                    const attachments = materialAttachments.filter(
+                      (attachment) =>
+                        attachment.relatedId === material.materialId
+                    );
                     return (
-                      <button
+                      <div
                         key={material.materialId}
-                        type="button"
-                        className="w-full rounded-lg border border-slate-100 bg-white p-4 text-left transition hover:border-indigo-200 hover:bg-indigo-50/40"
-                        onClick={() => {
-                          const rawResponse = readSavedRawResponse(material.parseResult);
-                          if (rawResponse) {
-                            setResult(rawResponse);
-                            setPendingParseResult(null);
-                            setActiveMaterialId(material.materialId);
-                            setActiveApiMaterialId(null);
-                            setSaveMessage(`已打开 ${material.filename} 的保存结果。`);
-                            setConsultationMessage(null);
-                            setResultSheetOpen(true);
-                          }
-                        }}
+                        className="rounded-lg border border-slate-100 bg-white p-4 transition hover:border-indigo-200 hover:bg-indigo-50/40"
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-slate-900">{material.filename}</p>
-                          <Badge variant={material.parseStatus === "failed" ? "destructive" : material.parseStatus === "completed" ? "success" : "secondary"}>
-                            {getParseStatusLabel(material.parseStatus)}
-                          </Badge>
-                        </div>
-                        <p className="mt-2 text-xs leading-5 text-slate-500">
-                          {savedResponse?.summary ?? material.description ?? material.parseError ?? "暂无解析摘要。"}
-                        </p>
-                      </button>
+                        <button
+                          type="button"
+                          className="w-full text-left"
+                          onClick={() => {
+                            const rawResponse = readSavedRawResponse(material.parseResult);
+                            if (rawResponse) {
+                              setResult(rawResponse);
+                              setPendingParseResult(null);
+                              setActiveMaterialId(material.materialId);
+                              setActiveApiMaterialId(null);
+                              setSaveMessage(`已打开 ${material.filename} 的保存结果。`);
+                              setConsultationMessage(null);
+                              setResultSheetOpen(true);
+                            }
+                          }}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-slate-900">{material.filename}</p>
+                            <Badge variant={material.parseStatus === "failed" ? "destructive" : material.parseStatus === "completed" ? "success" : "secondary"}>
+                              {getParseStatusLabel(material.parseStatus)}
+                            </Badge>
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-slate-500">
+                            {savedResponse?.summary ?? material.description ?? material.parseError ?? "暂无解析摘要。"}
+                          </p>
+                        </button>
+                        {attachments.length > 0 ? (
+                          <div
+                            data-testid={`d05-health-attachments-${material.materialId}`}
+                            className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3"
+                          >
+                            {attachments.map((attachment) =>
+                              attachment.downloadUrl ? (
+                                <a
+                                  key={attachment.attachmentId}
+                                  href={`${attachment.downloadUrl}?download=1`}
+                                  className="inline-flex min-h-9 items-center gap-2 rounded-md border border-indigo-200 bg-white px-3 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                  {attachment.fileName}
+                                </a>
+                              ) : (
+                                <Badge key={attachment.attachmentId} variant="outline">
+                                  {attachment.fileName} · 仅元数据
+                                </Badge>
+                              )
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
                     );
                   })
                 ) : (

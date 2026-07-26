@@ -133,7 +133,9 @@ test("D08 parent storybook demoSeed stays isolated from real provider and remote
     await expect(page.getByTestId("e10-storybook-export-markdown")).toBeEnabled({ timeout: 30_000 });
     await expect(page.locator("body")).toContainText(storybookTitle, { timeout: 30_000 });
     await page.getByTestId("e10-storybook-export-markdown").click();
-    await expect(page.getByTestId("e10-storybook-action-status")).toContainText(/export|local|本地|瀵煎嚭/i);
+    await expect(page.getByTestId("e10-storybook-action-status")).toContainText(
+      /download|export|local|下载|导出|本地|瀵煎嚭/i
+    );
     await page.getByTestId("e10-storybook-share-local").click();
     await expect(page.getByTestId("e10-storybook-action-status")).toContainText(/share|copy|local|分享|复制|本地|鍒嗕韩/i);
     await capture(page, "parent-03-storybook-demo-seed-isolated.png");

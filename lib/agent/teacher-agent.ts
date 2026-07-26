@@ -19,6 +19,7 @@ import {
   formatParentFeedbackImprovementLabel,
   formatParentFeedbackReactionLabel,
 } from "@/lib/feedback/consumption";
+import { compareFeedbackRecency } from "@/lib/feedback/recency";
 import type { GuardianFeedback } from "@/lib/feedback/types";
 import { getLocalToday, isDateWithinLastDays, normalizeLocalDate } from "@/lib/date";
 import {
@@ -98,6 +99,7 @@ export interface TeacherAgentRequestPayload {
   workflow: TeacherAgentWorkflowType;
   scope: TeacherAgentMode;
   targetChildId?: string;
+  question?: string;
   currentUser: TeacherAgentUserSnapshot;
   visibleChildren: TeacherAgentChildSnapshot[];
   presentChildren: TeacherAgentChildSnapshot[];
@@ -644,7 +646,7 @@ export function buildTeacherAgentChildContext(
   const pendingReviews = weeklyGrowthRecords.filter((record) => record.reviewStatus === "待复查");
   const recentFeedbacks = classContext.weeklyFeedbacks
     .filter((record) => record.childId === childId)
-    .sort((left, right) => right.date.localeCompare(left.date));
+    .sort(compareFeedbackRecency);
   const ageBandContext = resolveAgeBandContext({
     birthDate: child.birthDate,
     asOfDate: classContext.today,
@@ -1033,14 +1035,10 @@ function findDemoChild(context: TeacherAgentClassContext, name: string, id: stri
   return context.visibleChildren.find((child) => child.name === name || child.id === id);
 }
 
-function feedbackTimestamp(feedback: TeacherAgentGuardianFeedbackSnapshot) {
-  return feedback.submittedAt ?? feedback.date ?? "";
-}
-
 function latestWeeklyFeedbackForChild(context: TeacherAgentClassContext, childId: string) {
   return context.weeklyFeedbacks
     .filter((item) => item.childId === childId)
-    .sort((left, right) => feedbackTimestamp(right).localeCompare(feedbackTimestamp(left)))[0];
+    .sort(compareFeedbackRecency)[0];
 }
 
 function formatTeacherFeedbackWriteback(
@@ -1065,7 +1063,8 @@ function buildDefenseWeeklySummaryParts(context: TeacherAgentClassContext) {
   const gao = findDemoChild(context, "高远舟", "c-12");
   const chen = findDemoChild(context, "陈安安", "c-5");
 
-  if (!lin && !gao && !chen) return null;
+  // 防守演示不能补入当前教师班级外的儿童；缺任一案例时回到真实班级聚合结果。
+  if (!lin || !gao || !chen) return null;
 
   const linName = "林小雨";
   const gaoName = "高远舟";

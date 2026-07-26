@@ -62,7 +62,13 @@ const ROLE_LABEL_MAP: Record<AccountRole, string> = {
   家长: "家长端",
 };
 
-export default function MobileNav({ onLogout }: { onLogout: () => void | Promise<void> }) {
+export default function MobileNav({
+  onLogout,
+  keepAtLarge = false,
+}: {
+  onLogout: () => void | Promise<void>;
+  keepAtLarge?: boolean;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentLocation = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
@@ -134,7 +140,7 @@ export default function MobileNav({ onLogout }: { onLogout: () => void | Promise
   }, [open]);
 
   return (
-    <div className="lg:hidden">
+    <div className={keepAtLarge ? "xl:hidden" : "lg:hidden"}>
       <button
         ref={triggerRef}
         type="button"

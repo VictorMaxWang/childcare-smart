@@ -12,7 +12,13 @@ def _to_camel(value: str) -> str:
 
 JsonDict = dict[str, Any]
 HealthFileBridgeSourceRole = Literal["parent", "teacher"]
-HealthFileBridgeSource = Literal["backend-text-fallback", "next-local-extractor"]
+HealthFileBridgeSource = Literal[
+    "backend-text-fallback",
+    "next-local-extractor",
+    "local-text-fallback",
+    "vivo-ocr-provider",
+    "dashscope-ocr-provider",
+]
 HealthFileBridgeProviderState = Literal["configured", "live", "fallback", "mock"]
 HealthFileBridgeRiskLevel = Literal["low", "medium", "high"]
 HealthFileBridgeFileType = Literal[

@@ -93,9 +93,96 @@ function validateBrainHealthPayload(payload) {
   return issues;
 }
 
-async function fetchCheck(url) {
+function validateWebHealthPayload(payload, expectedCommitSha) {
+  const issues = [];
+  const capabilities = payload?.capabilities;
+  const commitSha = payload?.deployment?.commitSha;
+
+  if (payload?.ok !== true) issues.push("ok != true");
+  if (payload?.status !== "ok") issues.push("status != ok");
+  if (payload?.service !== "childcare-smart-web") {
+    issues.push("service != childcare-smart-web");
+  }
+  if (payload?.environment !== "production") {
+    issues.push("environment != production");
+  }
+  for (const capability of ["database", "auth", "privateBlob", "dashscope"]) {
+    if (capabilities?.[capability] !== true) {
+      issues.push(`capabilities.${capability} != true`);
+    }
+  }
+  if (!commitSha) {
+    issues.push("deployment.commitSha missing");
+  } else if (
+    expectedCommitSha &&
+    !String(commitSha).startsWith(expectedCommitSha) &&
+    !expectedCommitSha.startsWith(String(commitSha))
+  ) {
+    issues.push("deployment.commitSha does not match RELEASE_EXPECTED_COMMIT_SHA");
+  }
+  return issues;
+}
+
+function validateSessionPayload(payload) {
+  const issues = [];
+  if (payload?.ok !== true) issues.push("ok != true");
+  if (payload?.user?.role !== "机构管理员") {
+    issues.push("user.role != 机构管理员");
+  }
+  if (payload?.user?.accountKind !== "normal") {
+    issues.push("user.accountKind != normal");
+  }
+  if (!payload?.user?.institutionId) {
+    issues.push("user.institutionId missing");
+  }
+  return issues;
+}
+
+function validateStatePayload(payload) {
+  const issues = [];
+  if (payload?.ok !== true) issues.push("ok != true");
+  if (!payload?.snapshot || typeof payload.snapshot !== "object") {
+    issues.push("snapshot missing");
+    return issues;
+  }
+  for (const key of ["children", "health", "meals", "growth", "consultations"]) {
+    if (!Array.isArray(payload.snapshot[key])) {
+      issues.push(`snapshot.${key} missing`);
+    }
+  }
+  return issues;
+}
+
+function validateProviderStatusPayload(payload) {
+  const issues = [];
+  const data = payload?.data;
+  if (payload?.ok !== true) issues.push("ok != true");
+  for (const capability of ["chat", "vision", "ocr", "asr"]) {
+    const status = data?.[capability];
+    if (!status || typeof status !== "object") {
+      issues.push(`${capability} missing`);
+      continue;
+    }
+    if (status.configured !== true) {
+      issues.push(`${capability}.configured != true`);
+    }
+    if (status.mock === true) {
+      issues.push(`${capability}.mock == true`);
+    }
+    if (!status.model) {
+      issues.push(`${capability}.model missing`);
+    }
+  }
+  return issues;
+}
+
+async function fetchCheck(url, options = {}) {
   const start = Date.now();
-  const res = await fetch(url, { method: "GET" });
+  const res = await fetch(url, {
+    method: "GET",
+    redirect: "manual",
+    ...options,
+  });
   const elapsedMs = Date.now() - start;
   const text = await res.text();
   return { res, elapsedMs, text, preview: text.slice(0, 200) };
@@ -135,8 +222,10 @@ async function main() {
     "app/page.tsx",
     ".env.release.example",
     "playwright.online-smoke.config.ts",
+    "playwright.real-smoke.config.ts",
     "scripts/demo-preflight-all.mjs",
     "scripts/online-smoke-gate.mjs",
+    "scripts/real-three-role-smoke-gate.mjs",
     "scripts/release-check.mjs",
     "scripts/release-local-gate.mjs",
     "scripts/release-status.mjs",
@@ -156,7 +245,13 @@ async function main() {
   const pkg = readJson("package.json");
   const requiredScripts = [
     "lint",
+    "typecheck",
     "build",
+    "test:node",
+    "test:python",
+    "test:browser:release",
+    "real:smoke",
+    "db:check",
     "release:check",
     "release:report",
     "release:report:local",
@@ -190,10 +285,12 @@ async function main() {
     const requiredEnvKeys = [
       "RELEASE_BASE_URL",
       "RELEASE_ADMIN_COOKIE",
+      "RELEASE_EXPECTED_COMMIT_SHA",
       "CRON_SECRET",
       "BRAIN_API_BASE_URL",
       "DATABASE_URL",
       "DATABASE_SSL",
+      "BLOB_READ_WRITE_TOKEN",
       "AUTH_SESSION_SECRET",
       "DASHSCOPE_API_KEY",
       "BAILIAN_MODEL",
@@ -213,7 +310,9 @@ async function main() {
   const baseUrl = String(process.env.RELEASE_BASE_URL ?? "").trim().replace(/\/$/, "");
   const brainBaseUrl = String(process.env.BRAIN_API_BASE_URL ?? "").trim().replace(/\/$/, "");
   const cookie = String(process.env.RELEASE_ADMIN_COOKIE ?? "").trim();
-  const cronSecret = String(process.env.CRON_SECRET ?? "").trim();
+  const expectedCommitSha = String(
+    process.env.RELEASE_EXPECTED_COMMIT_SHA ?? ""
+  ).trim();
   report.remote.baseUrl = baseUrl;
   report.remote.brainBaseUrl = brainBaseUrl;
 
@@ -224,8 +323,12 @@ async function main() {
         reason: brainBaseUrl ? undefined : "BRAIN_API_BASE_URL missing",
       });
       pushRemote("remote-required-admin-cookie", Boolean(cookie), { reason: cookie ? undefined : "RELEASE_ADMIN_COOKIE missing" });
-      pushRemote("remote-required-cron-secret", Boolean(cronSecret), { reason: cronSecret ? undefined : "CRON_SECRET missing" });
-      console.error("[FAIL] Remote mode requires RELEASE_BASE_URL / BRAIN_API_BASE_URL / RELEASE_ADMIN_COOKIE / CRON_SECRET");
+      pushRemote("remote-required-commit-sha", Boolean(expectedCommitSha), {
+        reason: expectedCommitSha
+          ? undefined
+          : "RELEASE_EXPECTED_COMMIT_SHA missing",
+      });
+      console.error("[FAIL] Remote mode requires RELEASE_BASE_URL / BRAIN_API_BASE_URL / RELEASE_ADMIN_COOKIE / RELEASE_EXPECTED_COMMIT_SHA");
     } else {
       report.remote.enabled = false;
       report.summary.warnings.push("Remote checks skipped because RELEASE_BASE_URL is not set.");
@@ -233,7 +336,13 @@ async function main() {
     }
   } else {
     report.remote.enabled = true;
-    const endpoints = [`${baseUrl}/`, `${baseUrl}/health`];
+    if (requireRemote && !expectedCommitSha) {
+      pushRemote("remote-required-commit-sha", false, {
+        reason: "RELEASE_EXPECTED_COMMIT_SHA missing",
+      });
+      console.error("[FAIL] RELEASE_EXPECTED_COMMIT_SHA missing. Cannot prove which commit is deployed.");
+    }
+    const endpoints = [`${baseUrl}/`];
     for (const endpoint of endpoints) {
       try {
         const r = await fetchCheck(endpoint);
@@ -248,6 +357,92 @@ async function main() {
       } catch (e) {
         pushRemote(`remote:${endpoint}`, false, { reason: e instanceof Error ? e.message : "request failed" });
         console.error(`[FAIL] ${endpoint} request failed`);
+      }
+    }
+
+    const healthEndpoint = `${baseUrl}/api/health`;
+    try {
+      const r = await fetchCheck(healthEndpoint);
+      const payload = parseJsonSafe(r.text);
+      const issues = r.res.ok
+        ? validateWebHealthPayload(payload, expectedCommitSha)
+        : [diagnoseHttp(r.res.status, healthEndpoint)];
+      if (issues.length === 0) {
+        pushRemote(`remote:${healthEndpoint}`, true, {
+          status: r.res.status,
+          elapsedMs: r.elapsedMs,
+          commitSha: payload.deployment?.commitSha,
+          capabilities: payload.capabilities,
+        });
+        console.log(`[OK] ${healthEndpoint} reports the expected production deployment`);
+      } else {
+        pushRemote(`remote:${healthEndpoint}`, false, {
+          status: r.res.status,
+          issues,
+          preview: r.preview,
+        });
+        console.error(`[FAIL] ${healthEndpoint} returned an incomplete or stale deployment status`);
+      }
+    } catch (e) {
+      pushRemote(`remote:${healthEndpoint}`, false, {
+        reason: e instanceof Error ? e.message : "request failed",
+      });
+      console.error(`[FAIL] ${healthEndpoint} request failed`);
+    }
+
+    if (!cookie) {
+      pushRemote("remote:protected-session", false, {
+        reason: "RELEASE_ADMIN_COOKIE missing",
+      });
+      console.error("[FAIL] RELEASE_ADMIN_COOKIE missing. Cannot verify the protected production data path.");
+    } else {
+      const protectedHeaders = { cookie };
+      const protectedChecks = [
+        {
+          name: "session",
+          endpoint: `${baseUrl}/api/auth/session`,
+          validate: validateSessionPayload,
+        },
+        {
+          name: "state",
+          endpoint: `${baseUrl}/api/state`,
+          validate: validateStatePayload,
+        },
+        {
+          name: "provider-status",
+          endpoint: `${baseUrl}/api/ai/provider-status`,
+          validate: validateProviderStatusPayload,
+        },
+      ];
+      for (const check of protectedChecks) {
+        try {
+          const r = await fetchCheck(check.endpoint, {
+            headers: protectedHeaders,
+          });
+          const payload = parseJsonSafe(r.text);
+          const issues = r.res.ok
+            ? check.validate(payload)
+            : [diagnoseHttp(r.res.status, check.endpoint)];
+          if (issues.length === 0) {
+            pushRemote(`remote:protected-${check.name}`, true, {
+              status: r.res.status,
+              elapsedMs: r.elapsedMs,
+            });
+            console.log(`[OK] Protected ${check.name} check passed (${r.elapsedMs}ms)`);
+          } else {
+            pushRemote(`remote:protected-${check.name}`, false, {
+              status: r.res.status,
+              issues,
+              preview: r.preview,
+            });
+            console.error(`[FAIL] Protected ${check.name} check failed`);
+          }
+        } catch (e) {
+          pushRemote(`remote:protected-${check.name}`, false, {
+            reason: e instanceof Error ? e.message : "request failed",
+          });
+          console.error(`[FAIL] Protected ${check.name} request failed`);
+        }
       }
     }
 

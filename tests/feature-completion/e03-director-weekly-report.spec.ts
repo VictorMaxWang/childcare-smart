@@ -2,7 +2,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { loginAs } from "./helpers";
+import { loginAs, resetDemoStorage } from "./helpers";
 
 const E03_ARTIFACT_DIR = path.join(process.cwd(), "artifacts", "product-completion", "E03");
 
@@ -41,6 +41,7 @@ test.describe("E03 real aggregation, trends, and weekly reports", () => {
   test("director can query real metrics, generate weekly report, export/share/archive, and scope blocks overreach", async ({
     page,
   }, testInfo) => {
+    await resetDemoStorage(page);
     const director = await demoContext(testInfo, "u-admin");
     const parent = await demoContext(testInfo, "u-parent");
 
@@ -99,7 +100,7 @@ test.describe("E03 real aggregation, trends, and weekly reports", () => {
 
       await page.goto("/admin/agent?action=weekly-report");
       await expect(page.getByTestId("weekly-history-list")).toBeVisible();
-      await page.getByText("鏌ョ湅褰掓。").click();
+      await page.getByRole("button", { name: "查看归档", exact: true }).click({ timeout: 20_000 });
       const historyItem = page.getByTestId("weekly-history-list").getByRole("button", { name: new RegExp(created.title) });
       await expect(historyItem).toBeVisible();
       await historyItem.click();

@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import type { SessionUser } from "@/lib/auth/accounts";
 import type { AdminDispatchCreatePayload, AdminDispatchEvent, AdminDispatchUpdatePayload } from "@/lib/agent/admin-types";
 import { AUTH_SESSION_SECRET_CONFIG_ERROR_MESSAGE, MissingAuthSessionSecretError } from "@/lib/auth/session-config";
-import { DatabaseConfigError } from "@/lib/db/server";
+import {
+  DatabaseConfigError,
+  isMissingDatabaseTableError,
+} from "@/lib/db/server";
 import {
   createNotificationEvent,
   listNotificationEventsByInstitution,
@@ -192,6 +195,10 @@ function serviceErrorResponse(error: unknown) {
   return NextResponse.json({ error: "failed to process notification events" }, { status: 500 });
 }
 
+function isOptionalMirrorUnavailableError(error: unknown) {
+  return error instanceof DatabaseConfigError || isMissingDatabaseTableError(error);
+}
+
 async function listLegacyEvents(user: SessionUser, institutionId: string) {
   if (user.accountKind === "demo") {
     return { items: [] as AdminDispatchEvent[], mirrorAvailable: false };
@@ -203,7 +210,7 @@ async function listLegacyEvents(user: SessionUser, institutionId: string) {
       mirrorAvailable: true,
     };
   } catch (error) {
-    if (error instanceof DatabaseConfigError) {
+    if (isOptionalMirrorUnavailableError(error)) {
       return { items: [] as AdminDispatchEvent[], mirrorAvailable: false };
     }
     throw error;
@@ -242,7 +249,7 @@ async function mirrorCreatedEvent(params: {
     });
     return true;
   } catch (error) {
-    if (error instanceof DatabaseConfigError) return false;
+    if (isOptionalMirrorUnavailableError(error)) return false;
     logSecurityEvent("error", "notification_events.mirror_create_failed", { error });
     return false;
   }
@@ -263,7 +270,7 @@ async function mirrorUpdatedEvent(params: {
     });
     return true;
   } catch (error) {
-    if (error instanceof DatabaseConfigError) return false;
+    if (isOptionalMirrorUnavailableError(error)) return false;
     logSecurityEvent("error", "notification_events.mirror_update_failed", { error });
     return false;
   }
@@ -366,7 +373,7 @@ export async function PATCH(request: Request) {
         });
         if (item) return NextResponse.json({ item: decorateLegacyEvent(item), available: true, source: "legacy_db" }, { status: 200 });
       } catch (legacyError) {
-        if (!(legacyError instanceof DatabaseConfigError)) {
+        if (!isOptionalMirrorUnavailableError(legacyError)) {
           logSecurityEvent("error", "notification_events.legacy_patch_failed", { error: legacyError });
         }
       }

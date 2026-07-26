@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
+  Loader2,
   PencilLine,
   Trash2,
 } from "lucide-react";
@@ -213,6 +214,7 @@ function parseEditableFormValue(value: string, kind: EditableFieldKind) {
 
 export default function DraftRecordCard({
   item,
+  isConfirming,
   isExpanded,
   onToggleExpand,
   onConfirm,
@@ -220,6 +222,7 @@ export default function DraftRecordCard({
   onSaveEdit,
 }: {
   item: TeacherDraftUiItem;
+  isConfirming?: boolean;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onConfirm: () => void;
@@ -285,7 +288,12 @@ export default function DraftRecordCard({
   const metaBadges = getMetaBadges(item);
 
   return (
-    <div className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
+    <div
+      className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm"
+      data-testid="teacher-draft-record"
+      data-category={item.category}
+      data-child-id={item.childId}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -460,17 +468,27 @@ export default function DraftRecordCard({
           variant="premium"
           className="rounded-full"
           onClick={onConfirm}
-          disabled={item.status === "confirmed" || item.status === "discarded"}
+          disabled={
+            isConfirming ||
+            item.status === "confirmed" ||
+            item.status === "discarded"
+          }
+          aria-busy={isConfirming}
+          data-testid="teacher-draft-confirm"
         >
-          <CheckCircle2 className="mr-2 h-4 w-4" />
-          确认
+          {isConfirming ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <CheckCircle2 className="mr-2 h-4 w-4" />
+          )}
+          {isConfirming ? "保存中" : "确认"}
         </Button>
         <Button
           type="button"
           variant="outline"
           className="rounded-full"
           onClick={onToggleExpand}
-          disabled={item.status === "discarded"}
+          disabled={isConfirming || item.status === "discarded"}
         >
           <PencilLine className="mr-2 h-4 w-4" />
           编辑
@@ -480,7 +498,11 @@ export default function DraftRecordCard({
           variant="outline"
           className="rounded-full"
           onClick={onDiscard}
-          disabled={item.status === "discarded" || item.status === "confirmed"}
+          disabled={
+            isConfirming ||
+            item.status === "discarded" ||
+            item.status === "confirmed"
+          }
         >
           <Trash2 className="mr-2 h-4 w-4" />
           丢弃
