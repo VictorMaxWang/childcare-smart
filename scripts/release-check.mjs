@@ -187,14 +187,34 @@ function validateProviderStatusPayload(payload) {
 
 async function fetchCheck(url, options = {}) {
   const start = Date.now();
-  const res = await fetch(url, {
-    method: "GET",
-    redirect: "manual",
-    ...options,
-  });
-  const elapsedMs = Date.now() - start;
-  const text = await res.text();
-  return { res, elapsedMs, text, preview: text.slice(0, 200) };
+  const { signal: providedSignal, ...requestOptions } = options;
+  let lastError;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        redirect: "manual",
+        ...requestOptions,
+        signal: providedSignal ?? AbortSignal.timeout(30_000),
+      });
+      const elapsedMs = Date.now() - start;
+      const text = await res.text();
+      return {
+        res,
+        elapsedMs,
+        text,
+        preview: text.slice(0, 200),
+        attempts: attempt,
+      };
+    } catch (error) {
+      lastError = error;
+      if (attempt === 2 || providedSignal?.aborted) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+
+  throw lastError;
 }
 
 const report = {
