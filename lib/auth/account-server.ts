@@ -49,6 +49,8 @@ const MYSQL_DUPLICATE_KEY_ERROR_CODE = "ER_DUP_ENTRY";
 const MYSQL_DUPLICATE_KEY_ERROR_NUMBER = 1062;
 const MYSQL_BAD_FIELD_ERROR_CODE = "ER_BAD_FIELD_ERROR";
 const MYSQL_BAD_FIELD_ERROR_NUMBER = 1054;
+const SESSION_DATABASE_READ_MAX_ATTEMPTS = 3;
+const SESSION_DATABASE_READ_RETRY_DELAYS_MS = [150, 450] as const;
 
 export type DatabaseRuntimeErrorCode =
   | "DATABASE_ACCESS_DENIED"
@@ -186,33 +188,95 @@ export function resolveDatabaseRuntimeErrorCode(error: unknown): DatabaseRuntime
   return "DATABASE_QUERY_FAILED";
 }
 
-async function getAppUserById(userId: string) {
-  try {
-    const { rows } = await dbQuery<AppUserRow>(
-      `
-        select
-          id,
-          username_normalized,
-          display_name,
-          password_hash,
-          role,
-          avatar,
-          institution_id,
-          class_name,
-          child_ids,
-          is_demo
-        from app_users
-        where id = ?
-        limit 1
-      `,
-      [userId]
-    );
+export function isTransientDatabaseReadError(error: unknown) {
+  const code = resolveDatabaseRuntimeErrorCode(error);
+  return (
+    code === "DATABASE_CONNECT_TIMEOUT" ||
+    code === "DATABASE_CONNECTION_REFUSED" ||
+    code === "DATABASE_CONNECTION_LOST" ||
+    code === "DATABASE_HOST_NOT_FOUND"
+  );
+}
 
-    return rows[0] ?? null;
-  } catch (error) {
-    logSecurityEvent("error", "auth.account.load_by_id_failed", { error });
-    throw error;
+type TransientDatabaseReadRetryOptions = {
+  maxAttempts?: number;
+  retryDelaysMs?: readonly number[];
+  sleep?: (delayMs: number) => Promise<void>;
+  onRetry?: (input: {
+    error: unknown;
+    attempt: number;
+    maxAttempts: number;
+    delayMs: number;
+  }) => void;
+};
+
+/**
+ * 会话读取是幂等操作，可以对明确的网络建连故障做有限重试。
+ * 写操作不能复用此帮助函数，避免数据库已提交但客户端重试造成重复写入。
+ */
+export async function withTransientDatabaseReadRetry<T>(
+  operation: () => Promise<T>,
+  options: TransientDatabaseReadRetryOptions = {}
+) {
+  const maxAttempts = Math.max(
+    1,
+    Math.min(
+      Math.floor(
+        options.maxAttempts ?? SESSION_DATABASE_READ_MAX_ATTEMPTS
+      ),
+      4
+    )
+  );
+  const retryDelaysMs =
+    options.retryDelaysMs ?? SESSION_DATABASE_READ_RETRY_DELAYS_MS;
+  const sleep =
+    options.sleep ??
+    ((delayMs: number) =>
+      new Promise<void>((resolve) => setTimeout(resolve, delayMs)));
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (
+        attempt >= maxAttempts ||
+        !isTransientDatabaseReadError(error)
+      ) {
+        throw error;
+      }
+      const delayMs =
+        retryDelaysMs[Math.min(attempt - 1, retryDelaysMs.length - 1)] ??
+        0;
+      options.onRetry?.({ error, attempt, maxAttempts, delayMs });
+      if (delayMs > 0) await sleep(delayMs);
+    }
   }
+
+  throw new Error("unreachable database read retry state");
+}
+
+async function getAppUserById(userId: string) {
+  const { rows } = await dbQuery<AppUserRow>(
+    `
+      select
+        id,
+        username_normalized,
+        display_name,
+        password_hash,
+        role,
+        avatar,
+        institution_id,
+        class_name,
+        child_ids,
+        is_demo
+      from app_users
+      where id = ?
+      limit 1
+    `,
+    [userId]
+  );
+
+  return rows[0] ?? null;
 }
 
 async function getAppUserByUsername(username: string): Promise<AppUserLookupResult> {
@@ -400,11 +464,30 @@ export async function resolveSessionUserById(userId: string) {
     return demoUser;
   }
 
-  const row = await getAppUserById(userId);
-  if (!row) return null;
-  const session = mapDbUserToSessionUser(row);
-  const membership = await loadMembershipProjection(userId);
-  return applyMembershipProjection(session, membership);
+  try {
+    return await withTransientDatabaseReadRetry(
+      async () => {
+        const row = await getAppUserById(userId);
+        if (!row) return null;
+        const session = mapDbUserToSessionUser(row);
+        const membership = await loadMembershipProjection(userId);
+        return applyMembershipProjection(session, membership);
+      },
+      {
+        onRetry: ({ error, attempt, maxAttempts, delayMs }) => {
+          logSecurityEvent("warn", "auth.account.load_by_id_retry", {
+            error,
+            attempt,
+            maxAttempts,
+            delayMs,
+          });
+        },
+      }
+    );
+  } catch (error) {
+    logSecurityEvent("error", "auth.account.load_by_id_failed", { error });
+    throw error;
+  }
 }
 
 export async function getCurrentSessionUser() {

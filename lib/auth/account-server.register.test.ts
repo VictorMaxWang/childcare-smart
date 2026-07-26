@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   insertAppUserWithPhoneFallback,
+  isTransientDatabaseReadError,
   registerNormalAccountWithDependencies,
   resolveDatabaseRuntimeErrorCode,
+  withTransientDatabaseReadRetry,
   type RegisterNormalAccountDependencies,
 } from "@/lib/auth/account-server";
 import type { AccountRole } from "@/lib/auth/accounts";
@@ -409,4 +411,60 @@ test("resolveDatabaseRuntimeErrorCode maps database failures to safe public code
   );
   assert.equal(resolveDatabaseRuntimeErrorCode(Object.assign(new Error("timeout"), { code: "ETIMEDOUT" })), "DATABASE_CONNECT_TIMEOUT");
   assert.equal(resolveDatabaseRuntimeErrorCode(Object.assign(new Error("ssl handshake failed"), { code: "HANDSHAKE_SSL_ERROR" })), "DATABASE_SSL_FAILED");
+});
+
+test("session database reads retry transient connection failures only", async () => {
+  let attempts = 0;
+  const delays: number[] = [];
+  const result = await withTransientDatabaseReadRetry(
+    async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw Object.assign(new Error("connect timeout"), {
+          code: "ETIMEDOUT",
+        });
+      }
+      if (attempts === 2) {
+        throw Object.assign(new Error("connection reset"), {
+          code: "ECONNRESET",
+        });
+      }
+      return "session-ready";
+    },
+    {
+      retryDelaysMs: [10, 20],
+      sleep: async (delayMs) => {
+        delays.push(delayMs);
+      },
+    }
+  );
+
+  assert.equal(result, "session-ready");
+  assert.equal(attempts, 3);
+  assert.deepEqual(delays, [10, 20]);
+  assert.equal(
+    isTransientDatabaseReadError(
+      Object.assign(new Error("connect timeout"), { code: "ETIMEDOUT" })
+    ),
+    true
+  );
+
+  let nonTransientAttempts = 0;
+  await assert.rejects(
+    withTransientDatabaseReadRetry(
+      async () => {
+        nonTransientAttempts += 1;
+        throw Object.assign(new Error("access denied"), {
+          code: "ER_ACCESS_DENIED_ERROR",
+        });
+      },
+      {
+        sleep: async () => {
+          throw new Error("non-transient errors must not sleep");
+        },
+      }
+    ),
+    /access denied/
+  );
+  assert.equal(nonTransientAttempts, 1);
 });

@@ -147,15 +147,45 @@ async function getSession(
   api: APIRequestContext,
   expectedRole: AccountRole
 ) {
-  const response = await api.get("/api/auth/session");
-  expect(response.status()).toBe(200);
-  const body = await readJson(response);
-  expect(body?.ok).toBe(true);
-  const user = body?.user as SessionUser;
-  expect(user.role).toBe(expectedRole);
-  expect(user.accountKind).toBe("normal");
-  expect(user.institutionId).not.toBe("");
-  return user;
+  let lastDiagnostic: Record<string, unknown> = {};
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const response = await api.get("/api/auth/session");
+    const body = await readJson(response);
+    lastDiagnostic = {
+      expectedRole,
+      status: response.status(),
+      code: body?.code ?? null,
+      message: body?.message ?? body?.error ?? null,
+      retryable: body?.retryable ?? null,
+    };
+    if (response.status() === 200 && body?.ok) {
+      const user = body.user as SessionUser;
+      expect(user.role).toBe(expectedRole);
+      expect(user.accountKind).toBe("normal");
+      expect(user.institutionId).not.toBe("");
+      return user;
+    }
+    if (
+      attempt < 3 &&
+      [500, 502, 503, 504].includes(response.status())
+    ) {
+      const retryAfterSeconds = Number(
+        response.headers()["retry-after"]
+      );
+      const delayMs = Number.isFinite(retryAfterSeconds)
+        ? Math.min(Math.max(retryAfterSeconds * 1_000, 250), 2_000)
+        : 750;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      continue;
+    }
+    break;
+  }
+
+  expect(
+    lastDiagnostic.status,
+    JSON.stringify(lastDiagnostic)
+  ).toBe(200);
+  throw new Error(`session unavailable: ${JSON.stringify(lastDiagnostic)}`);
 }
 
 async function getState(api: APIRequestContext) {

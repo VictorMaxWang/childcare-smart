@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getCurrentSessionUser } from "@/lib/auth/account-server";
+import {
+  getCurrentSessionUser,
+  isTransientDatabaseReadError,
+  resolveDatabaseRuntimeErrorCode,
+} from "@/lib/auth/account-server";
 import { AUTH_SESSION_SECRET_CONFIG_ERROR_MESSAGE, MissingAuthSessionSecretError } from "@/lib/auth/session-config";
 import { DATABASE_URL_CONFIG_ERROR_MESSAGE, DatabaseConfigError } from "@/lib/db/server";
 import { logSecurityEvent } from "@/lib/server/security-log";
@@ -22,6 +26,25 @@ export async function GET() {
 
     if (error instanceof DatabaseConfigError) {
       return NextResponse.json({ ok: false, user: null, error: DATABASE_URL_CONFIG_ERROR_MESSAGE }, { status: 503 });
+    }
+
+    if (isTransientDatabaseReadError(error)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          user: null,
+          error: SESSION_LOAD_FAILED_ERROR,
+          code: resolveDatabaseRuntimeErrorCode(error),
+          retryable: true,
+        },
+        {
+          status: 503,
+          headers: {
+            "cache-control": "no-store",
+            "retry-after": "1",
+          },
+        }
+      );
     }
 
     logSecurityEvent("error", "auth.session.load_failed", { error });

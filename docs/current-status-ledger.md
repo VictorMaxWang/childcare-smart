@@ -7,12 +7,13 @@
 - 真实账号注册仍创建独立的个人/机构初始空间；注册成功不等于已经加入同一托育机构。
 - 新增的一次性机构邀请码负责后续正式绑定：园长创建邀请，教师按稳定班级 ID 加入，家长在完整监护同意校验后迁入孩子与历史记录。
 - 规范授权真相位于 `institution_memberships`、`teacher_class_assignments`、`child_registry`、`guardian_child_links`；`app_users` 的机构、班级、child_ids 仅保留兼容投影。
-- `dfc32f8` 已推送 `origin/main` 并由 `https://www.smartchildcare.cn/api/health` 确认部署到对应提交；本地代码验证已通过 `lint`、`typecheck`、production build、544 项 Node、227 项 Python 和发布浏览器套件。
+- `01f0fac` 已推送 `origin/main` 并由 `https://www.smartchildcare.cn/api/health` 确认部署到对应提交；本地代码验证已通过 `lint`、`typecheck`、production build、545 项 Node、227 项 Python 和发布浏览器套件。
 - 正式真实账号门禁现要求高风险会诊、营养评估、成长绘本文本/图片/语音均提供实时 provider 结果，并逐端实际打开搜索、通知和消息面板；残缺的上游营养评估结构会被拒绝并降级为完整规则结果。
 - 园长、教师、家长的搜索、通知、消息与账号菜单已从装饰按钮接入作用域数据；跨角色演示缓存切换、无权 child 链接和远端状态失败均有显式处理。
 - AI 持久化结果现在需要服务端来源证明，上传需要 MIME 与文件魔数一致，语音确认令牌需要数据库一次性消费；这些安全边界不能由浏览器字段绕过。
 - 生产 fresh smoke 已真实创建并绑定园长、教师、家长账号，依次通过健康/餐食/成长写入、跨端消息、语音确认写入、健康材料 OCR、食物识别、ASR、高风险会诊、三端 AI、营养评估和成长绘本文本；首次运行在绘本媒体状态请求处出现 `ECONNRESET`。
-- 绘本媒体状态接口已把 Brain 查询和本地图片/语音 provider 限制在浏览器轮询预算内，并为生产 smoke 增加瞬时网络错误重试；该补丁仍需重新部署和 fresh smoke 复验。
+- 绘本媒体状态接口已把 Brain 查询和本地图片/语音 provider 限制在浏览器轮询预算内，并为生产 smoke 增加瞬时网络错误重试；该补丁已部署。
+- 第二轮 fresh smoke 在绑定完成后的并发会话读取处发现 MySQL `ETIMEDOUT`；Vercel 运行日志确认是瞬时建连失败。会话只读路径现对明确的连接超时/断开做有限重试，持续失败返回带 `Retry-After` 的 503，该补丁仍待部署复验。
 - 现有三示例账号、绘本真实图片/语音最终完成、严格生产数据库预检仍待验收，当前不能宣称三端线上全部闭环。
 - 比赛展示口径已统一为 `慧育童行 - SmartChildcare Agent`，中文展示名为 `慧育童行`，英文名 / 技术系统名为 `SmartChildcare Agent`。
 - 当前 demo 数据热修已经切到“相对日期 + 固定 hero child matrix”模式。
