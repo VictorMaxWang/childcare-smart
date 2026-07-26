@@ -93,7 +93,19 @@ export function getAdminConsultationFeedBadge(params: {
   feedStatus: AdminConsultationFeedStatus;
   localConsultationCount: number;
   fallbackUsed?: boolean;
+  source?: AdminConsultationFeedState["source"];
 }): AdminConsultationFeedBadge {
+  if (
+    params.feedStatus === "ready" &&
+    !params.fallbackUsed &&
+    params.source === "session-scope"
+  ) {
+    return {
+      label: "机构主账",
+      variant: "success",
+    };
+  }
+
   if (params.feedStatus === "ready" && !params.fallbackUsed) {
     return {
       label: "后端推送",
@@ -137,8 +149,7 @@ export function buildAdminConsultationWorkspaceView(params: {
   const hasBackendItems = params.consultationFeed.items.length > 0;
   const fallbackUsed =
     params.consultationFeed.fallback ||
-    params.consultationFeed.status === "unavailable" ||
-    (params.consultationFeed.status === "ready" && !hasBackendItems);
+    params.consultationFeed.status === "unavailable";
   const limit = params.limit ?? 4;
   const feedItems = hasBackendItems
     ? buildAdminConsultationPriorityItems({
@@ -171,6 +182,7 @@ export function buildAdminConsultationWorkspaceView(params: {
       feedStatus: params.consultationFeed.status,
       localConsultationCount: localConsultations.length,
       fallbackUsed,
+      source: params.consultationFeed.source,
     }),
     feedStatusMessage:
       params.consultationFeed.message ??

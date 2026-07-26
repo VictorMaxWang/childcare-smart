@@ -38,6 +38,18 @@ test("getAdminConsultationFeedBadge distinguishes backend, local fallback and un
     getAdminConsultationFeedBadge({
       feedStatus: "ready",
       localConsultationCount: 2,
+      source: "session-scope",
+    }),
+    {
+      label: "机构主账",
+      variant: "success",
+    }
+  );
+
+  assert.deepEqual(
+    getAdminConsultationFeedBadge({
+      feedStatus: "ready",
+      localConsultationCount: 2,
     }),
     {
       label: "后端推送",
@@ -66,6 +78,39 @@ test("getAdminConsultationFeedBadge distinguishes backend, local fallback and un
       variant: "warning",
     }
   );
+});
+
+test("ready empty session feed is a valid institution state instead of a remote failure", () => {
+  const view = buildAdminConsultationWorkspaceView({
+    institutionName: "SmartChildcare",
+    children: [{ id: "c-1", name: "D01", className: "Sun Class" }],
+    consultationFeed: {
+      items: [],
+      status: "ready",
+      error: null,
+      source: "session-scope",
+      fallback: false,
+      fallbackReason: null,
+      message: null,
+      lastUpdatedAt: "2026-07-26T08:00:00.000Z",
+    },
+    localConsultations: [
+      buildAdminD01HighRiskConsultation({
+        childName: "D01",
+        className: "Sun Class",
+        generatedAt: "2026-07-26T08:00:00.000Z",
+      }),
+    ],
+    notificationEvents: [],
+    limit: 4,
+  });
+
+  assert.equal(view.feedStatus, "ready");
+  assert.equal(view.feedStatusMessage, null);
+  assert.equal(view.feedFallbackUsed, false);
+  assert.equal(view.feedFallbackReason, null);
+  assert.equal(view.feedBadge.label, "机构主账");
+  assert.equal(view.priorityItems.length, 1);
 });
 
 test("buildAdminConsultationWorkspaceView keeps board-ready fallback state stable", () => {

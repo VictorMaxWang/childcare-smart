@@ -64,7 +64,7 @@ function buildDemoLocalFallbackBody(url: URL, fallbackReason: string | null) {
   };
 }
 
-function buildScopedConsultationFeedItems(scope: SessionScope, url: URL) {
+export function buildScopedConsultationFeedItems(scope: SessionScope, url: URL) {
   const limit = readPositiveInteger(url.searchParams.get("limit"), 4);
   const childIdFilter = url.searchParams.get("child_id")?.trim() || null;
   const riskLevelFilter = url.searchParams.get("risk_level")?.trim() || null;
@@ -129,32 +129,44 @@ function buildScopedConsultationFeedItems(scope: SessionScope, url: URL) {
     });
 }
 
-function buildScopedLocalFallbackBody(scope: SessionScope, url: URL, fallbackReason: string | null) {
+export function buildScopedSessionFeedBody(scope: SessionScope, url: URL) {
   const items = buildScopedConsultationFeedItems(scope, url);
   return {
     items,
     count: items.length,
     source: "session-scope",
-    fallback: true,
-    fallbackReason: fallbackReason ?? "brain-proxy-unavailable",
-    message: "Remote feed is unavailable; showing consultations visible to the current session only.",
+    fallback: false,
+    fallbackReason: null,
+    message: null,
   };
 }
 
-function localFallbackResponse(params: {
+function demoFallbackResponse(params: {
   url: URL;
   targetPath: string;
   fallbackReason: string | null;
   upstreamHost: string | null;
-  sessionScope: SessionScope;
 }) {
-  const body =
-    params.sessionScope.user.accountKind === "demo"
-      ? buildDemoLocalFallbackBody(params.url, params.fallbackReason)
-      : buildScopedLocalFallbackBody(params.sessionScope, params.url, params.fallbackReason);
+  const body = buildDemoLocalFallbackBody(params.url, params.fallbackReason);
   return NextResponse.json(body, {
     status: 200,
     headers: buildLocalFallbackHeaders(params.targetPath, params.fallbackReason, params.upstreamHost),
+  });
+}
+
+function scopedSessionResponse(params: {
+  url: URL;
+  targetPath: string;
+  sessionScope: SessionScope;
+}) {
+  // 普通账号的会诊主账在 Web 数据库中，且 sessionScope 已完成机构、班级与幼儿权限裁剪。
+  // 直接使用这份快照可避免旧 Brain feed 的全局数据面，也不会因远端存储故障降级成“空壳”。
+  return NextResponse.json(buildScopedSessionFeedBody(params.sessionScope, params.url), {
+    status: 200,
+    headers: createBrainTransportHeaders({
+      transport: "next-json-fallback",
+      targetPath: params.targetPath,
+    }),
   });
 }
 
@@ -192,17 +204,24 @@ export async function GET(request: Request) {
     }
   }
   const targetPath = `/api/v1/agents/consultations/high-risk/feed${url.search}`;
+  if (authResult.session.user.accountKind !== "demo") {
+    return scopedSessionResponse({
+      url,
+      targetPath,
+      sessionScope,
+    });
+  }
+
   const brainForward = await forwardBrainRequest(request, targetPath, {
     serviceScope: buildServiceScopeClaim(sessionScope),
   });
   if (brainForward.response) {
     if (!brainForward.response.ok) {
-      return localFallbackResponse({
+      return demoFallbackResponse({
         url,
         targetPath,
         fallbackReason: `brain-status-${brainForward.response.status}`,
         upstreamHost: brainForward.upstreamHost,
-        sessionScope,
       });
     }
 
@@ -225,29 +244,26 @@ export async function GET(request: Request) {
         );
       }
     } catch {
-      return localFallbackResponse({
+      return demoFallbackResponse({
         url,
         targetPath,
         fallbackReason: "brain-feed-invalid-json",
         upstreamHost: brainForward.upstreamHost,
-        sessionScope,
       });
     }
 
-    return localFallbackResponse({
+    return demoFallbackResponse({
       url,
       targetPath,
       fallbackReason: "brain-feed-empty-real-empty-state",
       upstreamHost: brainForward.upstreamHost,
-      sessionScope,
     });
   }
 
-  return localFallbackResponse({
+  return demoFallbackResponse({
     url,
     targetPath,
     fallbackReason: brainForward.fallbackReason,
     upstreamHost: brainForward.upstreamHost,
-    sessionScope,
   });
 }
