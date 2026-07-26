@@ -14,12 +14,22 @@ import {
   SMARTCHILDCARE_TARGET_HEADER,
   SMARTCHILDCARE_TRANSPORT_HEADER,
 } from "@/lib/server/brain-client";
-import { POST } from "./route.ts";
+import {
+  parentStoryBookMediaStatusRouteInternals,
+  POST,
+} from "./route.ts";
 
 function withEnv(
   overrides: Partial<
     Record<
-      "BRAIN_API_BASE_URL" | "NEXT_PUBLIC_BACKEND_BASE_URL" | "VIVO_APP_ID" | "VIVO_APP_KEY" | "VIVO_BASE_URL" | "STORYBOOK_IMAGE_RETRY_BACKOFF_MS",
+      | "BRAIN_API_BASE_URL"
+      | "NEXT_PUBLIC_BACKEND_BASE_URL"
+      | "VIVO_APP_ID"
+      | "VIVO_APP_KEY"
+      | "VIVO_BASE_URL"
+      | "STORYBOOK_IMAGE_RETRY_BACKOFF_MS"
+      | "PARENT_STORYBOOK_MEDIA_STATUS_TIMEOUT_MS"
+      | "STORYBOOK_MEDIA_PROVIDER_TIMEOUT_MS",
       string | undefined
     >
   >,
@@ -32,6 +42,10 @@ function withEnv(
     VIVO_APP_KEY: process.env.VIVO_APP_KEY,
     VIVO_BASE_URL: process.env.VIVO_BASE_URL,
     STORYBOOK_IMAGE_RETRY_BACKOFF_MS: process.env.STORYBOOK_IMAGE_RETRY_BACKOFF_MS,
+    PARENT_STORYBOOK_MEDIA_STATUS_TIMEOUT_MS:
+      process.env.PARENT_STORYBOOK_MEDIA_STATUS_TIMEOUT_MS,
+    STORYBOOK_MEDIA_PROVIDER_TIMEOUT_MS:
+      process.env.STORYBOOK_MEDIA_PROVIDER_TIMEOUT_MS,
   };
 
   for (const [key, value] of Object.entries(overrides)) {
@@ -52,6 +66,25 @@ function withEnv(
     }
   });
 }
+
+test("media status budgets stay below the browser polling deadline", async () => {
+  await withEnv(
+    {
+      PARENT_STORYBOOK_MEDIA_STATUS_TIMEOUT_MS: "60000",
+      STORYBOOK_MEDIA_PROVIDER_TIMEOUT_MS: "45000",
+    },
+    () => {
+      assert.equal(
+        parentStoryBookMediaStatusRouteInternals.resolveMediaStatusTimeoutMs(),
+        12_000
+      );
+      assert.equal(
+        parentStoryBookMediaStatusRouteInternals.resolveLocalProviderTimeoutMs(),
+        30_000
+      );
+    }
+  );
+});
 
 function buildProgressiveStory(): ParentStoryBookResponse {
   return {

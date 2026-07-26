@@ -302,28 +302,58 @@ function storyMediaReady(story: Record<string, unknown> | null) {
   );
 }
 
+function storyMediaRetryDelayMs(story: Record<string, unknown>) {
+  const providerMeta = story.providerMeta as
+    | Record<string, unknown>
+    | undefined;
+  const diagnostics = providerMeta?.diagnostics as
+    | Record<string, unknown>
+    | undefined;
+  const image = diagnostics?.image as Record<string, unknown> | undefined;
+  const retryAfterMs = Number(image?.retryAfterMs);
+  return Number.isFinite(retryAfterMs) && retryAfterMs > 0
+    ? Math.min(Math.max(retryAfterMs, 1_000), 75_000)
+    : 1_500;
+}
+
 async function completeStorybookMedia(
   parent: APIRequestContext,
   childId: string,
   initialStory: Record<string, unknown>
 ) {
   let story = initialStory;
-  for (let attempt = 0; attempt < 3 && !storyMediaReady(story); attempt += 1) {
-    const response = await parent.post(
-      "/api/ai/parent-storybook/media-status",
-      {
-        data: {
-          childId,
-          storyId: story.storyId,
-          retryFailed: true,
-          prioritySceneIndices: [0, 1, 2, 3],
-          story,
-        },
-      }
-    );
+  let lastNetworkError: unknown = null;
+  for (let attempt = 0; attempt < 4 && !storyMediaReady(story); attempt += 1) {
+    let response: APIResponse;
+    try {
+      response = await parent.post(
+        "/api/ai/parent-storybook/media-status",
+        {
+          data: {
+            childId,
+            storyId: story.storyId,
+            retryFailed: true,
+            prioritySceneIndices: [0, 1, 2, 3],
+            story,
+          },
+        }
+      );
+      lastNetworkError = null;
+    } catch (error) {
+      lastNetworkError = error;
+      if (attempt >= 3) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      continue;
+    }
     expect(response.status()).toBe(200);
     story = (await readJson(response)) ?? {};
+    if (!storyMediaReady(story) && attempt < 3) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, storyMediaRetryDelayMs(story))
+      );
+    }
   }
+  if (lastNetworkError) throw lastNetworkError;
   return story;
 }
 

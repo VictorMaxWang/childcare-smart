@@ -32,12 +32,16 @@ import { reconcileRemoteStoryBookMedia } from "@/lib/server/parent-storybook-rem
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 const ROLE_PARENT = "家长";
 const VIVO_IMAGE_GENERATION_PATH = "/api/v1/image_generation";
 const VIVO_IMAGE_GENERATION_MODULE = "aigc";
 const VIVO_IMAGE_RATE_LIMIT_BACKOFF_MS = 70_000;
 const VIVO_IMAGE_ERROR_BACKOFF_MS = 20_000;
 const VIVO_IMAGE_GROUP_BATCH_SIZE = 4;
+const MEDIA_STATUS_BRAIN_TIMEOUT_MS = 12_000;
+const MEDIA_STATUS_PROVIDER_TIMEOUT_MS = 25_000;
+const MEDIA_STATUS_PROVIDER_TIMEOUT_MAX_MS = 30_000;
 
 function resolveMediaStatusTimeoutMs() {
   const raw =
@@ -45,7 +49,42 @@ function resolveMediaStatusTimeoutMs() {
     process.env.PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS ??
     process.env.PARENT_STORYBOOK_BRAIN_TIMEOUT_MS;
   const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed >= 1000 ? parsed : 60_000;
+  const configured =
+    Number.isFinite(parsed) && parsed >= 1_000
+      ? parsed
+      : MEDIA_STATUS_BRAIN_TIMEOUT_MS;
+  // 浏览器轮询预算为 50 秒；Brain 查询必须给本地补全和响应序列化留出时间。
+  return Math.min(configured, MEDIA_STATUS_BRAIN_TIMEOUT_MS);
+}
+
+function resolveLocalProviderTimeoutMs() {
+  const parsed = Number(process.env.STORYBOOK_MEDIA_PROVIDER_TIMEOUT_MS);
+  const configured =
+    Number.isFinite(parsed) && parsed >= 1_000
+      ? parsed
+      : MEDIA_STATUS_PROVIDER_TIMEOUT_MS;
+  return Math.min(configured, MEDIA_STATUS_PROVIDER_TIMEOUT_MAX_MS);
+}
+
+async function withProviderTimeout<T>(
+  task: Promise<T>,
+  label: string
+): Promise<T> {
+  const timeoutMs = resolveLocalProviderTimeoutMs();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      task,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+          timeoutMs
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function isMediaStatusPayload(payload: unknown): payload is ParentStoryBookMediaStatusRequest {
@@ -265,21 +304,35 @@ async function requestVivoStoryImages(scenes: ParentStoryBookScene[]) {
     parameters.sequential_image_generation = "auto";
   }
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.appKey}`,
-      "Content-Type": "application/json; charset=utf-8",
-    },
-    body: JSON.stringify({
-      model: resolveStoryImageModel(),
-      prompt: buildVivoStoryImagePrompt(scenes),
-      parameters,
-    }),
-    cache: "no-store",
-  });
-
-  const payload = await response.json().catch(() => null) as unknown;
+  const timeoutMs = resolveLocalProviderTimeoutMs();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let response: Response;
+  let payload: unknown;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.appKey}`,
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify({
+        model: resolveStoryImageModel(),
+        prompt: buildVivoStoryImagePrompt(scenes),
+        parameters,
+      }),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    payload = await response.json().catch(() => null) as unknown;
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`vivo image generation timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
   if (!response.ok) {
     throw new Error(`vivo image generation HTTP ${response.status}`);
   }
@@ -376,13 +429,16 @@ async function completeStoryMediaLocally(input: {
 
   const audioTasks = audioCandidates.map(async (scene) => {
     try {
-      const result = await requestVivoTts({
-        text: scene.audioScript || scene.sceneText,
-        childId: story.childId,
-        storyId: story.storyId,
-        page: scene.sceneIndex,
-        voiceStyle: scene.voiceStyle,
-      });
+      const result = await withProviderTimeout(
+        requestVivoTts({
+          text: scene.audioScript || scene.sceneText,
+          childId: story.childId,
+          storyId: story.storyId,
+          page: scene.sceneIndex,
+          voiceStyle: scene.voiceStyle,
+        }),
+        "vivo TTS"
+      );
       const mediaSeed = `${story.storyId}:next-vivo-tts:${scene.sceneIndex}`;
       const audioDataUrl = `data:${result.audioContentType};base64,${result.audioBytes.toString("base64")}`;
       const audioUrl = input.persistAudio
@@ -538,6 +594,11 @@ async function prepareStoryMediaForDelivery(input: {
     cacheState: "bypass",
   });
 }
+
+export const parentStoryBookMediaStatusRouteInternals = {
+  resolveMediaStatusTimeoutMs,
+  resolveLocalProviderTimeoutMs,
+};
 
 export async function POST(request: Request) {
   const authResult = await authorizeAiRouteSession(request, {
