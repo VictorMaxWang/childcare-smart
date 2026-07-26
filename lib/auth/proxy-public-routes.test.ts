@@ -13,6 +13,16 @@ test("proxy keeps the deployment health endpoint public", async () => {
   assert.equal(response.headers.get("location"), null);
 });
 
+test("proxy keeps the chunk recovery worker public before login", async () => {
+  const response = await proxy(
+    new NextRequest("https://smartchildcare.cn/chunk-recovery-sw.js")
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-middleware-next"), "1");
+  assert.equal(response.headers.get("location"), null);
+});
+
 test("proxy still protects business state from anonymous requests", async () => {
   const response = await proxy(
     new NextRequest("https://smartchildcare.cn/api/state")

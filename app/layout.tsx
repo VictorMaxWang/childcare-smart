@@ -4,10 +4,12 @@ import { AppProvider } from "../lib/store";
 import AppShell from "@/components/Navbar";
 import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "sonner";
+import { CHUNK_RECOVERY_BOOTSTRAP } from "@/lib/client/chunk-recovery";
 
 const enableVercelAnalytics =
   process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === "1" ||
   process.env.VERCEL_ENV === "production";
+const enableChunkRecovery = process.env.NODE_ENV === "production";
 
 export const metadata: Metadata = {
   title: "慧育童行 | SmartChildcare Agent",
@@ -21,6 +23,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
+      <head>
+        {enableChunkRecovery ? (
+          <script
+            id="smartchildcare-chunk-recovery"
+            dangerouslySetInnerHTML={{ __html: CHUNK_RECOVERY_BOOTSTRAP }}
+          />
+        ) : null}
+      </head>
       <body className="antialiased">
         <AppProvider>
           <AppShell>
