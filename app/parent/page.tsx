@@ -65,6 +65,7 @@ import { resolveWeeklyReportScope } from "@/lib/agent/weekly-report-scope";
 import { buildFallbackSuggestion } from "@/lib/ai/fallback";
 import type { AiSuggestionResponse, WeeklyReportResponse } from "@/lib/ai/types";
 import { useCareMode } from "@/lib/care-mode";
+import { formatClockTime, getLocalToday } from "@/lib/date";
 import { formatMealFoodSummary } from "@/lib/meals/display";
 import { buildParentSpeechScript } from "@/lib/voice/browser-tts";
 import { buildParentHomeViewModel } from "@/lib/view-models/role-home";
@@ -959,7 +960,7 @@ export default function ParentHomePage() {
     );
   }
 
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = getLocalToday();
   const latestAttendance =
     attendanceRecords.find((record) => record.childId === feed.child.id && record.date === todayKey) ??
     attendanceRecords
@@ -998,7 +999,7 @@ export default function ParentHomePage() {
       id: "arrival",
       label: "入园",
       value: latestAttendance?.checkInAt
-        ? new Date(latestAttendance.checkInAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+        ? formatClockTime(latestAttendance.checkInAt, latestAttendance.isPresent ? "已入园" : "暂无")
         : latestAttendance?.isPresent
           ? "已入园"
           : "暂无",

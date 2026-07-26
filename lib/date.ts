@@ -60,3 +60,33 @@ export function normalizeLocalDate(value: string) {
 
   return formatLocalDate(parsed);
 }
+
+/**
+ * 格式化业务记录中的时钟时间。
+ *
+ * 出勤记录历史上同时存在 `08:35` 纯时间和完整 ISO 时间戳；直接交给
+ * `new Date("08:35")` 会得到 Invalid Date，因此先识别纯时间，再回退到日期解析。
+ */
+export function formatClockTime(value: string | null | undefined, fallback = "") {
+  const normalized = value?.trim();
+  if (!normalized) return fallback;
+
+  const timeOnly = normalized.match(/^(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/);
+  if (timeOnly) {
+    const hour = Number(timeOnly[1]);
+    const minute = Number(timeOnly[2]);
+    if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+      return `${pad(hour)}:${pad(minute)}`;
+    }
+    return fallback;
+  }
+
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return fallback;
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(parsed);
+}

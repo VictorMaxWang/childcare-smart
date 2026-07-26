@@ -113,6 +113,12 @@ test.describe("FRONTEND-REPLICA-R07 parent replica", () => {
     await expect(page.getByTestId("r07-parent-child-age")).toHaveText(/^(?:\d+个月|\d+岁(?:\d+个月)?)$/);
     await expect(page.getByTestId("r07-parent-child-age")).not.toHaveText("3岁2个月");
     await expect(page.locator("body")).not.toContainText(/\bundefined\b/);
+    const arrivalStatus = page.locator(
+      '[data-testid="r07-parent-status-card"][data-status-id="arrival"]'
+    );
+    await expect(arrivalStatus).toBeVisible();
+    await expect(arrivalStatus).not.toContainText("Invalid Date");
+    await expect(arrivalStatus).toContainText(/(?:[01]\d|2[0-3]):[0-5]\d|已入园|暂无/);
     await expect(page.locator('[data-testid="r07-parent-status-card"][data-status-id="meal"]')).toBeVisible();
     await expect(page.locator('[data-testid="r07-parent-status-card"][data-status-id="temp"]')).toBeVisible();
     await expect(page.locator('[data-testid="r07-parent-status-card"][data-status-id="activity"]')).toBeVisible();
