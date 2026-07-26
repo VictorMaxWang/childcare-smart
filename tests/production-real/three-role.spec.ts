@@ -763,13 +763,23 @@ test("fresh real trio completes binding, media, voice, consultation, and AI", as
     });
     const asr = await expectEnvelope<{
       transcript: string;
+      source: string;
+      mode: string;
       fallback: boolean;
       provider: string;
+      providerTrace?: {
+        realProvider?: boolean;
+        fallback?: boolean;
+      };
     }>(asrResponse);
     expect(asr.transcript.trim().length).toBeGreaterThan(3);
     if (requireLiveAi) {
       expect(asr.fallback).toBe(false);
-      expect(asr.provider).toBe("dashscope");
+      expect(asr.source).toBe("provider");
+      expect(asr.mode).toBe("live");
+      expect(["vivo", "dashscope"]).toContain(asr.provider);
+      expect(asr.providerTrace?.realProvider).toBe(true);
+      expect(asr.providerTrace?.fallback).toBe(false);
     }
 
     const latestTeacherState = await getState(teacher);
