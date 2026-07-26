@@ -1,6 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 import { existsSync } from "node:fs";
 
+// 需要构造 normal-session cookie 的浏览器规格必须与 Next dev 共用同一测试密钥；
+// 显式 shell 环境仍优先，生产构建与部署配置不会读取该测试配置。
+process.env.AUTH_SESSION_SECRET ??=
+  "playwright-product-tests-local-session-secret";
+
 const productPort =
   process.env.PRODUCT_PORT?.trim() ||
   process.env.FEATURE_PORT?.trim() ||

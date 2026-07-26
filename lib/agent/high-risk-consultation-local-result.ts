@@ -104,6 +104,7 @@ export function buildLocalHighRiskConsultationResult({
     input: consultationInput,
     autoContext,
     fallbackReason,
+    accountKind: payload.currentUser.accountKind,
   });
   const providerTrace = buildAiProviderTrace({
     source: "local-rules-fallback",

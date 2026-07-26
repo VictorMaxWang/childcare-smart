@@ -12,6 +12,21 @@ test.describe("global utility center", () => {
   test("teacher can search scoped data, review notifications, and send a persisted message", async ({ page }) => {
     await loginAs(page, "u-teacher2", "/teacher");
 
+    await page
+      .getByTestId("shell-account-menu")
+      .locator("summary")
+      .click();
+    await expect(page.getByTestId("shell-account-menu-panel")).toBeVisible();
+    await expect(
+      page.getByTestId("shell-account-menu-panel").getByRole("link", {
+        name: "角色首页",
+      })
+    ).toHaveAttribute("href", "/teacher");
+    await page
+      .getByTestId("shell-account-menu")
+      .locator("summary")
+      .click();
+
     await page.getByTestId("global-search-trigger").click();
     await page.getByTestId("global-search-input").fill("陈乐然");
     await expect(page.getByTestId("global-search-results")).toContainText("陈乐然");
@@ -93,5 +108,28 @@ test.describe("global utility center", () => {
 
     await page.getByTestId("global-search-input").fill("张晨曦");
     await expect(page.getByTestId("global-search-results")).not.toContainText("张晨曦");
+  });
+
+  test("admin high-risk notification preserves the exact consultation context", async ({ page }) => {
+    await loginAs(page, "u-admin", "/admin");
+    await page.getByTestId("notification-center-trigger").click();
+
+    const notification = page
+      .getByTestId("notification-entry")
+      .filter({ hasText: "林小雨高风险会诊待处理" })
+      .first();
+    await expect(notification).toBeVisible();
+
+    await notification.click();
+    await expect(page).toHaveURL((url) => {
+      return (
+        url.pathname === "/admin" &&
+        url.searchParams.get("childId") === "c-1" &&
+        url.searchParams.get("consultationId") === "consultation-defense-c-1" &&
+        url.hash === "#admin-risk-priority-detail"
+      );
+    });
+    await expect(page.locator("#admin-risk-priority-detail")).toBeVisible();
+    await expect(page.locator("#admin-risk-priority-detail")).toContainText("林小雨");
   });
 });

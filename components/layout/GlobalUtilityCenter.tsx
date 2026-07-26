@@ -929,7 +929,8 @@ function consultationRoute(role: AccountRole, childId: string, consultationId?: 
   if (role === "家长") {
     return `/parent/agent?child=${encodeURIComponent(childId)}#feedback`;
   }
-  return "/admin/agent";
+  // 园长需直接落到完整会诊承接区，同时保留可审计、可复现的具体会诊上下文。
+  return `/admin?${query.toString()}#admin-risk-priority-detail`;
 }
 
 function reminderRoute(role: AccountRole, childId: string) {

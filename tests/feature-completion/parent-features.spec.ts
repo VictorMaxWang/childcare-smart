@@ -42,6 +42,11 @@ test("D08 parent child query survives core routes and mobile viewport", async ({
   await expect(page.locator("body")).toContainText(/授权|无权|没有该 childId|鎺堟潈|鏃犳潈/);
   await capture(page, "parent-01-invalid-child-no-fallback.png");
 
+  await page.goto("/parent/agent?child=c-2#feedback");
+  expect(new URL(page.url()).searchParams.get("child")).toBe("c-2");
+  await expect(page.locator("body")).toContainText(/无权|不属于当前账号|无法访问/);
+  await expect(page.getByTestId("parent-send-message")).toHaveCount(0);
+
   await page.setViewportSize({ width: 390, height: 844 });
   for (const route of routes.slice(0, 5)) {
     await page.goto(route);

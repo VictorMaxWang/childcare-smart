@@ -8,7 +8,12 @@ import {
   type GetBlobResult,
   type PutBlobResult,
 } from "@vercel/blob";
+import {
+  ATTACHMENT_ALLOWED_MIME_TYPES,
+  ATTACHMENT_MAX_UPLOAD_BYTES,
+} from "@/lib/attachments/constraints";
 import type { AttachmentRelatedType } from "@/lib/api/types";
+import { validateUploadFile } from "@/lib/server/upload-security";
 
 type BlobEnv = NodeJS.ProcessEnv | Record<string, string | undefined>;
 export type PrivateAttachmentReadResult = GetBlobResult;
@@ -67,17 +72,27 @@ export async function putPrivateAttachment(input: {
   relatedType?: AttachmentRelatedType;
   file: File;
 }): Promise<PutBlobResult> {
+  const validated = await validatePrivateAttachmentFile(input.file);
   const pathname = buildPrivateAttachmentPath({
     institutionId: input.institutionId,
     childId: input.childId,
     relatedType: input.relatedType,
-    mimeType: input.file.type,
+    mimeType: validated.mimeType,
   });
   return put(pathname, input.file, {
     access: "private",
     addRandomSuffix: true,
-    contentType: input.file.type,
+    contentType: validated.mimeType,
     cacheControlMaxAge: 300,
+  });
+}
+
+export function validatePrivateAttachmentFile(file: File) {
+  // Route 会先校验一次；Blob 边界重复校验可阻止未来新增调用方绕过入口约束。
+  return validateUploadFile({
+    file,
+    maxBytes: ATTACHMENT_MAX_UPLOAD_BYTES,
+    allowedMimeTypes: ATTACHMENT_ALLOWED_MIME_TYPES,
   });
 }
 

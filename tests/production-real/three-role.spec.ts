@@ -274,6 +274,173 @@ async function callRoleAi(
   );
 }
 
+function expectCompleteDietEvaluation(
+  body: Record<string, unknown> | null
+) {
+  expect(body).toBeTruthy();
+  const evaluation = body?.evaluation as Record<string, unknown> | undefined;
+  expectMeaningfulAiResult(evaluation ?? null, "diet evaluation", {
+    requireLive: requireLiveAi,
+  });
+  for (const key of ["mealScore", "todayScore", "recentScore"]) {
+    expect(typeof evaluation?.[key], `${key} must be numeric`).toBe("number");
+  }
+  expect(
+    Array.isArray(evaluation?.suggestions) &&
+      evaluation.suggestions.length > 0,
+    "diet evaluation must include actionable suggestions"
+  ).toBe(true);
+}
+
+function storyMediaReady(story: Record<string, unknown> | null) {
+  const providerMeta = story?.providerMeta as
+    | Record<string, unknown>
+    | undefined;
+  return (
+    providerMeta?.imageDelivery === "real" &&
+    providerMeta?.audioDelivery === "real"
+  );
+}
+
+async function completeStorybookMedia(
+  parent: APIRequestContext,
+  childId: string,
+  initialStory: Record<string, unknown>
+) {
+  let story = initialStory;
+  for (let attempt = 0; attempt < 3 && !storyMediaReady(story); attempt += 1) {
+    const response = await parent.post(
+      "/api/ai/parent-storybook/media-status",
+      {
+        data: {
+          childId,
+          storyId: story.storyId,
+          retryFailed: true,
+          prioritySceneIndices: [0, 1, 2, 3],
+          story,
+        },
+      }
+    );
+    expect(response.status()).toBe(200);
+    story = (await readJson(response)) ?? {};
+  }
+  return story;
+}
+
+async function verifyDietAndStorybookAi(
+  teacher: APIRequestContext,
+  parent: APIRequestContext,
+  child: Pick<
+    Snapshot["children"][number],
+    "id" | "name" | "className"
+  >,
+  marker: string
+) {
+  const foods = [
+    { name: "番茄炒蛋", category: "蛋白", amount: "80g" },
+    { name: "西兰花", category: "蔬菜", amount: "60g" },
+    { name: "米饭", category: "主食", amount: "100g" },
+  ];
+  const dietResponse = await teacher.post("/api/ai/diet-evaluation", {
+    data: {
+      childId: child.id,
+      input: {
+        childName: child.name,
+        ageText: "4岁",
+        ageBand: "3-6岁",
+        mealType: "午餐",
+        mealFoods: foods,
+        todayMeals: [{ meal: "午餐", foods, waterMl: 180 }],
+        recentMeals: [
+          {
+            date: new Date().toISOString().slice(0, 10),
+            meal: "午餐",
+            foods,
+            waterMl: 180,
+          },
+        ],
+      },
+    },
+  });
+  expect(dietResponse.status()).toBe(200);
+  expectCompleteDietEvaluation(await readJson(dietResponse));
+
+  const storyResponse = await parent.post("/api/ai/parent-storybook", {
+    data: {
+      childId: child.id,
+      requestSource: "production-real-smoke",
+      generationMode: "child-personalized",
+      pageCount: 4,
+      stylePreset: "sunrise-watercolor",
+      styleMode: "preset",
+      snapshot: {
+        child: {
+          id: child.id,
+          name: child.name,
+          className: child.className,
+        },
+        summary: {
+          growth: { recordCount: 1, topCategories: [] },
+          feedback: { count: 1, keywords: [marker] },
+        },
+        recentDetails: [
+          {
+            date: new Date().toISOString().slice(0, 10),
+            source: "production-smoke",
+            title: "今日成长记录",
+            detail: `${marker} 孩子完成了健康、饮食和成长记录。`,
+          },
+        ],
+        ruleFallback: [
+          {
+            title: "今日亮点",
+            description: `${marker} 愿意尝试均衡午餐。`,
+          },
+        ],
+      },
+      highlightCandidates: [
+        {
+          kind: "todayGrowth",
+          title: "今日小进步",
+          detail: `${marker} 愿意尝试均衡午餐并完成健康记录。`,
+          priority: 1,
+          source: "production-smoke",
+        },
+      ],
+    },
+  });
+  expect(storyResponse.status()).toBe(200);
+  let story = (await readJson(storyResponse)) ?? {};
+  expectMeaningfulAiResult(story, "parent storybook", {
+    requireLive: requireLiveAi,
+  });
+
+  if (requireLiveAi) {
+    story = await completeStorybookMedia(parent, child.id, story);
+    expect(storyMediaReady(story), "storybook image and audio must be real").toBe(
+      true
+    );
+  }
+  const scenes = Array.isArray(story.scenes) ? story.scenes : [];
+  expect(scenes.length, "storybook must include four scenes").toBeGreaterThanOrEqual(
+    4
+  );
+  for (const scene of scenes.slice(0, 4)) {
+    const item = scene as Record<string, unknown>;
+    expect(String(item.sceneText ?? "").trim()).not.toBe("");
+    if (requireLiveAi) {
+      expect(
+        Boolean(item.imageUrl ?? item.assetRef),
+        "storybook scene must have image media"
+      ).toBe(true);
+      expect(
+        Boolean(item.audioUrl ?? item.audioRef),
+        "storybook scene must have audio media"
+      ).toBe(true);
+    }
+  }
+}
+
 async function verifyRolePages(
   browser: Browser,
   testInfo: TestInfo,
@@ -318,6 +485,16 @@ async function verifyRolePages(
       await expect(page.getByTestId("global-search-trigger")).toBeVisible();
       await expect(page.getByTestId("notification-center-trigger")).toBeVisible();
       await expect(page.getByTestId("message-center-trigger")).toBeVisible();
+      for (const [trigger, dialog] of [
+        ["global-search-trigger", "global-search-dialog"],
+        ["notification-center-trigger", "notification-center-dialog"],
+        ["message-center-trigger", "message-center-dialog"],
+      ] as const) {
+        await page.getByTestId(trigger).click();
+        await expect(page.getByTestId(dialog)).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(page.getByTestId(dialog)).toBeHidden();
+      }
       await expect(page.locator("body")).not.toContainText(
         /Application error|客户端异常|加载失败/u
       );
@@ -807,7 +984,7 @@ test("fresh real trio completes binding, media, voice, consultation, and AI", as
     expectMeaningfulAiResult(
       await readJson(highRiskResponse),
       "high-risk consultation",
-      { requireLive: false }
+      { requireLive: requireLiveAi }
     );
 
     for (const api of [parent, admin]) {
@@ -826,6 +1003,7 @@ test("fresh real trio completes binding, media, voice, consultation, and AI", as
     }
 
     await callRoleAi(admin, teacher, parent, child.id, marker);
+    await verifyDietAndStorybookAi(teacher, parent, child, marker);
     await verifyRolePages(browser, testInfo, {
       admin: credentials.admin,
       teacher: credentials.teacher,

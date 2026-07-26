@@ -2,9 +2,35 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import {
+  FORMAL_REAL_SMOKE_ENV_KEYS,
+  validateFormalRealSmokeEnv,
+} from "./release-test-policy.mjs";
+
 const cwd = process.cwd();
-const envPath = path.join(cwd, ".env.release");
-const required = ["RELEASE_BASE_URL", "RELEASE_ADMIN_COOKIE", "CRON_SECRET", "BRAIN_API_BASE_URL"];
+const args = process.argv.slice(2);
+const formal = args.includes("--formal");
+const envArg = args.find((arg) => arg.startsWith("--env-file="));
+const envPath = path.resolve(
+  cwd,
+  envArg ? envArg.slice("--env-file=".length) : ".env.release"
+);
+const remoteRequired = [
+  "RELEASE_BASE_URL",
+  "RELEASE_ADMIN_COOKIE",
+  "RELEASE_EXPECTED_COMMIT_SHA",
+  "CRON_SECRET",
+  "BRAIN_API_BASE_URL",
+];
+const required = formal
+  ? Array.from(
+      new Set([
+        ...remoteRequired,
+        "DATABASE_URL",
+        ...FORMAL_REAL_SMOKE_ENV_KEYS,
+      ])
+    )
+  : remoteRequired;
 
 function parseEnv(text) {
   const out = {};
@@ -55,4 +81,18 @@ if (placeholder.length > 0) {
   process.exit(1);
 }
 
-console.log("[OK] .env.release has all required real values.");
+if (formal) {
+  const formalValidation = validateFormalRealSmokeEnv(env);
+  if (!formalValidation.ok) {
+    for (const issue of formalValidation.invalid) {
+      console.error(`[FAIL] ${issue}`);
+    }
+    process.exit(1);
+  }
+}
+
+console.log(
+  formal
+    ? "[OK] Formal release env has complete remote and real-smoke values."
+    : "[OK] Remote release env has all required real values."
+);

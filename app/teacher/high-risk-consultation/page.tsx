@@ -119,15 +119,24 @@ function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
 }
 
-function isLinXiaoyuCase(child?: { id?: string; name?: string } | null) {
-  return child?.id === "c-1" || child?.name === "林小雨";
+function isLinXiaoyuCase(
+  child: { id?: string; name?: string } | null | undefined,
+  accountKind: "demo" | "normal"
+) {
+  return accountKind === "demo" && (child?.id === "c-1" || child?.name === "林小雨");
 }
 
 function buildDefaultConsultationDraftPayload(params: {
   childName: string;
   autoContext: ReturnType<typeof buildHighRiskConsultationAutoContext>;
+  accountKind: "demo" | "normal";
 }): DraftPayload {
-  if (!isLinXiaoyuCase({ name: params.childName, id: params.autoContext.childId })) {
+  if (
+    !isLinXiaoyuCase(
+      { name: params.childName, id: params.autoContext.childId },
+      params.accountKind
+    )
+  ) {
     return {};
   }
 
@@ -534,8 +543,11 @@ export default function TeacherHighRiskConsultationPage() {
     [currentUser, mergedGuardianFeedbacks, growthRecords, healthCheckRecords, presentChildren, visibleChildren]
   );
   const demoChildId = useMemo(
-    () => visibleChildren.find((child) => isLinXiaoyuCase(child))?.id ?? "",
-    [visibleChildren]
+    () =>
+      visibleChildren.find((child) =>
+        isLinXiaoyuCase(child, currentUser.accountKind)
+      )?.id ?? "",
+    [currentUser.accountKind, visibleChildren]
   );
   const activeChildId = selectedChildId || queryPreferredChildId || demoChildId || visibleChildren[0]?.id || "";
   const childContext = useMemo(() => buildTeacherAgentChildContext(classContext, activeChildId), [classContext, activeChildId]);
@@ -583,9 +595,10 @@ export default function TeacherHighRiskConsultationPage() {
       buildDefaultConsultationDraftPayload({
         childName: selectedChild.name,
         autoContext,
+        accountKind: currentUser.accountKind,
       })
     );
-  }, [autoContext, existingDraftPayload, selectedChild]);
+  }, [autoContext, currentUser.accountKind, existingDraftPayload, selectedChild]);
   useEffect(() => {
     if (isStreaming) return;
     const preferredStored = queryConsultationId
@@ -1034,10 +1047,11 @@ export default function TeacherHighRiskConsultationPage() {
         )
       );
       const reloadResult = await reloadAppSnapshotFromApi();
-      if (reloadResult.status === "failed") {
-        throw new Error(reloadResult.error ?? reloadResult.message);
-      }
-      setStreamMessage("后续提醒已写入当前机构数据，教师端刷新后仍会保留。");
+      setStreamMessage(
+        reloadResult.status === "failed"
+          ? "后续提醒已写入当前机构数据，但页面刷新失败；重新打开后可查看。"
+          : "后续提醒已写入当前机构数据，教师端刷新后仍会保留。"
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "后续提醒保存失败。";
       setStreamError(message);
@@ -1112,15 +1126,16 @@ export default function TeacherHighRiskConsultationPage() {
           `/api/consultations/${encodeURIComponent(result.consultationId)}/notes`,
           { note }
         );
-        const reloadResult = await reloadAppSnapshotFromApi();
-        if (reloadResult.status === "failed") {
-          throw new Error(reloadResult.error ?? reloadResult.message);
-        }
         if (isRenderableConsultationApiResult(saved)) {
           setResult(saved);
         }
-        setStreamMessage("会诊备注已写入当前机构数据，三端刷新后可继续查看。");
         setDiscussionInput("");
+        const reloadResult = await reloadAppSnapshotFromApi();
+        setStreamMessage(
+          reloadResult.status === "failed"
+            ? "会诊备注已写入当前机构数据，但页面刷新失败；重新打开后可查看。"
+            : "会诊备注已写入当前机构数据，三端刷新后可继续查看。"
+        );
       } catch (error) {
         setStreamError(error instanceof Error ? error.message : "会诊备注保存失败。");
       }
@@ -1139,13 +1154,10 @@ export default function TeacherHighRiskConsultationPage() {
         `/api/consultations/${encodeURIComponent(result.consultationId)}/status`,
         { status }
       );
-      const reloadResult = await reloadAppSnapshotFromApi();
-      if (reloadResult.status === "failed") {
-        throw new Error(reloadResult.error ?? reloadResult.message);
-      }
       if (isRenderableConsultationApiResult(saved)) {
         setResult(saved);
       }
+      const reloadResult = await reloadAppSnapshotFromApi();
       setStreamMessage(
         `会诊状态已更新为${
           status === "pending"
@@ -1153,7 +1165,11 @@ export default function TeacherHighRiskConsultationPage() {
             : status === "in-progress"
               ? "处理中"
               : "已解决"
-        }，并写入当前机构数据。`
+        }，并写入当前机构数据。${
+          reloadResult.status === "failed"
+            ? " 页面刷新失败，重新打开后可查看。"
+            : ""
+        }`
       );
     } catch (error) {
       setStreamError(error instanceof Error ? error.message : "会诊状态更新失败。");
@@ -1629,7 +1645,7 @@ export default function TeacherHighRiskConsultationPage() {
                   onStart={(form) => void runConsultation(form)}
                   startButtonRef={consultationStartButtonRef}
                   isPrimaryDemoCase={
-                    currentUser.accountKind === "demo" && isLinXiaoyuCase(selectedChild)
+                    isLinXiaoyuCase(selectedChild, currentUser.accountKind)
                   }
                 />
               </div>

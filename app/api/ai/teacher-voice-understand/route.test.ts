@@ -8,6 +8,13 @@ import {
 import type { AsrProvider } from "@/lib/ai/providers";
 import { VivoProviderError } from "@/lib/providers/vivo";
 
+const WEBM_SIGNATURE = new Uint8Array([
+  0x1a, 0x45, 0xdf, 0xa3, 0x42, 0x86, 0x81, 0x01,
+]);
+const OGG_SIGNATURE = new Uint8Array([
+  0x4f, 0x67, 0x67, 0x53, 0x00, 0x02, 0x00, 0x00,
+]);
+
 function providerThatRejectsBrowserAudio(): AsrProvider {
   return {
     getStatus() {
@@ -37,7 +44,7 @@ function providerThatRejectsBrowserAudio(): AsrProvider {
 
 test("teacher voice understand maps a provider audio rejection to a redacted 503", async () => {
   const formData = new FormData();
-  formData.append("audio", new Blob(["not-a-real-audio-file"], { type: "audio/webm" }), "voice.webm");
+  formData.append("audio", new Blob([WEBM_SIGNATURE], { type: "audio/webm" }), "voice.webm");
   formData.append("scene", "normal-session-ai-access");
 
   const dependencies: TeacherVoiceUnderstandRouteDependencies = {
@@ -98,7 +105,104 @@ test("teacher voice understand rejects oversized audio before invoking ASR", asy
   );
   const body = (await response.json()) as Record<string, unknown>;
 
-  assert.equal(response.status, 400);
+  assert.equal(response.status, 413);
   assert.equal(body.code, "invalid_request");
   assert.equal(providerCalls, 0);
+});
+
+test("teacher voice understand rejects oversized Content-Length before authorization", async () => {
+  let authorizeCalls = 0;
+  const response = await handleTeacherVoiceUnderstandRequest(
+    new Request("http://localhost:3000/api/ai/teacher-voice-understand", {
+      method: "POST",
+      headers: {
+        "content-length": String(5 * 1024 * 1024),
+        "content-type": "multipart/form-data; boundary=voice",
+      },
+      body: "--voice--\r\n",
+    }),
+    {
+      async authorize() {
+        authorizeCalls += 1;
+        return null;
+      },
+      resolveProvider: providerThatRejectsBrowserAudio,
+    }
+  );
+
+  assert.equal(response.status, 413);
+  assert.equal(authorizeCalls, 0);
+});
+
+test("teacher voice understand rejects disguised audio before invoking ASR", async () => {
+  let providerCalls = 0;
+  const provider = providerThatRejectsBrowserAudio();
+  const formData = new FormData();
+  formData.set(
+    "audio",
+    new File(["<html>not audio</html>"], "voice.webm", {
+      type: "audio/webm",
+    })
+  );
+
+  const response = await handleTeacherVoiceUnderstandRequest(
+    new Request("http://localhost:3000/api/ai/teacher-voice-understand", {
+      method: "POST",
+      body: formData,
+    }),
+    {
+      async authorize() {
+        return null;
+      },
+      resolveProvider() {
+        return {
+          ...provider,
+          async transcribe(input) {
+            providerCalls += 1;
+            return provider.transcribe(input);
+          },
+        };
+      },
+    }
+  );
+
+  assert.equal(response.status, 415);
+  assert.equal(providerCalls, 0);
+});
+
+test("teacher voice understand accepts Ogg Opus and passes canonical MIME to ASR", async () => {
+  let receivedMimeType: string | undefined;
+  const provider = providerThatRejectsBrowserAudio();
+  const formData = new FormData();
+  formData.set(
+    "audio",
+    new File([OGG_SIGNATURE], "voice.ogg", {
+      type: "audio/ogg;codecs=opus",
+    })
+  );
+  formData.set("mimeType", "audio/wav");
+
+  const response = await handleTeacherVoiceUnderstandRequest(
+    new Request("http://localhost:3000/api/ai/teacher-voice-understand", {
+      method: "POST",
+      body: formData,
+    }),
+    {
+      async authorize() {
+        return null;
+      },
+      resolveProvider() {
+        return {
+          ...provider,
+          async transcribe(input) {
+            receivedMimeType = input.mimeType;
+            return provider.transcribe(input);
+          },
+        };
+      },
+    }
+  );
+
+  assert.equal(response.status, 503);
+  assert.equal(receivedMimeType, "audio/ogg");
 });

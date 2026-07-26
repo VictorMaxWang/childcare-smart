@@ -94,7 +94,19 @@ const INTAKE_OPTIONS: IntakeLevel[] = ["少量", "适中", "充足"];
 const PREFERENCE_OPTIONS: PreferenceStatus[] = ["偏好", "正常", "拒食"];
 
 interface VisionMealResponse {
-  foods: Array<{ name: string; category: FoodCategory; amount: string }>;
+  foods: Array<{
+    name: string;
+    category: FoodCategory;
+    amount: string;
+    childId?: string;
+    provider?: string;
+    model?: string;
+    source?: "ai" | "fallback";
+    live?: boolean;
+    fallback?: boolean;
+    realProvider?: boolean;
+    provenanceAttestation?: string;
+  }>;
   source: "ai" | "fallback";
   model: string;
 }
@@ -156,6 +168,26 @@ async function readVisionMealResponse(response: Response): Promise<VisionMealRes
           typeof food.amount === "string" && food.amount.trim()
             ? food.amount.trim()
             : "1份",
+        ...(typeof food.childId === "string"
+          ? { childId: food.childId }
+          : {}),
+        ...(typeof food.provider === "string"
+          ? { provider: food.provider }
+          : {}),
+        ...(typeof food.model === "string" ? { model: food.model } : {}),
+        ...(food.source === "ai" || food.source === "fallback"
+          ? { source: food.source }
+          : {}),
+        ...(typeof food.live === "boolean" ? { live: food.live } : {}),
+        ...(typeof food.fallback === "boolean"
+          ? { fallback: food.fallback }
+          : {}),
+        ...(typeof food.realProvider === "boolean"
+          ? { realProvider: food.realProvider }
+          : {}),
+        ...(typeof food.provenanceAttestation === "string"
+          ? { provenanceAttestation: food.provenanceAttestation }
+          : {}),
       };
     })
     .filter((item): item is VisionMealResponse["foods"][number] => Boolean(item));
@@ -172,7 +204,7 @@ async function readVisionMealResponse(response: Response): Promise<VisionMealRes
 }
 
 interface DietEvaluationResponse {
-  evaluation: Omit<MealAiEvaluation, "generatedAt" | "model">;
+  evaluation: MealAiEvaluation & Record<string, unknown>;
   source: "ai" | "fallback";
   model: string;
 }
@@ -535,6 +567,7 @@ export default function DietPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          childId: selectedChild.id,
           input: {
             childName: selectedChild.name,
             ageText: getAgeText(selectedChild.birthDate),
@@ -566,11 +599,8 @@ export default function DietPage() {
 
       const data = (await response.json()) as DietEvaluationResponse;
       const saveResult = await saveMealRecord(meal, {
-        aiEvaluation: {
-          ...data.evaluation,
-          generatedAt: new Date().toISOString(),
-          model: data.model,
-        },
+        // 服务端 evaluation 含作用域回执，必须原样保存；重建对象会使摘要失效。
+        aiEvaluation: data.evaluation,
       });
       if (!saveResult || saveResult.status === "failed") {
         return;
@@ -739,10 +769,8 @@ export default function DietPage() {
 
       const data = await readVisionMealResponse(response);
       const normalizedFoods = data.foods.map((item, index) => ({
+        ...item,
         id: createFoodId(`bulk-vision-${index}`),
-        name: item.name,
-        category: item.category,
-        amount: item.amount || "1份",
       }));
       setBulkFoods((prev) => [...prev, ...normalizedFoods]);
       setBulkVisionModel(data.model);
@@ -1582,6 +1610,7 @@ export default function DietPage() {
                 {MEAL_TYPES.map((meal) => (
                   <MealEditorCard
                     key={`${selectedChild.id}-${meal}`}
+                    childId={selectedChild.id}
                     meal={meal}
                     record={selectedChildMeals[meal]}
                     onSave={(patch) => saveMealRecord(meal, patch)}
@@ -1646,12 +1675,14 @@ export default function DietPage() {
 }
 
 function MealEditorCard({
+  childId,
   meal,
   record,
   onSave,
   onGenerateEvaluation,
   evaluating,
 }: {
+  childId: string;
   meal: MealType;
   record?: MealRecord;
   onSave: (patch: MealSavePatch) => Promise<MealSaveResult | null>;
@@ -1747,16 +1778,15 @@ function MealEditorCard({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          childId,
           imageDataUrl: compressedDataUrl,
         }),
       });
 
       const data = await readVisionMealResponse(response);
       const normalizedFoods = data.foods.map((item, index) => ({
+        ...item,
         id: createFoodId(`${meal}-vision-${index}`),
-        name: item.name,
-        category: item.category,
-        amount: item.amount || "1份",
       }));
       setVisionFoods(normalizedFoods);
       setVisionModel(data.model);

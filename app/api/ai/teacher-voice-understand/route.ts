@@ -6,12 +6,20 @@ import { VivoProviderError } from "@/lib/providers/vivo";
 import { createBrainTransportHeaders } from "@/lib/server/brain-client";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import {
-  validateVoiceAudioFile,
+  MULTIPART_FORM_DATA_OVERHEAD_BYTES,
+  readRequestWithBodyLimit,
+  UploadSecurityError,
+  validateAudioUploadFile,
+} from "@/lib/server/upload-security";
+import {
+  VOICE_AUDIO_MAX_BYTES,
   validateVoiceDuration,
   validateVoiceText,
 } from "@/lib/voice/audio-constraints";
 
 const TEACHER_VOICE_UNDERSTAND_TARGET = "/api/v1/agents/teacher/voice-understand";
+const VOICE_AUDIO_MAX_REQUEST_BYTES =
+  VOICE_AUDIO_MAX_BYTES + MULTIPART_FORM_DATA_OVERHEAD_BYTES;
 
 export type TeacherVoiceUnderstandRouteDependencies = {
   authorize: typeof authorizeAiRoute;
@@ -91,25 +99,82 @@ function buildProviderUnavailableResponse(
   );
 }
 
+function buildUploadSecurityResponse(
+  error: UploadSecurityError,
+  headers?: Headers
+) {
+  return NextResponse.json(
+    {
+      ok: false,
+      code: "invalid_request",
+      error: error.message,
+    },
+    { status: error.status, headers }
+  );
+}
+
 export async function handleTeacherVoiceUnderstandRequest(
   request: Request,
   dependencies: TeacherVoiceUnderstandRouteDependencies = defaultDependencies
 ) {
-  const authError = await dependencies.authorize(request, { requiredRole: "staff" });
+  let boundedRequest: Request;
+  try {
+    // 鉴权会读取 multipart/JSON child scope，先限制原始流才能避免鉴权阶段超量缓冲。
+    boundedRequest = await readRequestWithBodyLimit(
+      request,
+      VOICE_AUDIO_MAX_REQUEST_BYTES
+    );
+  } catch (error) {
+    if (error instanceof UploadSecurityError) {
+      return buildUploadSecurityResponse(error);
+    }
+    throw error;
+  }
+
+  const authError = await dependencies.authorize(boundedRequest, {
+    requiredRole: "staff",
+  });
   if (authError) return authError;
 
   const headers = buildLocalFallbackHeaders();
-  const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+  const contentType =
+    boundedRequest.headers.get("content-type")?.toLowerCase() ?? "";
   const asrProvider = dependencies.resolveProvider();
 
   if (contentType.includes("multipart/form-data")) {
-    const formData = await request.formData();
+    let formData: FormData;
+    try {
+      formData = await boundedRequest.formData();
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "invalid_request",
+          error: "语音上传请求必须使用有效的 multipart/form-data。",
+        },
+        { status: 400, headers }
+      );
+    }
     const audio = formData.get("audio");
     const transcript = toOptionalString(formData.get("transcript"));
     const fallbackText = toOptionalString(formData.get("fallbackText"));
     const durationMs = toOptionalNumber(formData.get("durationMs"));
+
+    let detectedAudioMimeType: string | undefined;
+    if (audio instanceof File) {
+      try {
+        detectedAudioMimeType = (
+          await validateAudioUploadFile(audio, VOICE_AUDIO_MAX_BYTES)
+        ).mimeType;
+      } catch (error) {
+        if (error instanceof UploadSecurityError) {
+          return buildUploadSecurityResponse(error, headers);
+        }
+        throw error;
+      }
+    }
+
     const validationError =
-      (audio instanceof File ? validateVoiceAudioFile(audio) : null) ||
       validateVoiceDuration(durationMs) ||
       validateVoiceText(transcript) ||
       validateVoiceText(fallbackText);
@@ -132,8 +197,8 @@ export async function handleTeacherVoiceUnderstandRequest(
       (audio instanceof File ? audio.name : undefined) ||
       "teacher-voice-note.webm";
     const mimeType =
+      detectedAudioMimeType ||
       toOptionalString(formData.get("mimeType")) ||
-      (audio instanceof File ? audio.type : undefined) ||
       "audio/webm";
     const scene = toOptionalString(formData.get("scene")) || "teacher-global-fab";
 
@@ -215,7 +280,7 @@ export async function handleTeacherVoiceUnderstandRequest(
 
   let body: unknown;
   try {
-    body = await request.json();
+    body = await boundedRequest.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400, headers });
   }

@@ -3,6 +3,10 @@ import {
   buildLocalHighRiskConsultationResult,
   isValidHighRiskConsultationPayload,
 } from "@/lib/agent/high-risk-consultation-local-result";
+import {
+  attestAiResult,
+  type AiProvenanceContext,
+} from "@/lib/ai/provenance-attestation";
 import { buildAiProviderTrace, type AiProviderTrace } from "@/lib/ai/provider-trace";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import { ApiRouteError } from "@/lib/server/api-errors";
@@ -236,15 +240,19 @@ function buildFallbackStreamEvents(
   payload: HighRiskConsultationRequestPayload,
   traceId: string,
   fallbackReason: string,
+  provenanceContext: AiProvenanceContext,
   message = "已切换本地会诊兜底：远端 AI 会诊暂不可用，正在生成可解释本地方案。"
 ): StreamEvent[] {
-  const result = buildLocalHighRiskConsultationResult({
+  const localResult = buildLocalHighRiskConsultationResult({
     payload,
     fallbackReason,
     transport: "next-stream-fallback",
     consultationSource: "stream-terminal-fallback",
     priorityReason: "AI stream did not finish in time; local fallback generated a complete 48-hour review plan.",
   });
+  const result = localResult
+    ? attestAiResult(localResult, provenanceContext)
+    : null;
   const fallbackProviderTrace: ProviderTrace = buildAiProviderTrace({
     source: "local-rules-fallback",
     provider: "local-rules-llm",
@@ -427,6 +435,52 @@ function parseSseEventPayload(block: string) {
   }
 }
 
+/**
+ * 远端流只有在服务端完整收到 done 事件后才成为可持久化的 AI 结果。
+ * 将事件级 provider 状态并入 result 后签名，避免 UI 显示与回执覆盖的数据不一致。
+ */
+function attestDoneSseBlock(
+  block: string,
+  provenanceContext: AiProvenanceContext
+) {
+  if (parseSseEventName(block) !== "done") return block;
+  const payload = parseSseEventPayload(block);
+  if (!isRecord(payload) || !isRecord(payload.result)) return block;
+
+  const sourceResult = {
+    ...payload.result,
+    ...(!isRecord(payload.result.providerTrace) &&
+    isRecord(payload.providerTrace)
+      ? { providerTrace: payload.providerTrace }
+      : {}),
+    ...(typeof payload.result.realProvider !== "boolean" &&
+    typeof payload.realProvider === "boolean"
+      ? { realProvider: payload.realProvider }
+      : {}),
+    ...(typeof payload.result.fallback !== "boolean" &&
+    typeof payload.fallback === "boolean"
+      ? { fallback: payload.fallback }
+      : {}),
+  };
+  const result = attestAiResult(sourceResult, provenanceContext);
+  const data = {
+    ...payload,
+    result,
+    providerTrace: isRecord(result.providerTrace)
+      ? result.providerTrace
+      : payload.providerTrace,
+    realProvider:
+      typeof result.realProvider === "boolean"
+        ? result.realProvider
+        : payload.realProvider,
+    fallback:
+      typeof result.fallback === "boolean"
+        ? result.fallback
+        : payload.fallback,
+  };
+  return `event: done\ndata: ${JSON.stringify(data)}`;
+}
+
 function containsExplicitMockResult(value: unknown, depth = 0): boolean {
   if (!shouldAcceptRemotePayload(value, "normal")) return true;
   if (!isRecord(value) || depth >= 3) return false;
@@ -451,8 +505,16 @@ function createRemoteStreamWithDoneFallback(params: {
   traceId: string;
   brainForward: BrainForwardResult;
   accountKind: "demo" | "normal";
+  provenanceContext: AiProvenanceContext;
 }) {
-  const { response, payload, traceId, brainForward, accountKind } = params;
+  const {
+    response,
+    payload,
+    traceId,
+    brainForward,
+    accountKind,
+    provenanceContext,
+  } = params;
   const remoteBody = response.body;
   const watchdogMs = getHighRiskConsultationStreamDoneTimeoutMs(brainForward);
   const encoder = new TextEncoder();
@@ -461,7 +523,12 @@ function createRemoteStreamWithDoneFallback(params: {
 
   if (!remoteBody) {
     return streamResponse(
-      buildFallbackStreamEvents(payload, traceId, "brain-stream-empty-body"),
+      buildFallbackStreamEvents(
+        payload,
+        traceId,
+        "brain-stream-empty-body",
+        provenanceContext
+      ),
       200,
       buildLocalStreamHeaders(brainForward, "brain-stream-empty-body")
     );
@@ -477,7 +544,7 @@ function createRemoteStreamWithDoneFallback(params: {
         let fallbackStarted = false;
         let mockResultSeen = false;
         let bufferedBytes = 0;
-        const remoteChunks: Uint8Array[] = [];
+        const validatedBlocks: string[] = [];
 
         const close = () => {
           if (closed) return;
@@ -489,11 +556,14 @@ function createRemoteStreamWithDoneFallback(params: {
           if (closed || doneSeen || fallbackStarted) return;
           fallbackStarted = true;
           await reader.cancel().catch(() => undefined);
-          if (!validateBeforeForwarding && buffer.trim()) {
-            controller.enqueue(encoder.encode("\n\n"));
-          }
           buffer = "";
-          for (const event of buildFallbackStreamEvents(payload, traceId, fallbackReason, message)) {
+          for (const event of buildFallbackStreamEvents(
+            payload,
+            traceId,
+            fallbackReason,
+            provenanceContext,
+            message
+          )) {
             controller.enqueue(encoder.encode(encodeEvent(event)));
           }
           close();
@@ -521,19 +591,26 @@ function createRemoteStreamWithDoneFallback(params: {
                 );
                 return;
               }
-              remoteChunks.push(value.slice());
-            } else {
-              controller.enqueue(value);
             }
             buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
             const chunks = buffer.split("\n\n");
             buffer = chunks.pop() ?? "";
 
             for (const chunk of chunks) {
+              const eventName = parseSseEventName(chunk);
               if (validateBeforeForwarding && containsExplicitMockSsePayload(chunk)) {
                 mockResultSeen = true;
               }
-              if (parseSseEventName(chunk) !== "done") continue;
+              if (validateBeforeForwarding) {
+                validatedBlocks.push(chunk);
+              } else {
+                controller.enqueue(
+                  encoder.encode(
+                    `${attestDoneSseBlock(chunk, provenanceContext)}\n\n`
+                  )
+                );
+              }
+              if (eventName !== "done") continue;
               clearTimeout(watchdog);
               if (mockResultSeen) {
                 await appendFallback(
@@ -545,7 +622,16 @@ function createRemoteStreamWithDoneFallback(params: {
 
               doneSeen = true;
               if (validateBeforeForwarding) {
-                for (const remoteChunk of remoteChunks) controller.enqueue(remoteChunk);
+                for (const validatedBlock of validatedBlocks) {
+                  controller.enqueue(
+                    encoder.encode(
+                      `${attestDoneSseBlock(
+                        validatedBlock,
+                        provenanceContext
+                      )}\n\n`
+                    )
+                  );
+                }
               }
               await reader.cancel().catch(() => undefined);
               close();
@@ -626,13 +712,24 @@ export async function POST(request: Request) {
     throw error;
   }
   payload = buildHighRiskConsultationPayloadFromScope(payload, sessionScope);
+  const provenanceContext: AiProvenanceContext = {
+    userId: authResult.session.user.id,
+    institutionId: authResult.session.user.institutionId,
+    capability: "high-risk-consultation",
+    scopeId: payload.targetChildId,
+  };
   const serviceScope = buildServiceScopeClaim(sessionScope);
   const traceId = getTraceId(asRecord(payload).traceId);
   const forcedFallback = request.headers.get("x-ai-force-fallback") === "1";
   if (forcedFallback) {
     const fallbackReason = "forced-local-fallback";
     return streamResponse(
-      buildFallbackStreamEvents(payload, traceId, fallbackReason),
+      buildFallbackStreamEvents(
+        payload,
+        traceId,
+        fallbackReason,
+        provenanceContext
+      ),
       200,
       buildForcedStreamHeaders(fallbackReason)
     );
@@ -655,6 +752,7 @@ export async function POST(request: Request) {
       traceId,
       brainForward,
       accountKind: authResult.session.user.accountKind,
+      provenanceContext,
     });
   }
 
@@ -662,7 +760,12 @@ export async function POST(request: Request) {
     ? "brain-stream-non-sse-response"
     : brainForward.fallbackReason ?? "brain-proxy-unavailable";
   return streamResponse(
-    buildFallbackStreamEvents(payload, traceId, fallbackReason),
+    buildFallbackStreamEvents(
+      payload,
+      traceId,
+      fallbackReason,
+      provenanceContext
+    ),
     200,
     buildLocalStreamHeaders(brainForward, fallbackReason)
   );

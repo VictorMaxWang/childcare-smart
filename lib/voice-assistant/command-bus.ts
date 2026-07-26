@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createHmac, timingSafeEqual } from "node:crypto";
 import type { AccountRole, SessionUser } from "@/lib/auth/accounts";
 import { sanitizeNextPath } from "@/lib/auth/route-access";
 import { ApiRouteError } from "@/lib/server/api-errors";
@@ -9,6 +8,10 @@ import { requireSession } from "@/lib/server/session";
 import { canAccessChild } from "@/lib/server/scope";
 import { getVivoProviderStatus } from "@/lib/providers/vivo";
 import { getUnifiedAiProviderStatus } from "@/lib/server/ai-provider-status";
+import {
+  issueAssistantConfirmationToken,
+  verifyAndConsumeAssistantConfirmationToken,
+} from "@/lib/voice-assistant/confirmation-token";
 import { accountRoleToAssistantRole } from "@/lib/voice-assistant/intents";
 import { parseAssistantCommand } from "@/lib/voice-assistant/parser";
 import { intentNeedsConfirmation, validateAssistantCommandPermission } from "@/lib/voice-assistant/permissions";
@@ -83,91 +86,6 @@ export function getAssistantProviderStatusLegacy(): AssistantProviderStatus {
 
 export function getAssistantProviderStatus(): AssistantProviderStatus {
   return getUnifiedAiProviderStatus();
-}
-
-function confirmationSecret() {
-  return (
-    process.env.NEXTAUTH_SECRET ||
-    process.env.AUTH_SECRET ||
-    process.env.VOICE_ASSISTANT_CONFIRMATION_SECRET ||
-    process.env.VIVO_APP_KEY ||
-    "childcare-smart-local-confirmation-secret"
-  );
-}
-
-function stableSerialize(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(",")}]`;
-  if (value && typeof value === "object") {
-    return `{${Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => `${JSON.stringify(key)}:${stableSerialize(entry)}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
-function jsonSafeRecord(value: Record<string, unknown>) {
-  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
-}
-
-function confirmationPayload(sessionUser: SessionUser, command: AssistantCommand, expiresAt: number) {
-  return jsonSafeRecord({
-    userId: sessionUser.id,
-    role: sessionUser.role,
-    institutionId: sessionUser.institutionId,
-    intent: command.intent,
-    params: command.params,
-    execute: command.execute,
-    safetyLevel: command.safetyLevel,
-    requiredConfirmation: command.requiredConfirmation,
-    expiresAt,
-  });
-}
-
-function signConfirmationPayload(payload: Record<string, unknown>) {
-  return createHmac("sha256", confirmationSecret()).update(stableSerialize(payload)).digest("base64url");
-}
-
-function createConfirmationToken(sessionUser: SessionUser, command: AssistantCommand) {
-  const payload = confirmationPayload(sessionUser, command, Date.now() + 10 * 60 * 1000);
-  return Buffer.from(
-    JSON.stringify({
-      payload,
-      signature: signConfirmationPayload(payload),
-    })
-  ).toString("base64url");
-}
-
-function verifyConfirmationToken(sessionUser: SessionUser, command: AssistantCommand) {
-  const token = command.confirmationToken;
-  if (!token) {
-    throw new ApiRouteError("needs_confirmation", "写入类语音命令缺少确认 token。");
-  }
-
-  let envelope: { payload?: Record<string, unknown>; signature?: string };
-  try {
-    envelope = JSON.parse(Buffer.from(token, "base64url").toString("utf8")) as typeof envelope;
-  } catch {
-    throw new ApiRouteError("needs_confirmation", "写入类语音命令确认 token 无效。");
-  }
-
-  if (!envelope.payload || typeof envelope.signature !== "string") {
-    throw new ApiRouteError("needs_confirmation", "写入类语音命令确认 token 无效。");
-  }
-  if (typeof envelope.payload.expiresAt !== "number" || envelope.payload.expiresAt < Date.now()) {
-    throw new ApiRouteError("needs_confirmation", "写入类语音命令确认 token 已过期，请重新解析指令。");
-  }
-
-  const expectedPayload = confirmationPayload(sessionUser, command, envelope.payload.expiresAt);
-  if (stableSerialize(envelope.payload) !== stableSerialize(expectedPayload)) {
-    throw new ApiRouteError("needs_confirmation", "写入类语音命令与确认 token 不匹配。");
-  }
-
-  const expected = Buffer.from(signConfirmationPayload(envelope.payload));
-  const actual = Buffer.from(envelope.signature);
-  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
-    throw new ApiRouteError("needs_confirmation", "写入类语音命令确认签名无效。");
-  }
 }
 
 export async function buildAssistantParseContext(
@@ -264,7 +182,7 @@ function attachConfirmationToken(command: AssistantCommand, sessionUser: Session
   if (!command.requiredConfirmation || command.status !== "needs_confirmation") return command;
   return {
     ...command,
-    confirmationToken: createConfirmationToken(sessionUser, command),
+    confirmationToken: issueAssistantConfirmationToken(sessionUser, command),
   };
 }
 
@@ -361,7 +279,8 @@ export async function executePlannedAssistantCommand(
   }
 
   if (command.requiredConfirmation) {
-    verifyConfirmationToken(session.user, command);
+    // 先原子消费一次性 token，再进入任何会产生持久化副作用的执行器。
+    await verifyAndConsumeAssistantConfirmationToken(session.user, command);
   }
 
   return executeAssistantCommand(session.user, command);

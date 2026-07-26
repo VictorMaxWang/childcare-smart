@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import type { ParentStoryBookRequest, ParentStoryBookResponse } from "@/lib/ai/types";
+import { verifyAiResultAttestation } from "@/lib/ai/provenance-attestation";
 import {
   SMARTCHILDCARE_FALLBACK_REASON_HEADER,
   SMARTCHILDCARE_TARGET_HEADER,
@@ -296,6 +297,15 @@ test("parent storybook route accepts manual-theme with authorized child id and s
 
         assert.equal(response.status, 200);
         assert.equal(callCount, 1);
+        assert.equal(
+          verifyAiResultAttestation(body, {
+            userId: "u-parent",
+            institutionId: "inst-1",
+            capability: "parent-storybook",
+            scopeId: "c-1",
+          }),
+          true
+        );
         assert.equal(body.childId, "c-1");
         assert.equal(body.providerMeta.transport, "remote-brain-proxy");
       }

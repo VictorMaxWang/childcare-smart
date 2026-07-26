@@ -87,6 +87,7 @@ export function buildAdminD01HighRiskConsultation(
     ...buildLocalHighRiskConsultationFallback({
       input,
       fallbackReason: "admin-feed-local-d01-high-risk",
+      accountKind: "demo",
     }),
     generatedAt,
   };

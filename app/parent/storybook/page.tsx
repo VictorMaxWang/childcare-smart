@@ -194,6 +194,7 @@ export default function ParentStoryBookPage() {
     return feeds[0];
   }, [childFromQuery, feeds, parentD01.invalidChildId, parentD01.selectedChildId]);
   const hasChildContext = Boolean(selectedFeed);
+  const isDemoStorybookAccount = parentD01.currentUser.accountKind === "demo";
   const savedStorybooks = useMemo(() => {
     if (!selectedFeed) return [];
     return [
@@ -226,8 +227,11 @@ export default function ParentStoryBookPage() {
     selectedFeed,
     taskCheckInRecords,
   ]);
+  // 固定案例只能由明确的 demo 身份启用，真实儿童即使复用了演示 ID 也必须走真实生成链路。
   const isLockedLinXiaoyuStorybook =
-    !parentD01.invalidChildId && selectedFeed?.child.id === LIN_XIAOYU_CHILD_ID;
+    isDemoStorybookAccount &&
+    !parentD01.invalidChildId &&
+    selectedFeed?.child.id === LIN_XIAOYU_CHILD_ID;
   const hasManualStorybookOverrideActive =
     hasManualStorybookOverride || hasManualStorybookOverrideRef.current;
   const isLinXiaoyuFixedStorybookVisible =
@@ -247,7 +251,7 @@ export default function ParentStoryBookPage() {
     }
   }, [selectedFeed?.child.id]);
 
-  const resolvedDemoSeedId = explicitDemoSeedId;
+  const resolvedDemoSeedId = isDemoStorybookAccount ? explicitDemoSeedId : null;
   const seededPreset = useMemo(
     () => getParentStoryBookDemoSeedPreset(resolvedDemoSeedId),
     [resolvedDemoSeedId]

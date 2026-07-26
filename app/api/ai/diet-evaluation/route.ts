@@ -6,6 +6,10 @@ import {
   type DietEvaluationResult,
 } from "@/lib/ai/dashscope";
 import {
+  attestAiResult,
+  type AiProvenanceContext,
+} from "@/lib/ai/provenance-attestation";
+import {
   forwardBrainRequest,
   shouldAcceptRemoteResponse,
 } from "@/lib/server/brain-client";
@@ -13,8 +17,11 @@ import { authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import { logSecurityEvent } from "@/lib/server/security-log";
 
 interface DietEvaluationPayload {
+  childId?: string;
   input: DietEvaluationInput;
 }
+
+type DietEvaluationSource = "ai" | "fallback";
 
 function isValidFoodItem(item: unknown) {
   if (!item || typeof item !== "object") return false;
@@ -116,9 +123,153 @@ function buildFallbackEvaluation(input: DietEvaluationInput): DietEvaluationResu
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function isValidDietEvaluationResult(
+  value: unknown
+): value is DietEvaluationResult {
+  if (!isRecord(value)) return false;
+
+  const scores = [
+    value.mealScore,
+    value.todayScore,
+    value.recentScore,
+  ];
+  const comments = [
+    value.mealComment,
+    value.todayComment,
+    value.recentComment,
+  ];
+  return (
+    scores.every(
+      (score) =>
+        typeof score === "number" &&
+        Number.isFinite(score) &&
+        score >= 0 &&
+        score <= 100
+    ) &&
+    comments.every((comment) => Boolean(readString(comment))) &&
+    Array.isArray(value.suggestions) &&
+    value.suggestions.length > 0 &&
+    value.suggestions.every((suggestion) => Boolean(readString(suggestion)))
+  );
+}
+
+function buildAttestedEvaluation(
+  evaluation: DietEvaluationResult,
+  metadata: {
+    childId?: string;
+    source: DietEvaluationSource;
+    provider: string;
+    model: string;
+    fallbackReason?: string | null;
+  },
+  context: AiProvenanceContext
+) {
+  const live = metadata.source === "ai";
+  return attestAiResult(
+    {
+      ...evaluation,
+      ...(metadata.childId ? { childId: metadata.childId } : {}),
+      generatedAt: new Date().toISOString(),
+      source: metadata.source,
+      provider: metadata.provider,
+      model: metadata.model,
+      live,
+      fallback: !live,
+      realProvider: live,
+      ...(metadata.fallbackReason
+        ? { fallbackReason: metadata.fallbackReason }
+        : {}),
+    },
+    context
+  );
+}
+
+async function attestRemoteDietResponse(
+  response: Response,
+  childId: string | undefined,
+  context: AiProvenanceContext
+) {
+  const body = (await response.clone().json().catch(() => null)) as unknown;
+  // 上游“请求成功”不代表业务结构完整；残缺评分若被签名，页面会保存后再解引用崩溃。
+  if (!isRecord(body) || !isValidDietEvaluationResult(body.evaluation)) {
+    return null;
+  }
+
+  const source: DietEvaluationSource =
+    body.source === "ai" ? "ai" : "fallback";
+  const model =
+    readString(body.model) ||
+    (source === "ai" ? "remote-diet-model" : "diet-rule-fallback");
+  const provider =
+    readString(body.provider) ||
+    (source === "ai" ? "remote-brain" : "local-rules");
+  const evaluation = buildAttestedEvaluation(
+    body.evaluation as unknown as DietEvaluationResult,
+    {
+      childId,
+      source,
+      provider,
+      model,
+      fallbackReason: readString(body.fallbackReason) || null,
+    },
+    context
+  );
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  headers.set("content-type", "application/json");
+  return new Response(
+    JSON.stringify({
+      ...body,
+      evaluation,
+    }),
+    {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    }
+  );
+}
+
 export async function POST(request: Request) {
-  const authResult = await authorizeAiRouteSession(request, { allowUnscoped: true });
+  const authResult = await authorizeAiRouteSession(request, {
+    allowUnscoped: true,
+    requireScopedNormalSession: true,
+  });
   if (authResult instanceof Response) return authResult;
+
+  const configuredModel = process.env.AI_DIET_MODEL?.trim() || resolveBailianRuntimeConfig().model;
+  let payload: DietEvaluationPayload | null = null;
+
+  try {
+    payload = (await request.clone().json()) as DietEvaluationPayload;
+  } catch (error) {
+    logSecurityEvent("error", "ai.diet_evaluation.invalid_payload", { error });
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  if (
+    !payload ||
+    !isValidInput(payload.input) ||
+    (Object.prototype.hasOwnProperty.call(payload, "childId") &&
+      (typeof payload.childId !== "string" || !payload.childId.trim()))
+  ) {
+    return NextResponse.json({ error: "Invalid diet evaluation payload" }, { status: 400 });
+  }
+  const childId = payload.childId?.trim() || undefined;
+  const provenanceContext: AiProvenanceContext = {
+    userId: authResult.session.user.id,
+    institutionId: authResult.session.user.institutionId,
+    capability: "diet-evaluation",
+    scopeId: childId ?? null,
+  };
 
   const brainForward = await forwardBrainRequest(request, "/api/v1/multimodal/diet-evaluation");
   const remoteResponseAccepted =
@@ -127,7 +278,16 @@ export async function POST(request: Request) {
       brainForward.response,
       authResult.session.user.accountKind
     ));
-  if (brainForward.response && remoteResponseAccepted) return brainForward.response;
+  if (brainForward.response && remoteResponseAccepted) {
+    const attestedRemoteResponse = await attestRemoteDietResponse(
+      brainForward.response,
+      childId,
+      provenanceContext
+    );
+    if (attestedRemoteResponse) {
+      return attestedRemoteResponse;
+    }
+  }
   const rejectedRemoteResult = Boolean(brainForward.response);
   const remoteFallbackReason = brainForward.response
     ? brainForward.response.ok
@@ -135,29 +295,28 @@ export async function POST(request: Request) {
       : `brain-status-${brainForward.response.status}`
     : brainForward.fallbackReason;
 
-  const configuredModel = process.env.AI_DIET_MODEL?.trim() || resolveBailianRuntimeConfig().model;
-  let payload: DietEvaluationPayload | null = null;
-
-  try {
-    payload = (await request.json()) as DietEvaluationPayload;
-  } catch (error) {
-    logSecurityEvent("error", "ai.diet_evaluation.invalid_payload", { error });
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  if (!payload || !isValidInput(payload.input)) {
-    return NextResponse.json({ error: "Invalid diet evaluation payload" }, { status: 400 });
-  }
-
   const fallback = buildFallbackEvaluation(payload.input);
 
   if (process.env.NODE_ENV !== "production" && request.headers.get("x-ai-force-fallback") === "1") {
+    const fallbackReason = rejectedRemoteResult
+      ? remoteFallbackReason
+      : "forced-local-fallback";
     return NextResponse.json(
       {
-        evaluation: fallback,
+        evaluation: buildAttestedEvaluation(
+          fallback,
+          {
+            childId,
+            source: "fallback",
+            provider: "local-rules",
+            model: "diet-rule-fallback",
+            fallbackReason,
+          },
+          provenanceContext
+        ),
         source: "fallback",
         model: "diet-rule-fallback",
-        fallbackReason: rejectedRemoteResult ? remoteFallbackReason : undefined,
+        fallbackReason,
       },
       { status: 200 }
     );
@@ -169,14 +328,25 @@ export async function POST(request: Request) {
       provider: "dashscope",
       model: configuredModel,
     });
+    const fallbackReason = rejectedRemoteResult
+      ? remoteFallbackReason
+      : brainForward.fallbackReason ?? "dashscope-provider-unavailable";
     return NextResponse.json(
       {
-        evaluation: fallback,
+        evaluation: buildAttestedEvaluation(
+          fallback,
+          {
+            childId,
+            source: "fallback",
+            provider: "local-rules",
+            model: "diet-rule-fallback",
+            fallbackReason,
+          },
+          provenanceContext
+        ),
         source: "fallback",
         model: "diet-rule-fallback",
-        fallbackReason: rejectedRemoteResult
-          ? remoteFallbackReason
-          : brainForward.fallbackReason ?? "dashscope-provider-unavailable",
+        fallbackReason,
       },
       { status: 200 }
     );
@@ -184,7 +354,16 @@ export async function POST(request: Request) {
 
   return NextResponse.json(
     {
-      evaluation: aiResult,
+      evaluation: buildAttestedEvaluation(
+        aiResult,
+        {
+          childId,
+          source: "ai",
+          provider: "dashscope",
+          model: configuredModel,
+        },
+        provenanceContext
+      ),
       source: "ai",
       model: configuredModel,
     },

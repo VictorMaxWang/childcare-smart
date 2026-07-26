@@ -5,6 +5,11 @@ import type {
   ParentStoryBookResponse,
   ParentStoryBookScene,
 } from "@/lib/ai/types";
+import {
+  attestAiResult,
+  sanitizeStorybookResultForContinuation,
+  type AiProvenanceContext,
+} from "@/lib/ai/provenance-attestation";
 import { buildAiProviderTraceFromProviderMeta } from "@/lib/ai/provider-trace";
 import { getVivoEnv, requestVivoTts } from "@/lib/providers/vivo";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
@@ -596,6 +601,19 @@ export async function POST(request: Request) {
     }
     throw error;
   }
+  const provenanceContext: AiProvenanceContext = {
+    userId: sessionUser.id,
+    institutionId: sessionUser.institutionId,
+    capability: "parent-storybook",
+    scopeId: payload.childId,
+  };
+  payload = {
+    ...payload,
+    story: sanitizeStorybookResultForContinuation(
+      payload.story,
+      provenanceContext
+    ) as ParentStoryBookResponse,
+  };
 
   const targetPath = "/api/v1/agents/parent/storybook/media-status";
   const brainRequest = new Request(request.url, {
@@ -623,17 +641,20 @@ export async function POST(request: Request) {
       requestUrl: request.url,
       serviceScope: buildServiceScopeClaim(sessionScope),
     });
-    return NextResponse.json(preparedStory, {
-      status: 200,
-      headers: mergeHeaders(
-        createBrainTransportHeaders({
-          transport: "next-json-fallback",
-          targetPath,
-          upstreamHost: brainForward.upstreamHost,
-          fallbackReason: null,
-        })
-      ),
-    });
+    return NextResponse.json(
+      attestAiResult(preparedStory, provenanceContext),
+      {
+        status: 200,
+        headers: mergeHeaders(
+          createBrainTransportHeaders({
+            transport: "next-json-fallback",
+            targetPath,
+            upstreamHost: brainForward.upstreamHost,
+            fallbackReason: null,
+          })
+        ),
+      }
+    );
   }
 
   const remoteStory = await parseRemoteStoryResponse(brainForward.response.clone());
@@ -654,17 +675,20 @@ export async function POST(request: Request) {
       requestUrl: request.url,
       serviceScope: buildServiceScopeClaim(sessionScope),
     });
-    return NextResponse.json(preparedStory, {
-      status: 200,
-      headers: mergeHeaders(
-        createBrainTransportHeaders({
-          transport: "next-json-fallback",
-          targetPath,
-          upstreamHost: brainForward.upstreamHost,
-          fallbackReason: null,
-        })
-      ),
-    });
+    return NextResponse.json(
+      attestAiResult(preparedStory, provenanceContext),
+      {
+        status: 200,
+        headers: mergeHeaders(
+          createBrainTransportHeaders({
+            transport: "next-json-fallback",
+            targetPath,
+            upstreamHost: brainForward.upstreamHost,
+            fallbackReason: null,
+          })
+        ),
+      }
+    );
   }
 
   const durableRemoteStory = await prepareStoryMediaForDelivery({
@@ -694,16 +718,19 @@ export async function POST(request: Request) {
     }
   );
 
-  return NextResponse.json(preparedStory, {
-    status: 200,
-    headers: mergeHeaders(
-      brainForward.response.headers,
-      createBrainTransportHeaders({
-        transport: "remote-brain-proxy",
-        targetPath,
-        upstreamHost: brainForward.upstreamHost,
-        fallbackReason: null,
-      })
-    ),
-  });
+  return NextResponse.json(
+    attestAiResult(preparedStory, provenanceContext),
+    {
+      status: 200,
+      headers: mergeHeaders(
+        brainForward.response.headers,
+        createBrainTransportHeaders({
+          transport: "remote-brain-proxy",
+          targetPath,
+          upstreamHost: brainForward.upstreamHost,
+          fallbackReason: null,
+        })
+      ),
+    }
+  );
 }

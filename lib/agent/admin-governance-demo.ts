@@ -510,7 +510,8 @@ function buildGovernanceActions(
         pendingMaterials.length > 0
           ? `${pendingMaterials.length} 份健康材料仍待解析，解析后进入会诊证据链。`
           : "健康材料已完成解析，可继续作为复查证据。",
-      href: "/teacher/health-file-bridge",
+      // 园长没有教师桥接页权限；共享健康页能展示当前机构范围内的材料与健康上下文。
+      href: "/health",
       tone: "purple",
       sourceIds: [...pendingMaterials.map((material) => material.materialId), ...healthParseTasks.map((task) => task.taskId)].slice(0, 6),
     },

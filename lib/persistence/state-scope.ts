@@ -2,8 +2,10 @@ import type { SessionUser } from "@/lib/auth/accounts";
 import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
 
 type SnapshotChild = AppStateSnapshot["children"][number];
+type SnapshotConversation = AppStateSnapshot["conversations"][number];
 type SnapshotReminder = AppStateSnapshot["reminders"][number];
 type SnapshotNutritionMenu = AppStateSnapshot["nutritionMenus"][number];
+type SnapshotRole = "parent" | "teacher" | "admin";
 
 const ROLE_PARENT = "家长";
 const ROLE_TEACHER = "教师";
@@ -127,12 +129,98 @@ function filterMenusForScope(
   return items.filter((item) => authorizedClassNames.has(item.classId));
 }
 
+function toSnapshotRole(user: Pick<SessionUser, "role">): SnapshotRole {
+  if (user.role === ROLE_PARENT) return "parent";
+  if (user.role === ROLE_TEACHER) return "teacher";
+  return "admin";
+}
+
+function isRoleVisibleReminder(reminder: SnapshotReminder, role: SnapshotRole) {
+  return reminder.targetRole === role || reminder.assigneeRole === role;
+}
+
+function isRoleVisibleConversation(
+  conversation: SnapshotConversation,
+  role: SnapshotRole
+) {
+  return conversation.participantRoles.includes(role);
+}
+
 export function scopeSnapshotForSessionUser(
   snapshot: AppStateSnapshot,
   user: Pick<SessionUser, "role" | "id" | "institutionId" | "classId" | "className" | "childIds">
 ) {
   const authorizedChildIds = resolveAuthorizedChildIdSet(user, snapshot.children);
   const authorizedClassNames = resolveAuthorizedClassNameSet(snapshot.children, authorizedChildIds);
+  const snapshotRole = toSnapshotRole(user);
+  const isAdmin = user.role === ROLE_ADMIN;
+  const childScopedTasks = filterByChildId(
+    snapshot.tasks,
+    authorizedChildIds,
+    (item) => item.childId
+  );
+  const tasks = isAdmin
+    ? childScopedTasks
+    : childScopedTasks.filter((item) => item.ownerRole === snapshotRole);
+  const visibleTaskRefs = new Set(
+    tasks.flatMap((task) =>
+      [
+        task.taskId,
+        task.sourceId,
+        task.legacyRefs?.legacyWeeklyTaskId,
+        task.legacyRefs?.interventionCardId,
+      ].filter((value): value is string => Boolean(value))
+    )
+  );
+  const childScopedTaskCheckIns = filterByChildId(
+    snapshot.taskCheckIns,
+    authorizedChildIds,
+    (item) => item.childId
+  );
+  const taskCheckIns = isAdmin
+    ? childScopedTaskCheckIns
+    : childScopedTaskCheckIns.filter((item) => visibleTaskRefs.has(item.taskId));
+  const childScopedMobileDrafts = filterByChildId(
+    snapshot.mobileDrafts,
+    authorizedChildIds,
+    (item) => item.childId
+  );
+  const mobileDrafts = isAdmin
+    ? childScopedMobileDrafts
+    : childScopedMobileDrafts.filter((item) => item.targetRole === snapshotRole);
+  const childScopedReminders = filterByChildId(
+    snapshot.reminders,
+    authorizedChildIds,
+    readReminderChildId
+  );
+  const reminders = isAdmin
+    ? childScopedReminders
+    : childScopedReminders.filter((item) =>
+        isRoleVisibleReminder(item, snapshotRole)
+      );
+  const childScopedConversations = filterByChildId(
+    snapshot.conversations,
+    authorizedChildIds,
+    (item) => item.childId
+  );
+  const conversations = isAdmin
+    ? childScopedConversations
+    : childScopedConversations.filter((item) =>
+        isRoleVisibleConversation(item, snapshotRole)
+      );
+  const visibleConversationIds = new Set(
+    conversations.map((item) => item.conversationId)
+  );
+  const childScopedMessages = filterByChildId(
+    snapshot.messages,
+    authorizedChildIds,
+    (item) => item.childId
+  );
+  const messages = isAdmin
+    ? childScopedMessages
+    : childScopedMessages.filter((item) =>
+        visibleConversationIds.has(item.conversationId)
+      );
 
   return {
     ...snapshot,
@@ -142,18 +230,18 @@ export function scopeSnapshotForSessionUser(
     growth: filterByChildId(snapshot.growth, authorizedChildIds, (item) => item.childId),
     feedback: filterByChildId(snapshot.feedback, authorizedChildIds, (item) => item.childId),
     health: filterByChildId(snapshot.health, authorizedChildIds, (item) => item.childId),
-    taskCheckIns: filterByChildId(snapshot.taskCheckIns, authorizedChildIds, (item) => item.childId),
+    taskCheckIns,
     interventionCards: filterByChildId(
       snapshot.interventionCards,
       authorizedChildIds,
       (item) => item.targetChildId
     ),
     consultations: filterByChildId(snapshot.consultations, authorizedChildIds, (item) => item.childId),
-    mobileDrafts: filterByChildId(snapshot.mobileDrafts, authorizedChildIds, (item) => item.childId),
-    reminders: filterByChildId(snapshot.reminders, authorizedChildIds, readReminderChildId),
-    tasks: filterByChildId(snapshot.tasks, authorizedChildIds, (item) => item.childId),
-    messages: filterByChildId(snapshot.messages, authorizedChildIds, (item) => item.childId),
-    conversations: filterByChildId(snapshot.conversations, authorizedChildIds, (item) => item.childId),
+    mobileDrafts,
+    reminders,
+    tasks,
+    messages,
+    conversations,
     healthMaterials: filterByChildId(snapshot.healthMaterials, authorizedChildIds, (item) => item.childId),
     nutritionMenus: filterMenusForScope(snapshot.nutritionMenus, authorizedClassNames),
     storybooks: filterByChildId(snapshot.storybooks, authorizedChildIds, (item) => item.childId),
@@ -166,57 +254,59 @@ export function mergeScopedSnapshotForSessionUser(params: {
   user: Pick<SessionUser, "role" | "id" | "institutionId" | "classId" | "className" | "childIds">;
 }) {
   const { currentSnapshot, incomingSnapshot, user } = params;
+  // 旧版浏览器缓存可能已含其他角色队列；合并前再次投影，避免升级后继续保留越权数据。
+  const scopedCurrentSnapshot = scopeSnapshotForSessionUser(currentSnapshot, user);
   const scopedIncomingSnapshot = scopeSnapshotForSessionUser(incomingSnapshot, user);
 
   if (user.role === ROLE_ADMIN) {
     return {
-      ...currentSnapshot,
-      children: mergeItemsByKey(currentSnapshot.children, scopedIncomingSnapshot.children, (item) => item.id),
-      attendance: mergeItemsByKey(currentSnapshot.attendance, scopedIncomingSnapshot.attendance, (item) => item.id),
-      meals: mergeItemsByKey(currentSnapshot.meals, scopedIncomingSnapshot.meals, (item) => item.id),
-      growth: mergeItemsByKey(currentSnapshot.growth, scopedIncomingSnapshot.growth, (item) => item.id),
-      feedback: mergeItemsByKey(currentSnapshot.feedback, scopedIncomingSnapshot.feedback, (item) => item.id),
-      health: mergeItemsByKey(currentSnapshot.health, scopedIncomingSnapshot.health, (item) => item.id),
-      taskCheckIns: mergeItemsByKey(currentSnapshot.taskCheckIns, scopedIncomingSnapshot.taskCheckIns, (item) => item.id),
+      ...scopedCurrentSnapshot,
+      children: mergeItemsByKey(scopedCurrentSnapshot.children, scopedIncomingSnapshot.children, (item) => item.id),
+      attendance: mergeItemsByKey(scopedCurrentSnapshot.attendance, scopedIncomingSnapshot.attendance, (item) => item.id),
+      meals: mergeItemsByKey(scopedCurrentSnapshot.meals, scopedIncomingSnapshot.meals, (item) => item.id),
+      growth: mergeItemsByKey(scopedCurrentSnapshot.growth, scopedIncomingSnapshot.growth, (item) => item.id),
+      feedback: mergeItemsByKey(scopedCurrentSnapshot.feedback, scopedIncomingSnapshot.feedback, (item) => item.id),
+      health: mergeItemsByKey(scopedCurrentSnapshot.health, scopedIncomingSnapshot.health, (item) => item.id),
+      taskCheckIns: mergeItemsByKey(scopedCurrentSnapshot.taskCheckIns, scopedIncomingSnapshot.taskCheckIns, (item) => item.id),
       interventionCards: mergeItemsByKey(
-        currentSnapshot.interventionCards,
+        scopedCurrentSnapshot.interventionCards,
         scopedIncomingSnapshot.interventionCards,
         (item) => item.id
       ),
       consultations: mergeItemsByKey(
-        currentSnapshot.consultations,
+        scopedCurrentSnapshot.consultations,
         scopedIncomingSnapshot.consultations,
         (item) => item.consultationId
       ),
       mobileDrafts: mergeItemsByKey(
-        currentSnapshot.mobileDrafts,
+        scopedCurrentSnapshot.mobileDrafts,
         scopedIncomingSnapshot.mobileDrafts,
         (item) => item.draftId
       ),
       reminders: mergeItemsByKey(
-        currentSnapshot.reminders,
+        scopedCurrentSnapshot.reminders,
         scopedIncomingSnapshot.reminders,
         (item) => item.reminderId
       ),
-      tasks: mergeItemsByKey(currentSnapshot.tasks, scopedIncomingSnapshot.tasks, (item) => item.taskId),
-      messages: mergeItemsByKey(currentSnapshot.messages, scopedIncomingSnapshot.messages, (item) => item.messageId),
+      tasks: mergeItemsByKey(scopedCurrentSnapshot.tasks, scopedIncomingSnapshot.tasks, (item) => item.taskId),
+      messages: mergeItemsByKey(scopedCurrentSnapshot.messages, scopedIncomingSnapshot.messages, (item) => item.messageId),
       conversations: mergeItemsByKey(
-        currentSnapshot.conversations,
+        scopedCurrentSnapshot.conversations,
         scopedIncomingSnapshot.conversations,
         (item) => item.conversationId
       ),
       healthMaterials: mergeItemsByKey(
-        currentSnapshot.healthMaterials,
+        scopedCurrentSnapshot.healthMaterials,
         scopedIncomingSnapshot.healthMaterials,
         (item) => item.materialId
       ),
       nutritionMenus: mergeItemsByKey(
-        currentSnapshot.nutritionMenus,
+        scopedCurrentSnapshot.nutritionMenus,
         scopedIncomingSnapshot.nutritionMenus,
         (item) => item.menuId
       ),
       storybooks: mergeItemsByKey(
-        currentSnapshot.storybooks,
+        scopedCurrentSnapshot.storybooks,
         scopedIncomingSnapshot.storybooks,
         (item) => item.storybookId
       ),
@@ -227,93 +317,170 @@ export function mergeScopedSnapshotForSessionUser(params: {
   // 浏览器缓存可能因容量不足只保留部分 bucket；缺失项不能被解释为删除远端数据。
   // 正常账号的显式删除使用归档接口，因此这里仅在授权范围内按稳定主键 upsert。
   return {
-    ...currentSnapshot,
+    ...scopedCurrentSnapshot,
     children: mergeItemsByKey(
-      currentSnapshot.children,
+      scopedCurrentSnapshot.children,
       scopedIncomingSnapshot.children,
       (item) => item.id
     ),
     attendance: mergeItemsByKey(
-      currentSnapshot.attendance,
+      scopedCurrentSnapshot.attendance,
       scopedIncomingSnapshot.attendance,
       (item) => item.id
     ),
     meals: mergeItemsByKey(
-      currentSnapshot.meals,
+      scopedCurrentSnapshot.meals,
       scopedIncomingSnapshot.meals,
       (item) => item.id
     ),
     growth: mergeItemsByKey(
-      currentSnapshot.growth,
+      scopedCurrentSnapshot.growth,
       scopedIncomingSnapshot.growth,
       (item) => item.id
     ),
     feedback: mergeItemsByKey(
-      currentSnapshot.feedback,
+      scopedCurrentSnapshot.feedback,
       scopedIncomingSnapshot.feedback,
       (item) => item.id
     ),
     health: mergeItemsByKey(
-      currentSnapshot.health,
+      scopedCurrentSnapshot.health,
       scopedIncomingSnapshot.health,
       (item) => item.id
     ),
     taskCheckIns: mergeItemsByKey(
-      currentSnapshot.taskCheckIns,
+      scopedCurrentSnapshot.taskCheckIns,
       scopedIncomingSnapshot.taskCheckIns,
       (item) => item.id
     ),
     interventionCards: mergeItemsByKey(
-      currentSnapshot.interventionCards,
+      scopedCurrentSnapshot.interventionCards,
       scopedIncomingSnapshot.interventionCards,
       (item) => item.id
     ),
     consultations: mergeItemsByKey(
-      currentSnapshot.consultations,
+      scopedCurrentSnapshot.consultations,
       scopedIncomingSnapshot.consultations,
       (item) => item.consultationId
     ),
     mobileDrafts: mergeItemsByKey(
-      currentSnapshot.mobileDrafts,
+      scopedCurrentSnapshot.mobileDrafts,
       scopedIncomingSnapshot.mobileDrafts,
       (item) => item.draftId
     ),
     reminders: mergeItemsByKey(
-      currentSnapshot.reminders,
+      scopedCurrentSnapshot.reminders,
       scopedIncomingSnapshot.reminders,
       (item) => item.reminderId
     ),
     tasks: mergeItemsByKey(
-      currentSnapshot.tasks,
+      scopedCurrentSnapshot.tasks,
       scopedIncomingSnapshot.tasks,
       (item) => item.taskId
     ),
     messages: mergeItemsByKey(
-      currentSnapshot.messages,
+      scopedCurrentSnapshot.messages,
       scopedIncomingSnapshot.messages,
       (item) => item.messageId
     ),
     conversations: mergeItemsByKey(
-      currentSnapshot.conversations,
+      scopedCurrentSnapshot.conversations,
       scopedIncomingSnapshot.conversations,
       (item) => item.conversationId
     ),
     healthMaterials: mergeItemsByKey(
-      currentSnapshot.healthMaterials,
+      scopedCurrentSnapshot.healthMaterials,
       scopedIncomingSnapshot.healthMaterials,
       (item) => item.materialId
     ),
     nutritionMenus: mergeItemsByKey(
-      currentSnapshot.nutritionMenus,
+      scopedCurrentSnapshot.nutritionMenus,
       scopedIncomingSnapshot.nutritionMenus,
       (item) => item.menuId
     ),
     storybooks: mergeItemsByKey(
-      currentSnapshot.storybooks,
+      scopedCurrentSnapshot.storybooks,
       scopedIncomingSnapshot.storybooks,
       (item) => item.storybookId
     ),
     updatedAt: scopedIncomingSnapshot.updatedAt,
+  } satisfies AppStateSnapshot;
+}
+
+export function mergeScopedSnapshotIntoInstitutionSnapshot(params: {
+  currentSnapshot: AppStateSnapshot;
+  incomingSnapshot: AppStateSnapshot;
+  user: Pick<SessionUser, "role" | "id" | "institutionId" | "classId" | "className" | "childIds">;
+}) {
+  const { currentSnapshot, incomingSnapshot, user } = params;
+  const scopedMergedSnapshot = mergeScopedSnapshotForSessionUser({
+    currentSnapshot,
+    incomingSnapshot,
+    user,
+  });
+
+  // 演示账号共用机构级缓存。这里只把当前角色授权范围内的增量写回完整快照，
+  // 避免教师或家长登录后把其他班级、其他角色的数据从共享缓存中裁掉。
+  return {
+    ...currentSnapshot,
+    children: mergeItemsByKey(currentSnapshot.children, scopedMergedSnapshot.children, (item) => item.id),
+    attendance: mergeItemsByKey(currentSnapshot.attendance, scopedMergedSnapshot.attendance, (item) => item.id),
+    meals: mergeItemsByKey(currentSnapshot.meals, scopedMergedSnapshot.meals, (item) => item.id),
+    growth: mergeItemsByKey(currentSnapshot.growth, scopedMergedSnapshot.growth, (item) => item.id),
+    feedback: mergeItemsByKey(currentSnapshot.feedback, scopedMergedSnapshot.feedback, (item) => item.id),
+    health: mergeItemsByKey(currentSnapshot.health, scopedMergedSnapshot.health, (item) => item.id),
+    taskCheckIns: mergeItemsByKey(
+      currentSnapshot.taskCheckIns,
+      scopedMergedSnapshot.taskCheckIns,
+      (item) => item.id
+    ),
+    interventionCards: mergeItemsByKey(
+      currentSnapshot.interventionCards,
+      scopedMergedSnapshot.interventionCards,
+      (item) => item.id
+    ),
+    consultations: mergeItemsByKey(
+      currentSnapshot.consultations,
+      scopedMergedSnapshot.consultations,
+      (item) => item.consultationId
+    ),
+    mobileDrafts: mergeItemsByKey(
+      currentSnapshot.mobileDrafts,
+      scopedMergedSnapshot.mobileDrafts,
+      (item) => item.draftId
+    ),
+    reminders: mergeItemsByKey(
+      currentSnapshot.reminders,
+      scopedMergedSnapshot.reminders,
+      (item) => item.reminderId
+    ),
+    tasks: mergeItemsByKey(currentSnapshot.tasks, scopedMergedSnapshot.tasks, (item) => item.taskId),
+    messages: mergeItemsByKey(
+      currentSnapshot.messages,
+      scopedMergedSnapshot.messages,
+      (item) => item.messageId
+    ),
+    conversations: mergeItemsByKey(
+      currentSnapshot.conversations,
+      scopedMergedSnapshot.conversations,
+      (item) => item.conversationId
+    ),
+    healthMaterials: mergeItemsByKey(
+      currentSnapshot.healthMaterials,
+      scopedMergedSnapshot.healthMaterials,
+      (item) => item.materialId
+    ),
+    nutritionMenus: mergeItemsByKey(
+      currentSnapshot.nutritionMenus,
+      scopedMergedSnapshot.nutritionMenus,
+      (item) => item.menuId
+    ),
+    storybooks: mergeItemsByKey(
+      currentSnapshot.storybooks,
+      scopedMergedSnapshot.storybooks,
+      (item) => item.storybookId
+    ),
+    updatedAt: incomingSnapshot.updatedAt,
   } satisfies AppStateSnapshot;
 }
 

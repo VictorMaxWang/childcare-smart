@@ -4,6 +4,10 @@ import test from "node:test";
 import { POST } from "./route.ts";
 
 type EnvKey = "VIVO_APP_ID" | "VIVO_APP_KEY" | "VIVO_BASE_URL";
+const WAV_SIGNATURE = new Uint8Array([
+  0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00,
+  0x57, 0x41, 0x56, 0x45,
+]);
 
 function withEnv(overrides: Partial<Record<EnvKey, string | undefined>>, fn: () => void | Promise<void>) {
   const previous: Record<EnvKey, string | undefined> = {
@@ -88,7 +92,73 @@ test("voice-asr rejects oversized audio before provider work", async () => {
   );
   const body = (await response.json()) as Record<string, unknown>;
 
-  assert.equal(response.status, 400);
+  assert.equal(response.status, 413);
   assert.equal(body.ok, false);
   assert.equal(body.code, "invalid_request");
+});
+
+test("voice-asr rejects oversized Content-Length before auth body inspection", async () => {
+  const response = await POST(
+    new Request("http://localhost:3000/api/ai/voice-asr", {
+      method: "POST",
+      headers: {
+        "content-length": String(5 * 1024 * 1024),
+        "content-type": "multipart/form-data; boundary=voice",
+      },
+      body: "--voice--\r\n",
+    })
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 413);
+  assert.equal(body.ok, false);
+  assert.equal(body.code, "invalid_request");
+});
+
+test("voice-asr rejects audio MIME that does not match the file signature", async () => {
+  const formData = new FormData();
+  formData.set(
+    "audio",
+    new File(["<html>not audio</html>"], "voice.wav", {
+      type: "audio/wav",
+    })
+  );
+
+  const response = await POST(
+    new Request("http://localhost:3000/api/ai/voice-asr", {
+      method: "POST",
+      headers: { "x-demo-account-id": "u-parent" },
+      body: formData,
+    })
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 415);
+  assert.equal(body.ok, false);
+  assert.equal(body.code, "invalid_request");
+});
+
+test("voice-asr keeps valid WAV text fallback usable after binary validation", async () => {
+  const formData = new FormData();
+  formData.set(
+    "audio",
+    new File([WAV_SIGNATURE], "voice.wav", {
+      type: "audio/x-wav",
+    })
+  );
+  formData.set("mimeType", "audio/webm");
+  formData.set("fallbackText", "幼儿午睡后情绪稳定");
+
+  const response = await POST(
+    new Request("http://localhost:3000/api/ai/voice-asr", {
+      method: "POST",
+      headers: { "x-demo-account-id": "u-parent" },
+      body: formData,
+    })
+  );
+  const envelope = (await response.json()) as Record<string, unknown>;
+  const data = envelope.data as Record<string, unknown>;
+
+  assert.equal(response.status, 200);
+  assert.equal(data.transcript, "幼儿午睡后情绪稳定");
 });

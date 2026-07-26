@@ -33,6 +33,7 @@ import {
   mergePromptMemoryContexts,
 } from "@/lib/memory/prompt-context";
 import type { TeacherCopilotPayload } from "@/lib/teacher-copilot/types";
+import type { AccountKind } from "@/lib/auth/accounts";
 
 export type TeacherAgentWorkflowType = "communication" | "follow-up" | "weekly-summary";
 export type TeacherAgentMode = "class" | "child";
@@ -44,6 +45,7 @@ export interface TeacherAgentUserSnapshot {
   className?: string;
   institutionId?: string;
   role?: string;
+  accountKind?: AccountKind;
 }
 
 export interface TeacherAgentChildSnapshot {
@@ -184,6 +186,7 @@ export interface TeacherAgentFocusChild {
 export interface TeacherAgentChildContext {
   today: string;
   className: string;
+  accountKind?: AccountKind;
   child: TeacherAgentChildSnapshot;
   todayHealthChecks: TeacherAgentHealthCheckSnapshot[];
   todayAbnormalChecks: TeacherAgentHealthCheckSnapshot[];
@@ -203,6 +206,7 @@ export interface TeacherAgentChildContext {
 export interface TeacherAgentClassContext {
   today: string;
   className: string;
+  accountKind?: AccountKind;
   visibleChildren: TeacherAgentChildSnapshot[];
   presentChildren: TeacherAgentChildSnapshot[];
   todayHealthChecks: TeacherAgentHealthCheckSnapshot[];
@@ -571,6 +575,7 @@ export function buildTeacherAgentClassContext(payload: Omit<TeacherAgentRequestP
   return {
     today,
     className: payload.currentUser.className ?? payload.visibleChildren[0]?.className ?? "当前班级",
+    accountKind: payload.currentUser.accountKind,
     visibleChildren: payload.visibleChildren,
     presentChildren: payload.presentChildren,
     todayHealthChecks,
@@ -604,7 +609,7 @@ export function pickTeacherAgentWorkflowTargetChildId(
     return requestedChildId;
   }
 
-  if (workflow === "follow-up") {
+  if (classContext.accountKind === "demo" && workflow === "follow-up") {
     return (
       classContext.visibleChildren.find((child) => child.name === "高远舟")?.id ??
       classContext.visibleChildren.find((child) => child.id === "c-12")?.id ??
@@ -612,7 +617,7 @@ export function pickTeacherAgentWorkflowTargetChildId(
     );
   }
 
-  if (workflow === "communication") {
+  if (classContext.accountKind === "demo" && workflow === "communication") {
     return (
       classContext.visibleChildren.find((child) => child.name === "陈安安")?.id ??
       classContext.visibleChildren.find((child) => child.id === "c-5")?.id ??
@@ -655,6 +660,7 @@ export function buildTeacherAgentChildContext(
   const context = {
     today: classContext.today,
     className: classContext.className,
+    accountKind: classContext.accountKind,
     child,
     todayHealthChecks,
     todayAbnormalChecks,
@@ -1059,6 +1065,9 @@ function formatTeacherFeedbackWriteback(
 }
 
 function buildDefenseWeeklySummaryParts(context: TeacherAgentClassContext) {
+  // 防守案例必须由显式 demo 身份开启，不能把可碰撞的儿童 ID/姓名当成环境开关。
+  if (context.accountKind !== "demo") return null;
+
   const lin = findDemoChild(context, "林小雨", "c-1");
   const gao = findDemoChild(context, "高远舟", "c-12");
   const chen = findDemoChild(context, "陈安安", "c-5");
@@ -1132,6 +1141,7 @@ function buildDefenseWeeklySummaryParts(context: TeacherAgentClassContext) {
 }
 
 function buildDefenseFollowUpParts(context: TeacherAgentChildContext) {
+  if (context.accountKind !== "demo") return null;
   if (context.child.name !== "高远舟" && context.child.id !== "c-12") return null;
   const childName = "高远舟";
   const guardianName = context.child.guardians?.[0]?.name ?? "家长";
@@ -1189,6 +1199,7 @@ function buildDefenseFollowUpParts(context: TeacherAgentChildContext) {
 }
 
 function buildDefenseCommunicationParts(context: TeacherAgentChildContext) {
+  if (context.accountKind !== "demo") return null;
   if (context.child.name !== "陈安安" && context.child.id !== "c-5") return null;
   const childName = "陈安安";
   const guardianName = context.child.guardians?.[0]?.name ?? "家长";

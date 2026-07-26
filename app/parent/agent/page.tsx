@@ -201,6 +201,7 @@ export default function ParentAgentPage() {
   const [pendingFeedbackUpload, setPendingFeedbackUpload] = useState<{
     childId: string;
     feedbackId: string;
+    messageSent: boolean;
   } | null>(null);
   const [apiMessages, setApiMessages] = useState<ApiMessage[]>([]);
   const [apiFeedbacks, setApiFeedbacks] = useState<ApiFeedback[]>([]);
@@ -222,17 +223,25 @@ export default function ParentAgentPage() {
   const autoTrendHandledRef = useRef<string | null>(null);
   const feedbackSectionRef = useRef<HTMLDivElement | null>(null);
 
+  const childQueryWasUnauthorized = Boolean(
+    childFromQuery && !authorizedChildIds.has(childFromQuery)
+  );
   const resolvedChildId =
-    selectedChildId && authorizedChildIds.has(selectedChildId)
+    childQueryWasUnauthorized
+      ? ""
+      : selectedChildId && authorizedChildIds.has(selectedChildId)
       ? selectedChildId
       : childFromQuery && authorizedChildIds.has(childFromQuery)
         ? childFromQuery
         : parentFeed[0]?.child.id ?? "";
   const selectedFeed = useMemo(
-    () => parentFeed.find((item) => item.child.id === resolvedChildId) ?? parentFeed[0],
-    [parentFeed, resolvedChildId]
+    () =>
+      childQueryWasUnauthorized
+        ? undefined
+        : parentFeed.find((item) => item.child.id === resolvedChildId) ??
+          parentFeed[0],
+    [childQueryWasUnauthorized, parentFeed, resolvedChildId]
   );
-  const childQueryWasUnauthorized = Boolean(childFromQuery && !authorizedChildIds.has(childFromQuery));
   const refreshE04CommunicationData = useCallback(async () => {
     if (!resolvedChildId) return;
     try {
@@ -1057,6 +1066,10 @@ export default function ParentAgentPage() {
       pendingFeedbackUpload?.childId === input.childId
         ? pendingFeedbackUpload.feedbackId
         : "";
+    let messageSent =
+      pendingFeedbackUpload?.childId === input.childId
+        ? pendingFeedbackUpload.messageSent
+        : false;
     const isRetryingFeedback = Boolean(savedFeedbackId);
     const feedbackContent = buildStructuredFeedbackMessageContent({
       childName: selectedFeed.child.name,
@@ -1067,6 +1080,7 @@ export default function ParentAgentPage() {
       barriers: input.barriers,
     });
     let reminderAcknowledgementWarning: string | null = null;
+    let refreshWarning: string | null = null;
     try {
       if (!savedFeedbackId) {
         const { attachmentDrafts, ...feedbackInput } = input;
@@ -1079,10 +1093,23 @@ export default function ParentAgentPage() {
           content: feedbackContent,
         });
         savedFeedbackId = detail.feedback.feedbackId;
+        setPendingFeedbackUpload({
+          childId: input.childId,
+          feedbackId: savedFeedbackId,
+          messageSent: false,
+        });
+      }
+      if (!messageSent) {
         await sendApiMessage({
           childId: input.childId,
           conversationId: getHomeSchoolConversationId(input.childId),
-          content: detail.feedback.content,
+          content: feedbackContent,
+        });
+        messageSent = true;
+        setPendingFeedbackUpload({
+          childId: input.childId,
+          feedbackId: savedFeedbackId,
+          messageSent: true,
         });
       }
       const attachmentDrafts = input.attachmentDrafts ?? [];
@@ -1090,6 +1117,7 @@ export default function ParentAgentPage() {
         setPendingFeedbackUpload({
           childId: input.childId,
           feedbackId: savedFeedbackId,
+          messageSent,
         });
         const existingAttachments = isRetryingFeedback
           ? await listApiAttachments({
@@ -1121,7 +1149,8 @@ export default function ParentAgentPage() {
       }
       const reloadResult = await reloadAppSnapshotFromApi();
       if (reloadResult.status === "failed") {
-        throw new Error(reloadResult.error ?? reloadResult.message);
+        refreshWarning =
+          "反馈已保存，但页面数据刷新失败；重新打开页面后可查看最新记录。";
       }
       await refreshE04CommunicationData();
       setFeedbackDetailId(savedFeedbackId);
@@ -1145,13 +1174,13 @@ export default function ParentAgentPage() {
       setFeedbackStatus(
         `今晚反馈已提交，并已写入家园沟通与当前机构数据；正在基于最新反馈刷新趋势解释。${
           reminderAcknowledgementWarning ? ` ${reminderAcknowledgementWarning}` : ""
-        }`
+        }${refreshWarning ? ` ${refreshWarning}` : ""}`
       );
     } else {
       setFeedbackStatus(
         `今晚反馈已提交，并已写入家园沟通与当前机构数据；下一次趋势解释会使用这条反馈。${
           reminderAcknowledgementWarning ? ` ${reminderAcknowledgementWarning}` : ""
-        }`
+        }${refreshWarning ? ` ${refreshWarning}` : ""}`
       );
     }
     return true;
@@ -1169,15 +1198,30 @@ export default function ParentAgentPage() {
         "snoozed"
       );
       const reloadResult = await reloadAppSnapshotFromApi();
-      if (reloadResult.status === "failed") {
-        throw new Error(reloadResult.error ?? reloadResult.message);
-      }
-      setFeedbackStatus("已设置稍后提醒，并写入当前机构数据。");
+      setFeedbackStatus(
+        reloadResult.status === "failed"
+          ? "稍后提醒已写入当前机构数据，但页面刷新失败；重新打开后可查看。"
+          : "已设置稍后提醒，并写入当前机构数据。"
+      );
     } catch (error) {
       setFeedbackStatus(
         `稍后提醒保存失败：${error instanceof Error ? error.message : "请稍后再试。"}`
       );
     }
+  }
+
+  if (childQueryWasUnauthorized) {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        <EmptyState
+          icon={<BrainCircuit className="h-6 w-6" />}
+          title="无法访问链接中的幼儿档案"
+          description="该 child 参数不属于当前家长账号。系统没有切换到其他孩子，也不会开放消息或反馈写入。"
+          actionLabel="返回家长首页"
+          onAction={() => router.push("/parent")}
+        />
+      </div>
+    );
   }
 
   if (!selectedFeed || !baseContext || !snapshot) {
@@ -1221,12 +1265,6 @@ export default function ParentAgentPage() {
                 : "已同步"}
           </Badge>
         </div>
-
-        {childQueryWasUnauthorized ? (
-          <p className="mt-3 rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-            当前链接中的 child 参数不属于本家长账号，已切换到授权孩子。
-          </p>
-        ) : null}
 
         <div data-testid="parent-message-list" className="mt-4 space-y-3">
           {threadMessages.length > 0 ? (

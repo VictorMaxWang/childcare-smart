@@ -93,6 +93,9 @@ export function sendMessage(input: MessageInput) {
       const child = getChild(snapshot, input.childId);
       const conversationId = input.conversationId ?? `conv-${input.childId}-home-school`;
       const senderRole = roleToMessageRole(input.context.user.role);
+      const receiverRole =
+        input.receiverRole ?? (senderRole === "parent" ? "teacher" : "parent");
+      const targetRole = input.targetRole ?? receiverRole;
       const message = {
         messageId: createDemoId("msg"),
         conversationId,
@@ -101,8 +104,8 @@ export function sendMessage(input: MessageInput) {
         senderRole,
         senderId: input.context.user.id,
         senderName: input.context.user.name,
-        receiverRole: input.receiverRole ?? (senderRole === "parent" ? "teacher" : "parent"),
-        targetRole: input.targetRole ?? (senderRole === "parent" ? "teacher" : "parent"),
+        receiverRole,
+        targetRole,
         content: input.content,
         createdAt: now,
         readBy: [input.context.user.id],
@@ -122,6 +125,8 @@ export function sendMessage(input: MessageInput) {
         participantRoles: Array.from(
           new Set([
             senderRole,
+            receiverRole,
+            targetRole,
             ...(snapshot.conversations.find((item) => item.conversationId === conversationId)?.participantRoles ?? []),
           ])
         ),

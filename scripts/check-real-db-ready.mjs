@@ -18,6 +18,7 @@ const REQUIRED_TABLES = [
   "authorization_audit_events",
   "storybook_media_assets",
   "admin_notification_events",
+  "voice_confirmation_token_consumptions",
 ];
 const REQUIRED_COLUMNS = [
   ["app_users", "id"],
@@ -104,6 +105,14 @@ const REQUIRED_COLUMNS = [
   ["admin_notification_events", "priority_level"],
   ["admin_notification_events", "recommended_owner_role"],
   ["admin_notification_events", "source_json"],
+  ["voice_confirmation_token_consumptions", "token_hash"],
+  ["voice_confirmation_token_consumptions", "institution_id"],
+  ["voice_confirmation_token_consumptions", "user_id"],
+  ["voice_confirmation_token_consumptions", "child_id"],
+  ["voice_confirmation_token_consumptions", "command_id"],
+  ["voice_confirmation_token_consumptions", "intent"],
+  ["voice_confirmation_token_consumptions", "expires_at"],
+  ["voice_confirmation_token_consumptions", "consumed_at"],
 ];
 
 const REQUIRED_INDEXES = [
@@ -118,6 +127,20 @@ const REQUIRED_INDEXES = [
     column: "code_hash",
     unique: true,
     label: "unique index on member_invitations.code_hash",
+  },
+  {
+    table: "voice_confirmation_token_consumptions",
+    column: "token_hash",
+    unique: true,
+    label:
+      "unique index on voice_confirmation_token_consumptions.token_hash",
+  },
+  {
+    table: "voice_confirmation_token_consumptions",
+    column: "expires_at",
+    unique: false,
+    label:
+      "index on voice_confirmation_token_consumptions.expires_at",
   },
 ];
 

@@ -4,9 +4,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
+from app.core.service_auth import require_internal_service
 from app.services.orchestrator import Orchestrator, build_orchestrator
 
-router = APIRouter(tags=["multimodal"])
+router = APIRouter(
+    tags=["multimodal"],
+    dependencies=[Depends(require_internal_service)],
+)
 
 
 def get_orchestrator() -> Orchestrator:

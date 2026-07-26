@@ -157,6 +157,7 @@ test("teacher-agent weekly summary surfaces Lin Xiaoyu parent feedback writeback
       className: "向阳班",
       institutionId: "inst-1",
       role: "教师",
+      accountKind: "demo",
     },
     visibleChildren: [
       {

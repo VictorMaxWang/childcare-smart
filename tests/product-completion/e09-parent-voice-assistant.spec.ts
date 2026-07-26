@@ -141,9 +141,27 @@ test.describe("E09 parent voice assistant skills", () => {
         422,
         "needs_confirmation"
       );
-      await executeVoiceCommand(parent, `给老师留言，今天晚上孩子有点咳嗽 ${token}`);
+      const confirmedMessageRequest = {
+        action: "execute",
+        command: messageCommand,
+        confirmed: true,
+      };
+      await expectOk(
+        await parent.post("/api/voice-assistant/commands", {
+          data: confirmedMessageRequest,
+        })
+      );
+      await expectApiFailure(
+        await parent.post("/api/voice-assistant/commands", {
+          data: confirmedMessageRequest,
+        }),
+        422,
+        "needs_confirmation"
+      );
       const teacherMessages = await expectOk(await teacher.get(`/api/messages?childId=${CHILD_ID}`));
-      expect(teacherMessages.some((message: { content?: string }) => message.content?.includes(token))).toBe(true);
+      expect(
+        teacherMessages.filter((message: { content?: string }) => message.content?.includes(token))
+      ).toHaveLength(1);
       await expectApiFailure(await otherTeacher.get(`/api/messages?childId=${CHILD_ID}`), 403, "forbidden_scope");
 
       await executeVoiceCommand(parent, `我要反馈，孩子最近睡眠不太好 ${token}`);

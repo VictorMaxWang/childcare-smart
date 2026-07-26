@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { AdminAgentRequestPayload, AdminAgentResult } from "@/lib/agent/admin-types";
+import { verifyAiResultAttestation } from "@/lib/ai/provenance-attestation";
 import { POST } from "./route.ts";
 
 function withEnv(
@@ -501,6 +502,15 @@ test("admin agent daily route returns local fallback result when provider is una
 
         assert.equal(response.status, 200);
         assertIsAdminAgentResult(body);
+        assert.equal(
+          verifyAiResultAttestation(body, {
+            userId: "u-admin",
+            institutionId: "inst-1",
+            capability: "admin-agent",
+            scopeId: "inst-1",
+          }),
+          true
+        );
         assert.equal(body.source, "fallback");
         assert.equal(body.model, "admin-local-daily-fallback");
       }

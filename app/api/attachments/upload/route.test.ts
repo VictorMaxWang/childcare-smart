@@ -4,6 +4,7 @@ import test from "node:test";
 import type { PutBlobResult } from "@vercel/blob";
 import type { SessionUser } from "@/lib/auth/accounts";
 import type { ApiAttachment } from "@/lib/api/types";
+import { ATTACHMENT_MAX_UPLOAD_BYTES } from "@/lib/attachments/constraints";
 import {
   handleAttachmentUploadRequest,
   type AttachmentUploadRouteDependencies,
@@ -32,26 +33,38 @@ const BLOB_RESULT: PutBlobResult = {
   etag: "blob-etag-test",
 };
 
-function buildUploadRequest(mimeType = "image/png") {
+const PNG_SIGNATURE = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
+
+function buildUploadRequest(
+  mimeType = "image/png",
+  bytes: BlobPart = PNG_SIGNATURE,
+  declaredContentLength?: number
+) {
   const formData = new FormData();
   formData.set(
     "file",
-    new File(["private-media-test"], "meal-photo.png", { type: mimeType })
+    new File([bytes], "meal-photo.png", { type: mimeType })
   );
   formData.set("childId", "child-private-media");
   formData.set("relatedType", "meal");
   formData.set("relatedId", "meal-private-media");
-  return new Request("http://localhost:3000/api/attachments/upload", {
+  const request = new Request("http://localhost:3000/api/attachments/upload", {
     method: "POST",
     body: formData,
   });
+  if (declaredContentLength !== undefined) {
+    request.headers.set("content-length", String(declaredContentLength));
+  }
+  return request;
 }
 
 function buildUnboundUploadRequest() {
   const formData = new FormData();
   formData.set(
     "file",
-    new File(["private-media-test"], "meal-photo.png", { type: "image/png" })
+    new File([PNG_SIGNATURE], "meal-photo.png", { type: "image/png" })
   );
   formData.set("childId", "child-private-media");
   formData.set("relatedType", "meal");
@@ -193,6 +206,49 @@ test("unsupported file types are rejected before storage upload", async () => {
   );
 
   assert.equal(response.status, 400);
+  assert.equal(calls.upload, 0);
+});
+
+test("oversized Content-Length is rejected before multipart parsing or authorization", async () => {
+  const { dependencies, calls } = buildDependencies();
+  const response = await handleAttachmentUploadRequest(
+    buildUploadRequest(
+      "image/png",
+      PNG_SIGNATURE,
+      ATTACHMENT_MAX_UPLOAD_BYTES + 1024 * 1024
+    ),
+    dependencies
+  );
+
+  assert.equal(response.status, 413);
+  assert.equal(calls.authorize, 0);
+  assert.equal(calls.upload, 0);
+});
+
+test("actual multipart file bytes are capped even without a trustworthy Content-Length", async () => {
+  const { dependencies, calls } = buildDependencies();
+  const response = await handleAttachmentUploadRequest(
+    buildUploadRequest(
+      "image/png",
+      new Uint8Array(ATTACHMENT_MAX_UPLOAD_BYTES + 512 * 1024)
+    ),
+    dependencies
+  );
+
+  assert.equal(response.status, 413);
+  assert.equal(calls.authorize, 0);
+  assert.equal(calls.upload, 0);
+});
+
+test("declared image MIME must match the uploaded file signature", async () => {
+  const { dependencies, calls } = buildDependencies();
+  const response = await handleAttachmentUploadRequest(
+    buildUploadRequest("image/png", "<html>not an image</html>"),
+    dependencies
+  );
+
+  assert.equal(response.status, 415);
+  assert.equal(calls.authorize, 0);
   assert.equal(calls.upload, 0);
 });
 

@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { normalizeAppStateSnapshot, type AppStateSnapshot } from "@/lib/persistence/snapshot";
 import {
   filterChildrenForSessionUser,
+  mergeScopedSnapshotIntoInstitutionSnapshot,
   mergeScopedSnapshotForSessionUser,
   scopeSnapshotForSessionUser,
 } from "@/lib/persistence/state-scope";
@@ -22,6 +23,7 @@ import {
   type RegisterAccountInput,
   type SessionUser,
 } from "@/lib/auth/accounts";
+import { loadClientSession } from "@/lib/auth/session-client";
 import { isPhoneLikeInput } from "@/lib/auth/phone";
 import { buildInterventionCardFromConsultation, type InterventionCard } from "@/lib/agent/intervention-card";
 import { getLocalToday, isDateWithinLastDays, normalizeLocalDate, shiftLocalDate, startOfLocalDay } from "@/lib/date";
@@ -33,7 +35,9 @@ import { buildDemoConsultationResults } from "@/lib/demo/demo-consultations";
 import {
   buildDemoNamespaceForInstitution,
   buildLegacyDemoUserNamespace,
+  getDefaultDemoStorage,
   getCurrentDemoContext,
+  readSnapshotFromStorage,
 } from "@/lib/demo-data/persistence";
 import { createDemoSeedSnapshot } from "@/lib/demo-data/seed";
 import { getDemoMediaPath } from "@/lib/demo-media/assets";
@@ -377,6 +381,10 @@ interface AppContextType {
   currentUser: User;
   isAuthenticated: boolean;
   authLoading: boolean;
+  authError: string | null;
+  retryAuth: () => void;
+  dataError: string | null;
+  retryData: () => void;
   login: (phone: string, password: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
   loginWithDemo: (accountId: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
   register: (input: RegisterAccountInput & { confirmPassword: string }) => Promise<{ ok: boolean; error?: string; user?: User; redirectPath?: string }>;
@@ -4752,7 +4760,11 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const demoAccounts = INITIAL_USERS;
   const [currentUser, setCurrentUser] = useState<User>(UNAUTHENTICATED_USER);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authRetryToken, setAuthRetryToken] = useState(0);
   const [dataLoading, setDataLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [dataRetryToken, setDataRetryToken] = useState(0);
   const [childrenList, setChildrenList] = useState<Child[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [mealRecords, setMealRecords] = useState<MealRecord[]>([]);
@@ -4931,17 +4943,33 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    setTasks((prev) =>
-      materializeTasksFromLegacy({
+    const visibleOwnerRole: TaskOwnerRole =
+      currentUser.role === "家长"
+        ? "parent"
+        : currentUser.role === "教师"
+          ? "teacher"
+          : "admin";
+    setTasks((prev) => {
+      const materialized = materializeTasksFromLegacy({
         existingTasks: prev,
         interventionCards,
         consultations,
         reminders,
         guardianFeedbacks,
         taskCheckIns: taskCheckInRecords,
-      })
-    );
-  }, [consultations, guardianFeedbacks, interventionCards, reminders, taskCheckInRecords]);
+      });
+      return currentUser.role === "机构管理员"
+        ? materialized
+        : materialized.filter((task) => task.ownerRole === visibleOwnerRole);
+    });
+  }, [
+    consultations,
+    currentUser.role,
+    guardianFeedbacks,
+    interventionCards,
+    reminders,
+    taskCheckInRecords,
+  ]);
 
   const remoteSnapshot = useMemo<AppStateSnapshot>(
     () =>
@@ -4989,28 +5017,20 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     const loadSession = async () => {
-      try {
-        const response = await fetch("/api/auth/session", { cache: "no-store" });
-        if (!response.ok) {
-          if (active) {
-            setCurrentUser(UNAUTHENTICATED_USER);
-          }
-          return;
-        }
-        const data = (await response.json()) as { ok?: boolean; user?: User | null };
-        if (!active) {
-          return;
-        }
-        setCurrentUser(data.ok && data.user ? data.user : UNAUTHENTICATED_USER);
-      } catch {
-        if (active) {
-          setCurrentUser(UNAUTHENTICATED_USER);
-        }
-      } finally {
-        if (active) {
-          setAuthLoading(false);
-        }
+      setAuthLoading(true);
+      const result = await loadClientSession();
+      if (!active) return;
+
+      if (result.status === "authenticated") {
+        setCurrentUser(result.user);
+        setAuthError(null);
+      } else if (result.status === "unauthenticated") {
+        setCurrentUser(UNAUTHENTICATED_USER);
+        setAuthError(null);
+      } else {
+        setAuthError(result.message);
       }
+      setAuthLoading(false);
     };
 
     void loadSession();
@@ -5018,6 +5038,11 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     return () => {
       active = false;
     };
+  }, [authRetryToken]);
+
+  const retryAuth = useCallback(() => {
+    setAuthError(null);
+    setAuthRetryToken((value) => value + 1);
   }, []);
 
   useEffect(() => {
@@ -5027,6 +5052,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
     let active = true;
     setDataLoading(true);
+    setDataError(null);
 
     const loadSnapshotForUser = async () => {
       if (!isAuthenticated) {
@@ -5041,11 +5067,17 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       if (isDemoUser) {
         lastSyncedSnapshotKeyRef.current = null;
         const freshSnapshot = buildFreshDemoSnapshot(getLocalToday());
-        const rawDemoSnapshot = readScopedSnapshot(currentStorageNamespace ?? buildDemoNamespaceForInstitution(currentUser.institutionId), freshSnapshot);
+        const demoNamespace =
+          currentStorageNamespace ?? buildDemoNamespaceForInstitution(currentUser.institutionId);
+        const rawDemoSnapshot = readSnapshotFromStorage(
+          getDefaultDemoStorage(),
+          demoNamespace,
+          freshSnapshot
+        );
         const legacyNamespace = buildLegacyDemoUserNamespace(currentUser);
         const legacyDemoSnapshot =
           legacyNamespace && currentStorageNamespace
-            ? mergeScopedSnapshotForSessionUser({
+            ? mergeScopedSnapshotIntoInstitutionSnapshot({
                 currentSnapshot: rawDemoSnapshot,
                 incomingSnapshot: readScopedSnapshot(legacyNamespace, rawDemoSnapshot),
                 user: currentUser,
@@ -5062,7 +5094,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
             | null;
           const apiSnapshot = normalizeAppStateSnapshot(data?.snapshot);
           if (active && response.ok && data?.ok && apiSnapshot) {
-            nextDemoSnapshot = mergeScopedSnapshotForSessionUser({
+            nextDemoSnapshot = mergeScopedSnapshotIntoInstitutionSnapshot({
               currentSnapshot: hydratedDemoSnapshot,
               incomingSnapshot: apiSnapshot,
               user: currentUser,
@@ -5098,15 +5130,24 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
       try {
         const response = await fetch("/api/state", { cache: "no-store" });
-        if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as
+          | {
+              ok?: boolean;
+              snapshot?: AppStateSnapshot | null;
+              isDemo?: boolean;
+              error?: string;
+            }
+          | null;
+        if (!response.ok || !data?.ok) {
+          if (active) {
+            setDataError(
+              data?.error?.trim() ||
+                "暂时无法读取机构数据，当前页面可能只显示本地缓存。"
+            );
+          }
           return;
         }
-        const data = (await response.json()) as {
-          ok?: boolean;
-          snapshot?: AppStateSnapshot | null;
-          isDemo?: boolean;
-        };
-        if (!active || !data.ok || data.isDemo) {
+        if (!active || data.isDemo) {
           return;
         }
         if (!data.snapshot) {
@@ -5117,7 +5158,11 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         applySnapshot(scopedSnapshot);
         lastSyncedSnapshotKeyRef.current = JSON.stringify(scopedSnapshot);
       } catch {
-        // Remote sync remains optional during local development.
+        if (active) {
+          setDataError(
+            "暂时无法连接机构数据服务，当前页面可能只显示本地缓存。"
+          );
+        }
       } finally {
         if (active) {
           setDataLoading(false);
@@ -5130,7 +5175,20 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [authLoading, applySnapshot, currentStorageNamespace, currentUser, isAuthenticated, isDemoUser]);
+  }, [
+    authLoading,
+    applySnapshot,
+    currentStorageNamespace,
+    currentUser,
+    dataRetryToken,
+    isAuthenticated,
+    isDemoUser,
+  ]);
+
+  const retryData = useCallback(() => {
+    setDataError(null);
+    setDataRetryToken((value) => value + 1);
+  }, []);
 
   const persistAppSnapshotNow = useCallback(
     async (override?: Partial<AppStateSnapshot>): Promise<PersistAppSnapshotResult> => {
@@ -5139,7 +5197,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
       if (currentStorageNamespace) {
         if (isDemoUser) {
-          const mergedSnapshot = mergeScopedSnapshotForSessionUser({
+          const mergedSnapshot = mergeScopedSnapshotIntoInstitutionSnapshot({
             currentSnapshot: fullDemoSnapshotRef.current ?? buildFreshDemoSnapshot(getLocalToday()),
             incomingSnapshot: snapshot,
             user: currentUser,
@@ -5201,11 +5259,17 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       const baseSnapshot = isDemoUser
         ? fullDemoSnapshotRef.current ?? buildFreshDemoSnapshot(getLocalToday())
         : buildSnapshotWithOverride();
-      const mergedSnapshot = mergeScopedSnapshotForSessionUser({
-        currentSnapshot: baseSnapshot,
-        incomingSnapshot: apiSnapshot,
-        user: currentUser,
-      });
+      const mergedSnapshot = isDemoUser
+        ? mergeScopedSnapshotIntoInstitutionSnapshot({
+            currentSnapshot: baseSnapshot,
+            incomingSnapshot: apiSnapshot,
+            user: currentUser,
+          })
+        : mergeScopedSnapshotForSessionUser({
+            currentSnapshot: baseSnapshot,
+            incomingSnapshot: apiSnapshot,
+            user: currentUser,
+          });
       if (isDemoUser) {
         fullDemoSnapshotRef.current = mergedSnapshot;
       }
@@ -5244,7 +5308,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     }
 
     if (isDemoUser) {
-      const mergedSnapshot = mergeScopedSnapshotForSessionUser({
+      const mergedSnapshot = mergeScopedSnapshotIntoInstitutionSnapshot({
         currentSnapshot: fullDemoSnapshotRef.current ?? buildFreshDemoSnapshot(getLocalToday()),
         incomingSnapshot: remoteSnapshot,
         user: currentUser,
@@ -5365,6 +5429,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         return { ok: false, error: result.error ?? fallbackError };
       }
       lastSyncedSnapshotKeyRef.current = null;
+      setAuthError(null);
       setCurrentUser(result.user);
       return { ok: true, user: result.user };
     } catch {
@@ -5403,6 +5468,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         return { ok: false, error: result.error ?? "注册失败，请稍后重试。" };
       }
       lastSyncedSnapshotKeyRef.current = null;
+      setAuthError(null);
       setCurrentUser(result.user);
       return { ok: true, user: result.user, redirectPath: result.redirectPath };
     } catch {
@@ -5415,6 +5481,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
       lastSyncedSnapshotKeyRef.current = null;
+      setAuthError(null);
       setCurrentUser(UNAUTHENTICATED_USER);
       applySnapshot(emptyInstitutionSnapshot());
       setDataLoading(false);
@@ -6408,6 +6475,10 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     currentUser,
     isAuthenticated,
     authLoading,
+    authError,
+    retryAuth,
+    dataError,
+    retryData,
     loginWithDemo,
     register,
     login,
@@ -6490,6 +6561,10 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     currentUser,
     isAuthenticated,
     authLoading,
+    authError,
+    retryAuth,
+    dataError,
+    retryData,
     loginWithDemo,
     register,
     login,

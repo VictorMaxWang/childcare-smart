@@ -13,11 +13,20 @@ import {
   getPrivateAttachment,
   type PrivateAttachmentReadResult,
 } from "@/lib/server/private-blob";
+import {
+  readStreamWithByteLimit,
+  UploadSecurityError,
+  validateMediaBytes,
+} from "@/lib/server/upload-security";
 
 const HEALTH_IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
+]);
+const HEALTH_BINARY_MIME_TYPES = new Set([
+  ...HEALTH_IMAGE_MIME_TYPES,
+  "application/pdf",
 ]);
 const MAX_PDF_PAGES = 20;
 
@@ -119,12 +128,29 @@ export async function prepareHealthAttachmentOcrPayload(input: {
   bytes: Uint8Array;
   mimeType: string;
 }): Promise<PreparedHealthAttachmentOcrPayload> {
-  const mimeType = input.mimeType.trim().toLowerCase();
   if (input.bytes.byteLength === 0 || input.bytes.byteLength > HEALTH_FILE_MAX_UPLOAD_BYTES) {
     throw new ApiRouteError(
       "invalid_request",
       "健康材料原文件必须大于 0 字节且不超过 4 MB。"
     );
+  }
+
+  let mimeType: string;
+  try {
+    mimeType = validateMediaBytes({
+      bytes: input.bytes,
+      claimedMimeType: input.mimeType,
+      allowedMimeTypes: HEALTH_BINARY_MIME_TYPES,
+    }).mimeType;
+  } catch (error) {
+    if (error instanceof UploadSecurityError) {
+      throw new ApiRouteError(
+        "invalid_request",
+        error.message,
+        error.status
+      );
+    }
+    throw error;
   }
 
   if (HEALTH_IMAGE_MIME_TYPES.has(mimeType)) {
@@ -183,7 +209,21 @@ async function readPrivateBytes(
       "健康材料原文件大小不在允许范围内。"
     );
   }
-  return new Uint8Array(await new Response(result.stream).arrayBuffer());
+  try {
+    return await readStreamWithByteLimit(
+      result.stream,
+      HEALTH_FILE_MAX_UPLOAD_BYTES
+    );
+  } catch (error) {
+    if (error instanceof UploadSecurityError) {
+      throw new ApiRouteError(
+        "invalid_request",
+        error.message,
+        error.status
+      );
+    }
+    throw error;
+  }
 }
 
 export async function hydrateHealthFileAttachments(

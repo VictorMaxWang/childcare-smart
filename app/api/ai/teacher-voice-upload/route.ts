@@ -6,10 +6,19 @@ import { apiError } from "@/lib/server/api-errors";
 import { VivoProviderError } from "@/lib/providers/vivo";
 import { buildVoiceUploadResponse } from "@/lib/mobile/voice-assistant-upload";
 import {
-  validateVoiceAudioFile,
+  MULTIPART_FORM_DATA_OVERHEAD_BYTES,
+  readRequestWithBodyLimit,
+  UploadSecurityError,
+  validateAudioUploadFile,
+} from "@/lib/server/upload-security";
+import {
+  VOICE_AUDIO_MAX_BYTES,
   validateVoiceDuration,
   validateVoiceText,
 } from "@/lib/voice/audio-constraints";
+
+const VOICE_AUDIO_MAX_REQUEST_BYTES =
+  VOICE_AUDIO_MAX_BYTES + MULTIPART_FORM_DATA_OVERHEAD_BYTES;
 
 function toNumber(value: FormDataEntryValue | null) {
   if (typeof value !== "string") return undefined;
@@ -18,14 +27,55 @@ function toNumber(value: FormDataEntryValue | null) {
 }
 
 export async function POST(request: Request) {
-  const authError = await authorizeAiRoute(request, { requiredRole: "staff" });
+  let boundedRequest: Request;
+  try {
+    // 鉴权守卫会检查 multipart child scope，必须先为原始正文建立硬上限。
+    boundedRequest = await readRequestWithBodyLimit(
+      request,
+      VOICE_AUDIO_MAX_REQUEST_BYTES
+    );
+  } catch (error) {
+    if (error instanceof UploadSecurityError) {
+      return apiError("invalid_request", error.message, {
+        status: error.status,
+      });
+    }
+    throw error;
+  }
+
+  const authError = await authorizeAiRoute(boundedRequest, {
+    requiredRole: "staff",
+  });
   if (authError) return authError;
 
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await boundedRequest.formData();
+  } catch {
+    return apiError(
+      "invalid_request",
+      "语音上传请求必须使用有效的 multipart/form-data。",
+      { status: 400 }
+    );
+  }
   const audio = formData.get("audio");
 
   if (!(audio instanceof File)) {
     return NextResponse.json({ error: "Missing audio file" }, { status: 400 });
+  }
+
+  let detectedAudioMimeType: string;
+  try {
+    detectedAudioMimeType = (
+      await validateAudioUploadFile(audio, VOICE_AUDIO_MAX_BYTES)
+    ).mimeType;
+  } catch (error) {
+    if (error instanceof UploadSecurityError) {
+      return apiError("invalid_request", error.message, {
+        status: error.status,
+      });
+    }
+    throw error;
   }
 
   const attachmentName =
@@ -40,7 +90,6 @@ export async function POST(request: Request) {
       : undefined;
   const durationMs = toNumber(formData.get("durationMs"));
   const validationError =
-    validateVoiceAudioFile(audio) ||
     validateVoiceDuration(durationMs) ||
     validateVoiceText(fallbackText);
   if (validationError) {
@@ -57,10 +106,7 @@ export async function POST(request: Request) {
       attachmentName,
       audioBytes: Buffer.from(await audio.arrayBuffer()),
       fallbackText,
-      mimeType:
-        (typeof formData.get("mimeType") === "string"
-          ? String(formData.get("mimeType"))
-          : undefined) || audio.type || "audio/webm",
+      mimeType: detectedAudioMimeType,
       durationMs,
       scene:
         typeof formData.get("scene") === "string"
@@ -139,10 +185,7 @@ export async function POST(request: Request) {
               ? String(formData.get("childId"))
               : undefined,
           durationMs,
-          mimeType:
-            (typeof formData.get("mimeType") === "string"
-              ? String(formData.get("mimeType"))
-              : undefined) || audio.type || "audio/webm",
+          mimeType: detectedAudioMimeType,
           scene:
             typeof formData.get("scene") === "string"
               ? String(formData.get("scene"))

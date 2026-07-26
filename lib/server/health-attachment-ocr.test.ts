@@ -66,6 +66,19 @@ test("health attachment OCR preparation extracts bounded text from a PDF", async
   assert.equal(result.imageBase64, undefined);
 });
 
+test("health attachment OCR rejects metadata MIME that disagrees with stored bytes", async () => {
+  await assert.rejects(
+    () =>
+      prepareHealthAttachmentOcrPayload({
+        bytes: buildSimplePdf("Temperature 38.1"),
+        mimeType: "image/png",
+      }),
+    (error: unknown) =>
+      error instanceof Error &&
+      error.message.includes("文件内容与声明类型不一致")
+  );
+});
+
 test("health attachment OCR preparation rejects a scanned PDF without a text layer", async () => {
   await assert.rejects(
     () =>

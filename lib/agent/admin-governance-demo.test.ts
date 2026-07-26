@@ -112,6 +112,10 @@ test("admin governance demo quality cockpit and weekly summary are non-empty", (
   assert.ok(viewModel.familyFeedbackItems.some((item) => item.childName === "林小雨"));
   assert.ok(viewModel.familyFeedbackItems.some((item) => item.childName === "陈安安"));
   assert.ok(viewModel.governanceActions.some((item) => item.title === "健康材料解析入口"));
+  assert.equal(
+    viewModel.governanceActions.find((item) => item.id === "governance-health-material")?.href,
+    "/health"
+  );
 });
 
 test("live governance mode keeps a real empty institution empty", () => {

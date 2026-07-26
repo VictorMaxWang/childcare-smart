@@ -16,7 +16,16 @@ const out = path.join(cwd, "artifacts", "release-sql-check.json");
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(
   out,
-  `${JSON.stringify({ generatedAt: new Date().toISOString(), overallPassed: value }, null, 2)}\n`,
+  `${JSON.stringify(
+    {
+      generatedAt: new Date().toISOString(),
+      overallPassed: value,
+      source: "manual",
+      mode: "manual",
+    },
+    null,
+    2
+  )}\n`,
   "utf8"
 );
 console.log(`[OK] SQL snapshot written: ${out}`);

@@ -1,6 +1,6 @@
 # SmartChildcare Agent 比赛架构总说明
 
-更新基准：`2026-07-24`
+更新基准：`2026-07-26`
 
 本文件是**比赛叙事、lane 映射与 shared contracts 主文档**。如果与其他文档冲突，统一按下面优先级处理：
 
@@ -34,6 +34,15 @@ SmartChildcare Agent 是面向托育场景的移动端优先 AI 智能体系统�
 生产启用该控制面前必须执行
 `supabase/sql/20260724_create_institution_memberships.sql`，并以
 `npm run db:check` 和三角色 Chrome 闭环作为发布门槛。
+
+### 1.2 可持久化 AI、上传与语音安全边界
+
+1. Next.js AI 路由只使用服务端会话计算机构、班级和幼儿作用域；浏览器提交的 `provider`、`model`、`live` 或来源 ID 不能直接成为持久化事实。
+2. 可持久化 AI 结果必须携带服务端签发的 provenance attestation，绑定操作者、机构、能力、幼儿/班级和结果摘要；校验失败时降级为非 live 来源。
+3. 健康材料、餐食图片、附件与语音上传同时执行流式字节上限、严格 Base64、MIME 白名单和文件魔数校验，不能只信任扩展名或 `Content-Type`。
+4. 需要确认的语音写操作使用短期签名令牌，并在 `voice_confirmation_token_consumptions` 中原子消费；生产缺少该表时拒绝执行，不能回退到单实例内存锁。
+5. Next.js 到 Python Brain 的多模态与流式接口使用内部签名服务身份；浏览器不能直接调用受信任的内部执行面。
+6. 生产还必须执行 `supabase/sql/20260726_create_voice_confirmation_token_consumptions.sql`，并由严格发布门禁验证数据库结构、在线 provider 和真实三账号闭环。
 
 ## 2. 当前最稳定比赛主路径
 

@@ -4,6 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
+  AlertTriangle,
   Baby,
   Bell,
   BookHeart,
@@ -15,6 +16,7 @@ import {
   LogOut,
   MessageCircle,
   Monitor,
+  RefreshCw,
   Salad,
   ShieldCheck,
   Sparkles,
@@ -31,9 +33,10 @@ import {
   type MobileBottomNavItem,
 } from "@/components/layout";
 import { VoiceOrb } from "@/components/voice-assistant/VoiceOrb";
+import { Button } from "@/components/ui/button";
 import { RoleBadge, type RoleBadgeRole } from "@/components/ui/role-badge";
-import { LoadingState } from "@/components/ui/state-block";
-import type { AccountRole } from "@/lib/auth/accounts";
+import { ErrorState, LoadingState } from "@/components/ui/state-block";
+import { getRoleHomePath, type AccountRole } from "@/lib/auth/accounts";
 import {
   ACCESS_DENIED_QUERY_PARAM,
   canRoleAccessPath,
@@ -144,7 +147,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { currentUser, visibleChildren, logout, authLoading, isAuthenticated } = useApp();
+  const {
+    currentUser,
+    visibleChildren,
+    logout,
+    authLoading,
+    authError,
+    retryAuth,
+    dataError,
+    retryData,
+    isAuthenticated,
+  } = useApp();
   const accessDeniedNoticeKeyRef = useRef<string | null>(null);
   const currentLocation = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
 
@@ -155,7 +168,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     pathname.startsWith("/auth/register");
 
   useEffect(() => {
-    if (hideShell || authLoading) {
+    if (hideShell || authLoading || authError) {
       return;
     }
 
@@ -172,10 +185,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
     if (!canRoleAccessPath(currentUser.role, pathname)) {
       router.replace(resolveUnauthorizedRedirectPath(currentUser.role));
     }
-  }, [authLoading, currentUser.role, hideShell, isAuthenticated, pathname, router]);
+  }, [authError, authLoading, currentUser.role, hideShell, isAuthenticated, pathname, router]);
 
   useEffect(() => {
-    if (hideShell || authLoading || !isAuthenticated || typeof window === "undefined") {
+    if (hideShell || authLoading || authError || !isAuthenticated || typeof window === "undefined") {
       return;
     }
 
@@ -196,7 +209,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
     url.searchParams.delete(ACCESS_DENIED_QUERY_PARAM);
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [authLoading, hideShell, isAuthenticated, pathname]);
+  }, [authError, authLoading, hideShell, isAuthenticated, pathname]);
 
   if (hideShell) {
     return <main className="min-h-screen bg-(--background)">{children}</main>;
@@ -208,6 +221,23 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <LoadingState
           title="正在校验登录状态"
           description="系统正在确认当前账号身份与页面访问权限。"
+        />
+      </main>
+    );
+  }
+
+  if (authError) {
+    return (
+      <main className="min-h-screen bg-(--background) p-6">
+        <ErrorState
+          title="暂时无法校验登录状态"
+          description={authError}
+          action={
+            <Button type="button" onClick={retryAuth}>
+              <RefreshCw className="h-4 w-4" />
+              重新连接
+            </Button>
+          }
         />
       </main>
     );
@@ -274,6 +304,26 @@ export default function AppShell({ children }: { children: ReactNode }) {
         )}
       >
         <main className="pixel-app-main min-h-[calc(100vh-86px)] overflow-x-hidden pb-[calc(env(safe-area-inset-bottom)+7.75rem)] sm:min-h-[calc(100vh-72px)] sm:pb-[calc(env(safe-area-inset-bottom)+8.25rem)] lg:min-h-[calc(100vh-80px)] lg:pb-0">
+          {dataError ? (
+            <div
+              className="mx-auto mt-3 flex max-w-[92rem] items-start gap-3 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:items-center"
+              role="alert"
+              data-testid="state-sync-error"
+            >
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 sm:mt-0" />
+              <p className="min-w-0 flex-1 leading-6">{dataError}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                onClick={retryData}
+              >
+                <RefreshCw className="h-4 w-4" />
+                重试
+              </Button>
+            </div>
+          ) : null}
           {children}
         </main>
         <VoiceOrb hideFloatingButton={currentUser.role === "教师"} />
@@ -348,16 +398,7 @@ function ShellTopbar({
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <GlobalUtilityCenter navItems={navItems} />
-          <div className="hidden items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-[0_10px_26px_rgb(15_23_42_/_0.07)] sm:flex">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-50 to-cyan-50 text-lg">
-              {currentUser.avatar}
-            </span>
-            <div className="hidden min-w-0 xl:block">
-              <p className="truncate text-sm font-semibold leading-tight text-slate-950">{currentUser.name}</p>
-              <p className="mt-0.5 truncate text-xs text-slate-500">{currentUser.className ?? currentUser.role}</p>
-            </div>
-            <ChevronDown className="hidden h-4 w-4 text-slate-400 xl:block" aria-hidden="true" />
-          </div>
+          <ShellAccountMenu currentUser={currentUser} onLogout={onLogout} />
           <div className="hidden sm:block">
             <RoleBadge role={roleMeta.badgeRole} label={roleMeta.shellLabel} />
           </div>
@@ -372,6 +413,81 @@ function ShellTopbar({
         </div>
       </div>
     </header>
+  );
+}
+
+function ShellAccountMenu({
+  currentUser,
+  onLogout,
+}: {
+  currentUser: CurrentShellUser;
+  onLogout: () => void;
+}) {
+  const roleHome = getRoleHomePath(currentUser.role);
+  const recordsHref =
+    currentUser.role === "家长" ? "/parent" : "/children";
+  const recordsLabel =
+    currentUser.role === "家长" ? "家庭与幼儿档案" : "成员与幼儿档案";
+
+  return (
+    <details
+      className="group relative hidden sm:block"
+      data-testid="shell-account-menu"
+    >
+      <summary
+        className="flex min-h-12 cursor-pointer list-none items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-[0_10px_26px_rgb(15_23_42_/_0.07)] outline-none transition hover:border-indigo-200 hover:bg-indigo-50/60 focus-visible:ring-2 focus-visible:ring-indigo-300 [&::-webkit-details-marker]:hidden"
+        aria-label="打开账号菜单"
+      >
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-50 to-cyan-50 text-lg">
+          {currentUser.avatar}
+        </span>
+        <span className="hidden min-w-0 text-left xl:block">
+          <span className="block truncate text-sm font-semibold leading-tight text-slate-950">
+            {currentUser.name}
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-slate-500">
+            {currentUser.className ?? currentUser.role}
+          </span>
+        </span>
+        <ChevronDown
+          className="hidden h-4 w-4 text-slate-400 transition group-open:rotate-180 xl:block"
+          aria-hidden="true"
+        />
+      </summary>
+      <div
+        className="absolute right-0 z-[70] mt-2 w-56 overflow-hidden rounded-lg border border-slate-200 bg-white py-2 shadow-[0_20px_55px_rgb(15_23_42_/_0.16)]"
+        data-testid="shell-account-menu-panel"
+      >
+        <div className="border-b border-slate-100 px-4 py-3">
+          <p className="truncate text-sm font-semibold text-slate-950">
+            {currentUser.name}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">{currentUser.role}</p>
+        </div>
+        <Link
+          href={roleHome}
+          className="flex min-h-10 items-center gap-2 px-4 text-sm font-medium text-slate-700 transition hover:bg-indigo-50 hover:text-indigo-700"
+        >
+          <Home className="h-4 w-4" />
+          角色首页
+        </Link>
+        <Link
+          href={recordsHref}
+          className="flex min-h-10 items-center gap-2 px-4 text-sm font-medium text-slate-700 transition hover:bg-indigo-50 hover:text-indigo-700"
+        >
+          <Users className="h-4 w-4" />
+          {recordsLabel}
+        </Link>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="flex min-h-10 w-full items-center gap-2 border-t border-slate-100 px-4 text-left text-sm font-medium text-rose-700 transition hover:bg-rose-50"
+        >
+          <LogOut className="h-4 w-4" />
+          退出登录
+        </button>
+      </div>
+    </details>
   );
 }
 

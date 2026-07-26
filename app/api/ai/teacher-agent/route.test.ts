@@ -351,6 +351,10 @@ test("teacher-agent route forwards the teacher question after rebuilding trusted
         (forwardedPayload.currentUser as { institutionId?: string }).institutionId,
         "inst-forged"
       );
+      assert.equal(
+        (forwardedPayload.currentUser as { accountKind?: string }).accountKind,
+        "demo"
+      );
     });
   } finally {
     globalThis.fetch = originalFetch;

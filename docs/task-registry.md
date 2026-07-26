@@ -1,8 +1,36 @@
 # Task Registry
 
-更新基准：`2026-07-24`
+更新基准：`2026-07-26`
 
 ## Active Hotfix
+
+### Three-role Production Hardening & Functional Completion
+
+- 状态：`Code-verified / Production-pending`
+- 目标：把园长、教师、家长三端从“页面可打开”推进到真实授权、真实写入、跨端读取、AI 结果可追溯和可审计发布。
+- 主改动源：
+  - `lib/persistence/state-scope.ts`
+  - `lib/server/app-data-service.ts`
+  - `lib/server/child-class-registry.ts`
+  - `lib/ai/provenance-attestation.ts`
+  - `lib/voice-assistant/confirmation-token.ts`
+  - `lib/server/upload-security.ts`
+  - `components/Navbar.tsx`
+  - `components/layout/GlobalUtilityCenter.tsx`
+  - `scripts/release-formal-gate.mjs`
+- 已完成：
+  - `/api/state`、任务、消息、会话、提醒和移动草稿按角色与幼儿作用域投影；家长无权 child 链接不再回退到其他幼儿。
+  - 会话与远端状态失败不再伪装成空数据；顶部搜索、通知、消息和账号菜单已接入真实作用域数据及写入操作。
+  - 演示账号切换不再把机构级完整缓存裁成单一角色快照；缓存超额时降级为内存/远端态而不击穿 React。
+  - 班级使用稳定 `classId`，幼儿写入与 `child_registry` 同事务同步；同名班级不再构成授权依据。
+  - AI 结果在服务端绑定用户、机构、能力、幼儿/班级和结果摘要；未签名或作用域不符的 provider 声明不能作为 live AI 结果持久化。
+  - 上传按流式大小上限、严格 Base64、MIME 与文件魔数校验；语音确认令牌绑定操作者与作用域，并通过数据库一次性消费防重放。
+  - 本地 `lint`、`typecheck`、production build、543 项 Node、227 项 Python 和 83 项发布浏览器回归已执行；浏览器结果为 80 通过、3 项真实账号规格明确跳过，因此只属于本地验证。
+  - 正式真实账号 smoke 已扩展为强制执行高风险会诊 live AI、营养评估、成长绘本文本及图片/语音媒体补全，并实际打开右上角搜索、通知和消息面板。
+- 生产待完成：
+  - 执行机构关系与语音令牌消费表迁移，并用严格 `npm run db:check` 生成新鲜证据。
+  - 推送 `main`、确认 Vercel 提交 SHA，并完成现有三账号与新建三账号的写入、读取、live AI、媒体和语音验收。
+  - 核对 Tencent Brain 服务版本、共享签名配置和在线模型可用性；未经服务器证据不宣称已闭环。
 
 ### Real Account Institution Membership Hotfix
 

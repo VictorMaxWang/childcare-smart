@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { HighRiskConsultationRequestPayload } from "@/lib/agent/high-risk-consultation";
+import { verifyAiResultAttestation } from "@/lib/ai/provenance-attestation";
 import { getLocalToday } from "@/lib/date";
 import { highRiskConsultationStreamInternals, POST } from "./route.ts";
 
@@ -146,6 +147,13 @@ function buildStreamRequest() {
   });
 }
 
+const CONSULTATION_PROVENANCE_CONTEXT = {
+  userId: "u-teacher2",
+  institutionId: "inst-1",
+  capability: "high-risk-consultation",
+  scopeId: "c-1",
+} as const;
+
 test("high-risk consultation stream identifies nested remote mock results", () => {
   const containsMock =
     highRiskConsultationStreamInternals.containsExplicitMockSsePayload;
@@ -162,6 +170,62 @@ test("high-risk consultation stream identifies nested remote mock results", () =
     ),
     false
   );
+});
+
+test("high-risk consultation stream attests the accepted remote done result", async () => {
+  const originalFetch = globalThis.fetch;
+  const encoder = new TextEncoder();
+
+  globalThis.fetch = (async () =>
+    new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              [
+                'event: status\ndata: {"stage":"current_recommendation"}',
+                'event: done\ndata: {"result":{"childId":"c-1","source":"ai","provider":"vivo","model":"qwen-plus","fallback":false,"realProvider":true,"providerTrace":{"mode":"live","provider":"vivo"}},"providerTrace":{"mode":"live","provider":"vivo"},"realProvider":true,"fallback":false}',
+                "",
+              ].join("\n\n")
+            )
+          );
+          controller.close();
+        },
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "text/event-stream; charset=utf-8" },
+      }
+    )) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        HIGH_RISK_CONSULTATION_BRAIN_TIMEOUT_MS: "1000",
+        HIGH_RISK_CONSULTATION_STREAM_DONE_TIMEOUT_MS: "1000",
+      },
+      async () => {
+        const response = await POST(buildStreamRequest());
+        const events = parseSse(await response.text());
+        const done = events.findLast((event) => event.event === "done")?.data;
+        const result = done?.result as Record<string, unknown>;
+
+        assert.equal(response.status, 200);
+        assert.equal(
+          verifyAiResultAttestation(
+            result,
+            CONSULTATION_PROVENANCE_CONTEXT
+          ),
+          true
+        );
+        assert.equal(result.realProvider, true);
+        assert.equal(done?.realProvider, true);
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("high-risk consultation stream appends local fallback done when brain SSE never finishes", async () => {
@@ -209,6 +273,13 @@ test("high-risk consultation stream appends local fallback done when brain SSE n
 
         assert.equal(response.status, 200);
         assert.equal(cancelCalled, true);
+        assert.equal(
+          verifyAiResultAttestation(
+            result,
+            CONSULTATION_PROVENANCE_CONTEXT
+          ),
+          true
+        );
         assert.ok(text.includes("已切换本地会诊兜底"));
         assert.ok(text.includes("证据链生成完成"));
         assert.equal(done?.fallback, true);

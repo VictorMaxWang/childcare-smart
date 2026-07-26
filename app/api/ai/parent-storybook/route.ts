@@ -4,6 +4,11 @@ import type {
   ParentStoryBookResponse,
   ParentStoryBookTransport,
 } from "@/lib/ai/types";
+import {
+  attestAiJsonResponse,
+  attestAiResult,
+  type AiProvenanceContext,
+} from "@/lib/ai/provenance-attestation";
 import { buildAiProviderTrace, buildAiProviderTraceFromProviderMeta } from "@/lib/ai/provider-trace";
 import { buildParentStoryBookResponse } from "@/lib/agent/parent-storybook";
 import {
@@ -538,6 +543,12 @@ export async function POST(request: Request) {
     ...payload,
     childId: requestedChildId,
   };
+  const provenanceContext: AiProvenanceContext = {
+    userId: sessionUser.id,
+    institutionId: sessionUser.institutionId,
+    capability: "parent-storybook",
+    scopeId: requestedChildId,
+  };
 
   const bypassCache = shouldBypassStoryCache(request);
   const cacheKey = buildParentStoryBookRequestCacheKey(payload);
@@ -551,14 +562,17 @@ export async function POST(request: Request) {
       cacheState: "bypass",
     });
 
-    return NextResponse.json(localStory, {
-      status: 200,
-      headers: buildLocalStoryBookFallbackHeaders({
-        fallbackReason,
-        cacheState: "bypass",
-        demoSeedIsolated: true,
-      }),
-    });
+    return NextResponse.json(
+      attestAiResult(localStory, provenanceContext),
+      {
+        status: 200,
+        headers: buildLocalStoryBookFallbackHeaders({
+          fallbackReason,
+          cacheState: "bypass",
+          demoSeedIsolated: true,
+        }),
+      }
+    );
   }
 
   if (cachedResponse) {
@@ -577,18 +591,21 @@ export async function POST(request: Request) {
       }
     );
 
-    return NextResponse.json(cachedStory, {
-      status: 200,
-      headers: mergeHeaders(
-        createBrainTransportHeaders({
-          transport: cachedResponse.transport,
-          targetPath: cachedResponse.targetPath,
-          upstreamHost: cachedResponse.upstreamHost,
-          fallbackReason: cachedResponse.fallbackReason,
-        }),
-        buildCacheHeaders("hit")
-      ),
-    });
+    return NextResponse.json(
+      attestAiResult(cachedStory, provenanceContext),
+      {
+        status: 200,
+        headers: mergeHeaders(
+          createBrainTransportHeaders({
+            transport: cachedResponse.transport,
+            targetPath: cachedResponse.targetPath,
+            upstreamHost: cachedResponse.upstreamHost,
+            fallbackReason: cachedResponse.fallbackReason,
+          }),
+          buildCacheHeaders("hit")
+        ),
+      }
+    );
   }
 
   const requireRealStoryText = shouldRequireRealStoryTextInThisRuntime();
@@ -644,7 +661,10 @@ export async function POST(request: Request) {
         brainForward,
       });
       if (enhancedStory instanceof NextResponse) {
-        return enhancedStory;
+        return attestAiJsonResponse(
+          enhancedStory,
+          provenanceContext
+        );
       }
       preparedStory = enhancedStory;
     }
@@ -659,13 +679,18 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json(preparedStory, {
-      status: brainForward.response.status,
-      headers: mergeHeaders(
-        brainForward.response.headers,
-        buildCacheHeaders(preparedStory.cacheMeta?.storyResponse ?? "bypass")
-      ),
-    });
+    return NextResponse.json(
+      attestAiResult(preparedStory, provenanceContext),
+      {
+        status: brainForward.response.status,
+        headers: mergeHeaders(
+          brainForward.response.headers,
+          buildCacheHeaders(
+            preparedStory.cacheMeta?.storyResponse ?? "bypass"
+          )
+        ),
+      }
+    );
   }
 
   const fallbackReason = brainForward.fallbackReason ?? "brain-proxy-unavailable";
@@ -683,21 +708,27 @@ export async function POST(request: Request) {
       brainForward,
     });
     if (enhancedStory instanceof NextResponse) {
-      return enhancedStory;
+      return attestAiJsonResponse(
+        enhancedStory,
+        provenanceContext
+      );
     }
 
-    return NextResponse.json(enhancedStory, {
-      status: 200,
-      headers: mergeHeaders(
-        createBrainTransportHeaders({
-          transport: "next-json-fallback",
-          targetPath: brainForward.targetPath,
-          upstreamHost: brainForward.upstreamHost,
-          fallbackReason: null,
-        }),
-        buildCacheHeaders("bypass")
-      ),
-    });
+    return NextResponse.json(
+      attestAiResult(enhancedStory, provenanceContext),
+      {
+        status: 200,
+        headers: mergeHeaders(
+          createBrainTransportHeaders({
+            transport: "next-json-fallback",
+            targetPath: brainForward.targetPath,
+            upstreamHost: brainForward.upstreamHost,
+            fallbackReason: null,
+          }),
+          buildCacheHeaders("bypass")
+        ),
+      }
+    );
   }
 
   const localStory = buildLocalStoryBookFallback({
@@ -707,12 +738,15 @@ export async function POST(request: Request) {
     cacheState: "bypass",
   });
 
-  return NextResponse.json(localStory, {
-    status: 200,
-    headers: buildLocalStoryBookFallbackHeaders({
-      brainForward,
-      fallbackReason,
-      cacheState: "bypass",
-    }),
-  });
+  return NextResponse.json(
+    attestAiResult(localStory, provenanceContext),
+    {
+      status: 200,
+      headers: buildLocalStoryBookFallbackHeaders({
+        brainForward,
+        fallbackReason,
+        cacheState: "bypass",
+      }),
+    }
+  );
 }

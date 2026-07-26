@@ -20,6 +20,11 @@ import type {
   AdminAgentWorkflowType,
 } from "@/lib/agent/admin-types";
 import {
+  attestAiJsonResponse,
+  attestAiResult,
+  type AiProvenanceContext,
+} from "@/lib/ai/provenance-attestation";
+import {
   buildAiProviderUnavailableBody,
   executeFollowUp,
   executeSuggestion,
@@ -167,6 +172,12 @@ function providerErrorResponse(error: unknown) {
 export async function POST(request: Request) {
   const authResult = await authorizeAiRouteSession(request, { requiredRole: "admin" });
   if (authResult instanceof Response) return authResult;
+  const provenanceContext: AiProvenanceContext = {
+    userId: authResult.session.user.id,
+    institutionId: authResult.session.user.institutionId,
+    capability: "admin-agent",
+    scopeId: authResult.session.user.institutionId,
+  };
 
   let payload: AdminAgentRequestPayload | null = null;
 
@@ -204,7 +215,10 @@ export async function POST(request: Request) {
     )
   ) {
     if (payload.workflow !== "weekly-ops-report" || !brainForward.response.ok) {
-      return brainForward.response;
+      return attestAiJsonResponse(
+        brainForward.response,
+        provenanceContext
+      );
     }
 
     let shouldFallbackToLocalWeekly = false;
@@ -213,7 +227,13 @@ export async function POST(request: Request) {
       const proxyData = (await brainForward.response.clone().json()) as unknown;
       const normalized = normalizeWeeklyProxyResult(payload, proxyData);
       if (normalized) {
-        return buildNormalizedProxyResponse(brainForward.response, normalized);
+        return attestAiJsonResponse(
+          buildNormalizedProxyResponse(
+            brainForward.response,
+            normalized
+          ),
+          provenanceContext
+        );
       }
       shouldFallbackToLocalWeekly = true;
     } catch (error) {
@@ -246,7 +266,10 @@ export async function POST(request: Request) {
       suggestion,
     });
 
-    return NextResponse.json(result, { status: 200 });
+    return NextResponse.json(
+      attestAiResult(result, provenanceContext),
+      { status: 200 }
+    );
   }
 
   if (payload.workflow === "question-follow-up") {
@@ -266,7 +289,10 @@ export async function POST(request: Request) {
       response,
     });
 
-    return NextResponse.json(result, { status: 200 });
+    return NextResponse.json(
+      attestAiResult(result, provenanceContext),
+      { status: 200 }
+    );
   }
 
   const weeklyMemoryContexts = await Promise.all(
@@ -296,12 +322,24 @@ export async function POST(request: Request) {
     memoryContexts: weeklyMemoryContexts,
   });
 
-  return NextResponse.json(sanitizeAdminWeeklyResult(result), { status: 200 });
+  return NextResponse.json(
+    attestAiResult(
+      sanitizeAdminWeeklyResult(result),
+      provenanceContext
+    ),
+    { status: 200 }
+  );
   } catch (error) {
     const response = providerErrorResponse(error);
     if (response) {
       return NextResponse.json(
-        buildAdminLocalFallbackResult(payload, "admin-agent-provider-unavailable"),
+        attestAiResult(
+          buildAdminLocalFallbackResult(
+            payload,
+            "admin-agent-provider-unavailable"
+          ),
+          provenanceContext
+        ),
         { status: 200 }
       );
     }

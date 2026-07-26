@@ -4,6 +4,11 @@ import {
   buildLocalHighRiskConsultationResult,
   isValidHighRiskConsultationPayload,
 } from "@/lib/agent/high-risk-consultation-local-result";
+import {
+  attestAiJsonResponse,
+  attestAiResult,
+  type AiProvenanceContext,
+} from "@/lib/ai/provenance-attestation";
 import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import {
   createBrainTransportHeaders,
@@ -100,7 +105,9 @@ function buildKnowledgeHintsForResponse(body: Record<string, unknown>) {
   });
 }
 
-async function maybeEnrichRemoteResponse(brainForward: BrainForwardResult): Promise<Response> {
+async function maybeEnrichRemoteResponse(
+  brainForward: BrainForwardResult
+): Promise<Response> {
   const response = brainForward.response;
   if (!response) {
     return NextResponse.json(
@@ -161,7 +168,8 @@ async function maybeEnrichRemoteResponse(brainForward: BrainForwardResult): Prom
 function localFallbackResponse(
   payload: HighRiskConsultationRequestPayload,
   headers: Headers,
-  fallbackReason: string
+  fallbackReason: string,
+  provenanceContext: AiProvenanceContext
 ) {
   const result = buildLocalHighRiskConsultationResult({
     payload,
@@ -177,7 +185,10 @@ function localFallbackResponse(
     );
   }
 
-  return NextResponse.json(result, { status: 200, headers });
+  return NextResponse.json(
+    attestAiResult(result, provenanceContext),
+    { status: 200, headers }
+  );
 }
 
 export async function POST(request: Request) {
@@ -217,6 +228,12 @@ export async function POST(request: Request) {
     throw error;
   }
   payload = buildHighRiskConsultationPayloadFromScope(payload, sessionScope);
+  const provenanceContext: AiProvenanceContext = {
+    userId: authResult.session.user.id,
+    institutionId: authResult.session.user.institutionId,
+    capability: "high-risk-consultation",
+    scopeId: payload.targetChildId,
+  };
   const serviceScope = buildServiceScopeClaim(sessionScope);
   const brainRequest = new Request(request.url, {
     method: "POST",
@@ -226,7 +243,12 @@ export async function POST(request: Request) {
 
   if (isForcedFallbackRequest(request)) {
     const fallbackReason = "forced-local-fallback";
-    return localFallbackResponse(payload, buildForcedFallbackHeaders(fallbackReason), fallbackReason);
+    return localFallbackResponse(
+      payload,
+      buildForcedFallbackHeaders(fallbackReason),
+      fallbackReason,
+      provenanceContext
+    );
   }
 
   const brainForward = await forwardBrainRequest(brainRequest, HIGH_RISK_CONSULTATION_TARGET_PATH, {
@@ -240,7 +262,14 @@ export async function POST(request: Request) {
         brainForward.response,
         authResult.session.user.accountKind
       ));
-    if (remoteResponseAccepted) return maybeEnrichRemoteResponse(brainForward);
+    if (remoteResponseAccepted) {
+      return attestAiJsonResponse(
+        await maybeEnrichRemoteResponse(
+          brainForward
+        ),
+        provenanceContext
+      );
+    }
 
     const fallbackReason = brainForward.response.ok
       ? "brain-untrusted-result"
@@ -248,10 +277,16 @@ export async function POST(request: Request) {
     return localFallbackResponse(
       payload,
       buildLocalFallbackHeaders(brainForward, fallbackReason),
-      fallbackReason
+      fallbackReason,
+      provenanceContext
     );
   }
 
   const fallbackReason = brainForward.fallbackReason ?? "brain-proxy-unavailable";
-  return localFallbackResponse(payload, buildLocalFallbackHeaders(brainForward), fallbackReason);
+  return localFallbackResponse(
+    payload,
+    buildLocalFallbackHeaders(brainForward),
+    fallbackReason,
+    provenanceContext
+  );
 }

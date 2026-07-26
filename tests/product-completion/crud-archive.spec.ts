@@ -16,17 +16,29 @@ test.describe.configure({ mode: "serial" });
 test.describe("E11 CRUD and archive regression", () => {
   test("children and teachers support create/update/archive/restore through API", async ({}, testInfo) => {
     const director = await demoContext(testInfo, "u-admin");
-    const teacher = await demoContext(testInfo, "u-teacher");
+    const teacher = await demoContext(testInfo, "u-teacher2");
     const token = `e11-crud-${Date.now()}`;
 
     try {
+      await expectFailure(
+        await director.post("/api/children", {
+          data: {
+            name: `${token}-forged-binding`,
+            className: "E11 Class",
+            guardians: [{ name: "E11 Guardian", relation: "parent", phone: "13800000000" }],
+            parentUserId: "u-parent",
+          },
+        }),
+        400,
+        "invalid_request"
+      );
+
       const child = await expectOk<{ id: string; name: string }>(
         await director.post("/api/children", {
           data: {
             name: `${token}-child`,
             className: "E11 Class",
             guardians: [{ name: "E11 Guardian", relation: "parent", phone: "13800000000" }],
-            parentUserId: "u-parent",
           },
         }),
         201
@@ -75,8 +87,8 @@ test.describe("E11 CRUD and archive regression", () => {
 
   for (const type of Object.keys(recordInputs) as RecordType[]) {
     test(`${type} records reject forged scope and support archive/restore`, async ({}, testInfo) => {
-      const teacher = await demoContext(testInfo, "u-teacher");
-      const teacher2 = await demoContext(testInfo, "u-teacher2");
+      const teacher = await demoContext(testInfo, "u-teacher2");
+      const otherTeacher = await demoContext(testInfo, "u-teacher");
       const token = `e11-${type}-${Date.now()}`;
 
       try {
@@ -105,7 +117,7 @@ test.describe("E11 CRUD and archive regression", () => {
         expect(updated.archivedAt).toBeFalsy();
 
         await expectFailure(
-          await teacher2.post("/api/records", {
+          await otherTeacher.post("/api/records", {
             data: { type, childId: CHILD_TEACHER, remark: `${token}-denied` },
           }),
           403,
@@ -126,7 +138,7 @@ test.describe("E11 CRUD and archive regression", () => {
         expect(restored.archivedAt).toBeFalsy();
       } finally {
         await teacher.dispose();
-        await teacher2.dispose();
+        await otherTeacher.dispose();
       }
     });
   }

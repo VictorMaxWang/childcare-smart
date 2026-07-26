@@ -294,6 +294,62 @@ function feedbackIdOf(feedback: SnapshotFeedback) {
   return feedback.feedbackId ?? feedback.id ?? "";
 }
 
+function storybookSourceOwnerIds(
+  snapshot: ApiExtendedSnapshot,
+  sourceRecordId: string
+) {
+  const ownerIds = new Set<string>();
+  const collect = (
+    items: Array<{ childId?: string }>,
+    readId: (item: { childId?: string }) => string
+  ) => {
+    for (const item of items) {
+      if (readId(item) === sourceRecordId && item.childId) {
+        ownerIds.add(item.childId);
+      }
+    }
+  };
+
+  collect(snapshot.attendance, (item) => readString((item as AnyRecord).id));
+  collect(snapshot.meals, (item) => readString((item as AnyRecord).id));
+  collect(snapshot.growth, (item) => readString((item as AnyRecord).id));
+  collect(snapshot.health, (item) => readString((item as AnyRecord).id));
+  collect(snapshot.taskCheckIns, (item) => readString((item as AnyRecord).id));
+  collect(snapshot.feedback, (item) =>
+    feedbackIdOf(item as SnapshotFeedback)
+  );
+  collect(snapshot.healthMaterials, (item) =>
+    readString((item as AnyRecord).materialId)
+  );
+  collect(snapshot.consultations, (item) =>
+    readString((item as AnyRecord).consultationId)
+  );
+  collect(snapshot.messages, (item) =>
+    readString((item as AnyRecord).messageId)
+  );
+  for (const card of snapshot.interventionCards) {
+    if (card.id === sourceRecordId) ownerIds.add(card.targetChildId);
+  }
+  return ownerIds;
+}
+
+function requireStorybookSourceScope(
+  snapshot: ApiExtendedSnapshot,
+  childId: string,
+  sourceRecordIds: string[]
+) {
+  for (const sourceRecordId of sourceRecordIds) {
+    const ownerIds = storybookSourceOwnerIds(snapshot, sourceRecordId);
+    // AI 场景可产生不落库的语义来源 ID；只有命中真实业务记录时才强制校验归属。
+    if ([...ownerIds].some((ownerId) => ownerId !== childId)) {
+      throw new ApiRouteError(
+        "forbidden_scope",
+        "成长绘本不能引用其他幼儿的业务记录。"
+      );
+    }
+  }
+}
+
 function feedbackTimestampOf(feedback: SnapshotFeedback) {
   const record = feedback as unknown as AnyRecord;
   return (
@@ -312,6 +368,17 @@ function readGender(value: unknown, fallback: "男" | "女" = "女") {
   return value === "男" || value === "女" ? value : fallback;
 }
 
+function readChildClassName(value: unknown, fallback = "待分班") {
+  const className = readString(value, fallback).trim();
+  if (!className || className.length > 100) {
+    throw new ApiRouteError(
+      "invalid_request",
+      "班级名称不能为空且不能超过 100 个字符。"
+    );
+  }
+  return className;
+}
+
 function sanitizeChildPatch(input: AnyRecord): AnyRecord {
   const patch: AnyRecord = {};
   if ("name" in input) patch.name = readString(input.name, "未命名幼儿");
@@ -322,9 +389,29 @@ function sanitizeChildPatch(input: AnyRecord): AnyRecord {
   if ("heightCm" in input) patch.heightCm = readNumber(input.heightCm, 0);
   if ("weightKg" in input) patch.weightKg = readNumber(input.weightKg, 0);
   if ("guardians" in input) patch.guardians = readArray(input.guardians);
-  if ("className" in input) patch.className = readString(input.className, "待分班");
+  if ("className" in input) {
+    patch.className = readChildClassName(input.className);
+  }
   if ("specialNotes" in input) patch.specialNotes = readString(input.specialNotes);
   return patch;
+}
+
+function resolveChildClassId(
+  snapshot: ApiExtendedSnapshot,
+  institutionId: string,
+  className: string
+) {
+  const existingClassId = snapshot.children.find(
+    (child) =>
+      child.institutionId === institutionId &&
+      child.className === className &&
+      typeof child.classId === "string" &&
+      child.classId.length > 0
+  )?.classId;
+
+  // classId 属于授权边界，不能直接接受客户端输入。已有班级复用稳定 ID，
+  // 新班级则由服务端生成，并由 repository 在同一事务内补齐关系表。
+  return existingClassId ?? createApiId("class");
 }
 
 function rejectDirectParentBinding(input: AnyRecord) {
@@ -645,6 +732,7 @@ export class AppDataService {
     rejectDirectParentBinding(input);
     return this.mutate("child", "new", "create", (snapshot) => {
       const now = nowIso();
+      const className = readChildClassName(input.className);
       const child = {
         id: createApiId("c"),
         name: readString(input.name, "未命名幼儿"),
@@ -656,7 +744,12 @@ export class AppDataService {
         weightKg: readNumber(input.weightKg, 0),
         guardians: readArray(input.guardians),
         institutionId: this.session.institutionId,
-        className: readString(input.className, "待分班"),
+        className,
+        classId: resolveChildClassId(
+          snapshot,
+          this.session.institutionId,
+          className
+        ),
         specialNotes: readString(input.specialNotes),
         avatar: input.gender === "男" ? "👦" : "👧",
         createdAt: now,
@@ -673,6 +766,13 @@ export class AppDataService {
     return this.mutate("child", childId, "update", (snapshot) => {
       requireChildAccess(this.session, snapshot, childId);
       const patch = sanitizeChildPatch(input);
+      if (typeof patch.className === "string") {
+        patch.classId = resolveChildClassId(
+          snapshot,
+          this.session.institutionId,
+          patch.className
+        );
+      }
       const { found, next } = updateById(snapshot.children, childId, (child) => child.id, (child) => ({
         ...child,
         ...patch,
@@ -1111,40 +1211,36 @@ export class AppDataService {
   async updateFeedbackStatus(feedbackId: string, input: AnyRecord) {
     requireStaff(this.session);
     const nextStatus = readFeedbackStatus(input.status);
-    const snapshot = await this.load();
-    const feedback = snapshot.feedback.find((item) => feedbackIdOf(item as SnapshotFeedback) === feedbackId) as
-      | SnapshotFeedback
-      | undefined;
-    if (!feedback) throw new ApiRouteError("not_found", "Feedback was not found.");
-    requireFeedbackViewAccess(this.session, snapshot, feedback);
-    const previousStatus = normalizeFeedbackStatus(feedback.status);
-    const updatedAt = nowIso();
-    snapshot.feedback = snapshot.feedback.map((item) =>
-      feedbackIdOf(item as SnapshotFeedback) === feedbackId
-        ? ({ ...item, status: nextStatus, updatedAt } as AppStateSnapshot["feedback"][number])
-        : item
-    );
-    appendAuditLog(snapshot, this.session, "feedback", feedbackId, "update_status", "success", {
-      previousStatus,
-      status: nextStatus,
-    });
-    await this.save(snapshot);
-    return this.buildFeedbackDetail(snapshot, feedbackId);
-  }
-
-  private async updateFeedbackStatusLegacy(feedbackId: string, input: AnyRecord) {
     return this.mutate("feedback", feedbackId, "update_status", (snapshot) => {
-      const feedback = snapshot.feedback.find((item) => feedbackIdOf(item as SnapshotFeedback) === feedbackId) as SnapshotFeedback | undefined;
+      const feedback = snapshot.feedback.find(
+        (item) => feedbackIdOf(item as SnapshotFeedback) === feedbackId
+      ) as SnapshotFeedback | undefined;
+      if (!feedback) throw new ApiRouteError("not_found", "Feedback was not found.");
       requireFeedbackViewAccess(this.session, snapshot, feedback);
-      if (this.session.role === "家长") {
-        throw new ApiRouteError("forbidden_scope", "家长不能更新反馈处理状态。");
-      }
+      const previousStatus = normalizeFeedbackStatus(feedback.status);
+      const updatedAt = nowIso();
       snapshot.feedback = snapshot.feedback.map((item) =>
         feedbackIdOf(item as SnapshotFeedback) === feedbackId
-          ? ({ ...item, status: readString(input.status, "handled"), updatedAt: nowIso() } as AppStateSnapshot["feedback"][number])
+          ? ({
+              ...item,
+              status: nextStatus,
+              updatedAt,
+            } as AppStateSnapshot["feedback"][number])
           : item
       );
-      return snapshot.feedback.find((item) => feedbackIdOf(item as SnapshotFeedback) === feedbackId);
+      appendAuditLog(
+        snapshot,
+        this.session,
+        "feedback",
+        feedbackId,
+        "update_status",
+        "success",
+        {
+          previousStatus,
+          status: nextStatus,
+        }
+      );
+      return this.buildFeedbackDetail(snapshot, feedbackId);
     });
   }
 
@@ -1628,15 +1724,25 @@ export class AppDataService {
     if (!childId) throw new ApiRouteError("invalid_request", "成长绘本必须提供 childId。");
     const storybookId = readString(input.storybookId, readString(input.storyId, readString(response?.storyId))) || createApiId("storybook");
     const pages = readArray<Record<string, unknown>>(input.pages).filter(isRecordLike);
+    const sourceRecordIds = readArray<string>(input.sourceRecordIds).filter(
+      (item) => typeof item === "string"
+    );
     const responsePages = response ? [{ kind: "parent-storybook-response", response }] : [];
     return this.mutate("storybook", storybookId, "upsert", (snapshot) => {
       requireChildAccess(this.session, snapshot, childId);
       const existing = snapshot.storybooks.find((item) => item.storybookId === storybookId) as SnapshotStorybook | undefined;
+      if (existing && existing.childId !== childId) {
+        throw new ApiRouteError(
+          "forbidden_scope",
+          "该绘本编号已属于其他幼儿，不能重新绑定。"
+        );
+      }
+      requireStorybookSourceScope(snapshot, childId, sourceRecordIds);
       const now = nowIso();
       const storybook = {
         storybookId,
         childId,
-        sourceRecordIds: readArray<string>(input.sourceRecordIds).filter((item) => typeof item === "string"),
+        sourceRecordIds,
         pages: pages.length > 0 ? pages : responsePages,
         generatedAt: readString(input.generatedAt, readString(response?.generatedAt, existing?.generatedAt ?? now)),
         updatedAt: now,
@@ -1808,44 +1914,53 @@ export class AppDataService {
     );
     const periodEnd = readString(input.periodEnd, nowIso().slice(0, 10));
     const periodStart = readString(input.periodStart, dateDaysBefore(periodEnd, 6));
-    const snapshot = await this.load();
+    return this.mutate("weekly-report", "new", "generate", (snapshot) => {
+      if (scopeType === "institution") requireDirector(this.session);
+      else if (scopeType === "class")
+        requireClassAccess(this.session, snapshot, scopeId);
+      else requireChildAccess(this.session, snapshot, scopeId);
 
-    if (scopeType === "institution") requireDirector(this.session);
-    else if (scopeType === "class") requireClassAccess(this.session, snapshot, scopeId);
-    else requireChildAccess(this.session, snapshot, scopeId);
+      const payload = buildWeeklyReportPayload(snapshot, this.session, {
+        scopeType,
+        scopeId,
+        periodStart,
+        periodEnd,
+      });
+      const now = nowIso();
+      const report: ApiWeeklyReport = {
+        reportId: createApiId("wr"),
+        title: readString(input.title, "Weekly report"),
+        scopeType,
+        scopeId,
+        institutionId: this.session.institutionId,
+        periodStart,
+        periodEnd,
+        status: "draft",
+        payload: {
+          ...payload,
+          clientPreview: isRecordLike(input.payload)
+            ? input.payload
+            : undefined,
+          clientSummary: readString(input.summary) || undefined,
+        },
+        sourceRecordIds: payload.sourceRecordIds,
+        createdBy: this.session.id,
+        generatedBy: this.session.id,
+        createdAt: now,
+        updatedAt: now,
+      };
 
-    const payload = buildWeeklyReportPayload(snapshot, this.session, {
-      scopeType,
-      scopeId,
-      periodStart,
-      periodEnd,
+      snapshot.weeklyReports = [report, ...snapshot.weeklyReports];
+      appendAuditLog(
+        snapshot,
+        this.session,
+        "weekly-report",
+        report.reportId,
+        "generate",
+        "success"
+      );
+      return report;
     });
-    const now = nowIso();
-    const report: ApiWeeklyReport = {
-      reportId: createApiId("wr"),
-      title: readString(input.title, "Weekly report"),
-      scopeType,
-      scopeId,
-      institutionId: this.session.institutionId,
-      periodStart,
-      periodEnd,
-      status: "draft",
-      payload: {
-        ...payload,
-        clientPreview: isRecordLike(input.payload) ? input.payload : undefined,
-        clientSummary: readString(input.summary) || undefined,
-      },
-      sourceRecordIds: payload.sourceRecordIds,
-      createdBy: this.session.id,
-      generatedBy: this.session.id,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    snapshot.weeklyReports = [report, ...snapshot.weeklyReports];
-    appendAuditLog(snapshot, this.session, "weekly-report", report.reportId, "generate", "success");
-    await this.save(snapshot);
-    return report;
   }
 
   async updateWeeklyReport(reportId: string, input: AnyRecord) {
@@ -2671,6 +2786,14 @@ export class AppDataService {
     const childId = readString(input.childId, readString(input.targetId));
     if (!childId) throw new ApiRouteError("invalid_request", "提醒必须提供 childId。");
     const targetRole = readReminderTargetRole(input.targetRole);
+    const requestedReminderId = readString(input.reminderId);
+    if (
+      requestedReminderId &&
+      (requestedReminderId.length > 200 ||
+        !/^[a-z0-9_-]+$/iu.test(requestedReminderId))
+    ) {
+      throw new ApiRouteError("invalid_request", "提醒编号格式无效。");
+    }
     if (this.session.role === "家长" && targetRole !== "parent") {
       throw new ApiRouteError(
         "forbidden_scope",
@@ -2689,8 +2812,26 @@ export class AppDataService {
     }
     return this.mutate("reminder", "new", "create", (snapshot) => {
       requireChildAccess(this.session, snapshot, childId);
+      const existing = requestedReminderId
+        ? snapshot.reminders.find(
+            (item) => item.reminderId === requestedReminderId
+          )
+        : undefined;
+      if (existing) {
+        const existingChildId = existing.childId ?? existing.targetId;
+        if (
+          existingChildId !== childId ||
+          existing.targetRole !== targetRole
+        ) {
+          throw new ApiRouteError(
+            "forbidden_scope",
+            "该提醒编号已属于其他幼儿或角色。"
+          );
+        }
+        return existing;
+      }
       const reminder = {
-        reminderId: createApiId("reminder"),
+        reminderId: requestedReminderId || createApiId("reminder"),
         reminderType: readString(input.reminderType, "family-task"),
         targetRole,
         targetId: childId,

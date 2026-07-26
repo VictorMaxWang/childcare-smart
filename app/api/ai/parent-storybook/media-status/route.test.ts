@@ -6,6 +6,11 @@ import type {
   ParentStoryBookResponse,
 } from "@/lib/ai/types";
 import {
+  attestAiResult,
+  UNVERIFIED_AI_PROVIDER,
+  verifyAiResultAttestation,
+} from "@/lib/ai/provenance-attestation";
+import {
   SMARTCHILDCARE_TARGET_HEADER,
   SMARTCHILDCARE_TRANSPORT_HEADER,
 } from "@/lib/server/brain-client";
@@ -215,14 +220,37 @@ function buildAudioReadyStory(overrides: Partial<ParentStoryBookResponse> = {}) 
   } satisfies ParentStoryBookResponse;
 }
 
-function buildMediaStatusRouteRequest(payload: ParentStoryBookMediaStatusRequest) {
+const STORYBOOK_PROVENANCE_CONTEXT = {
+  userId: "u-parent",
+  institutionId: "inst-1",
+  capability: "parent-storybook",
+  scopeId: "c-1",
+} as const;
+
+function buildMediaStatusRouteRequest(
+  payload: ParentStoryBookMediaStatusRequest,
+  options: { attestStory?: boolean } = {}
+) {
+  const story =
+    options.attestStory === false
+      ? payload.story
+      : (attestAiResult(
+          { ...payload.story },
+          {
+            ...STORYBOOK_PROVENANCE_CONTEXT,
+            scopeId: payload.childId,
+          }
+        ) as unknown as ParentStoryBookResponse);
   return new Request("http://localhost:3000/api/ai/parent-storybook/media-status", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-demo-account-id": "u-parent",
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      story,
+    }),
   });
 }
 
@@ -565,6 +593,57 @@ test("parent storybook media-status route honors vivo image retry backoff", asyn
         assert.equal(body.providerMeta.diagnostics?.image.errorSceneCount, 0);
         assert.equal(body.providerMeta.diagnostics?.image.rateLimited, true);
         assert.equal(body.providerMeta.diagnostics?.image.nextRetryAtMs, nextRetryAtMs);
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("parent storybook media-status route downgrades an unsigned live story before continuing it", async () => {
+  const originalFetch = globalThis.fetch;
+  let forwardedPayload: ParentStoryBookMediaStatusRequest | null = null;
+
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    forwardedPayload = await readForwardedJson(init?.body);
+    return new Response(JSON.stringify({ detail: "Not Found" }), {
+      status: 404,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+        VIVO_APP_ID: undefined,
+        VIVO_APP_KEY: undefined,
+        VIVO_BASE_URL: undefined,
+      },
+      async () => {
+        const response = await POST(
+          buildMediaStatusRouteRequest(buildMediaStatusPayload(), {
+            attestStory: false,
+          })
+        );
+        const body = (await response.json()) as ParentStoryBookResponse;
+
+        assert.equal(response.status, 200);
+        assert.equal(
+          forwardedPayload?.story.providerMeta.provider,
+          UNVERIFIED_AI_PROVIDER
+        );
+        assert.equal(
+          forwardedPayload?.story.providerMeta.realProvider,
+          false
+        );
+        assert.notEqual(body.providerMeta.textDelivery, "real");
+        assert.equal(body.providerMeta.realProvider, false);
+        assert.equal(
+          verifyAiResultAttestation(body, STORYBOOK_PROVENANCE_CONTEXT),
+          true
+        );
       }
     );
   } finally {

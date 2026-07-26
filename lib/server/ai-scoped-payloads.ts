@@ -320,6 +320,8 @@ export function buildTeacherAgentPayloadFromScope(
       institutionId: scope.institutionId,
       className: scope.user.className,
       role: scope.user.role,
+      // 只从已验签 session 投影，供 demo 专属兜底开关使用，不能信任客户端自报。
+      accountKind: scope.user.accountKind,
     },
     visibleChildren,
     presentChildren:

@@ -18,6 +18,12 @@ import {
   putPrivateAttachment,
 } from "@/lib/server/private-blob";
 import { requireSession } from "@/lib/server/session";
+import {
+  assertRequestContentLength,
+  readMultipartFormDataWithLimit,
+  UploadSecurityError,
+  validateUploadFile,
+} from "@/lib/server/upload-security";
 
 export const runtime = "nodejs";
 
@@ -31,6 +37,8 @@ const RELATED_TYPES = new Set<AttachmentRelatedType>([
   "meal",
   "growth",
 ]);
+const ATTACHMENT_MAX_REQUEST_BYTES =
+  ATTACHMENT_MAX_UPLOAD_BYTES + 256 * 1024;
 
 type AttachmentUploadService = Pick<
   AppDataService,
@@ -73,11 +81,28 @@ function safeFileName(value: string) {
   return normalized || "attachment";
 }
 
+function rethrowUploadSecurityError(error: unknown): never {
+  if (error instanceof UploadSecurityError) {
+    throw new ApiRouteError(
+      "invalid_request",
+      error.message,
+      error.status
+    );
+  }
+  throw error;
+}
+
 export async function handleAttachmentUploadRequest(
   request: Request,
   dependencies: AttachmentUploadRouteDependencies = defaultDependencies
 ) {
   return withApiErrors(async () => {
+    try {
+      assertRequestContentLength(request, ATTACHMENT_MAX_REQUEST_BYTES);
+    } catch (error) {
+      rethrowUploadSecurityError(error);
+    }
+
     const session = await dependencies.resolveSession(request);
     if (session.user.accountKind === "demo") {
       throw new ApiRouteError(
@@ -96,12 +121,12 @@ export async function handleAttachmentUploadRequest(
 
     let formData: FormData;
     try {
-      formData = await request.formData();
-    } catch {
-      throw new ApiRouteError(
-        "invalid_request",
-        "上传请求必须使用 multipart/form-data。"
+      formData = await readMultipartFormDataWithLimit(
+        request,
+        ATTACHMENT_MAX_REQUEST_BYTES
       );
+    } catch (error) {
+      rethrowUploadSecurityError(error);
     }
 
     const candidate = formData.get("file");
@@ -115,14 +140,14 @@ export async function handleAttachmentUploadRequest(
         "仅支持 JPEG、PNG、WebP、PDF 和常见音频格式。"
       );
     }
-    if (
-      candidate.size <= 0 ||
-      candidate.size > ATTACHMENT_MAX_UPLOAD_BYTES
-    ) {
-      throw new ApiRouteError(
-        "invalid_request",
-        "文件必须大于 0 字节且不超过 4 MB。"
-      );
+    try {
+      await validateUploadFile({
+        file: candidate,
+        maxBytes: ATTACHMENT_MAX_UPLOAD_BYTES,
+        allowedMimeTypes: ATTACHMENT_ALLOWED_MIME_TYPES,
+      });
+    } catch (error) {
+      rethrowUploadSecurityError(error);
     }
 
     const childId = readFormString(formData, "childId") || undefined;

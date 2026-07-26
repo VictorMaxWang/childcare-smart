@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { HighRiskConsultationRequestPayload } from "@/lib/agent/high-risk-consultation";
+import { verifyAiResultAttestation } from "@/lib/ai/provenance-attestation";
 import { getLocalToday } from "@/lib/date";
 import { POST } from "./route.ts";
 
@@ -155,6 +156,15 @@ test("high-risk consultation route returns complete Lin Xiaoyu fallback when for
       const knowledgeHints = body.knowledgeHints as Array<Record<string, unknown>>;
 
       assert.equal(response.status, 200);
+      assert.equal(
+        verifyAiResultAttestation(body, {
+          userId: "u-teacher2",
+          institutionId: "inst-1",
+          capability: "high-risk-consultation",
+          scopeId: "c-1",
+        }),
+        true
+      );
       assert.equal(body.childId, "c-1");
       assert.equal(body.riskLevel, "high");
       assert.equal(body.shouldEscalateToAdmin, true);

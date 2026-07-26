@@ -4,13 +4,22 @@ import { VivoProviderError } from "@/lib/providers/vivo/vivo-errors";
 import { apiOk, ApiRouteError, withApiErrors } from "@/lib/server/api-errors";
 import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
 import {
-  validateVoiceAudioFile,
+  MULTIPART_FORM_DATA_OVERHEAD_BYTES,
+  readRequestWithBodyLimit,
+  UploadSecurityError,
+  validateAudioUploadFile,
+} from "@/lib/server/upload-security";
+import {
+  VOICE_AUDIO_MAX_BYTES,
   validateVoiceDuration,
   validateVoiceText,
 } from "@/lib/voice/audio-constraints";
 import type { VoiceAsrResponse } from "@/lib/voice-assistant/types";
 
 export const runtime = "nodejs";
+
+const VOICE_AUDIO_MAX_REQUEST_BYTES =
+  VOICE_AUDIO_MAX_BYTES + MULTIPART_FORM_DATA_OVERHEAD_BYTES;
 
 function readString(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -21,22 +30,62 @@ function readNumber(value: FormDataEntryValue | null) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function rethrowUploadSecurityError(error: unknown): never {
+  if (error instanceof UploadSecurityError) {
+    throw new ApiRouteError(
+      "invalid_request",
+      error.message,
+      error.status
+    );
+  }
+  throw error;
+}
+
 export function POST(request: Request) {
   return withApiErrors(async () => {
-    const authError = await authorizeAiRoute(request, { allowUnscoped: true });
+    let boundedRequest: Request;
+    try {
+      // 鉴权会读取表单中的 childId；先限制原始流，避免鉴权阶段解析超大正文。
+      boundedRequest = await readRequestWithBodyLimit(
+        request,
+        VOICE_AUDIO_MAX_REQUEST_BYTES
+      );
+    } catch (error) {
+      rethrowUploadSecurityError(error);
+    }
+
+    const authError = await authorizeAiRoute(boundedRequest, {
+      allowUnscoped: true,
+    });
     if (authError) return authError;
 
-    const formData = await request.formData();
+    let formData: FormData;
+    try {
+      formData = await boundedRequest.formData();
+    } catch {
+      throw new ApiRouteError(
+        "invalid_request",
+        "语音上传请求必须使用有效的 multipart/form-data。"
+      );
+    }
     const audio = formData.get("audio");
-    const audioFile =
-      audio && typeof audio === "object" && "arrayBuffer" in audio
-        ? (audio as File)
-        : null;
+    const audioFile = audio instanceof File ? audio : null;
     const durationMs = readNumber(formData.get("durationMs"));
     const transcript = readString(formData.get("transcript"));
     const fallbackText = readString(formData.get("fallbackText"));
+
+    let detectedAudioMimeType: string | undefined;
+    if (audioFile) {
+      try {
+        detectedAudioMimeType = (
+          await validateAudioUploadFile(audioFile, VOICE_AUDIO_MAX_BYTES)
+        ).mimeType;
+      } catch (error) {
+        rethrowUploadSecurityError(error);
+      }
+    }
+
     const validationError =
-      (audioFile ? validateVoiceAudioFile(audioFile) : null) ||
       validateVoiceDuration(durationMs) ||
       validateVoiceText(transcript) ||
       validateVoiceText(fallbackText);
@@ -52,7 +101,11 @@ export function POST(request: Request) {
         audioBytes,
         durationMs,
         fallbackText,
-        mimeType: readString(formData.get("mimeType")) || audioFile?.type,
+        // 有二进制音频时只使用服务端检测结果，不能被独立 mimeType 字段覆盖。
+        mimeType:
+          detectedAudioMimeType ||
+          readString(formData.get("mimeType")) ||
+          undefined,
         scene: readString(formData.get("scene")) || "voice-orb",
         transcript,
       })

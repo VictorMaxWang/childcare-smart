@@ -61,6 +61,7 @@ type TestChild = {
   name: string;
   institutionId: string;
   className: string;
+  classId?: string;
   archivedAt?: string;
   archivedBy?: string;
   archiveReason?: string;
@@ -333,6 +334,103 @@ test("service writes through the repository atomic mutation contract when availa
   assert.equal(repo.mutateCount, 1);
 });
 
+test("feedback status and weekly report writes use the atomic repository contract", async () => {
+  const repo = new AtomicOnlyRepository();
+  const parent = new AppDataService(demoUser("u-parent"), repo);
+  const director = new AppDataService(demoUser("u-admin"), repo);
+  const feedback = await parent.createFeedback({
+    childId: "c-1",
+    content: "原子写入反馈",
+    sourceChannel: "parent-agent",
+  });
+  const feedbackId = feedback.feedback.feedbackId ?? feedback.feedback.id;
+  assert.ok(feedbackId);
+
+  const updated = await director.updateFeedbackStatus(feedbackId, {
+    status: "in-progress",
+  });
+  assert.equal(updated.feedback.status, "in-progress");
+
+  const report = await director.createWeeklyReport({
+    scopeType: "institution",
+    scopeId: demoUser("u-admin").institutionId,
+    title: "原子写入周报",
+    periodStart: "2026-04-27",
+    periodEnd: "2026-05-03",
+  });
+  assert.equal(report.title, "原子写入周报");
+  assert.equal(repo.mutateCount, 3);
+});
+
+test("storybook upsert cannot rebind an existing id to another family child", async () => {
+  const repo = new MemoryRepository();
+  const baseParent = demoUser("u-parent");
+  const firstParent: SessionUser = {
+    ...baseParent,
+    id: "u-parent-first",
+    childIds: ["c-1"],
+    accountKind: "normal",
+  };
+  const secondParent: SessionUser = {
+    ...baseParent,
+    id: "u-parent-second",
+    childIds: ["c-4"],
+    accountKind: "normal",
+  };
+  const firstService = new AppDataService(firstParent, repo);
+  const secondService = new AppDataService(secondParent, repo);
+
+  await secondService.upsertStorybook({
+    storybookId: "storybook-cross-family-guard",
+    childId: "c-4",
+    pages: [{ title: "第二个家庭的绘本" }],
+  });
+
+  await assert.rejects(
+    () =>
+      firstService.upsertStorybook({
+        storybookId: "storybook-cross-family-guard",
+        childId: "c-1",
+        pages: [{ title: "试图覆盖" }],
+      }),
+    assertApiError("forbidden_scope")
+  );
+
+  const persisted = await secondService.getStorybook(
+    "storybook-cross-family-guard"
+  );
+  assert.equal(persisted.childId, "c-4");
+  assert.deepEqual(persisted.pages, [{ title: "第二个家庭的绘本" }]);
+});
+
+test("storybook source records cannot reference another family child", async () => {
+  const repo = new MemoryRepository();
+  const teacher = new AppDataService(demoUser("u-teacher2"), repo);
+  const foreignGrowth = asTestRecord(
+    await teacher.createRecord("growth", {
+      childId: "c-1",
+      description: "仅属于第一名幼儿的成长记录",
+    })
+  );
+  const parent: SessionUser = {
+    ...demoUser("u-parent"),
+    id: "u-parent-c4-only",
+    childIds: ["c-4"],
+    accountKind: "normal",
+  };
+
+  await assert.rejects(
+    () =>
+      new AppDataService(parent, repo).upsertStorybook({
+        storybookId: "storybook-foreign-source-guard",
+        childId: "c-4",
+        sourceRecordIds: [foreignGrowth.id],
+        pages: [{ title: "不得引用其他幼儿素材" }],
+      }),
+    assertApiError("forbidden_scope")
+  );
+});
+
 test("createConsultation preserves rich high-risk result fields", async () => {
   const repo = new MemoryRepository();
   const service = new AppDataService(demoUser("u-teacher2"), repo);
@@ -477,6 +575,7 @@ test("director can create, update, archive and restore child profiles through sc
 
   assert.ok(created.id);
   assert.equal(created.institutionId, "inst-1");
+  assert.equal(created.classId, "class-sunrise");
 
   const updated = asTestChild(await director.updateChild(created.id, {
     id: "client-forged-id",
@@ -490,7 +589,27 @@ test("director can create, update, archive and restore child profiles through sc
   assert.equal(updated.institutionId, "inst-1");
   assert.equal(updated.name, `${token}-updated`);
   assert.equal(updated.className, "晨曦班");
+  assert.equal(updated.classId, "class-morning");
   assert.equal(updated.archivedAt, undefined);
+
+  const oldClassTeacher: SessionUser = {
+    ...demoUser("u-teacher"),
+    classId: "class-sunrise",
+  };
+  const newClassTeacher: SessionUser = {
+    ...demoUser("u-teacher2"),
+    classId: "class-morning",
+  };
+  await assert.rejects(
+    () => new AppDataService(oldClassTeacher, repo).getChild(created.id),
+    assertApiError("forbidden_scope")
+  );
+  assert.equal(
+    asTestChild(
+      await new AppDataService(newClassTeacher, repo).getChild(created.id)
+    ).id,
+    created.id
+  );
 
   const archived = asTestChild(await director.archiveChild(created.id, "archive", "unit-test"));
   assert.ok(archived.archivedAt);
@@ -563,6 +682,41 @@ test("role-scoped reminders cannot be read or closed by another role", async () 
       }),
     (error: unknown) =>
       error instanceof ApiRouteError && error.code === "forbidden_scope"
+  );
+});
+
+test("reminder retries reuse a stable id without crossing child scope", async () => {
+  const repo = new MemoryRepository();
+  const teacher = new AppDataService(demoUser("u-teacher2"), repo);
+  const payload = {
+    reminderId: "reminder-stable-retry",
+    reminderType: "review-48h",
+    targetRole: "teacher",
+    childId: "c-1",
+    targetId: "c-1",
+    title: "48 小时复查",
+    description: "复查同一条会诊任务。",
+    sourceId: "consultation-stable-retry",
+  };
+
+  const first = await teacher.createReminder(payload);
+  const retried = await teacher.createReminder(payload);
+  assert.equal(first.reminderId, payload.reminderId);
+  assert.equal(retried.reminderId, payload.reminderId);
+
+  const listed = await teacher.listReminders({ childId: "c-1" });
+  assert.equal(
+    listed.filter((item) => item.reminderId === payload.reminderId).length,
+    1
+  );
+  await assert.rejects(
+    () =>
+      teacher.createReminder({
+        ...payload,
+        childId: "c-4",
+        targetId: "c-4",
+      }),
+    assertApiError("forbidden_scope")
   );
 });
 
@@ -664,6 +818,27 @@ test("ordinary child CRUD cannot forge a parent account binding", async () => {
         className: "向阳班",
         parentUserId: "u-parent",
       }),
+    assertApiError("invalid_request")
+  );
+});
+
+test("child CRUD normalizes class names and rejects empty class bindings", async () => {
+  const repo = new MemoryRepository();
+  const director = new AppDataService(demoUser("u-admin"), repo);
+
+  const created = asTestChild(
+    await director.createChild({
+      name: "班级校验幼儿",
+      birthDate: "2023-02-03",
+      gender: "女",
+      className: "  晨曦班  ",
+    })
+  );
+  assert.equal(created.className, "晨曦班");
+  assert.equal(created.classId, "class-morning");
+
+  await assert.rejects(
+    () => director.updateChild(created.id, { className: "   " }),
     assertApiError("invalid_request")
   );
 });

@@ -4,6 +4,15 @@ import {
   isValidHealthFileBridgeRequest,
 } from "@/lib/agent/health-file-bridge";
 import {
+  attestAiJsonResponse,
+  type AiProvenanceContext,
+} from "@/lib/ai/provenance-attestation";
+import {
+  HEALTH_FILE_MAX_COUNT,
+  HEALTH_FILE_MAX_OCR_BASE64_LENGTH,
+  HEALTH_FILE_MAX_UPLOAD_BYTES,
+} from "@/lib/health/health-file-constraints";
+import {
   buildBrainServiceAuthHeaders,
   createBrainTransportHeaders,
   forwardBrainRequest,
@@ -25,6 +34,11 @@ import {
   requireScopedChild,
 } from "@/lib/server/session-scope";
 import { logSecurityEvent } from "@/lib/server/security-log";
+import {
+  inspectBase64Media,
+  readRequestWithBodyLimit,
+  UploadSecurityError,
+} from "@/lib/server/upload-security";
 import { resolveOcrProvider } from "@/lib/ai/providers";
 import { VivoProviderError } from "@/lib/providers/vivo";
 import type {
@@ -33,6 +47,18 @@ import type {
   HealthFileBridgeResponse,
   HealthFileBridgeWritebackRequest,
 } from "@/lib/ai/types";
+
+const HEALTH_FILE_MAX_REQUEST_BYTES =
+  HEALTH_FILE_MAX_COUNT * HEALTH_FILE_MAX_OCR_BASE64_LENGTH +
+  256 * 1024;
+const HEALTH_INLINE_BINARY_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+]);
+const HEALTH_DATA_URL_PATTERN =
+  /^data:([^;,]+);base64,([a-z0-9+/=\s]+)$/iu;
 
 function buildLocalFallbackHeaders(brainForward: BrainForwardResult) {
   return createBrainTransportHeaders({
@@ -94,6 +120,83 @@ function readFileBase64(file: HealthFileBridgeFile) {
   const fromDataUrl = typeof file.dataUrl === "string" ? file.dataUrl : "";
   const value = fromFile || fromMeta || fromDataUrl;
   return value.includes(",") ? value.split(",").pop()?.trim() ?? "" : value.trim();
+}
+
+function inferHealthMimeTypeFromName(fileName: string) {
+  const normalized = fileName.trim().toLowerCase();
+  if (normalized.endsWith(".jpg") || normalized.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+  if (normalized.endsWith(".png")) return "image/png";
+  if (normalized.endsWith(".webp")) return "image/webp";
+  if (normalized.endsWith(".pdf")) return "application/pdf";
+  return undefined;
+}
+
+function normalizeInlineHealthFile(file: HealthFileBridgeFile) {
+  const metaBase64 =
+    isRecord(file.meta) && typeof file.meta.imageBase64 === "string"
+      ? file.meta.imageBase64.trim()
+      : "";
+  const source =
+    file.imageBase64?.trim() ||
+    metaBase64 ||
+    file.dataUrl?.trim() ||
+    "";
+  if (!source) return file;
+
+  let base64 = source;
+  let dataUrlMimeType: string | undefined;
+  if (source.startsWith("data:")) {
+    const match = source.match(HEALTH_DATA_URL_PATTERN);
+    if (!match) {
+      throw new UploadSecurityError(
+        400,
+        "健康材料 data URL 编码无效。"
+      );
+    }
+    dataUrlMimeType = match[1].trim().toLowerCase();
+    base64 = match[2];
+  } else if (file.dataUrl?.trim() === source) {
+    throw new UploadSecurityError(
+      400,
+      "健康材料 data URL 编码无效。"
+    );
+  }
+
+  const declaredMimeType = file.mimeType?.trim().toLowerCase();
+  if (
+    declaredMimeType &&
+    dataUrlMimeType &&
+    declaredMimeType !== dataUrlMimeType
+  ) {
+    throw new UploadSecurityError(
+      415,
+      "健康材料声明类型与 data URL 类型不一致。"
+    );
+  }
+
+  const inspected = inspectBase64Media({
+    base64,
+    claimedMimeType:
+      declaredMimeType ||
+      dataUrlMimeType ||
+      inferHealthMimeTypeFromName(file.name),
+    allowedMimeTypes: HEALTH_INLINE_BINARY_MIME_TYPES,
+    maxBytes: HEALTH_FILE_MAX_UPLOAD_BYTES,
+  });
+  return {
+    ...file,
+    mimeType: inspected.mimeType,
+    sizeBytes: file.sizeBytes ?? inspected.bytes.byteLength,
+  } satisfies HealthFileBridgeFile;
+}
+
+function normalizeInlineHealthFiles(payload: HealthFileBridgeRequest) {
+  return {
+    ...payload,
+    files: payload.files.map(normalizeInlineHealthFile),
+  } satisfies HealthFileBridgeRequest;
 }
 
 function isBinaryHealthFile(file: HealthFileBridgeFile) {
@@ -415,12 +518,28 @@ export async function maybeAugmentRemoteBridgeResponse(
 }
 
 export async function POST(request: Request) {
-  const authResult = await authorizeAiRouteSession(request, { requiredRole: "staff" });
+  let boundedRequest: Request;
+  try {
+    // authorizeAiRouteSession 会读取 JSON 提取 child scope，必须先限制原始请求流。
+    boundedRequest = await readRequestWithBodyLimit(
+      request,
+      HEALTH_FILE_MAX_REQUEST_BYTES
+    );
+  } catch (error) {
+    if (error instanceof UploadSecurityError) {
+      return apiError("invalid_request", error.message, {
+        status: error.status,
+      });
+    }
+    throw error;
+  }
+
+  const authResult = await authorizeAiRouteSession(boundedRequest, { requiredRole: "staff" });
   if (authResult instanceof Response) return authResult;
 
   let payload: HealthFileBridgeRequest | null = null;
   try {
-    payload = (await request.json()) as HealthFileBridgeRequest;
+    payload = (await boundedRequest.clone().json()) as HealthFileBridgeRequest;
   } catch (error) {
     logSecurityEvent("error", "ai.health_file_bridge.invalid_payload", { error });
     return apiError("invalid_request", "Invalid JSON body", { status: 400 });
@@ -428,6 +547,16 @@ export async function POST(request: Request) {
 
   if (!isValidHealthFileBridgeRequest(payload)) {
     return apiError("invalid_request", "Invalid health-file-bridge payload", { status: 400 });
+  }
+  try {
+    payload = normalizeInlineHealthFiles(payload);
+  } catch (error) {
+    if (error instanceof UploadSecurityError) {
+      return apiError("invalid_request", error.message, {
+        status: error.status,
+      });
+    }
+    throw error;
   }
 
   const sessionScope = await getSessionScope(authResult.session);
@@ -453,6 +582,12 @@ export async function POST(request: Request) {
     }
   }
   const serviceScope = buildServiceScopeClaim(sessionScope);
+  const provenanceContext: AiProvenanceContext = {
+    userId: authResult.session.user.id,
+    institutionId: authResult.session.user.institutionId,
+    capability: "health-file-bridge",
+    scopeId: payload.childId ?? null,
+  };
   if (
     authResult.session.user.accountKind !== "demo" &&
     payload.childId &&
@@ -487,12 +622,12 @@ export async function POST(request: Request) {
   }
 
   let enriched: OcrEnrichment | null = null;
-  let forwardedRequest = buildPayloadRequest(request, payload);
+  let forwardedRequest = buildPayloadRequest(boundedRequest, payload);
   try {
     if (needsServerOcrEnrichment(payload)) {
       enriched = await enrichPayloadWithOcr(payload);
       payload = enriched.payload;
-      forwardedRequest = buildPayloadRequest(request, payload);
+      forwardedRequest = buildPayloadRequest(boundedRequest, payload);
     }
   } catch (error) {
     if (error instanceof ApiRouteError) {
@@ -508,7 +643,15 @@ export async function POST(request: Request) {
     serviceScope,
   });
   if (brainForward.response) {
-    return maybeAugmentRemoteBridgeResponse(forwardedRequest, brainForward.response, enriched, serviceScope);
+    return attestAiJsonResponse(
+      await maybeAugmentRemoteBridgeResponse(
+        forwardedRequest,
+        brainForward.response,
+        enriched,
+        serviceScope
+      ),
+      provenanceContext
+    );
   }
 
   const headers = buildLocalFallbackHeaders(brainForward);
@@ -534,8 +677,18 @@ export async function POST(request: Request) {
   // OCR 的 live 只证明文字提取成功；本地规则分析仍应如实标记为 fallback。
   const bridgeResponse = buildSafeLocalBridgeFallback(enriched.payload, enriched);
 
-  return buildAugmentedBridgeResponse(request, enriched.payload, bridgeResponse, {
-    status: 200,
-    headers,
-  }, enriched, serviceScope);
+  return attestAiJsonResponse(
+    await buildAugmentedBridgeResponse(
+      boundedRequest,
+      enriched.payload,
+      bridgeResponse,
+      {
+        status: 200,
+        headers,
+      },
+      enriched,
+      serviceScope
+    ),
+    provenanceContext
+  );
 }

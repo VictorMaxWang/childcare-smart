@@ -591,6 +591,7 @@ export default function TeacherHealthFileBridgePage() {
       setError("当前没有待保存的解析结果。");
       return;
     }
+    let refreshWarning = "";
     try {
       await apiPost<AppStateSnapshot["healthMaterials"][number]>(
         `/api/health-materials/${encodeURIComponent(materialId)}/parse`,
@@ -601,7 +602,7 @@ export default function TeacherHealthFileBridgePage() {
       );
       const reloadResult = await reloadAppSnapshotFromApi();
       if (reloadResult.status === "failed") {
-        throw new Error("解析结果已写入服务端，但页面刷新失败，请手动刷新查看。");
+        refreshWarning = " 页面刷新失败，重新打开后可查看已保存结果。";
       }
     } catch (apiSaveError) {
       setError(
@@ -614,7 +615,7 @@ export default function TeacherHealthFileBridgePage() {
       return;
     }
     setPendingParseResult(null);
-    setSaveMessage("解析结果已保存，刷新后仍可查看。");
+    setSaveMessage(`解析结果已保存，刷新后仍可查看。${refreshWarning}`);
   }
 
   async function handleCreateConsultationFromResult() {
@@ -639,6 +640,7 @@ export default function TeacherHealthFileBridgePage() {
       workflowStatus: "pending",
     };
     let consultation: AppStateSnapshot["consultations"][number];
+    let refreshWarning = "";
     try {
       consultation = await apiPost<AppStateSnapshot["consultations"][number]>(
         "/api/consultations",
@@ -646,7 +648,7 @@ export default function TeacherHealthFileBridgePage() {
       );
       const reloadResult = await reloadAppSnapshotFromApi();
       if (reloadResult.status === "failed") {
-        throw new Error("会诊已写入服务端，但页面刷新失败，请手动刷新查看。");
+        refreshWarning = " 页面刷新失败，重新打开后可查看已创建会诊。";
       }
     } catch (apiConsultationError) {
       setError(
@@ -658,7 +660,9 @@ export default function TeacherHealthFileBridgePage() {
       );
       return;
     }
-    setConsultationMessage("已创建高风险会诊，可在教师端和园长端查看。");
+    setConsultationMessage(
+      `已创建高风险会诊，可在教师端和园长端查看。${refreshWarning}`
+    );
     router.push(
       `/teacher/high-risk-consultation?childId=${selectedChild.id}&consultationId=${consultation.consultationId}`
     );

@@ -1,9 +1,56 @@
+import base64
+import hashlib
+import hmac
+import json
+import time
+
+import pytest
 from fastapi.testclient import TestClient
 
+from app.api.v1.endpoints import multimodal as multimodal_endpoints
+from app.core.config import get_settings
 from app.main import app
 
 
 client = TestClient(app)
+INTERNAL_SERVICE_SECRET = "pytest-multimodal-internal-secret"
+
+
+def _b64url(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).decode("utf-8").rstrip("=")
+
+
+def _service_headers(*, secret: str, path: str) -> dict[str, str]:
+    scope_token = _b64url(
+        json.dumps(
+            {
+                "institutionId": "inst-pytest",
+                "role": "teacher",
+                "accountKind": "normal",
+                "childIds": ["child-pytest"],
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    timestamp = str(int(time.time()))
+    signed = "\n".join(["POST", path, timestamp, scope_token]).encode("utf-8")
+    signature = _b64url(
+        hmac.new(secret.encode("utf-8"), signed, hashlib.sha256).digest()
+    )
+    return {
+        "x-smartchildcare-service-scope": scope_token,
+        "x-smartchildcare-service-timestamp": timestamp,
+        "x-smartchildcare-service-path": path,
+        "x-smartchildcare-service-signature": signature,
+    }
+
+
+@pytest.fixture
+def internal_service_secret(monkeypatch):
+    monkeypatch.setenv("BRAIN_INTERNAL_SHARED_SECRET", INTERNAL_SERVICE_SECRET)
+    get_settings.cache_clear()
+    yield INTERNAL_SERVICE_SECRET
+    get_settings.cache_clear()
 
 
 def test_parent_suggestions():
@@ -308,14 +355,69 @@ def test_high_risk_consultation_sparse_payload_uses_demo_child_context():
     assert body["autoContext"]["parentFeedbackNotes"]
 
 
-def test_multimodal_endpoints():
-    vision = client.post(
-        "/api/v1/multimodal/vision-meal",
-        json={"imageDataUrl": "data:image/png;base64,abc"},
-    )
-    assert vision.status_code == 200
-    assert vision.json()["source"] == "mock"
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        (
+            "/api/v1/multimodal/vision-meal",
+            {"imageDataUrl": "data:image/png;base64,abc"},
+        ),
+        (
+            "/api/v1/multimodal/diet-evaluation",
+            {"input": {"mealFoods": []}},
+        ),
+    ],
+)
+def test_multimodal_endpoints_reject_unauthorized_before_orchestration(
+    path,
+    payload,
+    internal_service_secret,
+):
+    dependency_calls: list[str] = []
 
-    diet = client.post("/api/v1/multimodal/diet-evaluation", json={"input": {"mealFoods": []}})
-    assert diet.status_code == 200
-    assert diet.json()["source"] == "mock"
+    def resolve_orchestrator():
+        dependency_calls.append(path)
+        raise AssertionError("orchestrator dependency must not run before service auth")
+
+    app.dependency_overrides[multimodal_endpoints.get_orchestrator] = resolve_orchestrator
+    try:
+        anonymous = client.post(path, json=payload)
+        assert anonymous.status_code == 401
+        assert dependency_calls == []
+
+        wrong_key = client.post(
+            path,
+            json=payload,
+            headers=_service_headers(secret="wrong-internal-secret", path=path),
+        )
+        assert wrong_key.status_code == 401
+        assert dependency_calls == []
+    finally:
+        app.dependency_overrides.pop(multimodal_endpoints.get_orchestrator, None)
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        (
+            "/api/v1/multimodal/vision-meal",
+            {"imageDataUrl": "data:image/png;base64,abc"},
+        ),
+        (
+            "/api/v1/multimodal/diet-evaluation",
+            {"input": {"mealFoods": []}},
+        ),
+    ],
+)
+def test_multimodal_endpoints_accept_valid_internal_service(
+    path,
+    payload,
+    internal_service_secret,
+):
+    response = client.post(
+        path,
+        json=payload,
+        headers=_service_headers(secret=internal_service_secret, path=path),
+    )
+    assert response.status_code == 200
+    assert response.json()["source"] == "mock"

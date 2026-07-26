@@ -10,6 +10,7 @@ import type {
 } from "@/lib/ai/types";
 import type { ConsultationInput } from "@/lib/agent/consultation/input";
 import type { HighRiskConsultationAutoContext } from "@/lib/agent/high-risk-consultation";
+import type { AccountKind } from "@/lib/auth/accounts";
 import { getChildcareKnowledgeHints } from "@/lib/knowledge/childcare-knowledge";
 
 const PARTICIPANTS: ConsultationParticipant[] = [
@@ -42,7 +43,11 @@ function textIncludesSocialEmotionalCase(text: string) {
 export function isLinXiaoyuHighRiskConsultationCase(params: {
   input: ConsultationInput;
   autoContext?: HighRiskConsultationAutoContext | null;
+  accountKind?: AccountKind;
 }) {
+  // childId 和姓名都可能由真实机构复用，必须先由可信会话明确确认 demo 身份。
+  if (params.accountKind !== "demo") return false;
+
   const combined = [
     params.input.childId,
     params.input.childName,
@@ -221,9 +226,14 @@ export function buildLocalHighRiskConsultationFallback(params: {
   input: ConsultationInput;
   autoContext?: HighRiskConsultationAutoContext | null;
   fallbackReason?: string | null;
+  accountKind?: AccountKind;
 }): ConsultationResult {
   const { input, autoContext } = params;
-  const socialEmotionalCase = isLinXiaoyuHighRiskConsultationCase({ input, autoContext });
+  const socialEmotionalCase = isLinXiaoyuHighRiskConsultationCase({
+    input,
+    autoContext,
+    accountKind: params.accountKind,
+  });
   const consultationId = socialEmotionalCase
     ? `consult-${input.childId}-bravery-expression`
     : `consult-${input.childId}-local-fallback`;

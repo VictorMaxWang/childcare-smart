@@ -14,6 +14,10 @@ import { DEMO_DATASET_VERSION } from "@/lib/demo-data/persistence";
 import { createDemoSeedSnapshot } from "@/lib/demo-data/seed";
 import { ApiRouteError } from "@/lib/server/api-errors";
 import { normalizeExtendedSnapshot } from "@/lib/server/app-data-model";
+import {
+  synchronizeChangedChildBindings,
+  type RegistryChild,
+} from "@/lib/server/child-class-registry";
 
 export interface AppDataRepository {
   load(session: SessionUser): Promise<ApiExtendedSnapshot>;
@@ -144,7 +148,16 @@ export class DefaultAppDataRepository implements AppDataRepository {
           : undefined;
         const raw = decodeDatabaseJson<unknown>(row?.snapshot) ?? row?.snapshot;
         const snapshot = normalizeExtendedSnapshot(raw, session);
+        const previousChildren = structuredClone(
+          snapshot.children
+        ) as RegistryChild[];
         const result = mutator(snapshot);
+        await synchronizeChangedChildBindings(
+          connection,
+          session,
+          previousChildren,
+          snapshot
+        );
         const encodedSnapshot = encodeDatabaseJson(snapshot);
 
         await connection.execute(
