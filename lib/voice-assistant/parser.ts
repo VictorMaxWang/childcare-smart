@@ -71,11 +71,19 @@ export function parseChineseNumber(value: string) {
 }
 
 function readTemperature(text: string) {
-  const match = /(?:体温|温度)?([0-9]{2}(?:\.[0-9])?|[三四五六七八九十零一二两点]{2,8})度?/.exec(text);
-  if (!match?.[1]) return undefined;
-  const parsed = parseChineseNumber(match[1]);
-  if (parsed === null || parsed < 30 || parsed > 43) return undefined;
-  return parsed;
+  const valuePattern = "([0-9]{2}(?:\\.[0-9])?|[三四五六七八九十零一二两点]{2,8})";
+  // 幼儿昵称、班级名和验收标记可能带数字；显式“体温/温度”必须优先于全文中的任意数字。
+  const explicit = new RegExp(
+    `(?:体温|温度)(?:为|是|约|大概)?，?${valuePattern}(?:度|℃)?`
+  ).exec(text);
+  const withUnit = new RegExp(`${valuePattern}(?:度|℃)`).exec(text);
+
+  for (const raw of [explicit?.[1], withUnit?.[1]]) {
+    if (!raw) continue;
+    const parsed = parseChineseNumber(raw);
+    if (parsed !== null && parsed >= 30 && parsed <= 43) return parsed;
+  }
+  return undefined;
 }
 
 function findByName<T extends { name: string; className?: string }>(items: T[] | undefined, text: string) {

@@ -101,8 +101,13 @@ async function expectEnvelope<T>(
   response: APIResponse,
   expectedStatus = 200
 ): Promise<T> {
-  expect(response.status()).toBe(expectedStatus);
   const body = await readJson(response);
+  const diagnostic = {
+    status: response.status(),
+    code: body?.code ?? null,
+    message: body?.message ?? body?.error ?? null,
+  };
+  expect(response.status(), JSON.stringify(diagnostic)).toBe(expectedStatus);
   expect(body?.ok).toBe(true);
   return body?.data as T;
 }

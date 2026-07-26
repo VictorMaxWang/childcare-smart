@@ -93,6 +93,16 @@ test("parses teacher morning check and requires confirmation", () => {
   assert.equal(command.params.temperature, 36.8);
 });
 
+test("prefers an explicit temperature label over unrelated earlier digits", () => {
+  const command = parse(
+    "u-teacher",
+    "给林小雨记录1234号晨检，体温三十六点七，状态正常 REAL-FRESH-20260726"
+  );
+  assert.equal(command.intent, "create_morning_check");
+  assert.equal(command.params.temperature, 36.7);
+  assert.deepEqual(command.missingParams, []);
+});
+
 test("parses parent message as write command", () => {
   const command = parse("u-parent", "给老师留言，今天晚上孩子有点咳嗽");
   assert.equal(command.intent, "send_message");
