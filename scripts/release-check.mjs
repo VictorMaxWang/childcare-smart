@@ -166,10 +166,19 @@ function validateProviderStatusPayload(payload) {
     if (status.configured !== true) {
       issues.push(`${capability}.configured != true`);
     }
+    if (status.status !== "ready") {
+      issues.push(`${capability}.status != ready`);
+    }
+    if (!status.providerName) {
+      issues.push(`${capability}.providerName missing`);
+    }
+    if (status.fallback === true) {
+      issues.push(`${capability}.fallback == true`);
+    }
     if (status.mock === true) {
       issues.push(`${capability}.mock == true`);
     }
-    if (!status.model) {
+    if (status.providerName === "dashscope" && !status.model) {
       issues.push(`${capability}.model missing`);
     }
   }
@@ -345,7 +354,7 @@ async function main() {
     const endpoints = [`${baseUrl}/`];
     for (const endpoint of endpoints) {
       try {
-        const r = await fetchCheck(endpoint);
+        const r = await fetchCheck(endpoint, { redirect: "follow" });
         if (r.res.ok) {
           pushRemote(`remote:${endpoint}`, true, { status: r.res.status, elapsedMs: r.elapsedMs });
           console.log(`[OK] ${endpoint} reachable (${r.elapsedMs}ms)`);
