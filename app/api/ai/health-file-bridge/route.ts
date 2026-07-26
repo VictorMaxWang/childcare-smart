@@ -223,6 +223,27 @@ async function enrichPayloadWithOcr(payload: HealthFileBridgeRequest) {
 
 type OcrEnrichment = Awaited<ReturnType<typeof enrichPayloadWithOcr>>;
 
+function buildSafeLocalBridgeFallback(
+  payload: HealthFileBridgeRequest,
+  enriched?: OcrEnrichment | null,
+  warning?: string
+) {
+  return buildHealthFileBridgeResponse(enriched?.payload ?? payload, {
+    source: enriched?.source ?? "local-text-fallback",
+    state: "fallback",
+    configured: Boolean(enriched?.usedRealProvider),
+    live: false,
+    fallback: true,
+    mock: false,
+    liveReadyButNotVerified: false,
+    provider: "local-health-rule-parser",
+    model: "local-health-rule-parser",
+    extractedText: enriched?.extractedText,
+    providerStatus: enriched?.providerStatus,
+    warnings: mergeUnique(enriched?.warnings, warning ? [warning] : []),
+  });
+}
+
 function mergeOcrProvenance(
   bridgeResponse: HealthFileBridgeResponse,
   enriched?: OcrEnrichment | null
@@ -326,7 +347,7 @@ async function buildAugmentedBridgeResponse(
   return buildJsonResponse(enhancedResponse, init);
 }
 
-async function maybeAugmentRemoteBridgeResponse(
+export async function maybeAugmentRemoteBridgeResponse(
   request: Request,
   response: Response,
   enriched?: OcrEnrichment | null,
@@ -354,15 +375,35 @@ async function maybeAugmentRemoteBridgeResponse(
     return response;
   }
 
-  if (
-    bridgeResponse.mock &&
-    payload.files.some((file) => isBinaryHealthFile(file)) &&
-    !hasTextMaterial(payload)
-  ) {
-    return apiError(
-      "provider_unavailable",
-      "当前未接入真实 OCR provider，图片/PDF 材料不会被后端 fallback 伪造成识别成功；请提供预览文字或配置 provider。",
-      { status: 503, headers: response.headers }
+  if (bridgeResponse.mock) {
+    if (
+      payload.files.some((file) => isBinaryHealthFile(file)) &&
+      !hasTextMaterial(payload)
+    ) {
+      return apiError(
+        "provider_unavailable",
+        "当前未接入真实 OCR provider，图片/PDF 材料不会被后端 fallback 伪造成识别成功；请提供预览文字或配置 provider。",
+        { status: 503, headers: response.headers }
+      );
+    }
+
+    // 旧版 Brain 仍可能返回演示结果；真实 OCR/用户文字只能进入明确标记的保守规则分析。
+    const safeFallback = buildSafeLocalBridgeFallback(
+      payload,
+      enriched,
+      "远端 Brain 返回了模拟结果，已自动改用本地保守规则分析；建议管理员升级 Brain 服务。"
+    );
+    return buildAugmentedBridgeResponse(
+      request,
+      payload,
+      safeFallback,
+      {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      },
+      enriched,
+      serviceScope
     );
   }
 
@@ -490,21 +531,8 @@ export async function POST(request: Request) {
     }
   }
 
-  const bridgeResponse = buildHealthFileBridgeResponse(enriched.payload, {
-    source: enriched.source,
-    // OCR 的 live 只证明文字提取成功；本地规则分析仍应如实标记为 fallback。
-    state: "fallback",
-    configured: enriched.usedRealProvider,
-    live: false,
-    fallback: true,
-    mock: false,
-    liveReadyButNotVerified: false,
-    provider: "local-health-rule-parser",
-    model: "local-health-rule-parser",
-    extractedText: enriched.extractedText,
-    providerStatus: enriched.providerStatus,
-    warnings: enriched.warnings,
-  });
+  // OCR 的 live 只证明文字提取成功；本地规则分析仍应如实标记为 fallback。
+  const bridgeResponse = buildSafeLocalBridgeFallback(enriched.payload, enriched);
 
   return buildAugmentedBridgeResponse(request, enriched.payload, bridgeResponse, {
     status: 200,
