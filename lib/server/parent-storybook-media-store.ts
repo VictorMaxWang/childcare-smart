@@ -48,6 +48,8 @@ export async function persistParentStoryBookMedia(
     contentType: string;
     bytes: Buffer;
     seed: string;
+    deadlineAtMs?: number;
+    signal?: AbortSignal;
   },
   dependencies: Partial<ParentStoryBookMediaStoreDependencies> = {}
 ) {
@@ -56,6 +58,7 @@ export async function persistParentStoryBookMedia(
     input.bytes,
     input.seed,
     {
+      institutionId: input.institutionId,
       childId: input.childId,
       storybookId: input.storybookId,
     }
@@ -63,6 +66,12 @@ export async function persistParentStoryBookMedia(
   const mediaKey = mediaUrl.split("/").at(-1);
   if (!mediaKey) {
     throw new Error("storybook media cache did not return a media key");
+  }
+  const remainingMs = input.deadlineAtMs
+    ? Math.floor(input.deadlineAtMs - Date.now())
+    : null;
+  if (remainingMs !== null && remainingMs <= 0) {
+    throw new Error("storybook media persistence deadline exhausted");
   }
 
   // 数据库写入成功后才把媒体标成持久可用，防止将仅当前实例可读的 URL 返回给正常账号。
@@ -73,6 +82,10 @@ export async function persistParentStoryBookMedia(
     storybookId: input.storybookId,
     contentType: input.contentType,
     bytes: input.bytes,
+    signal: input.signal,
+    ...(remainingMs !== null
+      ? { timeoutMs: Math.max(1, Math.min(30_000, remainingMs)) }
+      : {}),
   });
   markCachedParentStoryBookMediaPersisted(mediaKey);
 
@@ -84,10 +97,15 @@ export async function readParentStoryBookMedia(
     institutionId: string;
     mediaKey: string;
     allowPersistent?: boolean;
+    bypassCache?: boolean;
   },
   dependencies: Partial<ParentStoryBookMediaStoreDependencies> = {}
 ): Promise<ParentStoryBookMediaAsset | null> {
-  const cached = readCachedParentStoryBookMedia(input.mediaKey);
+  const cached = input.bypassCache
+    ? null
+    : readCachedParentStoryBookMedia(input.mediaKey, {
+        institutionId: input.institutionId,
+      });
   if (cached) return cached;
   if (input.allowPersistent === false) return null;
   if (!/^[a-f0-9]{40}$/u.test(input.mediaKey)) return null;

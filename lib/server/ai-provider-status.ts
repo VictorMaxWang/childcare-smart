@@ -9,6 +9,7 @@ import {
   getEffectiveAsrProviderStatus,
   getEffectiveOcrProviderStatus,
 } from "@/lib/ai/providers";
+import { resolveDashScopeStoryImageConfig } from "@/lib/providers/dashscope/dashscope-story-image-provider";
 import { getVivoProviderStatus, type VivoProviderStatus } from "@/lib/providers/vivo";
 import type {
   AssistantProviderStatus,
@@ -87,6 +88,7 @@ function buildStorybookMediaStatus(input: {
   fallbackProviderName: string;
   requiredEnv: string[];
   warnings?: string[];
+  model?: string;
 }): UnifiedCapabilityStatus {
   const missingEnv = input.requiredEnv.filter((name) => !readConfiguredEnv(name));
   const configured = missingEnv.length === 0;
@@ -107,6 +109,7 @@ function buildStorybookMediaStatus(input: {
     reason: configured
       ? undefined
       : `Missing required env for ${input.providerName}: ${missingEnv.join(", ")}`,
+    model: input.model,
     warnings: input.warnings ?? [],
     requiredEnv: input.requiredEnv,
   };
@@ -196,18 +199,38 @@ export function getUnifiedAiProviderStatus(): AssistantProviderStatus {
   const ocr = toUnifiedCapability(getEffectiveOcrProviderStatus(), "ocr");
   const asr = toUnifiedCapability(getEffectiveAsrProviderStatus(), "asr");
   const tts = toUnifiedCapability(getVivoProviderStatus("tts"), "tts");
-  const storybookImage = buildStorybookMediaStatus({
-    capability: "storybook-image",
-    providerName: "vivo-story-image",
-    fallbackProviderName: "storybook-dynamic-fallback",
-    requiredEnv: ["VIVO_APP_ID", "VIVO_APP_KEY"],
-    warnings: ["Status is config-based; no image generation request is made by provider-status."],
-  });
+  const dashscopeStoryImage = resolveDashScopeStoryImageConfig();
+  const requireDashscopeStoryImage =
+    dashscopeStoryImage.selected || process.env.NODE_ENV === "production";
+  const storybookImage = requireDashscopeStoryImage
+    ? buildStorybookMediaStatus({
+        capability: "storybook-image",
+        providerName: "dashscope-qwen-image",
+        fallbackProviderName: "storybook-dynamic-fallback",
+        requiredEnv: [
+          "NEXT_STORYBOOK_IMAGE_PROVIDER",
+          "DASHSCOPE_API_KEY",
+          "DATABASE_URL",
+        ],
+        model: dashscopeStoryImage.model,
+        warnings: [
+          "Status is config-based; live is reported after an async image task succeeds.",
+        ],
+      })
+    : buildStorybookMediaStatus({
+        capability: "storybook-image",
+        providerName: "vivo-story-image",
+        fallbackProviderName: "storybook-dynamic-fallback",
+        requiredEnv: ["VIVO_APP_ID", "VIVO_APP_KEY"],
+        warnings: [
+          "Status is config-based; no image generation request is made by provider-status.",
+        ],
+      });
   const storybookAudio = buildStorybookMediaStatus({
     capability: "storybook-audio",
     providerName: "vivo-story-tts",
     fallbackProviderName: "storybook-mock-preview",
-    requiredEnv: ["VIVO_APP_ID", "VIVO_APP_KEY"],
+    requiredEnv: ["VIVO_APP_ID", "VIVO_APP_KEY", "DATABASE_URL"],
     warnings: ["Status is config-based; no TTS synthesis request is made by provider-status."],
   });
   const capabilities = {

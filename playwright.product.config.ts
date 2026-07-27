@@ -1,5 +1,4 @@
 import { defineConfig, devices } from "@playwright/test";
-import { existsSync } from "node:fs";
 
 // 需要构造 normal-session cookie 的浏览器规格必须与 Next dev 共用同一测试密钥；
 // 显式 shell 环境仍优先，生产构建与部署配置不会读取该测试配置。
@@ -24,8 +23,7 @@ const skipWebServer =
   process.env.PRODUCT_SKIP_WEBSERVER === "1" ||
   process.env.FEATURE_SKIP_WEBSERVER === "1" ||
   process.env.BUGBASH_SKIP_WEBSERVER === "1";
-const devLockExists = existsSync(".next/dev/lock");
-const useExistingServer = hasExplicitBaseURL || skipWebServer || devLockExists;
+const useExistingServer = hasExplicitBaseURL || skipWebServer;
 
 export default defineConfig({
   testDir: ".",

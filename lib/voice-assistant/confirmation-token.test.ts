@@ -309,3 +309,70 @@ test("production refuses confirmation without a durable token store", async () =
     }
   }
 });
+
+test("local production build memory store is limited to explicitly enabled demo accounts", async () => {
+  const mutableEnv = process.env as Record<string, string | undefined>;
+  const previous = {
+    NODE_ENV: mutableEnv.NODE_ENV,
+    DATABASE_URL: mutableEnv.DATABASE_URL,
+    SMARTCHILDCARE_LOCAL_RELEASE_BROWSER:
+      mutableEnv.SMARTCHILDCARE_LOCAL_RELEASE_BROWSER,
+    VERCEL: mutableEnv.VERCEL,
+  };
+  const demoSession = parentSession();
+  const normalSession: SessionUser = {
+    ...demoSession,
+    id: "normal-parent-release-browser",
+    accountKind: "normal",
+  };
+  const command = messageCommand();
+  const demoToken = issue(
+    demoSession,
+    command,
+    "88888888-8888-4888-8888-888888888888"
+  );
+  const normalToken = issue(
+    normalSession,
+    command,
+    "99999999-9999-4999-8999-999999999999"
+  );
+
+  mutableEnv.NODE_ENV = "production";
+  mutableEnv.SMARTCHILDCARE_LOCAL_RELEASE_BROWSER = "1";
+  delete mutableEnv.DATABASE_URL;
+  delete mutableEnv.VERCEL;
+  try {
+    await verifyAndConsumeAssistantConfirmationToken(
+      demoSession,
+      confirmed(command, demoToken),
+      {
+        secret: TEST_SECRET,
+        now: ISSUED_AT + 1,
+      }
+    );
+
+    await assert.rejects(
+      verifyAndConsumeAssistantConfirmationToken(
+        normalSession,
+        confirmed(command, normalToken),
+        {
+          secret: TEST_SECRET,
+          now: ISSUED_AT + 1,
+        }
+      ),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiRouteError);
+        assert.equal(error.code, "provider_unavailable");
+        return true;
+      }
+    );
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (typeof value === "undefined") {
+        delete mutableEnv[key];
+      } else {
+        mutableEnv[key] = value;
+      }
+    }
+  }
+});

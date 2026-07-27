@@ -325,7 +325,7 @@ function isDuplicateKeyError(error: unknown) {
   return error.code === "ER_DUP_ENTRY" || error.errno === 1062;
 }
 
-function getDefaultConfirmationTokenStore() {
+function getDefaultConfirmationTokenStore(sessionUser: SessionUser) {
   const globals = globalThis as ConfirmationTokenGlobals;
   if (process.env.DATABASE_URL?.trim()) {
     globals.__voiceAssistantConfirmationDatabaseStore ??=
@@ -333,13 +333,21 @@ function getDefaultConfirmationTokenStore() {
     return globals.__voiceAssistantConfirmationDatabaseStore;
   }
 
-  if (process.env.NODE_ENV === "production") {
+  const allowLocalReleaseDemoStore =
+    sessionUser.accountKind === "demo" &&
+    process.env.SMARTCHILDCARE_LOCAL_RELEASE_BROWSER === "1" &&
+    !process.env.VERCEL;
+  if (
+    process.env.NODE_ENV === "production" &&
+    !allowLocalReleaseDemoStore
+  ) {
     throw new ApiRouteError(
       "provider_unavailable",
       "语音确认状态存储暂时不可用，请稍后重试。"
     );
   }
 
+  // 生产部署绝不走内存；该分支只让本机构建产物验收演示账号，真实账号仍强制使用数据库。
   globals.__voiceAssistantConfirmationMemoryStore ??=
     new InMemoryAssistantConfirmationTokenStore();
   return globals.__voiceAssistantConfirmationMemoryStore;
@@ -440,7 +448,8 @@ export async function verifyAndConsumeAssistantConfirmationToken(
     );
   }
 
-  const store = options.store ?? getDefaultConfirmationTokenStore();
+  const store =
+    options.store ?? getDefaultConfirmationTokenStore(sessionUser);
   let consumed: boolean;
   try {
     consumed = await store.consume({

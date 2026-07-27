@@ -56,14 +56,15 @@ test.describe("global utility center", () => {
 
     const token = `顶部消息中心-${Date.now()}`;
     await page.getByTestId("message-center-input").fill(token);
-    const response = page.waitForResponse(
+    const responsePromise = page.waitForResponse(
       (item) =>
         item.url().includes("/api/messages") &&
-        item.request().method() === "POST" &&
-        item.status() === 201
+        item.request().method() === "POST",
+      { timeout: 15_000 }
     );
     await page.getByTestId("message-center-send").click();
-    await response;
+    const response = await responsePromise;
+    expect(response.status()).toBe(201);
     await expect(page.getByTestId("message-thread-detail")).toContainText(token);
 
     await page.getByTestId("message-center-new").click();
@@ -79,14 +80,15 @@ test.describe("global utility center", () => {
     await page.getByTestId("message-center-child-select").selectOption(composeChildId);
     const newThreadToken = `顶部新会话-${Date.now()}`;
     await page.getByTestId("message-center-input").fill(newThreadToken);
-    const newThreadResponse = page.waitForResponse(
+    const newThreadResponsePromise = page.waitForResponse(
       (item) =>
         item.url().includes("/api/messages") &&
-        item.request().method() === "POST" &&
-        item.status() === 201
+        item.request().method() === "POST",
+      { timeout: 15_000 }
     );
     await page.getByTestId("message-center-send").click();
-    const createdResponse = await newThreadResponse;
+    const createdResponse = await newThreadResponsePromise;
+    expect(createdResponse.status()).toBe(201);
     const createdEnvelope = (await createdResponse.json()) as {
       data?: { childId?: string };
     };

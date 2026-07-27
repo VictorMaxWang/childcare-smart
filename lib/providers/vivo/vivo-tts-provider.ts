@@ -30,6 +30,27 @@ const TTS_SAMPLE_WIDTH = 2;
 const TTS_SIGNED_HEADERS = "x-ai-gateway-app-id;x-ai-gateway-timestamp;x-ai-gateway-nonce";
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+function assertTtsRequestActive(input: {
+  signal?: AbortSignal;
+  deadlineAtMs?: number;
+}) {
+  if (input.signal?.aborted) {
+    throw new VivoProviderError("vivo TTS request aborted", {
+      capability: "tts",
+      status: "provider-unavailable",
+    });
+  }
+  if (
+    typeof input.deadlineAtMs === "number" &&
+    input.deadlineAtMs <= Date.now()
+  ) {
+    throw new VivoProviderError("vivo TTS request deadline exhausted", {
+      capability: "tts",
+      status: "provider-unavailable",
+    });
+  }
+}
+
 function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/gu, " ").trim();
 }
@@ -137,27 +158,13 @@ function buildNumericReqId(requestId: string) {
   return parseInt(hex, 16);
 }
 
-function buildProfiles() {
+function buildPrimaryProfile(): TtsProfile {
   const env = getVivoEnv();
-  const profiles: TtsProfile[] = [
-    {
-      label: "primary",
-      engineId: env.storybookTtsEngineId,
-      voiceName: env.storybookTtsVoice,
-    },
-    {
-      label: "fallback",
-      engineId: env.storybookTtsFallbackEngineId,
-      voiceName: env.storybookTtsFallbackVoice,
-    },
-  ];
-  const seen = new Set<string>();
-  return profiles.filter((profile) => {
-    const key = `${profile.engineId}:${profile.voiceName}`;
-    if (!profile.engineId || !profile.voiceName || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return {
+    label: "primary",
+    engineId: env.storybookTtsEngineId,
+    voiceName: env.storybookTtsVoice,
+  };
 }
 
 function synthesizeOnce(input: {
@@ -167,7 +174,10 @@ function synthesizeOnce(input: {
   childId?: string;
   storyId?: string;
   page?: number;
+  signal?: AbortSignal;
+  deadlineAtMs?: number;
 }) {
+  assertTtsRequestActive(input);
   const env = getVivoEnv();
   const timestamp = String(Math.floor(Date.now() / 1000));
   const query = {
@@ -191,31 +201,58 @@ function synthesizeOnce(input: {
     timestamp,
     nonce: randomBytes(4).toString("hex"),
   });
+  const timeoutMs = Math.max(
+    1,
+    Math.min(
+      DEFAULT_TIMEOUT_MS,
+      input.deadlineAtMs
+        ? Math.floor(input.deadlineAtMs - Date.now())
+        : DEFAULT_TIMEOUT_MS
+    )
+  );
 
   return new Promise<Buffer>((resolve, reject) => {
     let settled = false;
     const chunks: Buffer[] = [];
     const ws = new WebSocket(wsUrl, {
       headers,
-      handshakeTimeout: DEFAULT_TIMEOUT_MS,
+      handshakeTimeout: timeoutMs,
     });
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
-      ws.close();
+      input.signal?.removeEventListener("abort", abortRequest);
+      ws.terminate();
       reject(
-        new VivoProviderError("vivo TTS request timed out", {
+        new VivoProviderError("vivo TTS request deadline exhausted", {
           capability: "tts",
           status: "provider-unavailable",
         })
       );
-    }, DEFAULT_TIMEOUT_MS);
+    }, timeoutMs);
     const finish = (callback: () => void) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      input.signal?.removeEventListener("abort", abortRequest);
       callback();
     };
+    const abortRequest = () => {
+      finish(() => {
+        ws.terminate();
+        reject(
+          new VivoProviderError("vivo TTS request aborted", {
+            capability: "tts",
+            status: "provider-unavailable",
+          })
+        );
+      });
+    };
+    if (input.signal?.aborted) {
+      abortRequest();
+      return;
+    }
+    input.signal?.addEventListener("abort", abortRequest, { once: true });
 
     ws.once("open", () => {
       ws.send(JSON.stringify({
@@ -282,6 +319,7 @@ function synthesizeOnce(input: {
 
     ws.once("unexpected-response", (_request, response) => {
       finish(() => {
+        ws.terminate();
         reject(
           new VivoProviderError(`vivo TTS websocket handshake failed with HTTP ${response.statusCode}`, {
             capability: "tts",
@@ -345,6 +383,7 @@ export async function requestVivoTts(input: VivoTtsInput): Promise<VivoTtsResult
       status: "provider-unavailable",
     });
   }
+  assertTtsRequestActive(input);
 
   const status = getVivoProviderStatus("tts");
   if (!status.configured || !status.supported) {
@@ -355,49 +394,47 @@ export async function requestVivoTts(input: VivoTtsInput): Promise<VivoTtsResult
   }
 
   const requestId = input.requestId ?? createRequestId();
-  const profiles = buildProfiles();
-  let lastError: unknown = null;
-
-  for (const profile of profiles) {
-    try {
-      const audioBytes = await synthesizeOnce({
-        text,
-        requestId,
-        profile,
-        childId: input.childId,
-        storyId: input.storyId,
-        page: input.page,
-      });
-      return {
-        audioBytes,
-        audioContentType: "audio/wav",
-        providerName: "vivo",
-        state: "live",
-        live: true,
-        fallback: false,
-        mock: false,
-        engineId: profile.engineId,
-        voiceName: profile.voiceName,
-        requestId,
-        isRealProvider: true,
-        status: {
-          ...status,
-          state: "live",
-          live: true,
-          fallback: false,
-          mock: false,
-          status: "ready",
-        },
-        warnings: status.warnings,
-      };
-    } catch (error) {
-      lastError = error;
-    }
+  const profile = buildPrimaryProfile();
+  if (!profile.engineId || !profile.voiceName) {
+    throw new VivoProviderError(
+      "vivo TTS provider has no configured primary profile",
+      {
+        capability: "tts",
+        status: "missing-env",
+      }
+    );
   }
-
-  if (lastError) throw lastError;
-  throw new VivoProviderError("vivo TTS provider has no configured profiles", {
-    capability: "tts",
-    status: "missing-env",
+  // 一个业务账本租约只对应一次上游合成，任何模糊失败都禁止自动切备用音色。
+  const audioBytes = await synthesizeOnce({
+    text,
+    requestId,
+    profile,
+    childId: input.childId,
+    storyId: input.storyId,
+    page: input.page,
+    signal: input.signal,
+    deadlineAtMs: input.deadlineAtMs,
   });
+  return {
+    audioBytes,
+    audioContentType: "audio/wav",
+    providerName: "vivo",
+    state: "live",
+    live: true,
+    fallback: false,
+    mock: false,
+    engineId: profile.engineId,
+    voiceName: profile.voiceName,
+    requestId,
+    isRealProvider: true,
+    status: {
+      ...status,
+      state: "live",
+      live: true,
+      fallback: false,
+      mock: false,
+      status: "ready",
+    },
+    warnings: status.warnings,
+  };
 }

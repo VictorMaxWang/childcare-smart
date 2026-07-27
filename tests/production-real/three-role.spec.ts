@@ -76,6 +76,8 @@ const speechAudioPath = path.join(
   "audio",
   "page-01.mp3"
 );
+const STORYBOOK_MEDIA_ACCEPTANCE_TIMEOUT_MS = 5 * 60 * 1_000;
+const STORYBOOK_MEDIA_ACCEPTANCE_MAX_ATTEMPTS = 40;
 
 test.describe.configure({ mode: "serial" });
 
@@ -346,6 +348,32 @@ function storyMediaRetryDelayMs(story: Record<string, unknown>) {
     : 1_500;
 }
 
+function storyMediaDiagnostic(story: Record<string, unknown>) {
+  const providerMeta = story.providerMeta as
+    | Record<string, unknown>
+    | undefined;
+  const diagnostics = providerMeta?.diagnostics as
+    | Record<string, unknown>
+    | undefined;
+  const image = diagnostics?.image as Record<string, unknown> | undefined;
+  const audio = diagnostics?.audio as Record<string, unknown> | undefined;
+
+  return JSON.stringify({
+    imageProvider: providerMeta?.imageProvider ?? null,
+    imageDelivery: providerMeta?.imageDelivery ?? null,
+    imageJobStatus: image?.jobStatus ?? null,
+    imageReadySceneCount: image?.readySceneCount ?? null,
+    imagePendingSceneCount: image?.pendingSceneCount ?? null,
+    imageLastErrorStage: image?.lastErrorStage ?? null,
+    imageLastErrorReason: image?.lastErrorReason ?? null,
+    imageRetryAfterMs: image?.retryAfterMs ?? null,
+    audioProvider: providerMeta?.audioProvider ?? null,
+    audioDelivery: providerMeta?.audioDelivery ?? null,
+    audioJobStatus: audio?.jobStatus ?? null,
+    audioReadySceneCount: audio?.readySceneCount ?? null,
+  });
+}
+
 async function completeStorybookMedia(
   parent: APIRequestContext,
   childId: string,
@@ -353,7 +381,14 @@ async function completeStorybookMedia(
 ) {
   let story = initialStory;
   let lastNetworkError: unknown = null;
-  for (let attempt = 0; attempt < 4 && !storyMediaReady(story); attempt += 1) {
+  const deadline = Date.now() + STORYBOOK_MEDIA_ACCEPTANCE_TIMEOUT_MS;
+  for (
+    let attempt = 0;
+    attempt < STORYBOOK_MEDIA_ACCEPTANCE_MAX_ATTEMPTS &&
+    Date.now() < deadline &&
+    !storyMediaReady(story);
+    attempt += 1
+  ) {
     let response: APIResponse;
     try {
       response = await parent.post(
@@ -371,15 +406,28 @@ async function completeStorybookMedia(
       lastNetworkError = null;
     } catch (error) {
       lastNetworkError = error;
-      if (attempt >= 3) throw error;
+      if (
+        attempt >= STORYBOOK_MEDIA_ACCEPTANCE_MAX_ATTEMPTS - 1 ||
+        Date.now() + 2_000 >= deadline
+      ) {
+        throw error;
+      }
       await new Promise((resolve) => setTimeout(resolve, 2_000));
       continue;
     }
     expect(response.status()).toBe(200);
     story = (await readJson(response)) ?? {};
-    if (!storyMediaReady(story) && attempt < 3) {
+    if (
+      !storyMediaReady(story) &&
+      attempt < STORYBOOK_MEDIA_ACCEPTANCE_MAX_ATTEMPTS - 1
+    ) {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) break;
       await new Promise((resolve) =>
-        setTimeout(resolve, storyMediaRetryDelayMs(story))
+        setTimeout(
+          resolve,
+          Math.min(storyMediaRetryDelayMs(story), remainingMs)
+        )
       );
     }
   }
@@ -477,8 +525,15 @@ async function verifyDietAndStorybookAi(
 
   if (requireLiveAi) {
     story = await completeStorybookMedia(parent, child.id, story);
-    expect(storyMediaReady(story), "storybook image and audio must be real").toBe(
-      true
+    expect(
+      storyMediaReady(story),
+      `storybook image and audio must be real: ${storyMediaDiagnostic(story)}`
+    ).toBe(true);
+    const providerMeta = story.providerMeta as
+      | Record<string, unknown>
+      | undefined;
+    expect(String(providerMeta?.imageProvider ?? "")).toContain(
+      "dashscope-qwen-image"
     );
   }
   const scenes = Array.isArray(story.scenes) ? story.scenes : [];
@@ -489,14 +544,50 @@ async function verifyDietAndStorybookAi(
     const item = scene as Record<string, unknown>;
     expect(String(item.sceneText ?? "").trim()).not.toBe("");
     if (requireLiveAi) {
+      const imageUrl = String(item.imageUrl ?? item.assetRef ?? "");
+      expect(item.imageProvider).toBe("dashscope-qwen-image");
       expect(
-        Boolean(item.imageUrl ?? item.assetRef),
+        Boolean(imageUrl),
         "storybook scene must have image media"
       ).toBe(true);
+      expect(imageUrl).toMatch(
+        /^\/api\/ai\/parent-storybook\/media\/[a-f0-9]{40}$/u
+      );
+      const imageResponse = await parent.get(imageUrl, {
+        headers: {
+          "x-smartchildcare-require-database": "1",
+        },
+      });
+      expect(imageResponse.status()).toBe(200);
+      expect(imageResponse.headers()["content-type"]).toBe("image/webp");
       expect(
-        Boolean(item.audioUrl ?? item.audioRef),
-        "storybook scene must have audio media"
-      ).toBe(true);
+        imageResponse.headers()["x-smartchildcare-storage-mode"]
+      ).toBe("database_media");
+      const imageBytes = await imageResponse.body();
+      expect(imageBytes.byteLength).toBeGreaterThan(0);
+      expect(imageBytes.byteLength).toBeLessThanOrEqual(4 * 1024 * 1024);
+      expect(imageBytes.subarray(0, 4).toString("ascii")).toBe("RIFF");
+      expect(imageBytes.subarray(8, 12).toString("ascii")).toBe("WEBP");
+      const audioUrl = String(item.audioUrl ?? "");
+      expect(item.audioProvider).toBe("vivo-story-tts");
+      expect(audioUrl, "storybook scene must have audio media").toMatch(
+        /^\/api\/ai\/parent-storybook\/media\/[a-f0-9]{40}$/u
+      );
+      const audioResponse = await parent.get(audioUrl, {
+        headers: {
+          "x-smartchildcare-require-database": "1",
+        },
+      });
+      expect(audioResponse.status()).toBe(200);
+      expect(audioResponse.headers()["content-type"]).toBe("audio/wav");
+      expect(
+        audioResponse.headers()["x-smartchildcare-storage-mode"]
+      ).toBe("database_media");
+      const audioBytes = await audioResponse.body();
+      expect(audioBytes.byteLength).toBeGreaterThan(44);
+      expect(audioBytes.byteLength).toBeLessThanOrEqual(4 * 1024 * 1024);
+      expect(audioBytes.subarray(0, 4).toString("ascii")).toBe("RIFF");
+      expect(audioBytes.subarray(8, 12).toString("ascii")).toBe("WAVE");
     }
   }
 }

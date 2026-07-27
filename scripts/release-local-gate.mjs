@@ -24,6 +24,7 @@ const releaseCheckReportPath = "artifacts/release-check.local.json";
 const browserPolicyReportPath = `artifacts/release-browser/policy-${mode}.json`;
 const sqlCheckReportPath = "artifacts/release-sql-check.json";
 const npmBin = "npm";
+const defaultStepTimeoutMs = 60 * 60 * 1_000;
 
 function resolvePath(filePath) {
   return path.isAbsolute(filePath) ? filePath : path.join(cwd, filePath);
@@ -42,9 +43,13 @@ function runStep(step) {
   console.log(`\n=== ${step.label} ===`);
   const result = spawnSync(step.command, step.args, {
     cwd,
-    env: process.env,
+    env: {
+      ...process.env,
+      ...step.env,
+    },
     shell: step.shell ?? false,
     stdio: "inherit",
+    timeout: step.timeoutMs ?? defaultStepTimeoutMs,
     windowsHide: true,
   });
   return {
@@ -85,19 +90,28 @@ const steps = [
     skipReason:
       "Explicit local opt-out: real database readiness is not being claimed.",
   },
-  { label: "npm run build", command: npmBin, args: ["run", "build"], shell: process.platform === "win32" },
+  {
+    label: "npm run build",
+    command: npmBin,
+    args: ["run", "build"],
+    shell: process.platform === "win32",
+    captureBuildId: true,
+    timeoutMs: 20 * 60 * 1_000,
+  },
   {
     label: allowRealAccountSkip
-      ? "npm run test:browser:release:local"
-      : "npm run test:browser:release",
-    command: npmBin,
+      ? "release browser tests (local opt-out, prebuilt)"
+      : "release browser tests (strict, prebuilt)",
+    command: process.execPath,
     args: [
-      "run",
+      "scripts/run-release-browser-tests.mjs",
       allowRealAccountSkip
-        ? "test:browser:release:local"
-        : "test:browser:release",
+        ? "--allow-real-account-skip"
+        : "--require-real-accounts",
+      "--skip-build",
     ],
-    shell: process.platform === "win32",
+    usesPrebuiltBuild: true,
+    timeoutMs: 60 * 60 * 1_000,
   },
   {
     label: "node scripts/release-check.mjs",
@@ -129,6 +143,7 @@ if (allowRealAccountSkip) {
 }
 
 let shouldContinue = true;
+let capturedBuildId = "";
 for (const step of steps) {
   if (step.skip || !shouldContinue) {
     report.steps.push({
@@ -145,7 +160,27 @@ for (const step of steps) {
     }
     continue;
   }
+  if (step.usesPrebuiltBuild) {
+    step.env = {
+      ...step.env,
+      RELEASE_BROWSER_EXPECTED_BUILD_ID: capturedBuildId,
+    };
+  }
   const result = runStep(step);
+  if (step.captureBuildId && result.exitCode === 0) {
+    try {
+      capturedBuildId = fs
+        .readFileSync(path.join(cwd, ".next", "BUILD_ID"), "utf8")
+        .trim();
+    } catch {
+      capturedBuildId = "";
+    }
+    if (!capturedBuildId) {
+      result.exitCode = 1;
+      result.error =
+        "Production build completed without a readable .next/BUILD_ID.";
+    }
+  }
   report.steps.push(result);
   report.local.checks.push({
     name: result.label,

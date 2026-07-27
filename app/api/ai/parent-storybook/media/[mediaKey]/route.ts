@@ -109,7 +109,11 @@ export async function GET(
     cachedMedia = await readParentStoryBookMedia({
       mediaKey,
       institutionId: authResult.session.user.institutionId,
-      allowPersistent: authResult.session.user.accountKind === "normal",
+      allowPersistent:
+        authResult.session.user.accountKind === "normal" ||
+        Boolean(process.env.DATABASE_URL?.trim()),
+      bypassCache:
+        request.headers.get("x-smartchildcare-require-database") === "1",
     });
   } catch {
     return handleApiError(

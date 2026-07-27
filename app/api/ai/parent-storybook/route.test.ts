@@ -9,7 +9,10 @@ import {
   SMARTCHILDCARE_TARGET_HEADER,
   SMARTCHILDCARE_TRANSPORT_HEADER,
 } from "@/lib/server/brain-client";
-import { parentStoryBookCacheInternals } from "@/lib/server/parent-storybook-cache";
+import {
+  parentStoryBookCacheInternals,
+  readCachedParentStoryBookMedia,
+} from "@/lib/server/parent-storybook-cache";
 import { POST } from "./route.ts";
 
 function withEnv(
@@ -713,6 +716,15 @@ test("parent storybook route returns a next-json-fallback story when brain is un
         assert.equal(body.providerTrace?.provider, body.providerMeta.provider);
         assert.equal(body.providerMeta.diagnostics?.brain.fallbackReason, "brain-proxy-timeout");
         assert.equal(typeof body.providerMeta.diagnostics?.brain.timeoutMs, "number");
+        const fallbackMediaKey = body.scenes[0]?.imageUrl
+          ?.split("/")
+          .at(-1);
+        assert.match(fallbackMediaKey ?? "", /^[a-f0-9]{40}$/u);
+        assert.ok(
+          readCachedParentStoryBookMedia(fallbackMediaKey ?? "", {
+            institutionId: "inst-1",
+          })
+        );
       }
     );
   } finally {

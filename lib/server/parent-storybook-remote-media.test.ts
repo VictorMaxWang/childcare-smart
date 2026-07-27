@@ -126,6 +126,44 @@ test("instance-only cached media is persisted before its URL is returned", async
   assert.match(result.scenes[0].audioUrl ?? "", /durable-audio$/u);
 });
 
+test("media from another story is never reused through a protected route", async () => {
+  let remoteReadCount = 0;
+  const result = await reconcileRemoteStoryBookMedia(
+    {
+      story: story(),
+      institutionId: "institution-1",
+      requestUrl: "http://localhost/api/ai/parent-storybook/media-status",
+      serviceScope: { institutionId: "institution-1", childIds: ["child-1"] },
+    },
+    {
+      readLocal: async () => ({
+        contentType: "image/webp",
+        bytes: Buffer.from("wrong-story"),
+        expiresAt: null,
+        ownerChildId: "child-1",
+        ownerStorybookId: "story-2",
+        storageMode: "database_media",
+      }),
+      loadRemote: async ({ expectedKind }) => {
+        remoteReadCount += 1;
+        return {
+          contentType:
+            expectedKind === "image" ? "image/webp" : "audio/wav",
+          bytes: Buffer.from(expectedKind),
+        };
+      },
+      persistLocal: async (input) => ({
+        mediaUrl: `/api/ai/parent-storybook/media/repaired-${input.contentType.split("/")[0]}`,
+        mediaKey: "repaired",
+      }),
+    }
+  );
+
+  assert.equal(remoteReadCount, 2);
+  assert.match(result.scenes[0].imageUrl ?? "", /repaired-image$/u);
+  assert.match(result.scenes[0].audioUrl ?? "", /repaired-audio$/u);
+});
+
 test("safe non-hash Brain media keys are copied or removed instead of leaking broken routes", async () => {
   const input = story();
   input.scenes[0].imageUrl =

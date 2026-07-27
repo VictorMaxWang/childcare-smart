@@ -114,12 +114,14 @@ async function ensureDurableMediaUrl(input: {
       institutionId: input.institutionId,
       mediaKey,
       allowPersistent: true,
+      bypassCache: true,
     })
     .catch(() => null);
   if (
     existing &&
     existing.contentType.startsWith(`${input.expectedKind}/`) &&
-    existing.ownerChildId === input.childId
+    existing.ownerChildId === input.childId &&
+    existing.ownerStorybookId === input.storybookId
   ) {
     if (existing.storageMode === "database_media") return input.url;
     const persistedExisting = await input.dependencies

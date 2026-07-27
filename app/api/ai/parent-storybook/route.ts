@@ -249,6 +249,7 @@ function resolveSnapshotChildId(payload: ParentStoryBookRequest) {
 
 function buildLocalStoryBookFallback(input: {
   payload: ParentStoryBookRequest;
+  institutionId: string;
   brainForward?: BrainForwardResult;
   fallbackReason: string;
   cacheState: "miss" | "bypass";
@@ -264,7 +265,10 @@ function buildLocalStoryBookFallback(input: {
         statusCode: input.brainForward?.statusCode,
         retryStrategy: input.brainForward?.retryStrategy,
       }),
-      { cacheState: input.cacheState }
+      {
+        cacheState: input.cacheState,
+        institutionId: input.institutionId,
+      }
     ),
     {
       transport: "next-json-fallback",
@@ -415,6 +419,7 @@ function buildTextProviderUnavailableResponse(input: {
 async function requireVivoStoryTextResponse(input: {
   payload: ParentStoryBookRequest;
   story: ParentStoryBookResponse;
+  institutionId: string;
   cacheState: "miss" | "bypass";
   brainForward?: BrainForwardResult;
 }) {
@@ -436,7 +441,10 @@ async function requireVivoStoryTextResponse(input: {
     } satisfies ParentStoryBookResponse;
     return prepareParentStoryBookResponseForDelivery(
       tracedEnhanced,
-      { cacheState: input.cacheState }
+      {
+        cacheState: input.cacheState,
+        institutionId: input.institutionId,
+      }
     );
   } catch (error) {
     const fallbackReason =
@@ -558,6 +566,7 @@ export async function POST(request: Request) {
     const fallbackReason = "demo-seed-isolated";
     const localStory = buildLocalStoryBookFallback({
       payload,
+      institutionId: sessionScope.institutionId,
       fallbackReason,
       cacheState: "bypass",
     });
@@ -580,6 +589,7 @@ export async function POST(request: Request) {
       prepareParentStoryBookResponseForDelivery(cachedResponse.story, {
         cacheState: "hit",
         ttlSeconds: cachedResponse.story.cacheMeta?.ttlSeconds,
+        institutionId: sessionScope.institutionId,
       }),
       {
         transport: cachedResponse.transport,
@@ -641,6 +651,7 @@ export async function POST(request: Request) {
     let preparedStory: ParentStoryBookResponse = attachTransportMetadata(
       prepareParentStoryBookResponseForDelivery(remoteStory, {
         cacheState: shouldCacheParentStoryBookResponse(remoteStory) ? "miss" : "bypass",
+        institutionId: sessionScope.institutionId,
       }),
       {
         transport: "remote-brain-proxy",
@@ -657,6 +668,7 @@ export async function POST(request: Request) {
       const enhancedStory = await requireVivoStoryTextResponse({
         payload,
         story: preparedStory,
+        institutionId: sessionScope.institutionId,
         cacheState: shouldCacheParentStoryBookResponse(preparedStory) ? "miss" : "bypass",
         brainForward,
       });
@@ -697,6 +709,7 @@ export async function POST(request: Request) {
   if (requireRealStoryText) {
     const localStory = buildLocalStoryBookFallback({
       payload,
+      institutionId: sessionScope.institutionId,
       brainForward,
       fallbackReason,
       cacheState: "bypass",
@@ -704,6 +717,7 @@ export async function POST(request: Request) {
     const enhancedStory = await requireVivoStoryTextResponse({
       payload,
       story: localStory,
+      institutionId: sessionScope.institutionId,
       cacheState: "bypass",
       brainForward,
     });
@@ -733,6 +747,7 @@ export async function POST(request: Request) {
 
   const localStory = buildLocalStoryBookFallback({
     payload,
+    institutionId: sessionScope.institutionId,
     brainForward,
     fallbackReason,
     cacheState: "bypass",

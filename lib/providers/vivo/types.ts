@@ -122,6 +122,8 @@ export interface VivoTtsInput {
   page?: number;
   voiceStyle?: string;
   requestId?: string;
+  signal?: AbortSignal;
+  deadlineAtMs?: number;
 }
 
 export interface VivoTtsResult {

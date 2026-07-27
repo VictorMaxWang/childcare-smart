@@ -31,6 +31,7 @@ type StoryBookMediaCacheEntry = {
   expiresAt: number;
   contentType: string;
   bytes: Buffer;
+  ownerInstitutionId: string | null;
   ownerChildId: string | null;
   ownerStorybookId: string | null;
   persisted: boolean;
@@ -74,12 +75,21 @@ function isStorybookMediaRoute(value: string | null | undefined) {
   );
 }
 
-function resolveCachedMediaExpiresAtFromUrl(url?: string | null) {
+function resolveCachedMediaExpiresAtFromUrl(
+  url?: string | null,
+  institutionId?: string
+) {
   if (!url || !url.startsWith("/api/ai/parent-storybook/media/")) return null;
   cleanupExpired();
   const mediaId = resolveMediaIdFromUrl(url);
   if (!mediaId) return null;
   const entry = mediaAssetCache.get(mediaId);
+  if (
+    institutionId &&
+    entry?.ownerInstitutionId !== institutionId
+  ) {
+    return null;
+  }
   return entry && !entry.persisted ? expiresAtIso(entry.expiresAt) : null;
 }
 
@@ -219,7 +229,11 @@ export function setCachedParentStoryBookResponse(
 export function cacheParentStoryBookMediaDataUrl(
   dataUrl: string,
   seed: string,
-  owner?: { childId?: string | null; storybookId?: string | null }
+  owner?: {
+    institutionId?: string | null;
+    childId?: string | null;
+    storybookId?: string | null;
+  }
 ) {
   cleanupExpired();
   const parsed = parseDataUrl(dataUrl);
@@ -238,19 +252,26 @@ export function cacheParentStoryBookMediaBytes(
   contentType: string,
   bytes: Buffer,
   seed: string,
-  owner?: { childId?: string | null; storybookId?: string | null },
+  owner?: {
+    institutionId?: string | null;
+    childId?: string | null;
+    storybookId?: string | null;
+  },
   identityPrefix = bytes.subarray(0, 96).toString("base64")
 ) {
   cleanupExpired();
   const mediaId = crypto
     .createHash("sha1")
-    .update(`${seed}:${identityPrefix}:${bytes.length}`)
+    .update(
+      `${owner?.institutionId ?? "unscoped"}:${seed}:${identityPrefix}:${bytes.length}`
+    )
     .digest("hex");
 
   mediaAssetCache.set(mediaId, {
     expiresAt: now() + STORYBOOK_MEDIA_TTL_SECONDS * 1000,
     contentType,
     bytes,
+    ownerInstitutionId: owner?.institutionId ?? null,
     ownerChildId: owner?.childId ?? null,
     ownerStorybookId: owner?.storybookId ?? null,
     persisted: false,
@@ -276,15 +297,25 @@ export function cacheParentStoryBookSvgContent(svg: string, seed: string) {
   );
 }
 
-export function readCachedParentStoryBookMedia(mediaId: string) {
+export function readCachedParentStoryBookMedia(
+  mediaId: string,
+  options: { institutionId?: string } = {}
+) {
   cleanupExpired();
   const entry = mediaAssetCache.get(mediaId);
   if (!entry) return null;
+  if (
+    options.institutionId &&
+    entry.ownerInstitutionId !== options.institutionId
+  ) {
+    return null;
+  }
 
   return {
     contentType: entry.contentType,
     bytes: entry.bytes,
     expiresAt: entry.persisted ? null : expiresAtIso(entry.expiresAt),
+    ownerInstitutionId: entry.ownerInstitutionId,
     ownerChildId: entry.ownerChildId,
     ownerStorybookId: entry.ownerStorybookId,
     storageMode: entry.persisted
@@ -302,6 +333,7 @@ export function prepareParentStoryBookResponseForDelivery(
   options: {
     cacheState: ParentStoryBookCacheMeta["storyResponse"];
     ttlSeconds?: number;
+    institutionId?: string;
   }
 ) {
   const nextStory = cloneStory(story);
@@ -346,7 +378,11 @@ export function prepareParentStoryBookResponseForDelivery(
       const cachedUrl = cacheParentStoryBookMediaDataUrl(
         nextScene.audioUrl,
         `${nextStory.storyId}:${nextScene.sceneIndex}`,
-        { childId: nextStory.childId, storybookId: nextStory.storyId }
+        {
+          institutionId: options.institutionId,
+          childId: nextStory.childId,
+          storybookId: nextStory.storyId,
+        }
       );
       if (cachedUrl) {
         audioDelivery = "stream-url";
@@ -377,7 +413,11 @@ export function prepareParentStoryBookResponseForDelivery(
       const cachedImageUrl = cacheParentStoryBookMediaDataUrl(
         nextScene.imageUrl,
         `${nextStory.storyId}:image:${nextScene.sceneIndex}`,
-        { childId: nextStory.childId, storybookId: nextStory.storyId }
+        {
+          institutionId: options.institutionId,
+          childId: nextStory.childId,
+          storybookId: nextStory.storyId,
+        }
       );
       if (cachedImageUrl) {
         nextScene = {
@@ -399,7 +439,11 @@ export function prepareParentStoryBookResponseForDelivery(
       const cachedAssetUrl = cacheParentStoryBookMediaDataUrl(
         nextScene.assetRef,
         `${nextStory.storyId}:asset:${nextScene.sceneIndex}`,
-        { childId: nextStory.childId, storybookId: nextStory.storyId }
+        {
+          institutionId: options.institutionId,
+          childId: nextStory.childId,
+          storybookId: nextStory.storyId,
+        }
       );
       if (cachedAssetUrl) {
         nextScene = {
@@ -415,9 +459,15 @@ export function prepareParentStoryBookResponseForDelivery(
         : typeof nextScene.assetRef === "string"
           ? nextScene.assetRef
           : null;
-    const imageExpiresAt = resolveCachedMediaExpiresAtFromUrl(imageSourceUrl);
+    const imageExpiresAt = resolveCachedMediaExpiresAtFromUrl(
+      imageSourceUrl,
+      options.institutionId
+    );
     const audioSourceUrl = typeof nextScene.audioUrl === "string" ? nextScene.audioUrl : null;
-    const audioExpiresAt = resolveCachedMediaExpiresAtFromUrl(audioSourceUrl);
+    const audioExpiresAt = resolveCachedMediaExpiresAtFromUrl(
+      audioSourceUrl,
+      options.institutionId
+    );
 
     return {
       ...nextScene,

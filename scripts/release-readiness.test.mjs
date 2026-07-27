@@ -9,6 +9,10 @@ import { fileURLToPath } from "node:url";
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.dirname(scriptsDir);
 const readinessScript = path.join(scriptsDir, "release-ready.mjs");
+const releaseBrowserRunner = path.join(
+  scriptsDir,
+  "run-release-browser-tests.mjs"
+);
 
 function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -163,4 +167,40 @@ test("release readiness rejects manually asserted SQL evidence", (t) => {
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /strict db:check step/u);
+});
+
+test("release browser runner rejects an unproven prebuilt bundle", (t) => {
+  const tempDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "childcare-release-browser-proof-")
+  );
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const policyPath = path.join(tempDir, "policy.json");
+  const playwrightPath = path.join(tempDir, "playwright.json");
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      releaseBrowserRunner,
+      "--allow-real-account-skip",
+      "--skip-build",
+      `--policy-report-path=${policyPath}`,
+      `--playwright-report-path=${playwrightPath}`,
+    ],
+    {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        RELEASE_BROWSER_EXPECTED_BUILD_ID:
+          "definitely-not-the-current-build-id",
+      },
+      encoding: "utf8",
+      windowsHide: true,
+    }
+  );
+
+  assert.notEqual(result.status, 0);
+  const report = JSON.parse(fs.readFileSync(policyPath, "utf8"));
+  assert.equal(report.summary.passed, false);
+  assert.equal(report.summary.outcome, "build-proof-failed");
+  assert.equal(report.playwrightExitCode, null);
 });

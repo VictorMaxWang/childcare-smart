@@ -33,6 +33,7 @@
     "auth:smoke": "node scripts/auth-register-real-db-smoke.mjs",
     "account:repair-sample-password": "node scripts/repair-sample-account-password.mjs",
     "db:check": "node scripts/check-real-db-ready.mjs",
+    "db:storybook-media-smoke": "node --import ./scripts/register-test-path-loader.mjs ./scripts/storybook-media-task-real-db-smoke.mjs",
     "sample-accounts:align": "node scripts/align-sample-accounts.mjs",
     "product:smoke": "playwright test tests/product-completion/api-scope.spec.ts tests/product-completion/full-user-journey.spec.ts --config=playwright.product.config.ts",
     "product:api": "playwright test tests/product-completion/api-scope.spec.ts tests/product-completion/crud-archive.spec.ts tests/product-completion/weekly-report.spec.ts tests/product-completion/feedback-attachments.spec.ts --config=playwright.product.config.ts",

@@ -3,6 +3,7 @@ import "server-only";
 import { getDatabasePool } from "@/lib/db/server";
 
 const MAX_STORYBOOK_MEDIA_BYTES = 4 * 1024 * 1024;
+const DEFAULT_STORYBOOK_MEDIA_QUERY_TIMEOUT_MS = 10_000;
 
 type StorybookMediaRow = {
   child_id: string;
@@ -22,6 +23,8 @@ export interface UpsertStorybookMediaAssetInput
   extends PersistedStorybookMediaAsset {
   institutionId: string;
   mediaKey: string;
+  timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 function assertSafeIdentifier(value: string, field: string) {
@@ -61,6 +64,108 @@ function assertMediaBytes(value: Buffer) {
   return value;
 }
 
+function resolveTimeoutMs(value?: number) {
+  return Number.isFinite(value) && Number(value) > 0
+    ? Math.max(1, Math.min(30_000, Math.floor(Number(value))))
+    : DEFAULT_STORYBOOK_MEDIA_QUERY_TIMEOUT_MS;
+}
+
+async function acquireConnection(input: {
+  deadlineAtMs: number;
+  signal?: AbortSignal;
+}) {
+  if (input.signal?.aborted) {
+    throw new Error("storybook media database operation aborted");
+  }
+  const pending = getDatabasePool().getConnection();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let abortRequest: (() => void) | undefined;
+  const cancellation = new Promise<never>((_, reject) => {
+    const rejectCancelled = () => {
+      reject(
+        new Error(
+          input.signal?.aborted
+            ? "storybook media database operation aborted"
+            : "storybook media database connection timed out"
+        )
+      );
+    };
+    if (input.signal) {
+      abortRequest = rejectCancelled;
+      input.signal.addEventListener("abort", abortRequest, { once: true });
+      if (input.signal.aborted) rejectCancelled();
+    }
+    timer = setTimeout(
+      rejectCancelled,
+      Math.max(1, input.deadlineAtMs - Date.now())
+    );
+  });
+  try {
+    return await Promise.race([pending, cancellation]);
+  } catch (error) {
+    void pending.then(
+      (connection) => connection.release(),
+      () => undefined
+    );
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+    if (abortRequest) {
+      input.signal?.removeEventListener("abort", abortRequest);
+    }
+  }
+}
+
+async function executeMediaQuery(
+  sql: string,
+  values: Array<string | number | Buffer>,
+  input: {
+    timeoutMs?: number;
+    signal?: AbortSignal;
+  } = {}
+) {
+  // mysql2 的 timeout 只会拒绝客户端 Promise；同时销毁连接，避免超时查询被重新放回连接池。
+  // 写入使用幂等 upsert，因此即使提交结果处于网络不确定态，也可由同一 mediaKey 安全重放。
+  const timeoutMs = resolveTimeoutMs(input.timeoutMs);
+  const deadlineAtMs = Date.now() + timeoutMs;
+  const connection = await acquireConnection({
+    deadlineAtMs,
+    signal: input.signal,
+  });
+  let destroyed = false;
+  let cancellationReason: "aborted" | "timed-out" | null = null;
+  const destroy = (reason: "aborted" | "timed-out") => {
+    if (destroyed) return;
+    cancellationReason = reason;
+    destroyed = true;
+    connection.destroy();
+  };
+  const abortRequest = () => destroy("aborted");
+  input.signal?.addEventListener("abort", abortRequest, { once: true });
+  if (input.signal?.aborted) abortRequest();
+  const remainingMs = Math.max(1, deadlineAtMs - Date.now());
+  const timer = setTimeout(() => destroy("timed-out"), remainingMs);
+  try {
+    return await connection.execute(
+      { sql, timeout: remainingMs },
+      values
+    );
+  } catch (error) {
+    if (cancellationReason || input.signal?.aborted) {
+      throw new Error(
+        cancellationReason === "aborted" || input.signal?.aborted
+          ? "storybook media database operation aborted"
+          : "storybook media database query timed out"
+      );
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    input.signal?.removeEventListener("abort", abortRequest);
+    if (!destroyed) connection.release();
+  }
+}
+
 export async function upsertStorybookMediaAsset(
   input: UpsertStorybookMediaAssetInput
 ) {
@@ -74,7 +179,7 @@ export async function upsertStorybookMediaAsset(
   const contentType = assertContentType(input.contentType);
   const bytes = assertMediaBytes(input.bytes);
 
-  await getDatabasePool().execute(
+  await executeMediaQuery(
     `
       insert into storybook_media_assets (
         institution_id,
@@ -101,13 +206,19 @@ export async function upsertStorybookMediaAsset(
       contentType,
       bytes,
       bytes.byteLength,
-    ]
+    ],
+    {
+      timeoutMs: input.timeoutMs,
+      signal: input.signal,
+    }
   );
 }
 
 export async function getStorybookMediaAsset(input: {
   institutionId: string;
   mediaKey: string;
+  timeoutMs?: number;
+  signal?: AbortSignal;
 }): Promise<PersistedStorybookMediaAsset | null> {
   const institutionId = assertSafeIdentifier(
     input.institutionId,
@@ -115,14 +226,18 @@ export async function getStorybookMediaAsset(input: {
   );
   const mediaKey = assertMediaKey(input.mediaKey);
 
-  const [rows] = await getDatabasePool().execute(
+  const [rows] = await executeMediaQuery(
     `
       select child_id, storybook_id, content_type, media_bytes
       from storybook_media_assets
       where institution_id = ? and media_key = ?
       limit 1
     `,
-    [institutionId, mediaKey]
+    [institutionId, mediaKey],
+    {
+      timeoutMs: input.timeoutMs,
+      signal: input.signal,
+    }
   );
   const row = Array.isArray(rows)
     ? (rows[0] as StorybookMediaRow | undefined)

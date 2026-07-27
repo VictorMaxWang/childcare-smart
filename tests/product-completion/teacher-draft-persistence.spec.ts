@@ -16,11 +16,12 @@ test("teacher confirms a voice draft into the canonical health record API", asyn
     (response) =>
       response.url().includes("/api/records") &&
       (response.request().method() === "POST" ||
-        response.request().method() === "PATCH") &&
-      response.ok()
+        response.request().method() === "PATCH"),
+    { timeout: 15_000 }
   );
   await canonicalHealthDraft.getByTestId("teacher-draft-confirm").click();
-  await responsePromise;
+  const response = await responsePromise;
+  expect(response.ok()).toBe(true);
   await expect(canonicalHealthDraft).toContainText("已确认并保存");
 
   const childId = await canonicalHealthDraft

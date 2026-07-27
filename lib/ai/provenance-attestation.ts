@@ -440,18 +440,31 @@ function downgradeStorybookResponse(
     };
   }
   if (Array.isArray(input.scenes)) {
-    result.scenes = input.scenes.map((scene) =>
-      isRecord(scene)
-        ? {
-            ...jsonSafeClone(scene),
-            imageSourceKind: "dynamic-fallback",
-            imageStatus: "fallback",
-            audioStatus: "fallback",
-            imageCacheHit: false,
-            audioCacheHit: false,
-          }
-        : scene
-    );
+    result.scenes = input.scenes.map((scene) => {
+      if (!isRecord(scene)) return scene;
+      const downgradedScene = jsonSafeClone(scene);
+      // 未签名媒体引用和异步 task 都不能穿过信任边界继续访问上游。
+      delete downgradedScene.imageTaskId;
+      delete downgradedScene.imageTaskProvider;
+      delete downgradedScene.imageTaskSubmittedAtMs;
+      delete downgradedScene.imageTaskPollErrorCount;
+      delete downgradedScene.imageProvider;
+      delete downgradedScene.audioProvider;
+      delete downgradedScene.imageStorageObject;
+      delete downgradedScene.audioStorageObject;
+      return {
+        ...downgradedScene,
+        imageUrl: null,
+        assetRef: null,
+        audioUrl: null,
+        audioRef: null,
+        imageSourceKind: "dynamic-fallback",
+        imageStatus: "fallback",
+        audioStatus: "fallback",
+        imageCacheHit: false,
+        audioCacheHit: false,
+      };
+    });
   }
   return result;
 }

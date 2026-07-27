@@ -696,6 +696,7 @@ export interface ParentStoryBookDiagnosticsChannel {
   missingConfig: string[];
   jobStatus?: "disabled" | "idle" | "warming" | "ready" | "partial" | "error";
   pendingSceneCount?: number;
+  blockedSceneCount?: number;
   readySceneCount?: number;
   errorSceneCount?: number;
   lastErrorStage?: string | null;
@@ -769,11 +770,13 @@ export interface ParentStoryBookScene {
   imageStorageObject?: StorageObject;
   imageSourceKind?: ParentStoryBookSceneImageSourceKind;
   imageStatus: ParentStoryBookMediaStatus;
+  imageProvider?: string | null;
   audioUrl?: string | null;
   audioRef?: string | null;
   audioStorageObject?: StorageObject;
   audioScript: string;
   audioStatus: ParentStoryBookMediaStatus;
+  audioProvider?: string | null;
   captionTiming?: ParentStoryBookCaptionTiming;
   voiceStyle: string;
   engineId?: string | null;

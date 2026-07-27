@@ -112,15 +112,15 @@ test("E04 feedback details and scoped media attachments close the parent-teacher
   await targetCommunicationCard.getByRole("button").first().click();
   await page.getByTestId("teacher-reply-input").fill("E04 李老师回复：已查看图片，语音附件同步给家长。");
   await targetCommunicationCard.locator("input[type='file']").first().setInputFiles(audioPath);
-  await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        response.url().includes("/api/messages/") &&
-        response.request().method() === "POST" &&
-        response.status() === 201
-    ),
-    page.getByTestId("teacher-send-reply").click(),
-  ]);
+  const teacherReplyResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/messages/") &&
+      response.request().method() === "POST",
+    { timeout: 15_000 }
+  );
+  await page.getByTestId("teacher-send-reply").click();
+  const teacherReplyResponse = await teacherReplyResponsePromise;
+  expect(teacherReplyResponse.status()).toBe(201);
   await expect
     .poll(async () => {
       const response = await page.request.get("/api/messages?childId=c-1");
