@@ -545,6 +545,76 @@ test("parent storybook route upgrades backend rule fallback to real vivo text wh
   }
 });
 
+test("parent storybook route retries one invalid vivo structured response", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  let vivoCallCount = 0;
+  parentStoryBookCacheInternals.storyResponseCache.clear();
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+    calls.push(url);
+    if (url.includes("api-ai.vivo.com.cn")) {
+      vivoCallCount += 1;
+      return new Response(
+        JSON.stringify({
+          model: "vivo-test-model",
+          choices: [
+            {
+              message: {
+                content:
+                  vivoCallCount === 1
+                    ? JSON.stringify({ title: "Incomplete story", scenes: [] })
+                    : buildVivoStoryText(1),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    return new Response(JSON.stringify(buildRemoteFallbackStory()), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+        PARENT_STORYBOOK_REQUIRE_REAL_TEXT: "1",
+        VIVO_APP_ID: "app-id",
+        VIVO_APP_KEY: "app-key",
+        VIVO_BASE_URL: "https://api-ai.vivo.com.cn",
+        VIVO_LLM_MODEL: "vivo-test-model",
+      },
+      async () => {
+        const response = await POST(buildStorybookRouteRequest());
+        const body = (await response.json()) as ParentStoryBookResponse;
+
+        assert.equal(response.status, 200);
+        assert.equal(calls.length, 3);
+        assert.equal(vivoCallCount, 2);
+        assert.equal(body.title, "AI emotion story");
+        assert.equal(body.providerMeta.textProvider, "vivo-chat");
+        assert.equal(body.providerMeta.textDelivery, "real");
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    parentStoryBookCacheInternals.storyResponseCache.clear();
+    parentStoryBookCacheInternals.mediaAssetCache.clear();
+  }
+});
+
 test("parent storybook route reports provider failure instead of successful rule fallback when real text is required", async () => {
   const originalFetch = globalThis.fetch;
   parentStoryBookCacheInternals.storyResponseCache.clear();

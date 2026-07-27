@@ -24,6 +24,13 @@ type StoryTextPayload = {
   scenes: StoryTextScene[];
 };
 
+const STORY_TEXT_MAX_ATTEMPTS = 2;
+const RETRYABLE_STORY_TEXT_FALLBACK_REASONS = new Set([
+  "provider-invalid-json",
+  "provider-invalid-page-count",
+  "provider-fixed-demo-content",
+]);
+
 export class ParentStoryBookRealTextError extends Error {
   fallbackReason: string;
   statusCode: number;
@@ -147,7 +154,15 @@ function extractJsonObject(value: string): Record<string, unknown> {
       statusCode: 502,
     });
   }
-  const parsed = JSON.parse(text.slice(start, end + 1));
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text.slice(start, end + 1));
+  } catch {
+    throw new ParentStoryBookRealTextError("vivo storybook text response contained invalid JSON", {
+      fallbackReason: "provider-invalid-json",
+      statusCode: 502,
+    });
+  }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new ParentStoryBookRealTextError("vivo storybook text response was not an object", {
       fallbackReason: "provider-invalid-json",
@@ -329,6 +344,20 @@ function classifyVivoTextError(error: unknown) {
   return { fallbackReason: "provider-response-error", statusCode: 502 };
 }
 
+function shouldRetryStoryTextError(error: unknown) {
+  if (error instanceof ParentStoryBookRealTextError) {
+    return RETRYABLE_STORY_TEXT_FALLBACK_REASONS.has(error.fallbackReason);
+  }
+  if (error instanceof VivoProviderError) {
+    return (
+      (typeof error.httpStatus === "number" && error.httpStatus >= 500) ||
+      (error.httpStatus === undefined &&
+        (error.status === "provider-unavailable" || error.status === "error"))
+    );
+  }
+  return error instanceof SyntaxError;
+}
+
 export function isParentStoryBookRealText(story: ParentStoryBookResponse) {
   const textProvider = story.providerMeta.textProvider ?? story.providerMeta.provider;
   return (
@@ -366,65 +395,86 @@ export async function enhanceParentStoryBookWithVivoText(input: {
     expectedSceneCount,
   });
 
-  try {
-    const result = await requestVivoChat({
-      taskType: "parent-storybook-real-text",
-      temperature: 0.35,
-      maxTokens: expectedSceneCount >= 8 ? 2200 : 1800,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a professional early-childhood picture-book writer. You output valid JSON only.",
-        },
-        { role: "user", content: prompt },
-      ],
-    });
-    const parsed = extractJsonObject(result.text);
-    const generated = validateStoryTextPayload(parsed, expectedSceneCount);
-    const elapsedMs = Date.now() - startedAt;
-    const diagnostics = input.story.providerMeta.diagnostics;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < STORY_TEXT_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      // 绘本写作是无副作用调用；仅对瞬时故障或结构化输出违约重试一次，避免偶发 502。
+      const isRetry = attempt > 0;
+      const result = await requestVivoChat({
+        taskType: "parent-storybook-real-text",
+        temperature: isRetry ? 0.1 : 0.35,
+        maxTokens: expectedSceneCount >= 8 ? 2200 : 1800,
+        messages: [
+          {
+            role: "system",
+            content: isRetry
+              ? "You are a professional early-childhood picture-book writer. Return one valid JSON object only, with exactly the requested number of scenes."
+              : "You are a professional early-childhood picture-book writer. You output valid JSON only.",
+          },
+          {
+            role: "user",
+            content: isRetry
+              ? `${prompt}\nThis is a structured-output retry. Return no prose outside the JSON object.`
+              : prompt,
+          },
+        ],
+      });
+      const parsed = extractJsonObject(result.text);
+      const generated = validateStoryTextPayload(parsed, expectedSceneCount);
+      const elapsedMs = Date.now() - startedAt;
+      const diagnostics = input.story.providerMeta.diagnostics;
 
-    return {
-      ...input.story,
-      title: generated.title || input.story.title,
-      summary: generated.summary || input.story.summary,
-      moral: generated.moral || input.story.moral,
-      parentNote: generated.parentNote || input.story.parentNote,
-      source: "vivo",
-      fallback: false,
-      fallbackReason: null,
-      providerMeta: {
-        ...input.story.providerMeta,
-        provider: "vivo-chat",
-        mode: input.story.providerMeta.mode === "live" ? "live" : "mixed",
-        textProvider: "vivo-chat",
-        textDelivery: "real",
+      return {
+        ...input.story,
+        title: generated.title || input.story.title,
+        summary: generated.summary || input.story.summary,
+        moral: generated.moral || input.story.moral,
+        parentNote: generated.parentNote || input.story.parentNote,
+        source: "vivo",
+        fallback: false,
         fallbackReason: null,
-        realProvider: true,
-        sceneCount: expectedSceneCount,
-        diagnostics: diagnostics
-          ? {
-              ...diagnostics,
-              brain: {
-                ...diagnostics.brain,
-                reachable: true,
-                fallbackReason: null,
-                upstreamHost: "api-ai.vivo.com.cn",
-                statusCode: null,
-                retryStrategy: "none",
-                elapsedMs,
-              },
-            }
-          : diagnostics,
-      },
-      scenes: mergeScenesWithRealText(input.story.scenes, generated.scenes),
-    };
-  } catch (error) {
-    const classified = classifyVivoTextError(error);
-    throw new ParentStoryBookRealTextError(
-      error instanceof Error ? error.message : "vivo storybook text provider failed",
-      classified
-    );
+        providerMeta: {
+          ...input.story.providerMeta,
+          provider: "vivo-chat",
+          mode: input.story.providerMeta.mode === "live" ? "live" : "mixed",
+          textProvider: "vivo-chat",
+          textDelivery: "real",
+          fallbackReason: null,
+          realProvider: true,
+          sceneCount: expectedSceneCount,
+          diagnostics: diagnostics
+            ? {
+                ...diagnostics,
+                brain: {
+                  ...diagnostics.brain,
+                  reachable: true,
+                  fallbackReason: null,
+                  upstreamHost: "api-ai.vivo.com.cn",
+                  statusCode: null,
+                  retryStrategy: "none",
+                  elapsedMs,
+                },
+              }
+            : diagnostics,
+        },
+        scenes: mergeScenesWithRealText(input.story.scenes, generated.scenes),
+      };
+    } catch (error) {
+      lastError = error;
+      if (
+        attempt >= STORY_TEXT_MAX_ATTEMPTS - 1 ||
+        !shouldRetryStoryTextError(error)
+      ) {
+        break;
+      }
+    }
   }
+
+  const classified = classifyVivoTextError(lastError);
+  throw new ParentStoryBookRealTextError(
+    lastError instanceof Error
+      ? lastError.message
+      : "vivo storybook text provider failed",
+    classified
+  );
 }

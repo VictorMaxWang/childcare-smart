@@ -451,10 +451,18 @@ async function requireVivoStoryTextResponse(input: {
       error instanceof ParentStoryBookRealTextError
         ? error.fallbackReason
         : "provider-response-error";
+    const statusCode =
+      error instanceof ParentStoryBookRealTextError ? error.statusCode : 502;
+    logSecurityEvent("warn", "ai.parent_storybook.text_provider_unavailable", {
+      fallbackReason,
+      statusCode,
+      upstreamHost: input.brainForward?.upstreamHost ?? null,
+      brainStatusCode: input.brainForward?.statusCode ?? null,
+    });
     return buildTextProviderUnavailableResponse({
       brainForward: input.brainForward,
       fallbackReason,
-      statusCode: error instanceof ParentStoryBookRealTextError ? error.statusCode : 502,
+      statusCode,
     });
   }
 }
