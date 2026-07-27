@@ -34,12 +34,21 @@ const RETRYABLE_STORY_TEXT_FALLBACK_REASONS = new Set([
 export class ParentStoryBookRealTextError extends Error {
   fallbackReason: string;
   statusCode: number;
+  attemptCount: number;
 
-  constructor(message: string, options: { fallbackReason: string; statusCode?: number }) {
+  constructor(
+    message: string,
+    options: {
+      fallbackReason: string;
+      statusCode?: number;
+      attemptCount?: number;
+    }
+  ) {
     super(message);
     this.name = "ParentStoryBookRealTextError";
     this.fallbackReason = options.fallbackReason;
     this.statusCode = options.statusCode ?? 503;
+    this.attemptCount = options.attemptCount ?? 1;
   }
 }
 
@@ -325,11 +334,32 @@ function mergeScenesWithRealText(
   });
 }
 
-function classifyVivoTextError(error: unknown) {
+function classifyVivoTextError(
+  error: unknown,
+  context?: {
+    signal?: AbortSignal;
+    deadlineAtMs?: number;
+  }
+) {
+  if (context?.signal?.aborted) {
+    return { fallbackReason: "provider-request-cancelled", statusCode: 408 };
+  }
+  if (
+    typeof context?.deadlineAtMs === "number" &&
+    Date.now() >= context.deadlineAtMs
+  ) {
+    return { fallbackReason: "provider-deadline-exceeded", statusCode: 504 };
+  }
   if (error instanceof ParentStoryBookRealTextError) {
     return { fallbackReason: error.fallbackReason, statusCode: error.statusCode };
   }
   if (error instanceof VivoProviderError) {
+    if (error.failureKind === "request-cancelled") {
+      return { fallbackReason: "provider-request-cancelled", statusCode: 408 };
+    }
+    if (error.failureKind === "request-timeout") {
+      return { fallbackReason: "provider-deadline-exceeded", statusCode: 504 };
+    }
     if (error.status === "missing-env") {
       return { fallbackReason: "provider-unconfigured", statusCode: 503 };
     }
@@ -345,17 +375,10 @@ function classifyVivoTextError(error: unknown) {
 }
 
 function shouldRetryStoryTextError(error: unknown) {
-  if (error instanceof ParentStoryBookRealTextError) {
-    return RETRYABLE_STORY_TEXT_FALLBACK_REASONS.has(error.fallbackReason);
-  }
-  if (error instanceof VivoProviderError) {
-    return (
-      (typeof error.httpStatus === "number" && error.httpStatus >= 500) ||
-      (error.httpStatus === undefined &&
-        (error.status === "provider-unavailable" || error.status === "error"))
-    );
-  }
-  return error instanceof SyntaxError;
+  return (
+    error instanceof ParentStoryBookRealTextError &&
+    RETRYABLE_STORY_TEXT_FALLBACK_REASONS.has(error.fallbackReason)
+  );
 }
 
 export function isParentStoryBookRealText(story: ParentStoryBookResponse) {
@@ -386,6 +409,8 @@ export function shouldRequireNextVivoStoryText(story: ParentStoryBookResponse) {
 export async function enhanceParentStoryBookWithVivoText(input: {
   payload: ParentStoryBookRequest;
   story: ParentStoryBookResponse;
+  signal?: AbortSignal;
+  deadlineAtMs?: number;
 }): Promise<ParentStoryBookResponse> {
   const startedAt = Date.now();
   const expectedSceneCount = input.story.scenes.length || input.payload.pageCount || 6;
@@ -396,14 +421,20 @@ export async function enhanceParentStoryBookWithVivoText(input: {
   });
 
   let lastError: unknown = null;
+  let attemptCount = 0;
   for (let attempt = 0; attempt < STORY_TEXT_MAX_ATTEMPTS; attempt += 1) {
     try {
-      // 绘本写作是无副作用调用；仅对瞬时故障或结构化输出违约重试一次，避免偶发 502。
+      // 只有已收到但结构不合约的模型响应才重试；传输结果不明时禁止再次付费调用。
       const isRetry = attempt > 0;
       const result = await requestVivoChat({
         taskType: "parent-storybook-real-text",
         temperature: isRetry ? 0.1 : 0.35,
         maxTokens: expectedSceneCount >= 8 ? 2200 : 1800,
+        signal: input.signal,
+        deadlineAtMs: input.deadlineAtMs,
+        onRequestStart: () => {
+          attemptCount += 1;
+        },
         messages: [
           {
             role: "system",
@@ -439,6 +470,7 @@ export async function enhanceParentStoryBookWithVivoText(input: {
           mode: input.story.providerMeta.mode === "live" ? "live" : "mixed",
           textProvider: "vivo-chat",
           textDelivery: "real",
+          textAttemptCount: attemptCount,
           fallbackReason: null,
           realProvider: true,
           sceneCount: expectedSceneCount,
@@ -470,11 +502,17 @@ export async function enhanceParentStoryBookWithVivoText(input: {
     }
   }
 
-  const classified = classifyVivoTextError(lastError);
+  const classified = classifyVivoTextError(lastError, {
+    signal: input.signal,
+    deadlineAtMs: input.deadlineAtMs,
+  });
   throw new ParentStoryBookRealTextError(
     lastError instanceof Error
       ? lastError.message
       : "vivo storybook text provider failed",
-    classified
+    {
+      ...classified,
+      attemptCount,
+    }
   );
 }

@@ -14,6 +14,8 @@ export interface VivoRequestOptions {
   body?: BodyInit | null;
   timeoutMs?: number;
   baseUrl?: string;
+  signal?: AbortSignal;
+  onRequestStart?: () => void;
 }
 
 function trimTrailingSlash(value: string) {
@@ -32,11 +34,16 @@ function buildUrl(baseUrl: string, path: string, query?: VivoRequestOptions["que
 
 export async function vivoFetch(options: VivoRequestOptions) {
   const env = getVivoEnv();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 30_000);
+  const timeoutSignal = AbortSignal.timeout(
+    Math.max(1, options.timeoutMs ?? 30_000)
+  );
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, timeoutSignal])
+    : timeoutSignal;
   const headers = buildVivoAuthHeaders(options.headers);
 
   try {
+    options.onRequestStart?.();
     const response = await fetch(
       buildUrl(options.baseUrl ?? env.baseUrl, options.path, options.query),
       {
@@ -44,21 +51,31 @@ export async function vivoFetch(options: VivoRequestOptions) {
         headers,
         body: options.body,
         cache: "no-store",
-        signal: controller.signal,
+        signal,
       }
     );
     return response;
   } catch (error) {
+    const failureKind = options.signal?.aborted
+      ? "request-cancelled"
+      : timeoutSignal.aborted
+        ? "request-timeout"
+        : undefined;
     throw new VivoProviderError(
-      error instanceof Error ? error.message : "vivo provider request failed",
+      failureKind === "request-cancelled"
+        ? "vivo provider request was cancelled"
+        : failureKind === "request-timeout"
+          ? "vivo provider request deadline was exceeded"
+          : error instanceof Error
+            ? error.message
+            : "vivo provider request failed",
       {
         capability: options.capability,
         status: "provider-unavailable",
         raw: error,
+        failureKind,
       }
     );
-  } finally {
-    clearTimeout(timeout);
   }
 }
 

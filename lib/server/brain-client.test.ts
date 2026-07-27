@@ -48,11 +48,12 @@ function withEnv(
   });
 }
 
-function buildStorybookRequest() {
+function buildStorybookRequest(signal?: AbortSignal) {
   return new Request("http://localhost:3000/api/ai/parent-storybook", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ ok: true }),
+    signal,
   });
 }
 
@@ -297,6 +298,109 @@ test("brain client surfaces timeout override and elapsed timing on abort", async
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.setTimeout = originalSetTimeout;
+  }
+});
+
+test("brain client propagates caller cancellation to the upstream request", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestController = new AbortController();
+  let fetchCallCount = 0;
+
+  globalThis.fetch = (((_input: RequestInfo | URL, init?: RequestInit) => {
+    fetchCallCount += 1;
+    return new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (!signal) {
+        reject(new Error("missing abort signal"));
+        return;
+      }
+      const fallbackTimer = setTimeout(
+        () => reject(new Error("caller abort was not propagated")),
+        250
+      );
+      signal.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(fallbackTimer);
+          reject(new DOMException("Aborted", "AbortError"));
+        },
+        { once: true }
+      );
+      setTimeout(() => requestController.abort(), 10);
+    });
+  }) as unknown) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+        NODE_ENV: "development",
+      },
+      async () => {
+        const result = await forwardBrainRequest(
+          buildStorybookRequest(requestController.signal),
+          "/api/v1/agents/parent/storybook",
+          { timeoutMs: 5_000 }
+        );
+
+        assert.equal(fetchCallCount, 1);
+        assert.equal(result.response, null);
+        assert.equal(result.fallbackReason, "brain-request-cancelled");
+        assert.ok((result.elapsedMs ?? 5_000) < 1_000);
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("brain client keeps its timeout active while buffering a response body", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (
+    _input: RequestInfo | URL,
+    init?: RequestInit
+  ) => {
+    const signal = init?.signal;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const abortBody = () =>
+          controller.error(new DOMException("Aborted", "AbortError"));
+        if (signal?.aborted) {
+          abortBody();
+          return;
+        }
+        signal?.addEventListener("abort", abortBody, { once: true });
+      },
+    });
+    return new Response(body, {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+        NODE_ENV: "development",
+      },
+      async () => {
+        const result = await forwardBrainRequest(
+          buildStorybookRequest(),
+          "/api/v1/agents/parent/storybook",
+          { timeoutMs: 25, bufferResponseBody: true }
+        );
+
+        assert.equal(result.response, null);
+        assert.equal(result.fallbackReason, "brain-proxy-timeout");
+        assert.equal(result.timeoutMs, 25);
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 

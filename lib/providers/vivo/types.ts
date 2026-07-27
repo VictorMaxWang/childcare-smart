@@ -40,6 +40,9 @@ export interface VivoChatInput {
   maxTokens?: number;
   stream?: boolean;
   taskType?: string;
+  signal?: AbortSignal;
+  deadlineAtMs?: number;
+  onRequestStart?: () => void;
 }
 
 export interface VivoChatResult {

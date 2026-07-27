@@ -367,6 +367,7 @@ export async function forwardBrainRequest(
   options?: {
     timeoutMs?: number;
     serviceScope?: BrainServiceScopeClaim | null;
+    bufferResponseBody?: boolean;
   }
 ): Promise<BrainForwardResult> {
   const baseUrlDetails = resolveBrainBaseUrlDetails();
@@ -392,6 +393,12 @@ export async function forwardBrainRequest(
   }
 
   const controller = new AbortController();
+  const abortFromCaller = () => controller.abort(request.signal.reason);
+  if (request.signal.aborted) {
+    abortFromCaller();
+  } else {
+    request.signal.addEventListener("abort", abortFromCaller, { once: true });
+  }
   const startedAt = Date.now();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const method = request.method.toUpperCase();
@@ -493,6 +500,9 @@ export async function forwardBrainRequest(
           };
         }
 
+        const responseBody = options?.bufferResponseBody
+          ? await proxiedResponse.arrayBuffer()
+          : proxiedResponse.body;
         const responseHeaders = new Headers();
         const contentType = proxiedResponse.headers.get("content-type");
         if (contentType) responseHeaders.set("content-type", contentType);
@@ -519,7 +529,7 @@ export async function forwardBrainRequest(
         });
 
         return {
-          response: new Response(proxiedResponse.body, {
+          response: new Response(responseBody, {
             status: proxiedResponse.status,
             statusText: proxiedResponse.statusText,
             headers: responseHeaders,
@@ -533,7 +543,9 @@ export async function forwardBrainRequest(
           timeoutMs,
         };
       } catch (error) {
-        lastFallbackReason = fallbackReasonFromError(error);
+        lastFallbackReason = request.signal.aborted
+          ? "brain-request-cancelled"
+          : fallbackReasonFromError(error);
         const canRetryWithNextLocalCandidate =
           baseUrlDetails.implicitDefault &&
           !(error instanceof DOMException && error.name === "AbortError") &&
@@ -584,6 +596,7 @@ export async function forwardBrainRequest(
     };
   } finally {
     clearTimeout(timeout);
+    request.signal.removeEventListener("abort", abortFromCaller);
   }
 }
 

@@ -40,6 +40,7 @@ import { logSecurityEvent } from "@/lib/server/security-log";
 
 export const runtime = "nodejs";
 const DEFAULT_PARENT_STORYBOOK_BRAIN_TIMEOUT_MS = 45_000;
+const DEFAULT_PARENT_STORYBOOK_REQUEST_TIMEOUT_MS = 70_000;
 const ROLE_PARENT = "家长";
 
 function resolveParentStoryBookBrainTimeoutMs() {
@@ -66,6 +67,15 @@ function resolveParentStoryBookBackendMediaTimeoutMs() {
 
 const PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS =
   resolveParentStoryBookBackendMediaTimeoutMs();
+
+function resolveParentStoryBookRequestTimeoutMs() {
+  const parsed = Number(
+    process.env.PARENT_STORYBOOK_REQUEST_TIMEOUT_MS?.trim()
+  );
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_PARENT_STORYBOOK_REQUEST_TIMEOUT_MS;
+}
 
 function normalizeStoryBookTransport(transport: BrainTransport): ParentStoryBookTransport {
   if (transport === "brain-proxy-error") {
@@ -365,6 +375,7 @@ function buildTextProviderUnavailableResponse(input: {
   brainForward?: BrainForwardResult;
   fallbackReason: string;
   statusCode?: number;
+  attemptCount?: number;
 }) {
   const providerTrace = buildAiProviderTrace({
     capability: "llm",
@@ -399,6 +410,7 @@ function buildTextProviderUnavailableResponse(input: {
         elapsedMs: input.brainForward?.elapsedMs ?? null,
         timeoutMs: input.brainForward?.timeoutMs ?? null,
         textProvider: "vivo-chat",
+        textAttemptCount: input.attemptCount ?? 0,
       },
     },
     {
@@ -422,11 +434,15 @@ async function requireVivoStoryTextResponse(input: {
   institutionId: string;
   cacheState: "miss" | "bypass";
   brainForward?: BrainForwardResult;
+  signal?: AbortSignal;
+  deadlineAtMs?: number;
 }) {
   try {
     const enhanced = await enhanceParentStoryBookWithVivoText({
       payload: input.payload,
       story: input.story,
+      signal: input.signal,
+      deadlineAtMs: input.deadlineAtMs,
     });
     const tracedEnhanced = {
       ...enhanced,
@@ -453,9 +469,12 @@ async function requireVivoStoryTextResponse(input: {
         : "provider-response-error";
     const statusCode =
       error instanceof ParentStoryBookRealTextError ? error.statusCode : 502;
+    const attemptCount =
+      error instanceof ParentStoryBookRealTextError ? error.attemptCount : 1;
     logSecurityEvent("warn", "ai.parent_storybook.text_provider_unavailable", {
       fallbackReason,
       statusCode,
+      attemptCount,
       upstreamHost: input.brainForward?.upstreamHost ?? null,
       brainStatusCode: input.brainForward?.statusCode ?? null,
     });
@@ -463,11 +482,14 @@ async function requireVivoStoryTextResponse(input: {
       brainForward: input.brainForward,
       fallbackReason,
       statusCode,
+      attemptCount,
     });
   }
 }
 
 export async function POST(request: Request) {
+  const requestDeadlineAtMs =
+    Date.now() + resolveParentStoryBookRequestTimeoutMs();
   const authResult = await authorizeAiRouteSession(request, {
     requiredRole: "parent",
     collectJsonClassNames: false,
@@ -631,15 +653,35 @@ export async function POST(request: Request) {
     method: "POST",
     headers: request.headers,
     body: JSON.stringify(payload),
+    signal: request.signal,
   });
+  const configuredBrainTimeoutMs = requireRealStoryText
+    ? PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS
+    : PARENT_STORYBOOK_BRAIN_TIMEOUT_MS;
+  const remainingRequestBudgetMs = requestDeadlineAtMs - Date.now();
+  if (remainingRequestBudgetMs <= 0) {
+    logSecurityEvent("warn", "ai.parent_storybook.deadline_before_brain", {
+      attemptCount: 0,
+    });
+    return attestAiJsonResponse(
+      buildTextProviderUnavailableResponse({
+        fallbackReason: "provider-deadline-exceeded",
+        statusCode: 504,
+        attemptCount: 0,
+      }),
+      provenanceContext
+    );
+  }
   const brainForward = await forwardBrainRequest(
     brainRequest,
     "/api/v1/agents/parent/storybook",
     {
-      timeoutMs: requireRealStoryText
-        ? PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS
-        : PARENT_STORYBOOK_BRAIN_TIMEOUT_MS,
+      timeoutMs: Math.min(
+        configuredBrainTimeoutMs,
+        remainingRequestBudgetMs
+      ),
       serviceScope: buildServiceScopeClaim(sessionScope),
+      bufferResponseBody: true,
     }
   );
 
@@ -679,6 +721,8 @@ export async function POST(request: Request) {
         institutionId: sessionScope.institutionId,
         cacheState: shouldCacheParentStoryBookResponse(preparedStory) ? "miss" : "bypass",
         brainForward,
+        signal: request.signal,
+        deadlineAtMs: requestDeadlineAtMs,
       });
       if (enhancedStory instanceof NextResponse) {
         return attestAiJsonResponse(
@@ -728,6 +772,8 @@ export async function POST(request: Request) {
       institutionId: sessionScope.institutionId,
       cacheState: "bypass",
       brainForward,
+      signal: request.signal,
+      deadlineAtMs: requestDeadlineAtMs,
     });
     if (enhancedStory instanceof NextResponse) {
       return attestAiJsonResponse(

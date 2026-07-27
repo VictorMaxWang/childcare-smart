@@ -738,6 +738,7 @@ export interface ParentStoryBookProviderMeta {
   transport?: ParentStoryBookTransport;
   textProvider?: string;
   textDelivery?: "real" | "mock" | "fallback";
+  textAttemptCount?: number;
   imageProvider: string;
   audioProvider: string;
   imageDelivery?: ParentStoryBookImageDelivery;

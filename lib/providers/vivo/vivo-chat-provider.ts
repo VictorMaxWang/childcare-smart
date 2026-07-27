@@ -32,6 +32,23 @@ export async function requestVivoChat(input: VivoChatInput): Promise<VivoChatRes
   const env = getVivoEnv();
   const requestId = input.requestId ?? createRequestId();
   const model = input.model ?? env.llmModel;
+  const remainingMs =
+    typeof input.deadlineAtMs === "number"
+      ? input.deadlineAtMs - Date.now()
+      : 60_000;
+  if (remainingMs <= 0 || input.signal?.aborted) {
+    const cancelled = input.signal?.aborted ?? false;
+    throw new VivoProviderError(
+      cancelled
+        ? "vivo chat request was cancelled"
+        : "vivo chat request deadline was exceeded",
+      {
+        capability: "chat",
+        status: "provider-unavailable",
+        failureKind: cancelled ? "request-cancelled" : "request-timeout",
+      }
+    );
+  }
   const raw = await vivoJsonRequest<VivoChatResponse>({
     capability: "chat",
     path: "/v1/chat/completions",
@@ -49,7 +66,9 @@ export async function requestVivoChat(input: VivoChatInput): Promise<VivoChatRes
       temperature: input.temperature ?? 0.2,
       max_tokens: input.maxTokens ?? 1024,
     }),
-    timeoutMs: 60_000,
+    timeoutMs: Math.min(60_000, remainingMs),
+    signal: input.signal,
+    onRequestStart: input.onRequestStart,
   });
 
   const text = readChatText(raw);
