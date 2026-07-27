@@ -1,13 +1,14 @@
 # Current Status Ledger
 
-更新基准：`2026-07-26`
+更新基准：`2026-07-27`
 
 ## 当前状态
 
 - 真实账号注册仍创建独立的个人/机构初始空间；注册成功不等于已经加入同一托育机构。
 - 新增的一次性机构邀请码负责后续正式绑定：园长创建邀请，教师按稳定班级 ID 加入，家长在完整监护同意校验后迁入孩子与历史记录。
 - 规范授权真相位于 `institution_memberships`、`teacher_class_assignments`、`child_registry`、`guardian_child_links`；`app_users` 的机构、班级、child_ids 仅保留兼容投影。
-- `0336460` 已推送 `origin/main` 并由 `https://www.smartchildcare.cn/api/health` 确认部署到对应提交；当前候选代码已通过 `lint`、`typecheck`、production build、627 项 Node、227 项 Python 和 36 项发布证明测试。
+- `a6ca28a72f2f604583811eb1fb6032d11ed8ea47` 已推送 `origin/main`；`https://www.smartchildcare.cn/api/health` 已确认部署 ID `dpl_FzJr6ewRkkztpbTFV8HUECRUnCXp` 对应这一完整提交。
+- 当前运行时代码已通过 `lint`、`typecheck`、production build、663 项 Node、228 项 Python 和 36 项发布证明测试；新增的绘本文案、Vivo 错误分类、DashScope 正文截止时间和前端状态定向回归为 `40/40`。
 - 正式真实账号门禁现要求高风险会诊、营养评估、成长绘本文本/图片/语音均提供实时 provider 结果，并逐端实际打开搜索、通知和消息面板；残缺的上游营养评估结构会被拒绝并降级为完整规则结果。
 - 园长、教师、家长的搜索、通知、消息与账号菜单已从装饰按钮接入作用域数据；跨角色演示缓存切换、无权 child 链接和远端状态失败均有显式处理。
 - AI 持久化结果现在需要服务端来源证明，上传需要 MIME 与文件魔数一致，语音确认令牌需要数据库一次性消费；这些安全边界不能由浏览器字段绕过。
@@ -16,9 +17,11 @@
 - 第二轮 fresh smoke 在绑定完成后的并发会话读取处发现 MySQL `ETIMEDOUT`；会话只读路径现对明确的连接超时/断开做有限重试，持续失败返回带 `Retry-After` 的 503，该补丁已部署。
 - `0336460` 上的正式 smoke 已让现有三示例账号通过，并让 fresh 三账号完成注册绑定、记录、消息、语音、OCR/食物/ASR、高风险会诊、三端 AI、营养评估和绘本文本；百炼图片达到 `4/4`，音频因媒体数据库提交超时为 `0/4`。
 - 当前候选代码为音频使用稳定机构媒体键，在任务账本提交结果不确定或 `markReady` 超时时执行精确回读；已落库音频可恢复账本且不会再次付费合成。Vivo ASR 同时补齐共享截止时间、取消信号、完成度判定和跨请求恢复账本。
+- 绘本文案现在以 Vivo 为首选，并在上游明确返回鉴权、限流或响应错误时使用已配置的 DashScope；连接重置、正文中断和超时不会自动改投另一供应商，避免结果不确定时重复付费。DashScope 调用与响应正文共享取消信号和总截止时间。
+- `a6ca28a` 生产 `REAL_SMOKE_MODE=all` 已完成现有三示例账号与 fresh 三账号两条真实浏览器链路：`2 passed`，`0 skipped`、`0 flaky`、`0 failed`。fresh 链路逐页冷读首 4 页媒体，图片为 `4/4 private_blob WebP (RIFF/WEBP)`，音频为 `4/4 private_blob WAV (RIFF/WAVE)`。
 - 生产 DMC 已执行幂等 `vivo_asr_tasks` 迁移，并用 `SHOW CREATE TABLE` 验证 18 个字段、主键和 3 个作用域/租约/过期索引；严格 `npm run db:check` 仍需从不暴露连接串的受控环境生成签名证据。
 - 正式发布证据现在要求 40 位完整 SHA、HMAC 报告签名、同一 `releaseRunId` 和不变的 Vercel `deploymentId`；权威入口在启动 Node 前净化环境，本地构建从该提交的隔离 worktree 执行，生产 smoke 固定到 deployment URL，旧报告、忽略的 `.env.local`、外部 Git hook 或跨部署报告不能拼接成通过结果。
-- 当前候选仍待生产部署和现有/fresh 三账号完整 smoke 复验；严格生产数据库预检尚无本地 `DATABASE_URL` 证据，当前不能宣称三端线上全部闭环。
+- 三端生产业务与 live AI 浏览器 smoke 已闭环；但本机 `.env.release` 缺少正式发布所需的 17 个字段，因此未运行签名 formal gate，`productionValidated` 仍不能作为正式证据声明。严格生产数据库预检仍需从不暴露连接串的受控环境生成。
 - 比赛展示口径已统一为 `慧育童行 - SmartChildcare Agent`，中文展示名为 `慧育童行`，英文名 / 技术系统名为 `SmartChildcare Agent`。
 - 当前 demo 数据热修已经切到“相对日期 + 固定 hero child matrix”模式。
 - 前端本地 demo snapshot 与后端 `build_demo_snapshot()` 已经围绕同一批 child case 对齐。

@@ -1,12 +1,12 @@
 # Task Registry
 
-更新基准：`2026-07-26`
+更新基准：`2026-07-27`
 
 ## Active Hotfix
 
 ### Three-role Production Hardening & Functional Completion
 
-- 状态：`Production smoke in progress`
+- 状态：`Production smoke passed / Formal evidence pending`
 - 目标：把园长、教师、家长三端从“页面可打开”推进到真实授权、真实写入、跨端读取、AI 结果可追溯和可审计发布。
 - 主改动源：
   - `lib/persistence/state-scope.ts`
@@ -25,7 +25,7 @@
   - 班级使用稳定 `classId`，幼儿写入与 `child_registry` 同事务同步；同名班级不再构成授权依据。
   - AI 结果在服务端绑定用户、机构、能力、幼儿/班级和结果摘要；未签名或作用域不符的 provider 声明不能作为 live AI 结果持久化。
   - 上传按流式大小上限、严格 Base64、MIME 与文件魔数校验；语音确认令牌绑定操作者与作用域，并通过数据库一次性消费防重放。
-  - 本地 `lint`、`typecheck`、production build、627 项 Node、227 项 Python、36 项发布证明测试和 83 项发布浏览器回归已执行；浏览器结果为 80 通过、3 项真实账号规格明确跳过，因此只属于本地验证。
+  - 本地 `lint`、`typecheck`、production build、663 项 Node、228 项 Python、36 项发布证明测试和 83 项发布浏览器回归已执行；浏览器结果为 80 通过、3 项真实账号规格明确跳过，因此只属于本地验证。
   - 正式真实账号 smoke 已扩展为强制执行高风险会诊 live AI、营养评估、成长绘本文本及图片/语音媒体补全，并实际打开右上角搜索、通知和消息面板。
   - `dfc32f8` 已推送并由生产 `/api/health` 确认部署；fresh smoke 已通过注册绑定、三类记录、跨端读取/消息、语音、OCR、食物识别、ASR、高风险会诊、三端 AI、营养评估和绘本文本。
   - 首次 fresh smoke 在绘本媒体状态请求处发生 `ECONNRESET`；媒体接口现限制远端与本地 provider 时间预算，生产测试会按服务端退避提示重试瞬时断连。
@@ -34,14 +34,16 @@
   - 当前候选为 TTS 使用稳定机构媒体键，并对未知提交、精确回读、账本 `markReady` 和已落库音频恢复提供有界重试；Vivo ASR 具备端到端截止时间、取消传播、完成度检查和跨请求恢复账本。
   - 生产 DMC 已执行 `vivo_asr_tasks` 幂等迁移，`SHOW CREATE TABLE` 已验证 18 个字段、主键和 3 个关键索引。
   - 发布门禁新增启动前环境净化、完整 SHA、HMAC 报告签名、隔离 worktree、禁用外部 Git hooks、固定 deployment origin、`releaseRunId` 与 `deploymentId`/deployment URL 交叉校验，避免旧报告、短 SHA、`.env.local` 或同提交不同部署造成假阳性。
-- 生产待完成：
-  - 推送当前音频恢复与 ASR 截止时间补丁，确认 Vercel 完整提交 SHA 和 `deploymentId`，重新完成现有/fresh 三账号真实图片与语音闭环。
-  - 用现有三示例账号完成写入、读取、live AI、媒体和语音验收；获得真实 `DATABASE_URL` 后再用严格 `npm run db:check` 生成新鲜数据库证据。
-  - 核对 Tencent Brain 服务版本、共享签名配置和在线模型可用性；未经服务器证据不宣称已闭环。
+  - 绘本文案新增 DashScope 结构化输出备用链路；仅对上游明确错误执行切换，连接/正文中断与超时不自动产生第二笔付费请求，Vivo 仍保留完整剩余预算。
+  - `a6ca28a72f2f604583811eb1fb6032d11ed8ea47` 已部署为 `dpl_FzJr6ewRkkztpbTFV8HUECRUnCXp`。生产 `all` smoke 中 existing 与 fresh 两条链路均通过，首 4 页图片和音频分别达到 `4/4 private_blob` 冷读，并通过 WebP/WAV 魔数验证。
+- 正式证据待完成：
+  - 在受控发布环境补齐 `.env.release` 后运行权威 `release-formal-gate.ps1`；当前本机缺少 17 个正式字段，不能把非 formal smoke 报告签成正式发布证明。
+  - 获得不暴露连接串的真实 `DATABASE_URL` 后，用严格 `npm run db:check` 生成新鲜数据库证据。
+  - 对 Tencent Brain 服务版本和共享签名继续保留服务器侧证据；本轮仅确认生产请求成功，不扩写未核验的部署叙述。
 
 ### Real Account Institution Membership Hotfix
 
-- 状态：`Code-verified / Production-pending`
+- 状态：`Production-verified / Formal DB proof pending`
 - 目标：让独立注册的园长、教师、家长通过一次性邀请码建立正式机构、班级与监护关系，并完成“教师记录 -> 家长读取 -> AI 分析/绘本”的真实账号闭环。
 - 主改动源：
   - `lib/server/institution-membership.ts`
@@ -58,9 +60,8 @@
   - 家长真实账号直接读取服务端作用域数据；AI 绘本记录完整来源 ID。
   - 授权/建档/缓存/记录测试、注册测试、lint、typecheck、production build 已通过。
 - 生产待完成：
-  - 在生产库执行规范关系 SQL 并运行 `npm run db:check`。
-  - dry-run 后执行三示例账号对齐。
-  - 部署 main，并在 Chrome 完成三账号记录、读取与 AI/绘本验收。
+  - 在不暴露连接串的受控环境运行严格 `npm run db:check`，补齐规范关系 SQL 的签名发布证据。
+  - 保留 `scripts/align-sample-accounts.mjs` 的 dry-run 优先边界；现有三示例账号已在 `all` smoke 中完成记录、读取、AI 与绘本验收。
 
 ### Demo Data & Recording Asset Recovery Hotfix
 
