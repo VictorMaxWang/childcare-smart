@@ -34,7 +34,7 @@ type StoryBookMediaCacheEntry = {
   ownerInstitutionId: string | null;
   ownerChildId: string | null;
   ownerStorybookId: string | null;
-  persisted: boolean;
+  persistentStorageMode: "database_media" | "private_blob" | null;
 };
 
 const storyResponseCache = new Map<string, StoryBookResponseCacheEntry>();
@@ -90,7 +90,9 @@ function resolveCachedMediaExpiresAtFromUrl(
   ) {
     return null;
   }
-  return entry && !entry.persisted ? expiresAtIso(entry.expiresAt) : null;
+  return entry && !entry.persistentStorageMode
+    ? expiresAtIso(entry.expiresAt)
+    : null;
 }
 
 function cloneStory(story: ParentStoryBookResponse) {
@@ -284,15 +286,18 @@ export function cacheParentStoryBookMediaBytes(
     ownerInstitutionId: owner?.institutionId ?? null,
     ownerChildId: owner?.childId ?? null,
     ownerStorybookId: owner?.storybookId ?? null,
-    persisted: false,
+    persistentStorageMode: null,
   });
 
   return `/api/ai/parent-storybook/media/${mediaId}`;
 }
 
-export function markCachedParentStoryBookMediaPersisted(mediaId: string) {
+export function markCachedParentStoryBookMediaPersisted(
+  mediaId: string,
+  storageMode: "database_media" | "private_blob" = "database_media"
+) {
   const entry = mediaAssetCache.get(mediaId);
-  if (entry) entry.persisted = true;
+  if (entry) entry.persistentStorageMode = storageMode;
 }
 
 export function cacheParentStoryBookAudioDataUrl(dataUrl: string, seed: string) {
@@ -324,13 +329,13 @@ export function readCachedParentStoryBookMedia(
   return {
     contentType: entry.contentType,
     bytes: entry.bytes,
-    expiresAt: entry.persisted ? null : expiresAtIso(entry.expiresAt),
+    expiresAt: entry.persistentStorageMode
+      ? null
+      : expiresAtIso(entry.expiresAt),
     ownerInstitutionId: entry.ownerInstitutionId,
     ownerChildId: entry.ownerChildId,
     ownerStorybookId: entry.ownerStorybookId,
-    storageMode: entry.persisted
-      ? ("database_media" as const)
-      : ("cached_media" as const),
+    storageMode: entry.persistentStorageMode ?? ("cached_media" as const),
   };
 }
 

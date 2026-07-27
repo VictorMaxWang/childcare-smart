@@ -40,6 +40,17 @@ export function isPrivateBlobConfigured(env: BlobEnv = process.env) {
   );
 }
 
+export function putPrivateObject(
+  pathname: string,
+  body: Parameters<typeof put>[1],
+  options: Omit<Parameters<typeof put>[2], "access"> = {}
+) {
+  return put(pathname, body, {
+    ...options,
+    access: "private",
+  });
+}
+
 export function buildPrivateAttachmentPath(input: {
   institutionId: string;
   childId?: string;
@@ -98,11 +109,17 @@ export function validatePrivateAttachmentFile(file: File) {
 
 export function getPrivateAttachment(
   storageKey: string,
-  options: { ifNoneMatch?: string } = {}
+  options: {
+    ifNoneMatch?: string;
+    abortSignal?: AbortSignal;
+    useCache?: boolean;
+  } = {}
 ): Promise<GetBlobResult | null> {
   return get(storageKey, {
     access: "private",
     ifNoneMatch: options.ifNoneMatch,
+    abortSignal: options.abortSignal,
+    useCache: options.useCache,
   });
 }
 

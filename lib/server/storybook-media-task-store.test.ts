@@ -278,7 +278,7 @@ test("terminal image tasks may resubmit once and then become blocked", async () 
   assert.equal(blocked.attemptCount, 2);
 });
 
-test("audio and image use independent task identities and audio never auto-retries", async () => {
+test("audio and image use independent task identities and audio retries persistence once", async () => {
   const store = new InMemoryStorybookMediaTaskStore();
   const now = Date.now();
   const [imageClaim, audioClaim] = await Promise.all([
@@ -303,8 +303,26 @@ test("audio and image use independent task identities and audio never auto-retri
   const audioReplay = await store.claim(audioIdentity, {
     nowMs: now + 10_000,
   });
-  assert.equal(audioReplay.action, "blocked");
-  assert.equal(audioReplay.attemptCount, 1);
+  assert.equal(audioReplay.action, "submit");
+  assert.equal(audioReplay.attemptCount, 2);
+  assert.ok(audioReplay.leaseToken);
+  assert.equal(
+    await store.markSubmissionFailure(
+      audioIdentity,
+      audioReplay.leaseToken,
+      {
+        retryable: true,
+        nextRetryAtMs: now + 20_000,
+        reason: "audio persistence failed again",
+      }
+    ),
+    true
+  );
+  const exhausted = await store.claim(audioIdentity, {
+    nowMs: now + 30_000,
+  });
+  assert.equal(exhausted.action, "blocked");
+  assert.equal(exhausted.attemptCount, 2);
 });
 
 test("persisted audio can recover a blocked ledger without another submission", async () => {
@@ -341,6 +359,56 @@ test("persisted audio can recover a blocked ledger without another submission", 
   assert.equal(recovered.attemptCount, 1);
   assert.equal(
     await store.recoverReadyAudio(imageIdentity, mediaKey),
+    false
+  );
+});
+
+test("a legacy blocked audio persistence failure can reopen only its remaining attempt", async () => {
+  const store = new InMemoryStorybookMediaTaskStore();
+  const now = Date.now();
+  const first = await store.claim(audioIdentity, { nowMs: now });
+  assert.equal(first.action, "submit");
+  assert.ok(first.leaseToken);
+  assert.equal(
+    await store.markSubmissionFailure(
+      audioIdentity,
+      first.leaseToken,
+      {
+        retryable: false,
+        nextRetryAtMs: now + 1_000,
+        reason: "storybook media database query timed out",
+      },
+      { nowMs: now + 1 }
+    ),
+    true
+  );
+  assert.equal(
+    await store.retryBlockedSubmission(audioIdentity, {
+      nowMs: now + 2,
+    }),
+    true
+  );
+  const replay = await store.claim(audioIdentity, { nowMs: now + 3 });
+  assert.equal(replay.action, "submit");
+  assert.equal(replay.attemptCount, 2);
+  assert.ok(replay.leaseToken);
+  assert.equal(
+    await store.markSubmissionFailure(
+      audioIdentity,
+      replay.leaseToken,
+      {
+        retryable: false,
+        nextRetryAtMs: now + 2_000,
+        reason: "storybook blob operation timed out",
+      },
+      { nowMs: now + 4 }
+    ),
+    true
+  );
+  assert.equal(
+    await store.retryBlockedSubmission(audioIdentity, {
+      nowMs: now + 5,
+    }),
     false
   );
 });

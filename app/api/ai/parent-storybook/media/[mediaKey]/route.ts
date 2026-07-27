@@ -56,8 +56,10 @@ export function buildStorybookMediaResponse(
   const range = parseByteRange(request.headers.get("range"), totalBytes);
   const baseHeaders = {
     "content-type": media.contentType,
-    "cache-control": "private, max-age=86400, immutable",
+    "cache-control": "private, no-store, max-age=0",
     "accept-ranges": "bytes",
+    "x-content-type-options": "nosniff",
+    vary: "Cookie",
     "x-smartchildcare-storage-mode": media.storageMode,
     ...(media.expiresAt
       ? { "x-smartchildcare-storage-expires-at": media.expiresAt }
@@ -114,6 +116,8 @@ export async function GET(
         Boolean(process.env.DATABASE_URL?.trim()),
       bypassCache:
         request.headers.get("x-smartchildcare-require-database") === "1",
+      // 将 child scope 下推到 Blob manifest 和 SQL，避免先读取大对象再判权。
+      authorizedChildIds: sessionScope.authorizedChildIds,
     });
   } catch {
     return handleApiError(

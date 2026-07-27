@@ -217,6 +217,7 @@ export async function upsertStorybookMediaAsset(
 export async function getStorybookMediaAsset(input: {
   institutionId: string;
   mediaKey: string;
+  authorizedChildIds?: readonly string[];
   timeoutMs?: number;
   signal?: AbortSignal;
 }): Promise<PersistedStorybookMediaAsset | null> {
@@ -225,15 +226,32 @@ export async function getStorybookMediaAsset(input: {
     "institutionId"
   );
   const mediaKey = assertMediaKey(input.mediaKey);
+  const authorizedChildIds = input.authorizedChildIds
+    ? Array.from(
+        new Set(
+          input.authorizedChildIds.map((childId) =>
+            assertSafeIdentifier(childId, "authorizedChildId")
+          )
+        )
+      )
+    : null;
+  if (authorizedChildIds?.length === 0) return null;
+  if ((authorizedChildIds?.length ?? 0) > 500) {
+    throw new Error("authorizedChildIds must not exceed 500 items");
+  }
+  const childScopeSql = authorizedChildIds
+    ? `and child_id in (${authorizedChildIds.map(() => "?").join(", ")})`
+    : "";
 
   const [rows] = await executeMediaQuery(
     `
       select child_id, storybook_id, content_type, media_bytes
       from storybook_media_assets
       where institution_id = ? and media_key = ?
+        ${childScopeSql}
       limit 1
     `,
-    [institutionId, mediaKey],
+    [institutionId, mediaKey, ...(authorizedChildIds ?? [])],
     {
       timeoutMs: input.timeoutMs,
       signal: input.signal,

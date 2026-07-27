@@ -566,7 +566,7 @@ async function verifyDietAndStorybookAi(
       expect(imageResponse.headers()["content-type"]).toBe("image/webp");
       expect(
         imageResponse.headers()["x-smartchildcare-storage-mode"]
-      ).toBe("database_media");
+      ).toBe("private_blob");
       const imageBytes = await imageResponse.body();
       expect(imageBytes.byteLength).toBeGreaterThan(0);
       expect(imageBytes.byteLength).toBeLessThanOrEqual(4 * 1024 * 1024);
@@ -586,7 +586,7 @@ async function verifyDietAndStorybookAi(
       expect(audioResponse.headers()["content-type"]).toBe("audio/wav");
       expect(
         audioResponse.headers()["x-smartchildcare-storage-mode"]
-      ).toBe("database_media");
+      ).toBe("private_blob");
       const audioBytes = await audioResponse.body();
       expect(audioBytes.byteLength).toBeGreaterThan(44);
       expect(audioBytes.byteLength).toBeLessThanOrEqual(4 * 1024 * 1024);

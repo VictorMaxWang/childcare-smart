@@ -28,6 +28,12 @@ test("storybook media route serves durable media with byte ranges", async () => 
     response.headers.get("x-smartchildcare-storage-mode"),
     "database_media"
   );
+  assert.equal(response.headers.get("vary"), "Cookie");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(
+    response.headers.get("cache-control"),
+    "private, no-store, max-age=0"
+  );
   assert.deepEqual(
     Array.from(new Uint8Array(await response.arrayBuffer())),
     [1, 2, 3]
@@ -45,4 +51,3 @@ test("storybook media route rejects an unsatisfiable byte range", async () => {
   assert.equal(response.status, 416);
   assert.equal(response.headers.get("content-range"), "bytes */6");
 });
-

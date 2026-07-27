@@ -144,7 +144,7 @@ async function ensureDurableMediaUrl(input: {
     existing.ownerChildId === input.childId &&
     existing.ownerStorybookId === input.storybookId
   ) {
-    if (existing.storageMode === "database_media") return input.url;
+    if (existing.storageMode !== "cached_media") return input.url;
     if (!hasBudget()) return null;
     const persistedExisting = await input.dependencies
       .persistLocal({

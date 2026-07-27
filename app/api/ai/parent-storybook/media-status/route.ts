@@ -38,11 +38,14 @@ import {
 } from "@/lib/server/parent-storybook-cache";
 import {
   buildParentStoryBookPersistentMediaKey,
+  isRecoverableParentStoryBookBlockedPersistenceReason,
+  isRetryableParentStoryBookMediaPersistenceError,
   persistParentStoryBookMedia,
   readParentStoryBookMedia,
 } from "@/lib/server/parent-storybook-media-store";
 import { reconcileRemoteStoryBookMedia } from "@/lib/server/parent-storybook-remote-media";
 import {
+  canRetryStorybookMediaSubmission,
   getStorybookMediaTaskStore,
   type StorybookMediaTaskClaim,
   type StorybookMediaTaskIdentity,
@@ -58,6 +61,7 @@ const VIVO_IMAGE_GENERATION_MODULE = "aigc";
 const VIVO_IMAGE_RATE_LIMIT_BACKOFF_MS = 70_000;
 const VIVO_IMAGE_ERROR_BACKOFF_MS = 20_000;
 const VIVO_AUDIO_ERROR_BACKOFF_MS = 20_000;
+const MEDIA_PERSISTENCE_RETRY_BACKOFF_MS = 3_000;
 const VIVO_IMAGE_GROUP_BATCH_SIZE = 4;
 const DASHSCOPE_IMAGE_POLL_INTERVAL_MS = 3_000;
 const DASHSCOPE_IMAGE_TASK_RETENTION_MS = 24 * 60 * 60 * 1_000;
@@ -66,7 +70,7 @@ const MEDIA_STATUS_PROVIDER_TIMEOUT_MS = 25_000;
 const MEDIA_STATUS_PROVIDER_TIMEOUT_MAX_MS = 30_000;
 const MEDIA_STATUS_LOCAL_DEADLINE_MS = 22_000;
 const MEDIA_STATUS_RESPONSE_DEADLINE_MS = 45_000;
-const MEDIA_TASK_COMMIT_BUDGET_MS = 16_000;
+const MEDIA_TASK_COMMIT_BUDGET_MS = 30_000;
 const MEDIA_TASK_FINALIZE_RESERVE_MS = 5_000;
 const MEDIA_TASK_LEDGER_ATTEMPT_TIMEOUT_MS = 2_000;
 const MEDIA_TASK_LEDGER_RETRY_DELAY_MS = 100;
@@ -133,6 +137,43 @@ function boundedConcurrency(value: string | undefined, fallback: number, max: nu
 function resolveAudioConcurrency() {
   // 同步 TTS 没有可恢复 task id；默认串行既降低数据库瞬时压力，也避免并发失败放大付费调用。
   return boundedConcurrency(process.env.STORYBOOK_TTS_CONCURRENCY, 1, 4);
+}
+
+async function runStoryAudioCandidateQueue<T>(
+  candidates: T[],
+  concurrency: number,
+  processCandidate: (
+    candidate: T
+  ) => Promise<"skip" | "occupied" | "submitted">
+) {
+  let consumedProviderSlots = 0;
+  let submittedProviderCalls = 0;
+  let visitedCandidates = 0;
+  let nextCandidateIndex = 0;
+  const worker = async () => {
+    while (nextCandidateIndex < candidates.length) {
+      const candidate = candidates[nextCandidateIndex];
+      nextCandidateIndex += 1;
+      visitedCandidates += 1;
+      const result = await processCandidate(candidate);
+      if (result === "skip") continue;
+      consumedProviderSlots += 1;
+      if (result === "submitted") submittedProviderCalls += 1;
+      return;
+    }
+  };
+  const workerCount = Math.min(
+    Math.max(1, concurrency),
+    candidates.length
+  );
+  if (workerCount > 0) {
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  }
+  return {
+    consumedProviderSlots,
+    submittedProviderCalls,
+    visitedCandidates,
+  };
 }
 
 function normalizePrioritySceneIndices(story: ParentStoryBookResponse, values: unknown) {
@@ -474,6 +515,77 @@ async function markMediaTaskReadyWithVerification(
   return false;
 }
 
+async function markMediaTaskSubmissionFailureWithVerification(
+  store: Pick<StorybookMediaTaskStore, "claim" | "markSubmissionFailure">,
+  identity: StorybookMediaTaskIdentity,
+  leaseToken: string,
+  input: Parameters<StorybookMediaTaskStore["markSubmissionFailure"]>[2],
+  deadlineAtMs: number
+) {
+  const expectedReason = input.reason.replace(/\s+/gu, " ").trim().slice(0, 500);
+  const verificationNowMs = Math.min(Date.now(), input.nextRetryAtMs - 1);
+  let lastTransientError: unknown = null;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    if (deadlineAtMs <= Date.now()) break;
+    const operation = {
+      deadlineAtMs: Math.min(
+        deadlineAtMs,
+        Date.now() + MEDIA_TASK_LEDGER_ATTEMPT_TIMEOUT_MS
+      ),
+    };
+    try {
+      if (
+        await store.markSubmissionFailure(
+          identity,
+          leaseToken,
+          input,
+          operation
+        )
+      ) {
+        return true;
+      }
+    } catch (error) {
+      if (!isTransientTaskStoreError(error)) throw error;
+      lastTransientError = error;
+    }
+
+    if (deadlineAtMs <= Date.now()) break;
+    try {
+      // 使用失败发生时刻读回，避免“确认写入”本身抢到下一次 provider lease。
+      const state = await store.claim(identity, {
+        deadlineAtMs: Math.min(
+          deadlineAtMs,
+          Date.now() + MEDIA_TASK_LEDGER_ATTEMPT_TIMEOUT_MS
+        ),
+        nowMs: verificationNowMs,
+      });
+      if (
+        state.action === "ready" ||
+        (state.lastErrorReason === expectedReason &&
+          (state.action === "wait" || state.action === "blocked"))
+      ) {
+        return true;
+      }
+    } catch (error) {
+      if (!isTransientTaskStoreError(error)) throw error;
+      lastTransientError = error;
+    }
+
+    if (
+      attempt < 2 &&
+      deadlineAtMs - Date.now() > MEDIA_TASK_LEDGER_RETRY_DELAY_MS
+    ) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, MEDIA_TASK_LEDGER_RETRY_DELAY_MS)
+      );
+    }
+  }
+
+  if (lastTransientError) throw lastTransientError;
+  return false;
+}
+
 function resolveVivoImageUrl(baseUrl: string, path: string) {
   return new URL(path, `${baseUrl.replace(/\/+$/u, "")}/`);
 }
@@ -741,7 +853,9 @@ async function completeStoryMediaLocally(input: {
       : orderedScenes(story, prioritySceneIndices).filter((scene) => !isRealImageScene(scene)).slice(0, effectiveImageBatchSize)
     : [];
   const audioCandidates = audioLiveEnabled
-    ? orderedScenes(story, prioritySceneIndices).filter((scene) => !isRealAudioScene(scene)).slice(0, audioConcurrency)
+    ? orderedScenes(story, prioritySceneIndices).filter(
+        (scene) => !isRealAudioScene(scene)
+      )
     : [];
 
   let imageTasks: Array<Promise<void>> = [];
@@ -776,6 +890,7 @@ async function completeStoryMediaLocally(input: {
             mediaKey: claim.mediaKey,
             allowPersistent: input.persistMedia,
             bypassCache: input.persistMedia,
+            authorizedChildIds: new Set([story.childId]),
             deadlineAtMs,
             signal: input.signal,
           });
@@ -861,17 +976,20 @@ async function completeStoryMediaLocally(input: {
             error.retryable &&
             claim.attemptCount < 2;
           try {
-            const marked = await mediaTaskStore!.markSubmissionFailure(
-              identity,
-              claim.leaseToken,
-              {
-                retryable,
-                nextRetryAtMs:
-                  Date.now() + resolveImageRetryBackoffMs(reason),
-                reason,
-              },
-              createMediaTaskCommitOperation(responseDeadlineAtMs)
-            );
+            const marked =
+              await markMediaTaskSubmissionFailureWithVerification(
+                mediaTaskStore!,
+                identity,
+                claim.leaseToken,
+                {
+                  retryable,
+                  nextRetryAtMs:
+                    Date.now() + resolveImageRetryBackoffMs(reason),
+                  reason,
+                },
+                createMediaTaskCommitOperation(responseDeadlineAtMs)
+                  .deadlineAtMs
+              );
             if (!retryable || !marked) {
               blockedImageSceneIndices.add(scene.sceneIndex);
             }
@@ -1117,9 +1235,9 @@ async function completeStoryMediaLocally(input: {
     ];
   }
 
-  const audioTasks = audioCandidates.map(async (scene) => {
+  const processAudioCandidate = async (scene: ParentStoryBookScene) => {
     const index = scenesByIndex.get(scene.sceneIndex);
-    if (typeof index !== "number") return;
+    if (typeof index !== "number") return "skip" as const;
     const currentScene = story.scenes[index];
     const identity = buildStoryMediaTaskIdentity({
       institutionId: input.institutionId,
@@ -1150,6 +1268,7 @@ async function completeStoryMediaLocally(input: {
           mediaKey: expectedPersistentMediaKey,
           allowPersistent: true,
           bypassCache: true,
+          authorizedChildIds: new Set([story.childId]),
           deadlineAtMs,
           signal: input.signal,
         });
@@ -1181,12 +1300,12 @@ async function completeStoryMediaLocally(input: {
             audioProvider: "vivo-story-tts",
             audioCacheHit: true,
           };
-          return;
+          return "skip" as const;
         }
       } catch (error) {
         audioErrorCount += 1;
         lastAudioError = normalizeErrorReason(error);
-        return;
+        return "occupied" as const;
       }
     }
     let claim: StorybookMediaTaskClaim;
@@ -1195,7 +1314,30 @@ async function completeStoryMediaLocally(input: {
     } catch (error) {
       audioErrorCount += 1;
       lastAudioError = normalizeErrorReason(error);
-      return;
+      return "occupied" as const;
+    }
+    if (
+      claim.action === "blocked" &&
+      input.payload.retryFailed === true &&
+      claim.lastErrorReason &&
+      isRecoverableParentStoryBookBlockedPersistenceReason(
+        claim.lastErrorReason
+      ) &&
+      mediaTaskStore!.retryBlockedSubmission
+    ) {
+      try {
+        const reopened = await mediaTaskStore!.retryBlockedSubmission(
+          identity,
+          operation
+        );
+        if (reopened) {
+          claim = await mediaTaskStore!.claim(identity, operation);
+        }
+      } catch (error) {
+        audioErrorCount += 1;
+        lastAudioError = normalizeErrorReason(error);
+        return "occupied" as const;
+      }
     }
 
     if (claim.action === "ready" && claim.mediaKey) {
@@ -1205,6 +1347,7 @@ async function completeStoryMediaLocally(input: {
           mediaKey: claim.mediaKey,
           allowPersistent: input.persistMedia,
           bypassCache: input.persistMedia,
+          authorizedChildIds: new Set([story.childId]),
           deadlineAtMs,
           signal: input.signal,
         });
@@ -1223,7 +1366,7 @@ async function completeStoryMediaLocally(input: {
           blockedAudioSceneIndices.add(scene.sceneIndex);
           lastAudioError =
             "persistent story audio is missing or has the wrong scope";
-          return;
+          return "skip" as const;
         }
         const audioUrl = `/api/ai/parent-storybook/media/${claim.mediaKey}`;
         story.scenes[index] = {
@@ -1238,7 +1381,7 @@ async function completeStoryMediaLocally(input: {
         audioErrorCount += 1;
         lastAudioError = normalizeErrorReason(error);
       }
-      return;
+      return "skip" as const;
     }
     if (claim.action === "blocked") {
       blockedAudioSceneIndices.add(scene.sceneIndex);
@@ -1246,12 +1389,18 @@ async function completeStoryMediaLocally(input: {
       lastAudioError =
         claim.lastErrorReason ??
         "storybook audio retry budget is exhausted";
-      return;
+      return "skip" as const;
     }
-    if (claim.action !== "submit" || !claim.leaseToken) {
-      return;
+    if (claim.action !== "submit") {
+      return claim.action === "wait"
+        ? ("occupied" as const)
+        : ("skip" as const);
+    }
+    if (!claim.leaseToken) {
+      return "occupied" as const;
     }
 
+    let ttsCompleted = false;
     try {
       const result = await requestVivoTts({
         text: currentScene.audioScript || currentScene.sceneText,
@@ -1262,6 +1411,7 @@ async function completeStoryMediaLocally(input: {
         deadlineAtMs,
         signal: input.signal,
       });
+      ttsCompleted = true;
       const mediaCommitOperation =
         createMediaTaskCommitOperation(responseDeadlineAtMs);
       const mediaPersistenceDeadlineAtMs =
@@ -1333,27 +1483,55 @@ async function completeStoryMediaLocally(input: {
         lastAudioError = `storybook audio ledger recovery deferred: ${normalizeErrorReason(error)}`;
       }
     } catch (error) {
-      blockedAudioSceneIndices.add(scene.sceneIndex);
       audioErrorCount += 1;
       const reason = normalizeErrorReason(error);
       lastAudioError = reason;
+      const retryablePersistenceFailure =
+        ttsCompleted &&
+        isRetryableParentStoryBookMediaPersistenceError(error) &&
+        canRetryStorybookMediaSubmission(
+          identity.channel,
+          claim.attemptCount
+        );
+      if (!retryablePersistenceFailure) {
+        blockedAudioSceneIndices.add(scene.sceneIndex);
+      }
       try {
-        await mediaTaskStore!.markSubmissionFailure(
+        const marked = await markMediaTaskSubmissionFailureWithVerification(
+          mediaTaskStore!,
           identity,
           claim.leaseToken,
           {
-            // 同一场景的同步 TTS 只允许一次付费调用。
-            retryable: false,
-            nextRetryAtMs: Date.now() + VIVO_AUDIO_ERROR_BACKOFF_MS,
+            // provider 本身失败仍保持一次调用；只有拿到真实字节后的瞬时存储故障才允许一次受控重试。
+            retryable: retryablePersistenceFailure,
+            nextRetryAtMs:
+              Date.now() +
+              (retryablePersistenceFailure
+                ? MEDIA_PERSISTENCE_RETRY_BACKOFF_MS
+                : VIVO_AUDIO_ERROR_BACKOFF_MS),
             reason,
           },
-          createMediaTaskCommitOperation(responseDeadlineAtMs)
+          createMediaTaskCommitOperation(responseDeadlineAtMs).deadlineAtMs
         );
+        if (!marked) {
+          blockedAudioSceneIndices.add(scene.sceneIndex);
+          lastAudioError = `${reason}; task store outcome could not be committed`;
+        }
       } catch (storeError) {
         lastAudioError = `${reason}; task store: ${normalizeErrorReason(storeError)}`;
       }
     }
-  });
+    return "submitted" as const;
+  };
+
+  const audioTasks = [
+    // blocked / ready / wait 只更新当前场景状态，不应占用本轮真正的 TTS 并发槽。
+    runStoryAudioCandidateQueue(
+      audioCandidates,
+      audioConcurrency,
+      processAudioCandidate
+    ).then(() => undefined),
+  ];
 
   await Promise.all([...imageTasks, ...audioTasks]);
 
@@ -1524,9 +1702,13 @@ export const parentStoryBookMediaStatusRouteInternals = {
   resolveMediaStatusTimeoutMs,
   resolveLocalProviderTimeoutMs,
   resolveAudioConcurrency,
+  runStoryAudioCandidateQueue,
   buildStoryMediaTaskIdentity,
   buildStoryAudioMediaSeed,
+  isRecoverableParentStoryBookBlockedPersistenceReason,
+  isRetryableParentStoryBookMediaPersistenceError,
   markMediaTaskReadyWithVerification,
+  markMediaTaskSubmissionFailureWithVerification,
   localDeadlineMs: MEDIA_STATUS_LOCAL_DEADLINE_MS,
   responseDeadlineMs: MEDIA_STATUS_RESPONSE_DEADLINE_MS,
   commitBudgetMs: MEDIA_TASK_COMMIT_BUDGET_MS,

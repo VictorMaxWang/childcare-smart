@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {
+  BlobRequestAbortedError,
+  BlobServiceNotAvailable,
+  BlobServiceRateLimited,
+} from "@vercel/blob";
 
 import {
   parentStoryBookCacheInternals,
   readCachedParentStoryBookMedia,
 } from "./parent-storybook-cache.ts";
+import { UploadSecurityError } from "./upload-security.ts";
 import {
   buildParentStoryBookPersistentMediaKey,
+  isRetryableParentStoryBookMediaPersistenceError,
   persistParentStoryBookMedia,
   readParentStoryBookMedia,
 } from "./parent-storybook-media-store.ts";
@@ -498,4 +505,243 @@ test("persistent media keys are stable for one scoped scene and isolated by inst
 
   assert.equal(first, replay);
   assert.notEqual(first, otherInstitution);
+});
+
+test("configured private Blob is the primary durable storybook media store", async () => {
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+  const bytes = Buffer.from("private-blob-audio");
+  let databaseWrites = 0;
+  let objectWrites = 0;
+
+  const persisted = await persistParentStoryBookMedia(
+    {
+      institutionId: "institution-blob",
+      childId: "child-blob",
+      storybookId: "story-blob",
+      contentType: "audio/wav",
+      bytes,
+      seed: "story-blob:scene-1",
+      deadlineAtMs: Date.now() + 5_000,
+    },
+    {
+      objectStorageConfigured: () => true,
+      persistObject: async (input) => {
+        objectWrites += 1;
+        assert.equal(input.institutionId, "institution-blob");
+        assert.deepEqual(input.bytes, bytes);
+        return {
+          childId: input.childId,
+          storybookId: input.storybookId,
+          contentType: input.contentType,
+          bytes: input.bytes,
+        };
+      },
+      upsertPersistent: async () => {
+        databaseWrites += 1;
+      },
+    }
+  );
+
+  assert.equal(objectWrites, 1);
+  assert.equal(databaseWrites, 0);
+  assert.equal(
+    readCachedParentStoryBookMedia(persisted.mediaKey)?.storageMode,
+    "private_blob"
+  );
+});
+
+test("cold storybook media reads prefer private Blob and preserve owner scope", async () => {
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+  const bytes = Buffer.from("private-blob-cold-read");
+  let databaseReads = 0;
+
+  const asset = await readParentStoryBookMedia(
+    {
+      institutionId: "institution-blob",
+      mediaKey: "e".repeat(40),
+      bypassCache: true,
+      deadlineAtMs: Date.now() + 5_000,
+    },
+    {
+      objectStorageConfigured: () => true,
+      readObject: async () => ({
+        childId: "child-blob",
+        storybookId: "story-blob",
+        contentType: "audio/wav",
+        bytes,
+      }),
+      readPersistent: async () => {
+        databaseReads += 1;
+        return null;
+      },
+    }
+  );
+
+  assert.equal(databaseReads, 0);
+  assert.equal(asset?.storageMode, "private_blob");
+  assert.equal(asset?.ownerChildId, "child-blob");
+  assert.equal(asset?.ownerStorybookId, "story-blob");
+  assert.deepEqual(asset?.bytes, bytes);
+});
+
+test("a missing private Blob manifest falls back to legacy database media", async () => {
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+  let databaseReads = 0;
+
+  const asset = await readParentStoryBookMedia(
+    {
+      institutionId: "institution-legacy",
+      mediaKey: "f".repeat(40),
+      bypassCache: true,
+      deadlineAtMs: Date.now() + 5_000,
+    },
+    {
+      objectStorageConfigured: () => true,
+      readObject: async () => null,
+      readPersistent: async () => {
+        databaseReads += 1;
+        return {
+          childId: "child-legacy",
+          storybookId: "story-legacy",
+          contentType: "image/webp",
+          bytes: Buffer.from("legacy-database-image"),
+        };
+      },
+    }
+  );
+
+  assert.equal(databaseReads, 1);
+  assert.equal(asset?.storageMode, "database_media");
+});
+
+test("real Vercel Blob transient error classes are retryable", () => {
+  assert.equal(
+    isRetryableParentStoryBookMediaPersistenceError(
+      new BlobServiceNotAvailable()
+    ),
+    true
+  );
+  assert.equal(
+    isRetryableParentStoryBookMediaPersistenceError(
+      new BlobServiceRateLimited(1)
+    ),
+    true
+  );
+  assert.equal(
+    isRetryableParentStoryBookMediaPersistenceError(
+      new BlobRequestAbortedError()
+    ),
+    true
+  );
+  assert.equal(
+    isRetryableParentStoryBookMediaPersistenceError(
+      new Error("storybook blob media could not be read", {
+        cause: new BlobRequestAbortedError(),
+      })
+    ),
+    true
+  );
+});
+
+test("private Blob cannot consume the database fallback budget", async () => {
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+  const totalDeadlineAtMs = Date.now() + 1_500;
+  let objectDeadlineAtMs = 0;
+  let databaseWrites = 0;
+
+  const persisted = await persistParentStoryBookMedia(
+    {
+      institutionId: "institution-fallback",
+      childId: "child-fallback",
+      storybookId: "story-fallback",
+      contentType: "audio/wav",
+      bytes: Buffer.from("RIFF-fallback-WAVE"),
+      seed: "story-fallback:scene-1",
+      deadlineAtMs: totalDeadlineAtMs,
+    },
+    {
+      objectStorageConfigured: () => true,
+      persistObject: async (input) => {
+        objectDeadlineAtMs = input.deadlineAtMs;
+        await new Promise((resolve) =>
+          setTimeout(
+            resolve,
+            Math.max(1, input.deadlineAtMs - Date.now() + 10)
+          )
+        );
+        throw new Error("storybook blob media could not be read", {
+          cause: new UploadSecurityError(400, "上传请求正文读取失败。", {
+            cause: new BlobRequestAbortedError(),
+          }),
+        });
+      },
+      upsertPersistent: async () => {
+        databaseWrites += 1;
+      },
+    }
+  );
+
+  assert.ok(objectDeadlineAtMs < totalDeadlineAtMs - 750);
+  assert.equal(databaseWrites, 1);
+  assert.equal(
+    readCachedParentStoryBookMedia(persisted.mediaKey)?.storageMode,
+    "database_media"
+  );
+});
+
+test("authorized child scope is enforced before Blob or database media is returned", async () => {
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+  const authorizedChildIds = new Set(["child-visible"]);
+  let databaseReads = 0;
+
+  const objectAsset = await readParentStoryBookMedia(
+    {
+      institutionId: "institution-scope",
+      mediaKey: "1".repeat(40),
+      bypassCache: true,
+      authorizedChildIds,
+      deadlineAtMs: Date.now() + 5_000,
+    },
+    {
+      objectStorageConfigured: () => true,
+      readObject: async (input) => {
+        assert.equal(input.authorizedChildIds, authorizedChildIds);
+        return {
+          childId: "child-hidden",
+          storybookId: "story-hidden",
+          contentType: "image/webp",
+          bytes: Buffer.from("hidden-object"),
+        };
+      },
+      readPersistent: async () => {
+        databaseReads += 1;
+        return null;
+      },
+    }
+  );
+  assert.equal(objectAsset, null);
+  assert.equal(databaseReads, 0);
+
+  const databaseAsset = await readParentStoryBookMedia(
+    {
+      institutionId: "institution-scope",
+      mediaKey: "2".repeat(40),
+      bypassCache: true,
+      authorizedChildIds,
+      deadlineAtMs: Date.now() + 5_000,
+    },
+    {
+      objectStorageConfigured: () => false,
+      readPersistent: async (input) => {
+        assert.deepEqual(input.authorizedChildIds, ["child-visible"]);
+        return {
+          childId: "child-hidden",
+          storybookId: "story-hidden",
+          contentType: "audio/wav",
+          bytes: Buffer.from("hidden-database"),
+        };
+      },
+    }
+  );
+  assert.equal(databaseAsset, null);
 });

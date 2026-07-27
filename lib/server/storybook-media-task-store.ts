@@ -23,11 +23,18 @@ const CHANNEL_PROVIDER = {
 } as const;
 const MAX_ATTEMPTS = {
   image: 2,
-  // 同步 TTS 没有可恢复 task id，失败后自动重试可能重复计费。
-  audio: 1,
+  // provider 失败仍只调用一次；稳定 key 找回失败且媒体持久化瞬时失败时，最多再合成一次。
+  audio: 2,
 } as const;
 
 export type StorybookMediaTaskChannel = keyof typeof CHANNEL_PROVIDER;
+
+export function canRetryStorybookMediaSubmission(
+  channel: StorybookMediaTaskChannel,
+  attemptCount: number
+) {
+  return attemptCount < MAX_ATTEMPTS[channel];
+}
 
 export interface StorybookMediaTaskIdentity {
   institutionId: string;
@@ -85,6 +92,10 @@ export interface StorybookMediaTaskStore {
       nextRetryAtMs: number;
       reason: string;
     },
+    operation?: StorybookMediaTaskOperation
+  ): Promise<boolean>;
+  retryBlockedSubmission?(
+    identity: StorybookMediaTaskIdentity,
     operation?: StorybookMediaTaskOperation
   ): Promise<boolean>;
   markPending(
@@ -652,7 +663,10 @@ export class InMemoryStorybookMediaTaskStore
     }
     const retryable =
       input.retryable &&
-      current.attemptCount < MAX_ATTEMPTS[identity.channel];
+      canRetryStorybookMediaSubmission(
+        identity.channel,
+        current.attemptCount
+      );
     this.tasks.set(key, {
       ...current,
       status: retryable ? "retryable" : "blocked",
@@ -660,6 +674,35 @@ export class InMemoryStorybookMediaTaskStore
       leaseExpiresAtMs: null,
       nextRetryAtMs: retryable ? input.nextRetryAtMs : null,
       lastErrorReason: safeErrorReason(input.reason),
+    });
+    return true;
+  }
+
+  async retryBlockedSubmission(
+    identity: StorybookMediaTaskIdentity,
+    operation: StorybookMediaTaskOperation = {}
+  ) {
+    assertOperationActive(operation);
+    const key = taskKey(identity);
+    const current = this.tasks.get(key);
+    if (
+      !current ||
+      current.status !== "blocked" ||
+      current.taskId ||
+      !canRetryStorybookMediaSubmission(
+        identity.channel,
+        current.attemptCount
+      )
+    ) {
+      return false;
+    }
+    const nowMs = resolveNow(operation);
+    this.tasks.set(key, {
+      ...current,
+      status: "retryable",
+      leaseToken: null,
+      leaseExpiresAtMs: null,
+      nextRetryAtMs: nowMs,
     });
     return true;
   }
@@ -1216,6 +1259,36 @@ export class DatabaseStorybookMediaTaskStore
         safeErrorReason(input.reason),
         taskKey(identity),
         leaseToken,
+      ],
+      operation
+    );
+    return (resultRaw as ResultSetHeader).affectedRows === 1;
+  }
+
+  async retryBlockedSubmission(
+    identity: StorybookMediaTaskIdentity,
+    operation: StorybookMediaTaskOperation = {}
+  ) {
+    await this.ensureTable(operation);
+    const nowMs = resolveNow(operation);
+    const [resultRaw] = await executeWithBudget(
+      this.pool,
+      `
+        update storybook_media_tasks
+        set
+          status = 'retryable',
+          next_retry_at = ?,
+          lease_token = null,
+          lease_expires_at = null
+        where task_key = ?
+          and status = 'blocked'
+          and task_id is null
+          and attempt_count < ?
+      `,
+      [
+        new Date(nowMs),
+        taskKey(identity),
+        MAX_ATTEMPTS[identity.channel],
       ],
       operation
     );

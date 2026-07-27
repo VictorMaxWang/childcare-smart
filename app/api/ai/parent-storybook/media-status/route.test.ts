@@ -123,15 +123,20 @@ test("media status budgets stay below the browser polling deadline", async () =>
       );
       assert.equal(
         parentStoryBookMediaStatusRouteInternals.commitBudgetMs,
-        16_000
+        30_000
       );
       assert.equal(
         parentStoryBookMediaStatusRouteInternals.finalizeReserveMs,
         5_000
       );
       assert.ok(
+        parentStoryBookMediaStatusRouteInternals.commitBudgetMs +
+          parentStoryBookMediaStatusRouteInternals.finalizeReserveMs <
+          parentStoryBookMediaStatusRouteInternals.responseDeadlineMs
+      );
+      assert.ok(
         parentStoryBookMediaStatusRouteInternals.localDeadlineMs +
-          parentStoryBookMediaStatusRouteInternals.commitBudgetMs <
+          parentStoryBookMediaStatusRouteInternals.finalizeReserveMs <
           parentStoryBookMediaStatusRouteInternals.responseDeadlineMs
       );
     }
@@ -151,6 +156,58 @@ test("storybook TTS defaults to one paid synthesis at a time", async () => {
       4
     );
   });
+});
+
+test("blocked audio scenes do not consume the next real TTS submission slot", async () => {
+  const visited: number[] = [];
+  const result =
+    await parentStoryBookMediaStatusRouteInternals.runStoryAudioCandidateQueue(
+      [1, 2, 3],
+      1,
+      async (sceneIndex) => {
+        visited.push(sceneIndex);
+        return sceneIndex === 2 ? "submitted" : "skip";
+      }
+    );
+
+  assert.deepEqual(visited, [1, 2]);
+  assert.equal(result.consumedProviderSlots, 1);
+  assert.equal(result.visitedCandidates, 2);
+});
+
+test("audio candidate queue preserves configured parallel provider slots", async () => {
+  const submitted = new Set<number>();
+  const result =
+    await parentStoryBookMediaStatusRouteInternals.runStoryAudioCandidateQueue(
+      [1, 2, 3],
+      2,
+      async (sceneIndex) => {
+        if (sceneIndex === 1) return "skip";
+        submitted.add(sceneIndex);
+        return "submitted";
+      }
+    );
+
+  assert.deepEqual([...submitted].sort(), [2, 3]);
+  assert.equal(result.consumedProviderSlots, 2);
+  assert.equal(result.visitedCandidates, 3);
+});
+
+test("an active audio wait occupies its configured cross-request TTS slot", async () => {
+  const visited: number[] = [];
+  const result =
+    await parentStoryBookMediaStatusRouteInternals.runStoryAudioCandidateQueue(
+      [1, 2],
+      1,
+      async (sceneIndex) => {
+        visited.push(sceneIndex);
+        return sceneIndex === 1 ? "occupied" : "submitted";
+      }
+    );
+
+  assert.deepEqual(visited, [1]);
+  assert.equal(result.consumedProviderSlots, 1);
+  assert.equal(result.submittedProviderCalls, 0);
 });
 
 test("storybook audio persistence key changes with the provider model", () => {
@@ -180,6 +237,45 @@ test("storybook audio persistence key changes with the provider model", () => {
     });
 
   assert.notEqual(firstSeed, nextSeed);
+});
+
+test("storybook audio retries transient persistence failures but not provider or integrity failures", () => {
+  assert.equal(
+    parentStoryBookMediaStatusRouteInternals.isRetryableParentStoryBookMediaPersistenceError(
+      new Error("storybook blob operation timed out")
+    ),
+    true
+  );
+  assert.equal(
+    parentStoryBookMediaStatusRouteInternals.isRetryableParentStoryBookMediaPersistenceError(
+      new Error("storybook media database query timed out")
+    ),
+    true
+  );
+  assert.equal(
+    parentStoryBookMediaStatusRouteInternals.isRetryableParentStoryBookMediaPersistenceError(
+      new Error("Vivo TTS provider rejected the request")
+    ),
+    false
+  );
+  assert.equal(
+    parentStoryBookMediaStatusRouteInternals.isRetryableParentStoryBookMediaPersistenceError(
+      new Error("storybook blob media digest does not match")
+    ),
+    false
+  );
+  assert.equal(
+    parentStoryBookMediaStatusRouteInternals.isRecoverableParentStoryBookBlockedPersistenceReason(
+      "storybook media database query timed out"
+    ),
+    true
+  );
+  assert.equal(
+    parentStoryBookMediaStatusRouteInternals.isRecoverableParentStoryBookBlockedPersistenceReason(
+      "vivo TTS request deadline exhausted"
+    ),
+    false
+  );
 });
 
 test("an ambiguous task-ready write is accepted only after ledger read-back", async () => {
@@ -230,6 +326,60 @@ test("an ambiguous task-ready write is accepted only after ledger read-back", as
   assert.equal(marked, true);
   assert.equal(markReadyCalls, 1);
   assert.equal(claimCalls, 1);
+});
+
+test("an ambiguous task-failure write is verified without claiming the next provider lease", async () => {
+  const story = buildProgressiveStory();
+  const identity =
+    parentStoryBookMediaStatusRouteInternals.buildStoryMediaTaskIdentity({
+      institutionId: "institution-1",
+      userId: "parent-1",
+      story,
+      scene: story.scenes[0],
+      channel: "audio",
+    });
+  const reason = "storybook media database query timed out";
+  const nextRetryAtMs = Date.now() + 5_000;
+  let observedNowMs = Number.POSITIVE_INFINITY;
+  const store = {
+    markSubmissionFailure: async () => {
+      throw new Error("storybook media task database query timed out");
+    },
+    claim: async (
+      _identity: typeof identity,
+      operation?: { nowMs?: number }
+    ) => {
+      observedNowMs = operation?.nowMs ?? Number.POSITIVE_INFINITY;
+      return {
+        action: "wait" as const,
+        leaseToken: null,
+        taskId: null,
+        submittedAtMs: null,
+        attemptCount: 1,
+        pollErrorCount: 0,
+        nextRetryAtMs,
+        mediaKey: null,
+        lastErrorReason: reason,
+      };
+    },
+  };
+
+  const marked =
+    await parentStoryBookMediaStatusRouteInternals
+      .markMediaTaskSubmissionFailureWithVerification(
+        store,
+        identity,
+        "lease-1",
+        {
+          retryable: true,
+          nextRetryAtMs,
+          reason,
+        },
+        Date.now() + 5_000
+      );
+
+  assert.equal(marked, true);
+  assert.ok(observedNowMs < nextRetryAtMs);
 });
 
 function buildProgressiveStory(): ParentStoryBookResponse {
@@ -992,6 +1142,88 @@ test("concurrent replay synthesizes each missing story audio scene once", async 
             /^\/api\/ai\/parent-storybook\/media\/[a-f0-9]{40}$/u
           );
         }
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const client of server.clients) client.terminate();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+test("concurrent polling honors one active TTS slot across requests", async () => {
+  const originalFetch = globalThis.fetch;
+  const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  let connectionCount = 0;
+  let activeConnections = 0;
+  let peakActiveConnections = 0;
+  server.on("connection", (socket) => {
+    connectionCount += 1;
+    activeConnections += 1;
+    peakActiveConnections = Math.max(
+      peakActiveConnections,
+      activeConnections
+    );
+    socket.once("close", () => {
+      activeConnections -= 1;
+    });
+    socket.once("message", () => {
+      setTimeout(() => {
+        socket.send(
+          JSON.stringify({
+            error_code: 0,
+            data: {
+              audio: Buffer.from([0, 0, 1, 0]).toString("base64"),
+              status: 2,
+            },
+          })
+        );
+      }, 80);
+    });
+  });
+
+  const story = buildProgressiveStory();
+  story.providerMeta.imageDelivery = "real";
+  story.providerMeta.audioDelivery = "preview-only";
+  story.scenes = story.scenes.map((scene) => ({
+    ...scene,
+    imageUrl: `https://cdn.example.com/story-${scene.sceneIndex}.png`,
+    assetRef: `https://cdn.example.com/story-${scene.sceneIndex}.png`,
+    imageStatus: "ready" as const,
+    imageSourceKind: "real" as const,
+    imageProvider: "vivo-story-image",
+    audioUrl: null,
+    audioRef: null,
+    audioStatus: "fallback" as const,
+    audioProvider: null,
+  }));
+  globalThis.fetch = (async () => {
+    throw new Error("ready images and local TTS must not use HTTP upstreams");
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        VIVO_APP_ID: "test-app-id",
+        VIVO_APP_KEY: "test-app-key",
+        VIVO_BASE_URL: `http://127.0.0.1:${address.port}`,
+        STORYBOOK_TTS_CONCURRENCY: "1",
+      },
+      async () => {
+        const payload = buildMediaStatusPayload({ story });
+        const responses = await Promise.all([
+          POST(buildMediaStatusRouteRequest(payload)),
+          POST(buildMediaStatusRouteRequest(payload)),
+        ]);
+        assert.deepEqual(
+          responses.map((response) => response.status),
+          [200, 200]
+        );
+        assert.equal(connectionCount, 1);
+        assert.equal(peakActiveConnections, 1);
       }
     );
   } finally {

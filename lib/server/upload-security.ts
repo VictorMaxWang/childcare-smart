@@ -25,8 +25,12 @@ const MIME_TYPE_ALIASES = new Map([
 export class UploadSecurityError extends Error {
   readonly status: 400 | 413 | 415;
 
-  constructor(status: 400 | 413 | 415, message: string) {
-    super(message);
+  constructor(
+    status: 400 | 413 | 415,
+    message: string,
+    options?: ErrorOptions
+  ) {
+    super(message, options);
     this.name = "UploadSecurityError";
     this.status = status;
   }
@@ -232,7 +236,10 @@ export async function readStreamWithByteLimit(
     }
   } catch (error) {
     if (error instanceof UploadSecurityError) throw error;
-    throw new UploadSecurityError(400, "上传请求正文读取失败。");
+    // 对外只保留安全消息，内部 cause 用于区分可重试网络中断与非法请求。
+    throw new UploadSecurityError(400, "上传请求正文读取失败。", {
+      cause: error,
+    });
   } finally {
     reader.releaseLock();
   }
