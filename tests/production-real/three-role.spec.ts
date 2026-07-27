@@ -148,6 +148,18 @@ async function postWithTransientNetworkRetry(
   throw lastError;
 }
 
+function getWithTransientNetworkRetry(
+  api: APIRequestContext,
+  url: string,
+  options: Parameters<APIRequestContext["get"]>[1] = {}
+) {
+  return api.get(url, {
+    ...options,
+    // Playwright 仅对 ECONNRESET 使用该选项，不会按 HTTP 状态重放请求。
+    maxRetries: Math.max(options.maxRetries ?? 0, 2),
+  });
+}
+
 async function register(
   api: APIRequestContext,
   role: "admin" | "teacher" | "parent",
@@ -176,7 +188,10 @@ async function getSession(
 ) {
   let lastDiagnostic: Record<string, unknown> = {};
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    const response = await api.get("/api/auth/session");
+    const response = await getWithTransientNetworkRetry(
+      api,
+      "/api/auth/session"
+    );
     const body = await readJson(response);
     lastDiagnostic = {
       expectedRole,
@@ -216,7 +231,7 @@ async function getSession(
 }
 
 async function getState(api: APIRequestContext) {
-  const response = await api.get("/api/state");
+  const response = await getWithTransientNetworkRetry(api, "/api/state");
   expect(response.status()).toBe(200);
   const body = await readJson(response);
   expect(body?.ok).toBe(true);
@@ -582,7 +597,7 @@ async function verifyDietAndStorybookAi(
       expect(imageUrl).toMatch(
         /^\/api\/ai\/parent-storybook\/media\/[a-f0-9]{40}$/u
       );
-      const imageResponse = await parent.get(imageUrl, {
+      const imageResponse = await getWithTransientNetworkRetry(parent, imageUrl, {
         headers: {
           "x-smartchildcare-require-database": "1",
         },
@@ -602,7 +617,7 @@ async function verifyDietAndStorybookAi(
       expect(audioUrl, "storybook scene must have audio media").toMatch(
         /^\/api\/ai\/parent-storybook\/media\/[a-f0-9]{40}$/u
       );
-      const audioResponse = await parent.get(audioUrl, {
+      const audioResponse = await getWithTransientNetworkRetry(parent, audioUrl, {
         headers: {
           "x-smartchildcare-require-database": "1",
         },
@@ -747,7 +762,8 @@ test("existing real admin, teacher, and parent share records and AI", async ({
 
     for (const api of [parent, admin]) {
       const records = await expectEnvelope<Array<Record<string, unknown>>>(
-        await api.get(
+        await getWithTransientNetworkRetry(
+          api,
           `/api/records?type=health&childId=${encodeURIComponent(child!.id)}&includeArchived=1`
         )
       );
@@ -984,7 +1000,8 @@ test("fresh real trio completes binding, media, voice, consultation, and AI", as
     const adminConsultations = await expectEnvelope<
       Array<Record<string, unknown>>
     >(
-      await admin.get(
+      await getWithTransientNetworkRetry(
+        admin,
         `/api/consultations?childId=${encodeURIComponent(child.id)}`
       )
     );
@@ -1023,7 +1040,10 @@ test("fresh real trio completes binding, media, voice, consultation, and AI", as
     expect(growthAttachment.downloadUrl).toContain(
       `/api/attachments/${growthAttachment.attachmentId}/content`
     );
-    const attachmentContent = await parent.get(growthAttachment.downloadUrl!);
+    const attachmentContent = await getWithTransientNetworkRetry(
+      parent,
+      growthAttachment.downloadUrl!
+    );
     expect(attachmentContent.status()).toBe(200);
     expect((await attachmentContent.body()).byteLength).toBeGreaterThan(100);
 
@@ -1181,14 +1201,18 @@ test("fresh real trio completes binding, media, voice, consultation, and AI", as
     for (const api of [parent, admin]) {
       for (const type of ["health", "meal", "growth"]) {
         const records = await expectEnvelope<Array<Record<string, unknown>>>(
-          await api.get(
+          await getWithTransientNetworkRetry(
+            api,
             `/api/records?type=${type}&childId=${encodeURIComponent(child.id)}&includeArchived=1`
           )
         );
         expect(JSON.stringify(records)).toContain(marker);
       }
       const messages = await expectEnvelope<Array<Record<string, unknown>>>(
-        await api.get(`/api/messages?childId=${encodeURIComponent(child.id)}`)
+        await getWithTransientNetworkRetry(
+          api,
+          `/api/messages?childId=${encodeURIComponent(child.id)}`
+        )
       );
       expect(JSON.stringify(messages)).toContain(marker);
     }
