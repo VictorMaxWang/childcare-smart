@@ -1,506 +1,640 @@
-# SmartChildcare Agent
+# 慧育童行 - SmartChildcare Agent
 
-> 面向托育场景的多角色、多智能体、移动端优先协同决策系统。  
-> 它的核心目标不是生成一段回答，而是把教师记录、风险会诊、园长承接、家长执行与反馈回流，组织成持续工作的智能闭环。
+> 面向托育场景的多角色、多智能体、移动端优先闭环决策系统。
 
-中文展示名：`慧育童行`；英文名 / 技术系统名：`SmartChildcare Agent`。比赛材料统一使用 `慧育童行 - SmartChildcare Agent`。
+慧育童行把教师记录、AI 会诊、园长决策、家长理解与执行反馈组织成一条可演示、可复验、可继续生产化的托育协作链路。系统不以“再做一个聊天框”为目标，而是让观察、判断、行动、反馈与下一轮决策能够持续衔接。
 
-![SmartChildcare Agent 系统总架构](./docs/assets/readme-system-architecture.png)
+<p align="center">
+  <a href="https://www.smartchildcare.cn">在线站点</a> ·
+  <a href="https://www.smartchildcare.cn/api/health">生产健康接口</a> ·
+  <a href="./public/demo/huiyu-tongxing.pdf">系统导览 PDF</a> ·
+  <a href="./docs/current-status-ledger.md">当前状态账本</a> ·
+  <a href="./docs/competition-message-guide.md">统一展示口径</a>
+</p>
 
-## 项目价值与问题定义
+![慧育童行三端核心能力总览](./public/demo/system-tour/v3/display/page-08.webp)
 
-托育场景真正困难的部分，从来不是“有没有数据”，而是**数据能否进入连续判断与行动闭环**。
+> 上图与文末绘本图片均为仓库内的 demo-safe 展示素材，不是真实儿童或真实机构业务数据。
 
-在真实机构里，问题通常出现在以下几处：
+## 目录
 
-- 教师观察高度碎片化，很多高价值现场信息来不及形成结构化记录。
-- 家园沟通容易停留在单次通知，缺少围绕同一儿童、同一问题的连续协作。
-- 风险判断和机构承接经常断层，个体问题难以及时升级到园长视角。
-- 家长执行之后，反馈往往难以稳定回流，导致系统下一轮判断仍然像“第一次见面”。
-- 普通后台系统擅长记账，普通聊天式 AI 擅长回答，但都不足以支撑托育现场需要的持续判断、分层协同与后续追踪。
+- [一分钟了解项目](#一分钟了解项目)
+- [当前状态](#当前状态)
+- [核心业务闭环](#核心业务闭环)
+- [三角色能力](#三角色能力)
+- [真实账号与机构绑定](#真实账号与机构绑定)
+- [系统架构](#系统架构)
+- [安全与可信边界](#安全与可信边界)
+- [技术栈](#技术栈)
+- [仓库结构](#仓库结构)
+- [本地快速启动](#本地快速启动)
+- [环境变量](#环境变量)
+- [数据库准备](#数据库准备)
+- [测试与发布门禁](#测试与发布门禁)
+- [部署说明](#部署说明)
+- [演示路线与素材](#演示路线与素材)
+- [文档索引](#文档索引)
+- [已知边界](#已知边界)
 
-SmartChildcare Agent 聚焦的不是“再加一个 AI 功能”，而是把托育现场最关键的这条链路跑通：
+## 一分钟了解项目
 
-**教师记录 -> 系统理解 -> 风险会诊 -> 园长承接 -> 家长执行 -> 反馈回流 -> 下一轮判断**
+SmartChildcare Agent 围绕同一名儿童，把三类角色放进同一条工作流：
 
-这决定了它不是一个展示型聊天工具，也不是一个仅靠单次问答成立的产品，而是一套面向真实协同关系设计的系统。
+- 教师负责捕捉晨检、饮食、成长、语音观察和现场风险信号。
+- 系统把碎片输入整理为结构化记录、会诊证据、干预卡、任务和周报。
+- 园长承接机构级风险优先级、决策、派单、质量治理和复盘。
+- 家长接收易理解的趋势解释、今晚行动和成长绘本，并提交结构化反馈。
+- 反馈重新进入儿童画像、状态快照、会诊和周报，成为下一轮判断的上下文。
 
-## 项目整体定位
+项目的核心差异不是某个单独的 AI 页面，而是四个工程事实：
 
-SmartChildcare Agent 是一套围绕教师、园长、家长三类角色协同运行的托育智能体系统。  
-它的价值，不在于某一个页面“看起来像 AI”，而在于系统内部已经形成了明确的角色入口、工作流编排、记忆回流与结构化承接关系。
+1. **多角色协同**：Teacher、Admin、Parent 各自拥有与职责匹配的工作台和权限边界。
+2. **结构化承接**：AI 输出被收敛为证据、行动、任务、周报、媒体和反馈，而不是只保留自由文本。
+3. **连续记忆**：儿童画像、状态快照、轨迹和反馈支撑连续判断。
+4. **可验证边界**：live provider、规则降级、demo 数据和正式发布证据被明确区分。
 
-从系统定位上看，它具备五个明确特征：
+## 当前状态
 
-- `Multi-Agent`：理解、会诊、建议、治理与反馈消费不是单一问答，而是可分工的工作流。
-- `Mobile-first`：交互优先服务竖屏、单屏、短链路任务，不把复杂流程强行堆成桌面报表。
-- `Memory-driven`：儿童画像、状态快照、会诊轨迹与反馈信号构成连续判断底座。
-- `Structured decision-making`：输出草稿卡、证据链、干预卡、优先级板、趋势图和周报，而不是只输出一段长文本。
-- `Closed-loop collaboration`：教师、园长、家长围绕同一问题形成链式承接，而不是各看各的页面。
+更新基准：`2026-07-28`
 
-## 为什么它不是“聊天框外挂”
+| 范围 | 当前结论 | 证据入口 |
+| --- | --- | --- |
+| Web 生产站 | 在线；健康接口返回 `production`，并公开当前部署提交、部署 ID 及数据库、认证、私有媒体、DashScope 配置存在性 | [`/api/health`](https://www.smartchildcare.cn/api/health) |
+| 三角色生产业务链 | 现有账号与 fresh 账号两条真实浏览器链路已完成生产 smoke；园长、教师、家长业务写入、跨端读取和 live AI 主链均有通过记录 | [当前状态账本](./docs/current-status-ledger.md) |
+| 绘本媒体 | 最近一次生产 smoke 中，fresh 链路首 4 页图片与音频均完成 `private_blob` 冷读，并通过 WebP/WAV 文件魔数验证 | [任务账本](./docs/task-registry.md) |
+| 本地工程验证 | 最近一轮账本记录包含 lint、typecheck、production build、Node/Python 测试、发布脚本测试与浏览器回归 | [当前状态账本](./docs/current-status-ledger.md) |
+| 正式发布证明 | **尚未完成**。当前只可声明“生产业务与 live AI smoke 已通过”，不能声明 `productionValidated=true` | [发布门禁真实性](./docs/release/RELEASE_GATE_TRUTHFULNESS.md) |
+| 严格生产数据库证据 | 仍需在不暴露连接串的受控环境运行严格 `npm run db:check` 并生成新鲜签名证据 | [任务账本](./docs/task-registry.md) |
 
-这个项目之所以更接近一个完整系统，而不是一个叠加 AI 的页面组合，原因在于：
+生产健康接口是动态事实源。README 不冻结 deployment ID；需要判断当前线上版本时，请直接检查该接口返回的完整 `commitSha` 与 `deploymentId`。其中 capability 布尔值只表示关键配置是否存在，不代表数据库或 provider 的实时调用一定成功。
 
-- 角色入口不是共用同一聊天界面，而是围绕不同职责设计成教师、园长、家长三条主任务流。
-- AI 不只负责生成内容，还负责把输入组织成会诊、跟进、派单、周报和反馈等可执行对象。
-- 记忆不是用于“润色回答”，而是用于让下一轮判断真实消费上一轮观察与执行结果。
-- 家长侧不是信息展示终点，而是执行和反馈的正式输入端。
-- 园长侧不是报表终点，而是把个体问题上升为机构级优先级和治理动作的承接面。
-
-## 系统总图（PNG 版）
-
-上图用于首屏快速理解系统完整度，适合答辩展示、海报复用和 README 总览。  
-图中重点强调五层关系：
-
-- 角色入口层：教师、园长、家长三类核心用户。
-- 交互与桥接层：移动端页面、角色工作台、统一 AI 路由。
-- 智能体编排层：围绕 Teacher、会诊、Parent、周报与治理的工作流编排。
-- 记忆中枢：儿童画像、状态快照、轨迹与结构化反馈。
-- 输出层：草稿确认、证据链、干预卡、优先级板、趋势解释、微绘本与周报。
-
-这张 PNG 不是装饰图，而是对仓库当前真实系统关系的图像化整理。对应生成脚本位于：
-
-- `scripts/generate_readme_architecture_png.py`
-
-## 系统总架构
-
-```mermaid
-flowchart LR
-  subgraph A["角色入口层"]
-    T["Teacher 教师端"]
-    D["Admin 园长端"]
-    P["Parent 家长端"]
-  end
-
-  subgraph B["交互与桥接层"]
-    UI["移动端页面与结构化卡片"]
-    API["统一 AI 路由与角色工作台"]
-  end
-
-  subgraph C["智能体编排层"]
-    ORCH["FastAPI Orchestrator"]
-    AG["多智能体工作流与角色协同"]
-  end
-
-  subgraph M["记忆中枢"]
-    MEM["child_profile_memory"]
-    SNAP["state snapshots"]
-    TRACE["trace / evidence / feedback"]
-  end
-
-  subgraph O["结构化输出层"]
-    O1["草稿确认 / Teacher Copilot"]
-    O2["会诊结论 / 干预卡 / 优先级板"]
-    O3["趋势解释 / 微绘本 / 周报"]
-  end
-
-  T --> UI
-  D --> UI
-  P --> UI
-  UI --> API --> ORCH --> AG
-  ORCH <--> MEM
-  ORCH <--> SNAP
-  ORCH <--> TRACE
-  AG --> O1
-  AG --> O2
-  AG --> O3
-```
-
-从逻辑上看，系统可以分为五层：
-
-### 1. 角色入口层
-
-- 教师侧负责输入现场观察、确认草稿、发起跟进或会诊。
-- 园长侧负责机构级优先级、决策承接、派单和治理视角。
-- 家长侧负责理解趋势、执行家庭动作、查看成长故事并提交反馈。
-
-### 2. 交互与桥接层
-
-- 前端以移动端优先的角色页面和结构化卡片为主，不把复杂链路压成一条无限长聊天记录。
-- `Next.js` 路由层把前端交互统一收束到 `/api/ai/*` 能力入口。
-- 同一条角色链路可以在首页、工作台和专项页面之间跳转，而不需要重新组织上下文。
-
-### 3. 智能体编排层
-
-- `FastAPI Orchestrator` 负责把不同任务映射到 Teacher、会诊、Parent、周报、治理等具体服务。
-- 编排层的目标不是“调用模型”，而是把角色输入转换成稳定的结构化结果。
-- 高风险会诊、家长趋势、微绘本、周报、治理指标都由编排层汇总上下文后产生结果。
-
-### 4. 记忆中枢
-
-- `child_profile_memory` 沉淀长期画像。
-- `agent_state_snapshots` 沉淀各轮关键阶段结果。
-- `agent_trace_log` 与证据链保留判断过程与来源线索。
-- 结构化反馈让家长执行结果重新进入趋势、会诊和周报链路。
-
-### 5. 结构化输出层
-
-- 教师看到的是草稿确认、Copilot 补全、跟进动作与沟通建议。
-- 园长看到的是风险优先级、证据链、决策卡、治理指标与运营周报。
-- 家长看到的是趋势解释、行动建议、微绘本、反馈表单与家庭周报。
-
-## 多角色闭环
+## 核心业务闭环
 
 ```mermaid
 flowchart LR
-  R1["教师记录<br/>语音速记 / OCR 草稿 / 现场观察"]
-  R2["系统理解<br/>草稿确认 / 风险识别 / 连续判断"]
-  R3["风险会诊<br/>多智能体分工 / 证据链 / 干预建议"]
-  R4["园长承接<br/>优先级排序 / 决策卡 / 派单"]
-  R5["家长执行<br/>趋势解释 / 今晚行动 / 微绘本"]
-  R6["反馈回流<br/>结构化反馈 / 提醒 / 周报复用"]
-  R7["下一轮判断<br/>复查 / 再会诊 / 连续观察"]
-
-  R1 --> R2 --> R3 --> R4 --> R5 --> R6 --> R7 --> R2
+  A["教师记录<br/>晨检、饮食、成长、语音与材料"] --> B["系统理解<br/>结构化草稿与可信作用域"]
+  B --> C["高风险会诊<br/>证据链、多智能体协作与干预卡"]
+  C --> D["园长承接<br/>优先级、决策、派单与治理"]
+  D --> E["家长执行<br/>趋势解释、今晚行动与成长绘本"]
+  E --> F["结构化反馈<br/>执行结果、孩子反应与困难"]
+  F --> G["记忆与快照<br/>画像、轨迹、周报与连续上下文"]
+  G --> B
 ```
 
-这条闭环是 README 的核心。  
-它意味着教师输入不是终点，家长反馈也不是终点；每一轮记录、解释、执行和回流，都会变成下一轮判断的输入。
+这条闭环决定了项目的设计原则：
 
-## 三条主展示主链
+- 观察不是终点，必须能够进入判断。
+- 判断不是终点，必须能够落成角色动作。
+- 家长接收不是终点，执行结果必须能够回流。
+- AI 结果不是天然可信事实，必须保留来源、作用域、质量与降级状态。
 
-### 1. Teacher 智能体主链
+## 三角色能力
 
-教师侧的目标不是增加填表负担，而是把“现场观察”尽快压缩为可确认、可跟进、可协作的结构化输入。
+### Teacher 教师端
 
-- 支持语音速记与 OCR 草稿，降低现场记录门槛。
-- 系统先完成理解与草稿化，再由教师确认，而不是要求教师先写完完整记录。
-- Teacher Copilot 会补充记录完善提示、30 秒 SOP 和家长沟通话术。
-- 同一工作区继续承接今日跟进行动、家长沟通建议与班级周报预览。
-- 教师侧不仅是输入入口，也是后续会诊和家长协作的起点。
+教师端强调低负担记录、快速确认和后续跟进。
+
+- 教师工作台、班级出勤、晨检、饮食、成长、待办和家园沟通概览。
+- 晨检、饮食、成长等业务记录的创建、更新、归档与跨端读取。
+- 语音理解、OCR/健康材料解析、结构化草稿和 Teacher Copilot。
+- 高风险会诊发起、SSE 阶段流、证据链、干预卡与 48 小时复查。
+- 全局搜索、通知、消息和账号菜单均读取当前登录作用域内的数据。
+
+主要入口：
+
+| 路由 | 用途 |
+| --- | --- |
+| `/teacher` | 教师工作台与记录入口 |
+| `/teacher/agent` | Teacher Agent、草稿确认与周报预览 |
+| `/teacher/high-risk-consultation` | 高风险会诊、证据链与干预建议 |
+| `/teacher/health-file-bridge` | 健康材料上传与解析入口 |
+| `/health`、`/diet`、`/growth` | 晨检、饮食与成长记录 |
+
+### Admin 园长端
+
+园长端强调机构级优先级、承接责任和质量治理。
+
+- 园所运营总览、风险优先级、会诊承接、决策卡和派单。
+- 教师管理、机构统计、质量治理指标与行动化周报。
+- 创建角色和班级受限的一次性机构邀请码。
+- 查看机构作用域内的任务、消息、通知、记录和会诊进展。
+- 通过稳定 `classId` 和规范成员关系管理教师、班级、儿童与家长授权。
+
+主要入口：
+
+| 路由 | 用途 |
+| --- | --- |
+| `/admin` | 园长首页、风险优先级和治理区 |
+| `/admin/agent` | 园长 Agent、会诊承接与派单 |
+| `/admin/agent?action=weekly-report` | 机构周报补充演示路线 |
+| `/admin/teachers` | 教师管理 |
+
+### Parent 家长端
+
+家长端强调“看得懂、做得到、愿意反馈”。
+
+- 家长首页、孩子状态、趋势解释、今晚行动、提醒和家庭周报。
+- 关怀模式、统一意图入口与更短的家庭执行链路。
+- 个性化成长绘本，支持文本、图片、音频、媒体状态、持久化，以及本地/受控分享与导出入口；生产级公开外链和 PDF 交付仍受已知边界约束。
+- 结构化反馈记录执行状态、次数、执行者、孩子反应、改善情况和困难。
+- 首次儿童建档前完成最小必要信息与监护人同意。
+- 无权访问的 `childId` 会被明确拒绝，不会自动回退到其他儿童。
+
+主要入口：
+
+| 路由 | 用途 |
+| --- | --- |
+| `/parent` | 家长首页、今晚行动与周报入口 |
+| `/parent/agent?child=c-1` | 趋势解释、追问和结构化反馈 |
+| `/parent/storybook?child=c-1` | 个性化成长绘本 |
+| `/parent/reminders` | 家庭提醒 |
+| `/parent/onboarding/child` | 儿童建档与监护同意 |
+
+## 真实账号与机构绑定
+
+真实注册与加入正式机构是两个独立阶段。
 
 ```mermaid
-flowchart LR
-  A["语音速记 / OCR 草稿"] --> B["系统理解"]
-  B --> C["草稿确认"]
-  C --> D["Teacher Copilot"]
-  D --> E["今日跟进建议"]
-  D --> F["家长沟通建议"]
-  D --> G["教师周报预览"]
+sequenceDiagram
+  participant U as 新用户
+  participant W as Next.js Web
+  participant DB as MySQL
+  participant A as 园长
+
+  U->>W: 手机号、密码、确认密码注册
+  W->>DB: 创建 app_users 与隔离初始空间
+  W-->>U: 写入 ccs_session，进入角色首页
+  A->>W: 创建一次性角色/班级邀请码
+  U->>W: 登录后接受邀请
+  W->>DB: 校验角色、稳定 classId 与监护同意
+  W->>DB: 事务写入规范成员/班级/监护关系
+  DB-->>W: 返回新的可信作用域
+  W-->>U: 会话按规范关系重新投影
 ```
 
-这一主链体现的是“先捕捉，再理解，再执行”的逻辑。  
-它把教师从纯记录角色，提升成了被系统持续增强的专业协作角色。
+关键规则：
 
-### 2. 高风险会诊与园长决策主链
+- 注册只创建账号及其隔离的机构、教师或家庭初始空间，不会自动加入其他托育机构。
+- 登录兼容手机号与旧用户名账号；密码使用带盐 `scrypt` 哈希。
+- 登录态沿用 12 小时 HMAC `ccs_session` HttpOnly Cookie。
+- 园长邀请码是一次性的，并绑定目标角色；教师邀请可进一步绑定稳定班级 ID。
+- 家长迁入儿童和历史记录前，必须通过监护授权、服务条款与儿童隐私同意校验。
+- 规范授权关系存放在 `institution_memberships`、`teacher_class_assignments`、`child_registry`、`guardian_child_links`；`app_users` 中的旧机构、班级和 `child_ids` 只保留兼容投影。
+- 教师和儿童都具备 `classId` 时，授权必须按稳定 ID 判断；同名班级不能作为权限依据。
 
-高风险会诊不是把一段提示词包装成结果页，而是把**当前观察、历史画像、最近上下文与多智能体分工**收束成可承接的结构化决策链。
-
-- 会诊过程支持阶段式流转，适合展示“如何得出结论”，而不只是展示最终结论。
-- 证据链界面把来源、置信度、人工复核需求和支撑关系显式可见。
-- 会诊结果沉淀为园内动作、今晚家庭任务与 48 小时复查点。
-- 园长侧进一步承接为风险优先级、决策卡、派单动作与治理视角。
-- Admin 首页同时存在“今日优先级”和“机构治理”双视角，不让系统只停留在个体事件响应上。
-
-```mermaid
-flowchart LR
-  S1["当前观察"] --> C["多智能体会诊"]
-  S2["长期画像"] --> C
-  S3["最近快照与反馈"] --> C
-  C --> E["证据链与解释层"]
-  E --> R["会诊结论"]
-  R --> I["干预卡 / 48 小时复查"]
-  R --> P["园长优先级板"]
-  P --> D["决策卡与派单"]
-  D --> G["质量治理与运营周报"]
-```
-
-这条主链体现的是机构级的判断闭环：不仅知道“谁需要关注”，还知道“为什么、谁来承接、后续如何追踪”。
-
-### 3. Parent 双引擎主链
-
-家长侧不是附属页面，而是系统闭环中承担“理解、执行、反馈”三种责任的正式角色。
-
-- 一条链负责趋势解释，把近 7/14/30 天变化转成可理解、可行动的说明。
-- 一条链负责情感连接，把成长亮点、今晚任务和会诊上下文组织成微绘本。
-- 关怀模式为祖辈或低数字熟练度照护者提供更短链路、更大字、更少决策负担的首屏体验。
-- 结构化反馈把执行结果重新写回系统，进入下一轮趋势判断、会诊和周报。
-- 家庭周报预览让家长看到“本周发生了什么”与“接下来应该做什么”。
-
-```mermaid
-flowchart LR
-  CTX["共享儿童上下文"] --> T["趋势解释引擎"]
-  CTX --> S["微绘本 / 情感连接引擎"]
-  T --> TE["趋势图与行动说明"]
-  S --> SE["成长故事与睡前微绘本"]
-  TE --> A["今晚行动"]
-  SE --> A
-  A --> F["结构化反馈"]
-```
-
-Parent 双引擎的意义不在于“内容更丰富”，而在于系统同时处理理性解释与情感连接，让家长既愿意看，也看得懂、做得下去。
-
-## 记忆中枢与反馈回流
-
-SmartChildcare Agent 的关键差异，在于它不是一次性问答，而是一个持续消费上下文的系统。
-
-- `child_profile_memory` 沉淀儿童长期画像。
-- `agent_state_snapshots` 保留各轮理解、会诊、跟进与周报结果。
-- `agent_trace_log` 与证据链让系统保留过程信息，而不是只有答案。
-- 家长结构化反馈会回流到趋势解释、会诊判断、周报摘要与后续提醒。
-- 年龄分层照护策略已经开始接入 Teacher、Parent 与干预建议主链，使建议不再是泛儿童化表达。
+## 系统架构
 
 ```mermaid
 flowchart TB
-  M1["child_profile_memory"]
-  M2["agent_state_snapshots"]
-  M3["agent_trace_log"]
-  M4["parent structured feedback"]
-  W["weekly report"]
-  T["trend explanation"]
-  C["consultation"]
-  N["next-round decision"]
+  subgraph R["角色体验层"]
+    T["Teacher 工作台"]
+    A["Admin 治理与决策"]
+    P["Parent 理解、执行与反馈"]
+  end
 
-  M1 --> C
-  M2 --> C
-  M3 --> C
-  C --> W
-  C --> T
-  T --> M4
-  W --> M4
-  M4 --> M2
-  M4 --> M3
-  M4 --> N
-  N --> C
+  subgraph N["Next.js 可信桥接层"]
+    UI["App Router 页面与结构化卡片"]
+    API["Route Handlers：/api/* 与 /api/ai/*"]
+    AUTH["ccs_session、角色路由与 session scope"]
+    SCOPE["机构 / 班级 / 儿童作用域与 provenance"]
+  end
+
+  subgraph B["FastAPI Brain"]
+    ORCH["Orchestrator 与工作流"]
+    AGENTS["Teacher / Consultation / Admin / Parent Agents"]
+    PROVIDERS["Vivo / DashScope / Mock 与规则降级"]
+    MEMORY["MemoryService、snapshots 与 trace"]
+  end
+
+  subgraph D["持久化与媒体"]
+    MYSQL["MySQL<br/>账号、关系、业务记录与任务账本"]
+    SQLITE["SQLite / MySQL Brain Memory"]
+    BLOB["Private Vercel Blob<br/>图片、音频与附件"]
+  end
+
+  T --> UI
+  A --> UI
+  P --> UI
+  UI --> API --> AUTH --> SCOPE
+  SCOPE -->|"HMAC service scope"| ORCH
+  ORCH --> AGENTS
+  AGENTS --> PROVIDERS
+  AGENTS <--> MEMORY
+  SCOPE <--> MYSQL
+  MEMORY <--> SQLITE
+  API <--> BLOB
+  AGENTS -->|"结构化结果"| API
+  API -->|"卡片、证据、任务、周报、媒体"| UI
 ```
 
-系统真正积累的不是“回答”，而是**判断上下文**。  
-这也是它更接近智能体系统，而不是单次内容生成工具的原因。
-
-## 结构化输出与可解释性
-
-项目的输出设计强调可承接、可追踪、可解释，而不是只追求生成效果。
-
-| 面向角色 | 典型输出 | 系统意义 |
-| --- | --- | --- |
-| Teacher | 草稿确认卡、补全提示、微培训 SOP、家长沟通话术 | 把观察转成可执行工作流 |
-| Consultation | 总结卡、证据链、Follow-up 卡、Intervention Card | 把风险判断转成结构化决策 |
-| Admin | Risk Priority Board、决策卡、派单入口、治理指标、运营周报 | 把个体问题升级成机构级承接 |
-| Parent | 趋势解释卡、趋势图、今晚行动、微绘本、反馈表单、家庭周报 | 把“愿意看”转成“做得下去并能回流” |
-
-解释层还会显式保留以下信息：
-
-- `source`
-- `dataQuality`
-- `warnings`
-- `memoryMeta`
-- 证据链与结构化 supports 关系
-
-这些元信息的作用，不是削弱系统，而是让系统更容易被审阅、被理解、被信任。
-
-## 技术栈与工程实现
-
-本项目的技术栈描述不追求“堆名词”，而是强调每一层真实承担什么职责。
-
-### 前端体验层
-
-- 使用 `Next.js App Router`、`React`、`TypeScript` 作为主要前端框架。
-- 前端不是一个统一聊天页，而是按角色拆分为 Teacher、Admin、Parent 三类页面与工作区。
-- UI 组织方式以移动端任务流、结构化卡片、角色工作台和跳转承接为主。
-- 已落地的页面主链包括：
-  - `/teacher`
-  - `/teacher/agent`
-  - `/teacher/high-risk-consultation`
-  - `/admin`
-  - `/admin/agent`
-  - `/parent`
-  - `/parent/storybook`
-  - `/parent/agent`
-
-前端在角色体验上已经形成几个清晰特征：
-
-- 教师侧强调“草稿确认”而不是“先填完表单”。
-- 园长侧强调“先看优先级，再决定推进什么”。
-- 家长侧强调“先理解今晚做什么，再决定是否继续追问”。
-
-### AI 桥接与路由层
-
-前端与后端之间不是直接散乱调用，而是通过统一的 AI 路由层完成桥接。
-
-- 统一入口为 `/api/ai/*`。
-- 角色页通过该层访问 Teacher 理解、会诊、Parent 趋势、微绘本、周报和反馈能力。
-- 会诊链路支持 SSE 流式事件，让阶段式过程可以直接被页面消费。
-- 页面和工作区之间共用结构化结果，而不是每跳一页就丢失上下文。
-
-这层的意义不是“代理请求”，而是把不同角色的交互统一成一套稳定的工作流边界。
-
-### 后端编排与工作流层
-
-后端核心由 `FastAPI` 与工作流编排服务承担。
-
-当前仓库中，编排层已经覆盖的关键能力包括：
-
-- Teacher 语音理解与 Copilot 辅助
-- 高风险会诊与流式阶段输出
-- Parent 趋势解释
-- Parent 微绘本生成与媒体状态组织
-- Teacher / Admin / Parent 三角色周报链路
-- Admin 质量治理指标
-- 需求洞察聚合
-
-从职责上看，编排层做的不是简单的模型代理，而是：
-
-- 统一收口角色输入
-- 组织记忆上下文
-- 产出结构化结果
-- 把结果继续写入快照、轨迹或下一轮工作流
-
-### 记忆、状态与数据层
-
-系统的连续性建立在一套明确的状态与记忆结构上。
-
-- `child_profile_memory`：沉淀长期画像。
-- `agent_state_snapshots`：保留每轮关键工作流输出。
-- `agent_trace_log`：保留推理轨迹与阶段事件。
-- `MemoryService`：负责跨工作流读写与统一访问。
-- 前端本地 store 与草稿持久化：负责移动端草稿、提醒、角色视图联动。
-- 结构化反馈与提醒：把执行信号从家长侧重新注入系统。
-
-这意味着系统不是围绕“单轮 prompt”设计，而是围绕“连续判断”设计。
-
-### 结构化合同与共享模型
-
-项目的一个关键工程特点，是大量能力都不是以自由文本形式互相传递，而是依赖结构化合同。
-
-当前 README 可以明确成立的结构化锚点包括：
-
-- 会诊证据链 `evidenceItems`
-- 干预卡 `InterventionCard`
-- 家长结构化反馈记录
-- 三角色行动化周报
-- 年龄分层上下文 `ageBandContext`
-- 趋势响应中的 `source / dataQuality / warnings`
-
-这类共享合同的价值在于：
-
-- 页面能稳定承接结果，而不是靠字符串解析。
-- 周报、会诊、反馈之间能够复用同一批信号。
-- 系统更容易做可解释性、治理指标和连续回流。
-
-### 流式展示、解释层与治理能力
-
-项目的“智能感”并不只来自生成结果，更来自过程和治理层。
-
-- 高风险会诊支持流式阶段展示，用户能够看到过程推进，而不是只看到结论。
-- 证据链把来源、置信度、人工复核需求和支撑关系显式展示出来。
-- Admin 首页除了风险优先级，还新增质量治理区和周报预览，形成治理第二视角。
-- 需求洞察引擎开始聚合家长关注点、执行难点、会诊触发热区等机构级问题。
-
-这使系统不仅能“回答”，还能被用来做管理、复盘和决策承接。
-
-### 多模态与内容能力接入
-
-项目在能力接入上采用保守而兼容的口径：  
-比赛与演示统一表述为：`vivo` 能力已具备代码层接入、smoke/test 与受控演示验证；Chat/OCR/ASR 在当前演示发布链路中已有验证记录，provider 状态可通过工程材料核验。
-
-在当前代码事实范围内，这些能力主要体现在：
-
-- Teacher 侧的语音理解与草稿化
-- 健康材料解析链路中的 OCR / 多模态抽取骨架
-- Parent 侧的趋势解释
-- 会诊链路的结构化判断
-- 微绘本链路的内容组织与媒体状态管理
-
-README 不把演示验证扩写成真实机构生产化全链路已完成；对象存储、长期监控、正式审计、SLA 和完整隐私合规流程继续按生产化边界说明。
-
-### 工程验证与持续收口
-
-项目当前并不依赖“口头保证”来成立，仓库中已经存在围绕主链路的验证入口。
-
-- 前端侧包含 lint、build 与部分定向测试。
-- 后端侧包含 Teacher 语音、会诊流、Admin feed、Parent trend、Parent storybook、memory/orchestrator 等测试文件。
-- 多条角色主链已经形成稳定 walkthrough 顺序，便于答辩和持续复验。
-
-这让项目具备进一步演进和持续收口的工程基础，而不是一次性展示页。
-
-## 真实注册试用
-
-当前仓库支持小范围真实注册试用。注册入口为 `/register`，使用手机号、密码和确认密码创建账号；服务端会再次校验 `password` / `confirmPassword`、手机号格式和密码长度。注册成功后账号写入真实数据库的 `app_users`，并创建对应 `institution_id` 的初始 `app_state_snapshots`，不会使用邀请码，也不会写入 demo account。
-
-注册成功后继续沿用现有 HMAC `ccs_session` cookie 建立登录态，并按身份进入对应路径：
-
-- `admin` / 机构管理员：进入 `/admin`，创建独立机构试用空间。
-- `teacher` / 教师：进入 `/teacher`，创建教师个人试用机构空间。
-- `parent` / 家长：进入 `/parent`，先创建空家庭空间。
-
-家长账号不会在注册时自动生成儿童档案。家长首次进入空家庭空间时，需要通过儿童建档入口完成最小必要档案填写，并完成监护人确认与同意记录后，儿童才会绑定到当前家长账号。
-
-真实数据访问边界继续按 `institution_id` 和 `childIds` 控制：机构管理员只能访问本机构数据，教师只能访问本机构和本班范围，家长只能访问自己授权的儿童或自己创建绑定的儿童。这个能力面向小范围试用和发布前验证，不代表已经具备大规模商用所需的完整短信验证、密码找回、长期审计、生产 SLA 或完整合规运营能力。
-
-真实注册 smoke 的发布前环境口径包括 `DATABASE_URL`、`AUTH_SESSION_SECRET`、`AUTH_REGISTER_ENABLED`、`BRAIN_API_BASE_URL` 和 `BRAIN_INTERNAL_SHARED_SECRET`。可先运行 `npm run db:check` 做只读数据库预检，确认真实注册所需表、字段和唯一索引已就绪；该命令不会输出完整连接串，也不会写入数据。当前 `scripts/auth-register-real-db-smoke.mjs` 只直接覆盖注册、手机号登录、受保护角色首页和 parent onboarding，不直接调用 FastAPI `/api/v1/agents/*` 或 `/api/v1/memory/*`；如果试用或 smoke 扩展到 AI/brain 链路，Next.js 与 FastAPI 必须配置同一个 `BRAIN_INTERNAL_SHARED_SECRET`。
-
-非 `development` 环境中，FastAPI 内部路由启用 T8B HMAC service auth；缺少 `BRAIN_INTERNAL_SHARED_SECRET` 时，`/api/v1/agents/*` 和 `/api/v1/memory/*` 会拒绝内部请求。不要把真实 secret 写入 `.env.example` 或仓库，只放入部署平台或本地私有 env 文件。
-
-## 推荐体验路径
-
-建议按以下顺序体验系统主链：
-
-1. `/teacher`  
-   从教师视角进入记录与工作台，理解系统如何从第一手观察开始。
-2. `/teacher/high-risk-consultation`  
-   观看高风险会诊的阶段流、证据链和干预卡，这是系统最强的智能体展示位。
-3. `/admin`  
-   观察园长如何承接会诊结果，完成优先级判断、治理查看与决策推进。
-4. `/parent`  
-   查看家长首页如何把今晚任务、趋势入口、关怀模式与反馈入口组织成短链路体验。
-5. `/parent/storybook?child=c-1`  
-   体验微绘本如何把成长亮点与任务建议转成更具情感连接的表达。
-6. `/parent/agent?child=c-1`  
-   查看趋势解释、继续追问、结构化反馈与下一轮闭环如何合并在同一工作区。
-
-## 项目亮点总结
-
-- 它把教师、园长、家长三类角色组织进同一条智能闭环，而不是分别做三个独立页面。
-- 它把会诊、干预、优先级、周报、反馈都做成结构化输出，让系统天然具备承接动作的能力。
-- 它以记忆中枢驱动连续判断，让每次记录、会诊和反馈都能进入下一轮决策。
-- 它在理性解释之外，加入微绘本与关怀模式，让家长侧同时具备行动价值与情感连接。
-- 它保留证据链、来源说明和数据质量提示，使系统更容易被理解、被审阅、被信任。
-- 它已经形成从角色入口、工作流编排到治理指标的系统骨架，而不是停留在单一功能演示。
-
-## 边界与表达原则
-
-为了保持 README 的真实性，以下能力采用保守表达：
-
-- 外部健康资料桥接已具入口与骨架，但不写成完整闭环已完成。
-- 自动升级规则、完整 48 小时生命周期与完整信任透明层，不写成既成事实。
-- `vivo` Chat/OCR/ASR 可写代码接入、smoke/test 与受控演示验证，不写成真实机构生产化全链路已完成。
-- 微绘本图像、配音、语音理解等上游能力不写成已完成长期生产验收。
-- 趋势、周报与会诊链路保留 `source / dataQuality / warnings` 等元信息，用于支持解释与审阅。
-
-## 本地启动
-
-<details>
-<summary>展开查看最小启动方式</summary>
-
-### 前端
+### 分层职责
+
+| 层级 | 主要职责 |
+| --- | --- |
+| 角色体验层 | 为教师、园长、家长提供不同的信息密度、操作路径和承接对象 |
+| Next.js 页面与 API | 处理会话、业务 CRUD、页面渲染、AI 桥接、媒体读取和浏览器侧交互 |
+| 可信作用域层 | 从服务端会话重建机构、班级、儿童与角色范围，不信任浏览器自报的 provider 或 scope |
+| FastAPI Brain | 编排 Teacher、会诊、Parent、周报、治理、多模态和记忆工作流 |
+| Provider 层 | 接入 Vivo、DashScope，并在允许的开发/演示场景提供显式 mock 或规则降级 |
+| 数据与媒体层 | MySQL 保存账号、规范关系和业务事实；Brain memory 保存连续上下文；私有 Blob 保存媒体 |
+
+## 安全与可信边界
+
+### 会话与授权
+
+- `ccs_session` 使用 HMAC-SHA256 签名，生产环境启用 `Secure`，同时设置 `HttpOnly` 与 `SameSite=Lax`。
+- 服务端从会话和规范关系表构造可信作用域；前端提交的 `institutionId`、`classId`、`childId` 只能作为待校验输入。
+- 业务读取与写入按角色、机构、班级和儿童范围投影。
+- 家长无权儿童链接、跨角色缓存切换和远端状态失败均有显式处理。
+
+### AI 结果与服务间调用
+
+- 浏览器只调用 Next.js `/api/ai/*`，不直接进入受信任的 Brain 执行面。
+- 非 `development` 环境中，Next.js 与 FastAPI 必须配置相同的 `BRAIN_INTERNAL_SHARED_SECRET`。
+- FastAPI 的 agents/memory 路由校验路径、时间戳和作用域签名；缺少共享密钥时 fail closed。
+- 可持久化 AI 结果需要服务端 provenance attestation，绑定用户、机构、能力、儿童/班级和结果摘要。
+- 客户端自报的 `provider`、`model` 或 `live=true` 不能直接升级为可信 live AI 事实。
+
+### 上传、媒体与语音
+
+- 上传执行流式大小限制、严格 Base64、MIME 白名单与文件魔数一致性检查。
+- 图片、音频和附件通过私有 Blob 或受控数据库记录读取，不把私有存储地址当公开静态资源。
+- 需要确认的语音写操作使用短期签名令牌，并在数据库中原子消费，防止跨实例重放。
+- 绘本媒体任务使用稳定作用域键、任务账本、精确回读和幂等恢复，避免超时后重复付费生成。
+
+更完整的审计见 [租户隔离审计](./docs/security/tenant-isolation-audit.md)。
+
+## 技术栈
+
+| 模块 | 技术 |
+| --- | --- |
+| Web | Next.js `16.1.6`、React `19.2.3`、TypeScript、App Router |
+| 样式与组件 | Tailwind CSS 4、Radix UI、Lucide、Sonner |
+| 数据可视化 | Recharts |
+| Next.js 服务端 | Route Handlers、Node.js runtime、`mysql2` |
+| Brain | FastAPI、Uvicorn、Pydantic 2、httpx、WebSocket |
+| 应用数据库 | MySQL；账号、规范关系、业务记录、状态快照和任务账本 |
+| Brain Memory | 本地 SQLite 或 MySQL/`aiomysql` |
+| AI Provider | Vivo、DashScope；开发/演示环境可显式使用 mock 或规则降级 |
+| 私有媒体 | Vercel Blob private store |
+| 测试 | Node Test、Pytest、Playwright |
+| 部署配置 | Vercel Web；FastAPI Dockerfile、Docker Compose、Caddy staging runbook |
+
+> `supabase/sql/` 是历史目录名，其中 DDL 使用 **MySQL 方言**；README 不把它描述成 Supabase/PostgreSQL 运行时。
+
+## 仓库结构
+
+```text
+childcare-smart/
+├─ app/                         # Next.js 页面、角色入口与 Route Handlers
+│  ├─ admin/                    # 园长端
+│  ├─ teacher/                  # 教师端
+│  ├─ parent/                   # 家长端
+│  └─ api/                      # 认证、业务、AI、媒体与状态 API
+├─ components/                  # 角色页面、结构化卡片、全局工具中心
+├─ lib/                         # 认证、作用域、业务服务、AI contract 与客户端 store
+├─ backend/
+│  ├─ app/                      # FastAPI Brain、agents、services、providers、memory
+│  ├─ tests/                    # Python 测试
+│  ├─ requirements.txt
+│  └─ Dockerfile
+├─ shared/                      # TypeScript / Python 共用策略与静态 contract
+├─ supabase/sql/                # MySQL 基础表与受控迁移脚本
+├─ scripts/                     # smoke、发布门禁、数据库预检与演示素材工具
+├─ tests/                       # Playwright 产品、功能、发布与视觉回归
+├─ public/demo/                 # 系统导览与公开 demo 素材
+├─ public/demo-media/           # demo-safe 绘本和多媒体资产
+├─ docs/                        # 架构、状态、发布、安全、QA 与任务账本
+├─ .env.example                 # 根环境变量模板；不含真实密钥
+├─ package.json
+└─ docker-compose.yml
+```
+
+## 本地快速启动
+
+### 1. 前置要求
+
+- Node.js `>= 20.9`，推荐使用当前 LTS 或更新版本。
+- npm，依赖安装优先使用锁文件对应的 `npm ci`。
+- Python `3.11+`；后端 Docker 镜像使用 Python `3.13`。
+- 如需真实账号与真实业务数据，准备 MySQL。
+- 如需浏览器测试，安装 Playwright Chromium。
+
+### 2. 克隆并安装依赖
 
 ```powershell
-npm install
+git clone https://github.com/VictorMaxWang/childcare-smart.git
+Set-Location .\childcare-smart
+
+npm ci
+
+py -m venv .\backend\.venv
+.\backend\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\backend\.venv\Scripts\python.exe -m pip install -r .\backend\requirements.txt
+
+Copy-Item .\.env.example .\.env.local
+```
+
+浏览器测试首次使用时：
+
+```powershell
+npx playwright install chromium
+```
+
+### 3. 配置最小本地环境
+
+先生成随机 session secret：
+
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+至少在未跟踪的 `.env.local` 中填写：
+
+```dotenv
+AUTH_SESSION_SECRET=替换为上一步生成的随机值
+BRAIN_API_BASE_URL=http://127.0.0.1:8000
+BRAIN_PROVIDER=mock
+ENABLE_MOCK_PROVIDER=true
+```
+
+开发模式允许显式 mock/规则降级，适合先体验 demo；它不代表真实数据库、live AI 或正式发布门禁已经通过。
+
+### 4. 启动 FastAPI Brain
+
+打开第一个 PowerShell：
+
+```powershell
+.\backend\.venv\Scripts\python.exe -m uvicorn app.main:app `
+  --app-dir backend `
+  --host 127.0.0.1 `
+  --port 8000
+```
+
+Brain 健康检查：
+
+```text
+http://127.0.0.1:8000/api/v1/health
+```
+
+### 5. 启动 Next.js
+
+打开第二个 PowerShell：
+
+```powershell
 npm run dev
 ```
 
-### 后端
+访问：
+
+- Web：`http://localhost:3000`
+- 登录页：`http://localhost:3000/login`
+- Web 健康接口：`http://localhost:3000/api/health`
+
+登录页提供示例账号入口。真实账号注册、真实 AI 和私有媒体需要继续配置数据库与 provider。
+
+## 环境变量
+
+完整模板位于：
+
+- [`.env.example`](./.env.example)
+- [`.env.release.example`](./.env.release.example)
+- [`backend/.env.example`](./backend/.env.example)
+- [`backend/.env.release.example`](./backend/.env.release.example)
+
+下面只列最重要的分组。真实密码、Cookie、API Key 和连接串只能放在未跟踪 env 文件或部署平台 secrets 中。
+
+| 分组 | 关键变量 | 说明 |
+| --- | --- | --- |
+| Web 认证与数据库 | `AUTH_SESSION_SECRET`、`DATABASE_URL`、`DATABASE_SSL` | 真实账号、会话与 MySQL 业务数据 |
+| 私有媒体 | `BLOB_READ_WRITE_TOKEN` | 私有图片、音频与附件；生产媒体链需要 |
+| Next → Brain | `BRAIN_API_BASE_URL`、`BRAIN_INTERNAL_SHARED_SECRET`、`BRAIN_API_TIMEOUT_MS` | 非开发环境两端必须共享同一 secret |
+| Brain 运行模式 | `ENVIRONMENT`、`ALLOW_ORIGINS`、`ENABLE_MOCK_PROVIDER`、`BRAIN_PROVIDER` | 控制环境、CORS 与 provider 选择 |
+| Brain Memory | `BRAIN_MEMORY_BACKEND`、`BRAIN_MEMORY_SQLITE_PATH`、`MYSQL_URL` | 本地 SQLite 或 MySQL memory |
+| Vivo | `VIVO_APP_ID`、`VIVO_APP_KEY`、`VIVO_BASE_URL`、`VIVO_LLM_MODEL`、ASR/TTS 相关变量 | 只在服务端配置 |
+| DashScope | `DASHSCOPE_API_KEY`、`BAILIAN_*`、`NEXT_STORYBOOK_IMAGE_PROVIDER`、`STORYBOOK_DASHSCOPE_*` | 文本、OCR、视觉与绘本图片能力 |
+| 发布门禁 | `RELEASE_*`、`REAL_SMOKE_*`、现有三角色账号凭据 | 仅用于受控发布环境 |
+
+特别说明：
+
+- `DATABASE_URL` 只接受 `mysql://` 或 `mysqls://`。
+- `AUTH_REGISTER_ENABLED` 当前由真实注册 smoke 做前置校验，**不是可依赖的运行时注册开关**。
+- 不要创建或提交任何 `NEXT_PUBLIC_VIVO_*`；provider 密钥不能暴露给浏览器。
+- 配置 VPS/Brain 的 `VIVO_*` 不等于 Vercel 上的 Next.js AI 路由已经完成同样配置，两者是独立配置面。
+
+## 数据库准备
+
+项目没有 Alembic、Prisma 或自动 migration runner。SQL 必须在确认目标数据库和依赖顺序后，由受控环境人工应用。
+
+### 基础与关键迁移
+
+| 范围 | 主要脚本 |
+| --- | --- |
+| 账号与状态 | `supabase/sql/app_users.sql`、`supabase/sql/app_state_snapshots.sql` |
+| 手机号与监护同意 | `supabase/sql/20260704_add_phone_normalized_to_app_users.sql`、`supabase/sql/20260704_create_consent_records.sql` |
+| 正式机构关系 | `supabase/sql/20260724_create_institution_memberships.sql` |
+| 绘本媒体 | `supabase/sql/20260724_create_storybook_media_assets.sql`、`supabase/sql/20260726_create_storybook_media_tasks.sql` |
+| 通知与 ASR 任务 | `supabase/sql/20260725_create_admin_notification_events.sql`、`supabase/sql/20260726_create_vivo_asr_tasks.sql` |
+| 语音确认防重放 | `supabase/sql/20260726_create_voice_confirmation_token_consumptions.sql` |
+| Brain MySQL Memory | `supabase/sql/agent_memory_hub.sql` |
+
+注意：
+
+- 不要对生产库盲目重复执行全部脚本。
+- `20260704_add_phone_normalized_to_app_users.sql` 不是可无条件重复执行的幂等迁移。
+- 未执行机构关系迁移的环境会回退旧授权字段，不具备正式邀请绑定能力。
+- 生产缺少语音确认消费表时，需要确认的语音写操作会被拒绝，不能降级到单实例内存锁。
+
+完成受控迁移后，运行只读预检：
 
 ```powershell
-py -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+npm run db:check
 ```
 
-### 重新生成 README 架构总图 PNG
+`db:check` 检查真实业务所需的表、列和关键索引，不写数据，也不会输出完整连接串。
+
+## 测试与发布门禁
+
+### 基础质量检查
 
 ```powershell
-py scripts/generate_readme_architecture_png.py
+npm run lint
+npm run typecheck
+npm run test:node
+npm run test:python
+npm run build
 ```
 
-### 生成答辩演示素材包
+### 安全与重点功能
 
 ```powershell
+npm run test:session-security
+npm run test:auth-register
+npm run test:auth-phone
+npm run test:security-permission
+npm run product:smoke
+npm run product:ai
+npm run product:voice
+npm run product:journey
+```
+
+### 本地浏览器与开发门禁
+
+```powershell
+npm run test:browser:release:local
+npm run release:gate:local
+```
+
+本地 opt-out 允许明确跳过需要真实账号的规格；报告会标记 `[LOCAL-ONLY]`，不能据此声明生产已验证。
+
+### 真实数据库 smoke
+
+```powershell
+npm run auth:smoke
+```
+
+`auth:smoke` 会在确认过的真实数据库中创建测试数据；正常完成时会尝试清理并验证清理结果。进程异常中断、数据库连接中断或启用 `AUTH_SMOKE_KEEP_DATA` 时可能保留测试数据。运行前必须核对 `DATABASE_URL`，并准备：
+
+- `DATABASE_URL`
+- `DATABASE_SSL`
+- `AUTH_SESSION_SECRET`
+- `AUTH_REGISTER_ENABLED=true`
+- `BRAIN_API_BASE_URL`
+- `BRAIN_INTERNAL_SHARED_SECRET`
+
+如启用保留数据选项，测试数据不会自动清理；不要在不理解目标库和选项的情况下运行。
+
+### 正式发布门禁
+
+唯一权威入口是从干净宿主直接启动 PowerShell：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\release-formal-gate.ps1 `
+  -EnvFile .env.release
+```
+
+正式门禁要求同一次运行中的完整 SHA、签名报告、固定 deployment origin、严格 SQL 证据、非跳过浏览器测试，以及现有/fresh 三角色真实账号 live AI 链路。
+
+`npm run release:go:all` 只用于发现命令，不是敌对宿主环境下的权威发布证明。完整规则见 [发布门禁真实性](./docs/release/RELEASE_GATE_TRUTHFULNESS.md)。
+
+## 部署说明
+
+### Web
+
+- 生产 Web 当前运行在 Vercel。
+- `/api/health` 暴露当前提交、deployment ID 和关键能力配置存在性，便于核对“代码提交”和“实际部署”是否一致；它不是数据库或 provider 的实时可用性探针。
+- 仓库没有跟踪的 `.github/workflows` 或 `vercel.json`，因此 README 不宣称 GitHub Actions CI/CD 已配置；Vercel 项目绑定属于平台外部状态。
+
+### FastAPI Brain
+
+仓库提供：
+
+- [`backend/Dockerfile`](./backend/Dockerfile)
+- [`docker-compose.yml`](./docker-compose.yml)
+- [`Caddyfile`](./Caddyfile)
+- [腾讯云 VPS staging runbook](./docs/deployment-vps.md)
+
+Docker Compose 拓扑用于 FastAPI backend + Caddy staging，读取根目录未跟踪的 `.env.release`，并通过 `/data` 持久卷保存本地 memory。该拓扑是部署配置和 runbook，不应被扩写成未经核验的当前生产事实。
+
+### 部署时必须保持
+
+- Vercel/Next.js 与 FastAPI 是两个独立环境变量配置面。
+- 两端的 `BRAIN_INTERNAL_SHARED_SECRET` 必须一致。
+- 生产 provider 密钥只放服务端。
+- Web 健康、Brain 健康、数据库预检和三角色真实浏览器链路需要分别验收。
+- 只有正式 PowerShell 门禁的同次签名证据可以给出正式发布结论。
+
+## 演示路线与素材
+
+推荐按下面顺序体验：
+
+1. `/login`：品牌首屏、示例账号与系统导览。
+2. `/teacher`：教师工作台、记录与语音/草稿入口。
+3. `/teacher/high-risk-consultation`：高风险会诊、证据链与干预卡。
+4. `/admin`：风险优先级、会诊承接、治理区与周报预览。
+5. `/parent`：今晚行动、趋势入口、关怀模式与反馈入口。
+6. `/parent/storybook?child=c-1`：成长微绘本。
+7. `/parent/agent?child=c-1`：趋势追问与结构化反馈。
+
+`/teacher/agent` 与 `/admin/agent?action=weekly-report` 作为补充路线。
+
+### 演示素材命令
+
+```powershell
+npm run system-tour:images
+npm run capture:ui
+npm run demo:preflight
 npm run demo:materials
 npm run demo:materials:capture
 npm run demo:video-storyboard
 ```
 
-输出目录为 `artifacts/demo-materials/`，说明见 `docs/demo-materials.md`。
+- `demo:materials` 打包已有截图、系统导览、preflight 与架构素材。
+- `demo:materials:capture` 会重新采集页面，运行前应确认目标 URL、账号和脱敏策略。
+- 输出主要位于 `artifacts/demo-materials/`，详见 [演示素材说明](./docs/demo-materials.md)。
 
-</details>
+<table>
+  <tr>
+    <td width="50%">
+      <img src="./public/demo/system-tour/v3/display/page-01.webp" alt="慧育童行系统导览封面" />
+    </td>
+    <td width="50%">
+      <img src="./public/demo-media/storybooks/lin-xiaoyu/images/page-01.webp" alt="慧育童行 demo-safe 个性化成长绘本示意图" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center">系统导览封面</td>
+    <td align="center">个性化成长绘本 demo-safe 示例</td>
+  </tr>
+</table>
 
+## 文档索引
+
+### 当前事实与比赛口径
+
+- [当前状态账本](./docs/current-status-ledger.md)
+- [任务账本](./docs/task-registry.md)
+- [比赛架构总说明](./docs/competition-architecture.md)
+- [比赛统一口径](./docs/competition-message-guide.md)
+
+### 认证、数据与安全
+
+- [认证注册下一阶段说明](./docs/auth-registration-next-phase.md)
+- [真实数据库注册任务清单](./docs/tasks/registration-real-db-tasklist.md)
+- [租户隔离审计](./docs/security/tenant-isolation-audit.md)
+
+### 发布与部署
+
+- [发布门禁真实性](./docs/release/RELEASE_GATE_TRUTHFULNESS.md)
+- [VPS staging 部署与修复](./docs/deployment-vps.md)
+- [演示素材说明](./docs/demo-materials.md)
+
+### 开发协作
+
+新线程或贡献者应按以下顺序阅读：
+
+1. [`docs/current-status-ledger.md`](./docs/current-status-ledger.md)
+2. [`docs/competition-architecture.md`](./docs/competition-architecture.md)
+3. [`docs/task-registry.md`](./docs/task-registry.md)
+4. [`AGENTS.md`](./AGENTS.md)
+
+代码事实始终高于旧文档描述。遇到 dirty worktree 时，不要回滚或顺手提交他人的在途改动。
+
+## 已知边界
+
+以下内容不能因为 demo、代码接入或单次 smoke 成功而被写成“已经完整生产化”：
+
+- 真实短信验证码、密码找回和完整账号生命周期仍未完成。
+- 完整隐私合规运营、正式审计、长期监控、灾备、SLA 与真实机构规模化验收仍需继续建设。
+- Vivo/DashScope 的代码接入与 smoke 记录不等于所有上游能力长期稳定。
+- Provider 未配置、不可用或超时时，部分链路会显式进入 mock、规则降级或 unavailable；降级结果不能标记为 live AI。
+- 正式签名发布门禁与严格生产数据库证明仍待受控环境补齐。
+- demo 数据、系统导览和绘本示意图不能作为真实儿童或真实机构业务事实。
+- Brain MySQL memory 的物理表仍需继续强化机构维度；当前主要依赖签名后的 child scope 与服务端作用域隔离。
+- Teacher Storybook 尚未纳入本 README 的已发布能力；相关代码只有进入已跟踪提交并完成验证后，才应更新公开口径。
+
+---
+
+- 项目展示名：**慧育童行**
+- 英文名 / 技术系统名：**SmartChildcare Agent**
