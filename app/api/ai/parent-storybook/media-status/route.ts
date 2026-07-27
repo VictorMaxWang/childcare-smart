@@ -56,6 +56,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 const ROLE_PARENT = "家长";
+const ROLE_TEACHER = "教师";
 const VIVO_IMAGE_GENERATION_PATH = "/api/v1/image_generation";
 const VIVO_IMAGE_GENERATION_MODULE = "aigc";
 const VIVO_IMAGE_RATE_LIMIT_BACKOFF_MS = 70_000;
@@ -1717,7 +1718,7 @@ export const parentStoryBookMediaStatusRouteInternals = {
 
 export async function POST(request: Request) {
   const authResult = await authorizeAiRouteSession(request, {
-    requiredRole: "parent",
+    requiredRole: "parent-or-teacher",
     collectJsonClassNames: false,
   });
   if (authResult instanceof Response) return authResult;
@@ -1740,12 +1741,12 @@ export async function POST(request: Request) {
   }
 
   const sessionUser = authResult.session.user;
-  if (sessionUser.role !== ROLE_PARENT) {
+  if (sessionUser.role !== ROLE_PARENT && sessionUser.role !== ROLE_TEACHER) {
     return aiRouteLimitedResponse(
       {
         reason: "role_mismatch",
-        error: "Parent role required.",
-        requiredRole: "parent",
+        error: "Parent or teacher role required.",
+        requiredRole: "parent-or-teacher",
       },
       { headers: { "cache-control": "no-store" } }
     );
@@ -1754,8 +1755,8 @@ export async function POST(request: Request) {
     return aiRouteLimitedResponse(
       {
         reason: "scope_required",
-        error: "Child scope is required for parent storybook media.",
-        requiredRole: "parent",
+        error: "Child scope is required for storybook media.",
+        requiredRole: "parent-or-teacher",
       },
       { headers: { "cache-control": "no-store" } }
     );
@@ -1770,7 +1771,7 @@ export async function POST(request: Request) {
         {
           reason: "forbidden_child",
           error: "Current account cannot access this child storybook media scope.",
-          requiredRole: "parent",
+          requiredRole: "parent-or-teacher",
         },
         { headers: { "cache-control": "no-store" } }
       );

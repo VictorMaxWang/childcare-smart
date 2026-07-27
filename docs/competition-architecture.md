@@ -111,22 +111,26 @@ SmartChildcare Agent 是面向托育场景的移动端优先 AI 智能体系统�
   - `ConsultationTraceCard` 已开始优先展示结构化 `evidenceItems` 证据链，兼容摘要仅作为 fallback
   - 不扩写为 `T9D` / `T9C` 完整打通
 
-### 3.4 Parent 微绘本主线
+### 3.4 Teacher / Parent 成长绘本主线
 
-- 入口顺序：`/parent` 作为桥接首页，`/parent/storybook?child=c-1` 作为 wow factor 主入口
-- 角色目标：先让家长愿意看、愿意进入行动建议
+- 入口顺序：教师从 `/teacher/storybook?child=<childId>` 选择同班幼儿并生成，家长从 `/parent/storybook?child=<childId>` 回看同一份绘本
+- 角色目标：让教师把真实观察记录整理成图文音成长故事，再让家长愿意看、愿意进入行动建议
 - 现有页面 / route / service：
   - `app/parent/page.tsx`
   - `app/parent/storybook/page.tsx`
+  - `app/teacher/storybook/page.tsx`
+  - `components/storybook/StoryBookWorkspace.tsx`
   - `app/api/ai/parent-storybook/route.ts`
+  - `app/api/ai/parent-storybook/media-status/route.ts`
   - `app/api/ai/parent-storybook/media/[mediaKey]/route.ts`
   - `components/parent/StoryBookViewer.tsx`
   - `backend/app/services/parent_storybook_service.py`
   - `backend/app/providers/story_image_provider.py`
   - `backend/app/providers/story_audio_provider.py`
 - 当前口径：
-  - 已具展示能力
-  - 图像 / 配音与上游 live provider 仍有边界
+  - 教师生成、媒体补全、服务端保存与家长读取复用同一 child-scoped 数据链路
+  - 教师只允许同机构分班幼儿；家长只允许已建立监护关系的幼儿
+  - live provider 不可用时必须显式展示降级状态，不能把占位媒体标成真实结果
 
 ### 3.5 Parent 趋势与反馈主线
 

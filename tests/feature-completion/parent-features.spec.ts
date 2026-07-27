@@ -66,6 +66,8 @@ test("D08 parent storybook demoSeed stays isolated from real provider and remote
   const childId = "c-4";
   const storybookId = `storybook-r02-${stamp}`;
   const storybookTitle = `R02 local share storybook ${stamp}`;
+  const teacherStorybookId = `storybook-r02-teacher-${stamp}`;
+  const teacherStorybookTitle = `R02 teacher shared storybook ${stamp}`;
   const statePutRequests: string[] = [];
 
   page.on("request", (request) => {
@@ -75,7 +77,7 @@ test("D08 parent storybook demoSeed stays isolated from real provider and remote
   });
 
   const parent = await demoContext(testInfo, "u-parent");
-  const teacher = await demoContext(testInfo, "u-teacher");
+  const teacher = await demoContext(testInfo, "u-teacher2");
 
   try {
     await resetDemoStorage(page);
@@ -95,17 +97,19 @@ test("D08 parent storybook demoSeed stays isolated from real provider and remote
     expect(demoSeedBody.providerMeta?.transport).toBe("next-json-fallback");
     expect(demoSeedBody.providerMeta?.realProvider).toBe(false);
 
-    await expectFailure(
+    const teacherDemoSeedDenied = await expectFailure(
       await teacher.post("/api/ai/parent-storybook", {
         data: buildStorybookAiRequest({
-          childId,
+          childId: "c-1",
+          className: "晨曦班",
           requestSource: `parent-storybook-demo-seed:r02-forbidden-${stamp}`,
-          detail: "teacher must not call parent storybook AI",
+          detail: "teacher must not call the parent-only demo seed path",
         }),
       }),
       403,
       "forbidden_scope"
     );
+    expect((teacherDemoSeedDenied as { reason?: string }).reason).toBe("role_mismatch");
     await expectFailure(
       await parent.post("/api/ai/parent-storybook", {
         data: buildStorybookAiRequest({
@@ -119,9 +123,20 @@ test("D08 parent storybook demoSeed stays isolated from real provider and remote
       "forbidden_scope"
     );
 
-    await seedStorybook(parent, storybookId, storybookTitle);
+    const savedParentStorybook = await seedStorybook(parent, storybookId, storybookTitle) as {
+      storybookId?: string;
+    };
+    expect(savedParentStorybook.storybookId).toBe(storybookId);
+    const parentStorybookList = await expectOk<Array<{ storybookId: string }>>(
+      await parent.get(`/api/storybooks?childId=${childId}`)
+    );
+    expect(parentStorybookList.some((item) => item.storybookId === storybookId)).toBe(true);
+    const exportResponse = await parent.get(
+      `/api/storybooks/${storybookId}/export?format=markdown`
+    );
+    expect(exportResponse.status(), await exportResponse.text()).toBe(200);
     const exported = await expectOk<{ kind: string; content: string; filename: string }>(
-      await parent.get(`/api/storybooks/${storybookId}/export?format=markdown`)
+      exportResponse
     );
     expect(exported.kind).toBe("download");
     expect(exported.content).toContain(storybookTitle);
@@ -133,6 +148,31 @@ test("D08 parent storybook demoSeed stays isolated from real provider and remote
     expect(shared.kind).toBe("share-text");
     expect(shared.copyText).toContain(storybookTitle);
     expect(shared.externalService).toBe("unavailable");
+
+    // 功能测试只验证确定性的作用域、保存和 UI；真实模型调用由生产 real-account smoke 覆盖。
+    await seedStorybook(teacher, teacherStorybookId, teacherStorybookTitle, "c-1");
+    await loginAs(page, "u-teacher2", "/teacher/storybook?child=c-1");
+    await expect(page.getByTestId("teacher-storybook-workspace")).toBeVisible();
+    await expect(page.getByTestId("teacher-storybook-child-select")).toBeVisible();
+    await expect(page.locator("body")).toContainText(teacherStorybookTitle, { timeout: 30_000 });
+    await capture(page, "teacher-01-storybook-selected-child.png");
+
+    const parentVisibleStorybooks = await expectOk<Array<{
+      storybookId: string;
+    }>>(await parent.get("/api/storybooks?childId=c-1"));
+    expect(
+      parentVisibleStorybooks.some(
+        (item) => item.storybookId === teacherStorybookId
+      )
+    ).toBe(true);
+    const teacherStorybookExport = await expectOk<{
+      content: string;
+    }>(
+      await parent.get(
+        `/api/storybooks/${teacherStorybookId}/export?format=markdown`
+      )
+    );
+    expect(teacherStorybookExport.content).toContain(teacherStorybookTitle);
 
     await loginAs(page, "u-parent", `/parent/storybook?child=${childId}`);
     await expect(page.getByTestId("e10-storybook-export-markdown")).toBeEnabled({ timeout: 30_000 });

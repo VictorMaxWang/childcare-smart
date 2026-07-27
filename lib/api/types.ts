@@ -33,7 +33,13 @@ export type ApiFailure = {
   code: ApiErrorCode;
   limited?: boolean;
   reason?: ApiLimitedReason | string;
-  requiredRole?: "parent" | "teacher" | "staff" | "admin" | null;
+  requiredRole?:
+    | "parent"
+    | "teacher"
+    | "staff"
+    | "admin"
+    | "parent-or-teacher"
+    | null;
   demoAvailable?: boolean;
 };
 

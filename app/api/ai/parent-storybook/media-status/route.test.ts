@@ -627,8 +627,9 @@ async function seedDashScopeImageTask(input: {
 
 function buildMediaStatusRouteRequest(
   payload: ParentStoryBookMediaStatusRequest,
-  options: { attestStory?: boolean } = {}
+  options: { accountId?: string; attestStory?: boolean } = {}
 ) {
+  const accountId = options.accountId ?? "u-parent";
   const story =
     options.attestStory === false
       ? payload.story
@@ -636,6 +637,7 @@ function buildMediaStatusRouteRequest(
           { ...payload.story },
           {
             ...STORYBOOK_PROVENANCE_CONTEXT,
+            userId: accountId,
             scopeId: payload.childId,
           }
         ) as unknown as ParentStoryBookResponse);
@@ -643,7 +645,7 @@ function buildMediaStatusRouteRequest(
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-demo-account-id": "u-parent",
+      "x-demo-account-id": accountId,
     },
     body: JSON.stringify({
       ...payload,
@@ -742,6 +744,54 @@ test("parent storybook media-status route forwards media-only polling without st
         assert.equal(body.title, "Progressive story text");
         assert.equal(body.providerMeta.imageDelivery, "real");
         assert.equal(body.providerMeta.audioDelivery, "real");
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("teacher storybook media-status route keeps class scope on media continuation", async () => {
+  const originalFetch = globalThis.fetch;
+  let providerCallCount = 0;
+
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    providerCallCount += 1;
+    const forwardedPayload = await readForwardedJson(init?.body);
+    return new Response(JSON.stringify(forwardedPayload.story), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+      },
+      async () => {
+        const allowed = await POST(
+          buildMediaStatusRouteRequest(buildMediaStatusPayload(), {
+            accountId: "u-teacher2",
+          })
+        );
+        assert.equal(allowed.status, 200);
+        assert.equal(providerCallCount, 1);
+
+        const denied = await POST(
+          buildMediaStatusRouteRequest(buildMediaStatusPayload(), {
+            accountId: "u-teacher",
+          })
+        );
+        const deniedBody = (await denied.json()) as {
+          reason?: string;
+          requiredRole?: string;
+        };
+        assert.equal(denied.status, 403);
+        assert.equal(deniedBody.reason, "forbidden_child");
+        assert.equal(deniedBody.requiredRole, "parent-or-teacher");
+        assert.equal(providerCallCount, 1);
       }
     );
   } finally {

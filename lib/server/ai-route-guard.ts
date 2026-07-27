@@ -9,7 +9,12 @@ import { DefaultAppDataRepository, type AppDataRepository } from "@/lib/server/a
 import { requireSession, type RequestSession } from "@/lib/server/session";
 import { requireChildAccess, requireClassAccess } from "@/lib/server/scope";
 
-export type AiRouteRole = "admin" | "staff" | "teacher" | "parent";
+export type AiRouteRole =
+  | "admin"
+  | "staff"
+  | "teacher"
+  | "parent"
+  | "parent-or-teacher";
 
 export interface AiRouteGuardOptions {
   requiredRole?: AiRouteRole;
@@ -124,6 +129,9 @@ function roleMatches(session: SessionUser, role?: AiRouteRole) {
   if (role === "staff") return session.role === ROLE_ADMIN || session.role === ROLE_TEACHER;
   if (role === "teacher") return session.role === ROLE_TEACHER;
   if (role === "parent") return session.role === ROLE_PARENT;
+  if (role === "parent-or-teacher") {
+    return session.role === ROLE_PARENT || session.role === ROLE_TEACHER;
+  }
   return false;
 }
 

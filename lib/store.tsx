@@ -6423,11 +6423,8 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const getSmartInsights = useCallback(() => smartInsights, [smartInsights]);
 
   const parentFeedData = useMemo(() => {
-    const parentChildren = currentUser.role === "家长"
-      ? visibleChildren
-      : visibleChildren.filter((child) => Boolean(child.parentUserId));
-
-    return parentChildren.map((child) => {
+    // visibleChildren 已由服务端按角色和班级收窄；绘本生成不应再以是否完成家长绑定为前置条件。
+    return visibleChildren.map((child) => {
       const todayMeals = todayMealRecordsMap.get(child.id) ?? [];
       const todayGrowth = todayGrowthRecordsMap.get(child.id) ?? [];
       const weeklyGrowth = weeklyGrowthRecordsMap.get(child.id) ?? [];
@@ -6449,7 +6446,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         mediaGallery: buildParentMediaGallery(child.id, weeklyGrowth, todayMeals),
       };
     });
-  }, [currentUser.role, getWeeklyDietTrend, smartInsights, todayFeedbackMap, todayGrowthRecordsMap, todayMealRecordsMap, visibleChildren, visibleWeeklyTrendMap, weeklyFeedbackMap, weeklyGrowthRecordsMap]);
+  }, [getWeeklyDietTrend, smartInsights, todayFeedbackMap, todayGrowthRecordsMap, todayMealRecordsMap, visibleChildren, visibleWeeklyTrendMap, weeklyFeedbackMap, weeklyGrowthRecordsMap]);
 
   const getParentFeed = useCallback(() => parentFeedData, [parentFeedData]);
 

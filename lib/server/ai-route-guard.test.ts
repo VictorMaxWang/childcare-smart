@@ -109,7 +109,6 @@ test("normal teacher can access own class child and class scope but not other cl
     role: "教师",
     className: "晨曦班",
   });
-
   const ownChild = await authorizeAiRoute(requestWithJson({ childId: "c-1" }), {
     requiredRole: "staff",
     repository,
@@ -141,6 +140,69 @@ test("normal teacher can access own class child and class scope but not other cl
   assert.ok(deniedClass instanceof Response);
   assert.equal(deniedClass.status, 403);
   assert.equal((await readLimited(deniedClass)).reason, "forbidden_class");
+});
+
+test("parent-or-teacher routes accept scoped caregivers but reject institution admins", async () => {
+  const parent = normalUser({
+    id: "normal-parent",
+    role: "家长",
+    childIds: ["c-1"],
+  });
+  const teacher = normalUser({
+    id: "normal-teacher",
+    role: "教师",
+    className: "晨曦班",
+  });
+  const outsideTeacher = normalUser({
+    id: "outside-teacher",
+    role: "教师",
+    institutionId: "inst-outside",
+    className: "晨曦班",
+  });
+  const admin = normalUser({
+    id: "normal-admin",
+    role: "机构管理员",
+  });
+
+  const parentAllowed = await authorizeAiRoute(requestWithJson({ childId: "c-1" }), {
+    requiredRole: "parent-or-teacher",
+    repository,
+    session: session(parent),
+  });
+  assert.equal(parentAllowed, null);
+
+  const teacherAllowed = await authorizeAiRoute(requestWithJson({ childId: "c-1" }), {
+    requiredRole: "parent-or-teacher",
+    repository,
+    session: session(teacher),
+  });
+  assert.equal(teacherAllowed, null);
+
+  const outsideTeacherDenied = await authorizeAiRoute(
+    requestWithJson({ childId: "c-1" }),
+    {
+      requiredRole: "parent-or-teacher",
+      repository,
+      session: session(outsideTeacher),
+    }
+  );
+  assert.ok(outsideTeacherDenied instanceof Response);
+  assert.equal(outsideTeacherDenied.status, 403);
+  assert.equal(
+    (await readLimited(outsideTeacherDenied)).reason,
+    "forbidden_child"
+  );
+
+  const adminDenied = await authorizeAiRoute(requestWithJson({ childId: "c-1" }), {
+    requiredRole: "parent-or-teacher",
+    repository,
+    session: session(admin),
+  });
+  assert.ok(adminDenied instanceof Response);
+  assert.equal(adminDenied.status, 403);
+  const adminDeniedBody = await readLimited(adminDenied);
+  assert.equal(adminDeniedBody.reason, "role_mismatch");
+  assert.equal(adminDeniedBody.requiredRole, "parent-or-teacher");
 });
 
 test("role mismatch and missing session return explicit limited envelopes", async () => {

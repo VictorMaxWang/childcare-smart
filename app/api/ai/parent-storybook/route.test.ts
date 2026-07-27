@@ -105,13 +105,14 @@ function buildPayload(): ParentStoryBookRequest {
 
 function buildStorybookRouteRequest(
   payload: ParentStoryBookRequest = buildPayload(),
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  accountId = "u-parent"
 ) {
   return new Request("http://localhost:3000/api/ai/parent-storybook", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-demo-account-id": "u-parent",
+      "x-demo-account-id": accountId,
     },
     body: JSON.stringify(payload),
     signal,
@@ -428,6 +429,117 @@ test("parent storybook route still rejects unauthorized child ids", async () => 
   assert.equal(response.status, 403);
   assert.equal(body.code, "forbidden_scope");
   assert.ok(body.error);
+});
+
+test("teacher can generate a storybook only for a child in the assigned class", async () => {
+  const originalFetch = globalThis.fetch;
+  let callCount = 0;
+  parentStoryBookCacheInternals.storyResponseCache.clear();
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+
+  globalThis.fetch = (async () => {
+    callCount += 1;
+    return new Response(JSON.stringify(buildRemoteStory()), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+      },
+      async () => {
+        const payload = buildPayload();
+        const allowed = await POST(
+          buildStorybookRouteRequest(
+            {
+              ...payload,
+              requestSource: "teacher-storybook-page:route-test",
+            },
+            undefined,
+            "u-teacher2"
+          )
+        );
+        const allowedBody = (await allowed.json()) as ParentStoryBookResponse;
+        assert.equal(allowed.status, 200);
+        assert.equal(callCount, 1);
+        assert.equal(
+          verifyAiResultAttestation(allowedBody, {
+            userId: "u-teacher2",
+            institutionId: "inst-1",
+            capability: "parent-storybook",
+            scopeId: "c-1",
+          }),
+          true
+        );
+
+        const denied = await POST(
+          buildStorybookRouteRequest(
+            {
+              ...payload,
+              requestSource: "teacher-storybook-page:wrong-class",
+            },
+            undefined,
+            "u-teacher"
+          )
+        );
+        const deniedBody = (await denied.json()) as {
+          code?: string;
+          reason?: string;
+        };
+        assert.equal(denied.status, 403);
+        assert.equal(deniedBody.code, "forbidden_scope");
+        assert.equal(deniedBody.reason, "forbidden_child");
+        assert.equal(callCount, 1);
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    parentStoryBookCacheInternals.storyResponseCache.clear();
+    parentStoryBookCacheInternals.mediaAssetCache.clear();
+  }
+});
+
+test("teacher cannot invoke the parent-only demoSeed storybook path", async () => {
+  const originalFetch = globalThis.fetch;
+  let callCount = 0;
+  globalThis.fetch = (async () => {
+    callCount += 1;
+    return new Response(JSON.stringify(buildRemoteStory()), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const payload = buildPayload();
+    const response = await POST(
+      buildStorybookRouteRequest(
+        {
+          ...payload,
+          requestSource: "parent-storybook-demo-seed:teacher-denied",
+        },
+        undefined,
+        "u-teacher2"
+      )
+    );
+    const body = (await response.json()) as {
+      code?: string;
+      reason?: string;
+      requiredRole?: string;
+    };
+
+    assert.equal(response.status, 403);
+    assert.equal(body.code, "forbidden_scope");
+    assert.equal(body.reason, "role_mismatch");
+    assert.equal(body.requiredRole, "parent");
+    assert.equal(callCount, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("parent storybook route still rejects real snapshot child mismatch", async () => {

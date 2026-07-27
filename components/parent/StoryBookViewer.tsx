@@ -35,6 +35,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PARENT_STORYBOOK_PRESETS, splitStoryBookCaptionSegments } from "@/lib/agent/parent-storybook-presets";
 import type {
   ParentStoryBookGenerationMode,
@@ -64,6 +71,7 @@ import {
 } from "@/lib/voice/browser-tts";
 
 type StoryBookViewerStatus = "loading" | "storybook" | "card" | "empty" | "error";
+type StoryBookViewerRole = "parent" | "teacher";
 type PlaybackState = "idle" | "loading" | "playing" | "paused" | "preview" | "local";
 type StoryBookTheme = ReturnType<typeof getTheme>;
 type StoryBookRuntimeTransport = "remote-brain-proxy" | "next-json-fallback" | "next-stream-fallback";
@@ -1347,6 +1355,12 @@ export default function StoryBookViewer({
   parentHref = "/parent",
   tonightActionHref = "/parent/agent",
   feedbackHref = "/parent/agent#feedback",
+  workspaceRole = "parent",
+  availableChildren = [],
+  selectedChildId,
+  onSelectedChildChange,
+  sourceSummary = [],
+  savedStorybookCount = 0,
   lockedStorybook,
 }: {
   status: StoryBookViewerStatus;
@@ -1386,6 +1400,19 @@ export default function StoryBookViewer({
   parentHref?: string;
   tonightActionHref?: string;
   feedbackHref?: string;
+  workspaceRole?: StoryBookViewerRole;
+  availableChildren?: ReadonlyArray<{
+    id: string;
+    name: string;
+    className?: string;
+  }>;
+  selectedChildId?: string;
+  onSelectedChildChange?: (childId: string) => void;
+  sourceSummary?: ReadonlyArray<{
+    label: string;
+    value: number;
+  }>;
+  savedStorybookCount?: number;
   lockedStorybook?: {
     subtitle: string;
     paged?: boolean;
@@ -1395,6 +1422,8 @@ export default function StoryBookViewer({
     feedbackPrompt?: string;
   };
 }) {
+  const isTeacherWorkspace = workspaceRole === "teacher";
+  const homeLabel = isTeacherWorkspace ? "返回教师工作台" : "返回家长首页";
   const theme = getTheme(story?.stylePreset ?? selectedPresetId);
   const runtimeStory = story ? getRuntimeStory(story) : null;
   const selectedThemeChip = themeChips.includes(manualTheme.trim()) ? manualTheme.trim() : null;
@@ -1451,8 +1480,10 @@ export default function StoryBookViewer({
       errorMessage={errorMessage}
       onRetry={onRetry}
       parentHref={parentHref}
+      homeLabel={homeLabel}
       quietClass={theme.quiet}
       accentClass={theme.accent}
+      isTeacherWorkspace={isTeacherWorkspace}
     />
   ) : (
     <StoryBookSceneStream
@@ -1498,9 +1529,19 @@ export default function StoryBookViewer({
         "min-h-[100svh] px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+9.5rem)] sm:px-6 sm:pt-6 sm:pb-[calc(env(safe-area-inset-bottom)+9.75rem)] lg:pb-6",
         theme.page
       )}
+      data-testid={isTeacherWorkspace ? "teacher-storybook-workspace" : "parent-storybook-workspace"}
+      data-workspace-role={workspaceRole}
+      data-selected-child-id={selectedChildId ?? ""}
+      data-generation-state={status}
+      data-storybook-id={story?.storyId ?? ""}
     >
       <div className="mx-auto flex max-w-[1320px] gap-6">
-        <aside className="sticky top-4 hidden h-[calc(100svh-2rem)] w-52 shrink-0 flex-col justify-between rounded-[28px] border border-slate-100 bg-white/86 p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] backdrop-blur xl:flex">
+        <aside
+          className={cn(
+            "sticky top-4 hidden h-[calc(100svh-2rem)] w-52 shrink-0 flex-col justify-between rounded-[28px] border border-slate-100 bg-white/86 p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] backdrop-blur",
+            !isTeacherWorkspace && "xl:flex"
+          )}
+        >
           <div>
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-600 text-white">
@@ -1553,6 +1594,59 @@ export default function StoryBookViewer({
           </div>
         </aside>
         <div className="min-w-0 flex-1 space-y-4">
+        {isTeacherWorkspace ? (
+          <section className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-[0_16px_44px_rgb(79_70_229_/_0.10)] sm:p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <Badge variant="info">教师端 · 同班幼儿</Badge>
+                <h1 className="mt-3 text-2xl font-black tracking-normal text-slate-950">
+                  为选定幼儿生成成长绘本
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  {availableChildren.length > 0
+                    ? "绘本只会引用当前教师可见范围内的健康、饮食、成长和家园反馈记录，保存后对应家长也能回看。"
+                    : "当前账号尚未分配可见幼儿，请先接受园长邀请并加入班级。"}
+                </p>
+                <div
+                  className="mt-3 flex flex-wrap gap-2"
+                  data-testid="teacher-storybook-source-summary"
+                >
+                  {sourceSummary.map((item) => (
+                    <Badge key={item.label} variant={item.value > 0 ? "secondary" : "outline"}>
+                      {item.label} {item.value}
+                    </Badge>
+                  ))}
+                  <Badge variant={savedStorybookCount > 0 ? "success" : "outline"}>
+                    已保存 {savedStorybookCount} 本
+                  </Badge>
+                </div>
+              </div>
+              <div className="w-full lg:w-80">
+                <p className="mb-2 text-sm font-semibold text-slate-800">当前幼儿</p>
+                <Select
+                  value={selectedChildId || undefined}
+                  disabled={availableChildren.length === 0}
+                  onValueChange={onSelectedChildChange}
+                >
+                  <SelectTrigger data-testid="teacher-storybook-child-select" aria-label="选择绘本幼儿">
+                    <SelectValue placeholder="请选择一名幼儿" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableChildren.map((child) => (
+                      <SelectItem
+                        key={child.id}
+                        value={child.id}
+                        data-testid={`teacher-storybook-child-option-${child.id}`}
+                      >
+                        {child.name}{child.className ? ` · ${child.className}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </section>
+        ) : null}
         <div className="flex items-center justify-between gap-3">
           <Button
             asChild
@@ -1561,13 +1655,13 @@ export default function StoryBookViewer({
           >
             <StoryBookLink href={parentHref}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              返回家长首页
+              {homeLabel}
             </StoryBookLink>
           </Button>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Badge variant="info">
               <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              成长绘本助手
+              {isTeacherWorkspace ? "教师绘本助手" : "成长绘本助手"}
             </Badge>
             {modeCopy ? (
               <Badge variant={modeCopy.badgeVariant}>
@@ -1589,7 +1683,7 @@ export default function StoryBookViewer({
               </div>
               <h2 className="mt-4 text-3xl font-black tracking-normal text-slate-950">成长绘本 / 成长故事</h2>
               <p className="mt-2 max-w-2xl text-base leading-7 text-slate-600">
-                记录{selectedChildName ?? "孩子"}在园的每个成长瞬间，见证她的点滴进步与美好时光。
+                记录{selectedChildName ?? "孩子"}在园的每个成长瞬间，见证孩子的点滴进步与美好时光。
               </p>
             </div>
             <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-none sm:flex sm:flex-wrap">
@@ -1597,9 +1691,15 @@ export default function StoryBookViewer({
                 <RotateCcw className="mr-2 h-4 w-4" />
                 刷新故事
               </Button>
-              <Button type="button" className={cn("w-full rounded-full shadow-sm sm:w-auto", theme.accent)} disabled={!canGenerate} onClick={onGenerate}>
+              <Button
+                type="button"
+                className={cn("w-full rounded-full shadow-sm sm:w-auto", theme.accent)}
+                disabled={!canGenerate}
+                data-testid={isTeacherWorkspace ? "teacher-storybook-generate" : undefined}
+                onClick={onGenerate}
+              >
                 <Sparkles className="mr-2 h-4 w-4" />
-                添加故事
+                {isTeacherWorkspace ? "生成绘本" : "添加故事"}
               </Button>
               {story ? (
                 <>
@@ -1610,7 +1710,7 @@ export default function StoryBookViewer({
                   >
                     <StoryBookLink href={tonightActionHref}>
                       <Sparkles className="mr-2 h-4 w-4" />
-                      看今晚怎么做
+                      {isTeacherWorkspace ? "打开幼儿 AI 建议" : "看今晚怎么做"}
                     </StoryBookLink>
                   </Button>
                   <Button
@@ -1621,7 +1721,7 @@ export default function StoryBookViewer({
                   >
                     <StoryBookLink href={feedbackHref}>
                       <MessageCircle className="mr-2 h-4 w-4" />
-                      做完去反馈
+                      {isTeacherWorkspace ? "进入家园沟通" : "做完去反馈"}
                     </StoryBookLink>
                   </Button>
                   <Button
@@ -2063,7 +2163,10 @@ export default function StoryBookViewer({
             )}
 
             {refreshMessage ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-6 text-amber-900">
+              <div
+                className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-6 text-amber-900"
+                data-testid={isTeacherWorkspace ? "teacher-storybook-save-status" : undefined}
+              >
                 {refreshMessage}
               </div>
             ) : null}
@@ -3348,15 +3451,19 @@ function EmptyStoryState({
   errorMessage,
   onRetry,
   parentHref,
+  homeLabel,
   quietClass,
   accentClass,
+  isTeacherWorkspace,
 }: {
   status: StoryBookViewerStatus;
   errorMessage?: string | null;
   onRetry?: () => void;
   parentHref: string;
+  homeLabel: string;
   quietClass: string;
   accentClass: string;
+  isTeacherWorkspace: boolean;
 }) {
   if (status === "loading") {
     return (
@@ -3387,7 +3494,7 @@ function EmptyStoryState({
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           <Button asChild variant="outline" className={cn("rounded-full", quietClass)}>
-            <StoryBookLink href={parentHref}>返回家长首页</StoryBookLink>
+            <StoryBookLink href={parentHref}>{homeLabel}</StoryBookLink>
           </Button>
           {onRetry ? (
             <Button type="button" className={cn("rounded-full", accentClass)} onClick={onRetry}>
@@ -3405,7 +3512,8 @@ function EmptyStoryState({
       <CardHeader>
         <CardTitle className="text-xl text-slate-950">先设定这本成长绘本</CardTitle>
         <CardDescription className="leading-7 text-slate-600">
-          选择模式、主题、页数和风格后，点击“重新生成”，就会得到一部图文音一体的成长绘本。
+          选择模式、主题、页数和风格后，点击“{isTeacherWorkspace ? "生成绘本" : "重新生成"}”，
+          就会得到一部图文音一体的成长绘本。
         </CardDescription>
       </CardHeader>
       <CardContent className="text-sm leading-7 text-slate-600">

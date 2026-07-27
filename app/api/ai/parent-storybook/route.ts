@@ -45,6 +45,7 @@ const DEFAULT_PARENT_STORYBOOK_REQUEST_TIMEOUT_MS = 70_000;
 const MAX_PARENT_STORYBOOK_BRAIN_TIMEOUT_MS = 45_000;
 const MAX_PARENT_STORYBOOK_REQUEST_TIMEOUT_MS = 90_000;
 const ROLE_PARENT = "家长";
+const ROLE_TEACHER = "教师";
 
 function resolveBoundedTimeoutMs(
   rawValue: string | undefined,
@@ -542,7 +543,7 @@ export async function POST(request: Request) {
     routeTimeoutSignal,
   ]);
   const authResult = await authorizeAiRouteSession(request, {
-    requiredRole: "parent",
+    requiredRole: "parent-or-teacher",
     collectJsonClassNames: false,
     ignoredChildIds: ["storybook-guest"],
   });
@@ -570,12 +571,12 @@ export async function POST(request: Request) {
   const requestedChildId = resolveRequestChildId(payload);
   const snapshotChildId = resolveSnapshotChildId(payload);
   const sessionUser = authResult.session.user;
-  if (sessionUser.role !== ROLE_PARENT) {
+  if (sessionUser.role !== ROLE_PARENT && sessionUser.role !== ROLE_TEACHER) {
     return aiRouteLimitedResponse(
       {
         reason: "role_mismatch",
-        error: "Parent role required.",
-        requiredRole: "parent",
+        error: "Parent or teacher role required.",
+        requiredRole: "parent-or-teacher",
       },
       { headers: buildCacheHeaders("bypass") }
     );
@@ -584,8 +585,8 @@ export async function POST(request: Request) {
     return aiRouteLimitedResponse(
       {
         reason: "scope_required",
-        error: "Child scope is required for parent storybook generation.",
-        requiredRole: "parent",
+        error: "Child scope is required for storybook generation.",
+        requiredRole: "parent-or-teacher",
       },
       { headers: buildCacheHeaders("bypass") }
     );
@@ -595,6 +596,17 @@ export async function POST(request: Request) {
       {
         reason: "forbidden_child",
         error: "Storybook snapshot child does not match requested child",
+        requiredRole: "parent-or-teacher",
+      },
+      { headers: buildCacheHeaders("bypass") }
+    );
+  }
+  // demoSeed 包含固定演示材料，不能因开放教师真实生成而扩大到教师会话。
+  if (isDemoSeedRequest(payload) && sessionUser.role !== ROLE_PARENT) {
+    return aiRouteLimitedResponse(
+      {
+        reason: "role_mismatch",
+        error: "Demo seed storybooks are only available to demo parent accounts.",
         requiredRole: "parent",
       },
       { headers: buildCacheHeaders("bypass") }
@@ -620,7 +632,7 @@ export async function POST(request: Request) {
           {
             reason: "forbidden_child",
             error: "Current account cannot access this child storybook scope.",
-            requiredRole: "parent",
+            requiredRole: "parent-or-teacher",
           },
           { headers: buildCacheHeaders("bypass") }
         );

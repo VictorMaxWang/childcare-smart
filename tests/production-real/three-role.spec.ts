@@ -442,7 +442,7 @@ function storyTextResponseDiagnostic(
 }
 
 async function completeStorybookMedia(
-  parent: APIRequestContext,
+  actor: APIRequestContext,
   childId: string,
   initialStory: Record<string, unknown>
 ) {
@@ -458,7 +458,7 @@ async function completeStorybookMedia(
   ) {
     let response: APIResponse;
     try {
-      response = await parent.post(
+      response = await actor.post(
         "/api/ai/parent-storybook/media-status",
         {
           data: {
@@ -509,7 +509,8 @@ async function verifyDietAndStorybookAi(
     Snapshot["children"][number],
     "id" | "name" | "className"
   >,
-  marker: string
+  marker: string,
+  sourceRecordIds: string[]
 ) {
   const foods = [
     { name: "番茄炒蛋", category: "蛋白", amount: "80g" },
@@ -540,10 +541,10 @@ async function verifyDietAndStorybookAi(
   expect(dietResponse.status()).toBe(200);
   expectCompleteDietEvaluation(await readJson(dietResponse));
 
-  const storyResponse = await parent.post("/api/ai/parent-storybook", {
+  const storyResponse = await teacher.post("/api/ai/parent-storybook", {
     data: {
       childId: child.id,
-      requestSource: "production-real-smoke",
+      requestSource: "teacher-storybook-page:production-real-smoke",
       generationMode: "child-personalized",
       pageCount: 4,
       stylePreset: "sunrise-watercolor",
@@ -589,12 +590,12 @@ async function verifyDietAndStorybookAi(
     storyResponse.status(),
     storyTextResponseDiagnostic(storyResponse, story)
   ).toBe(200);
-  expectMeaningfulAiResult(story, "parent storybook", {
+  expectMeaningfulAiResult(story, "teacher storybook", {
     requireLive: requireLiveAi,
   });
 
   if (requireLiveAi) {
-    story = await completeStorybookMedia(parent, child.id, story);
+    story = await completeStorybookMedia(teacher, child.id, story);
     expect(
       storyMediaReady(story),
       `storybook image and audio must be real: ${storyMediaDiagnostic(story)}`
@@ -623,7 +624,7 @@ async function verifyDietAndStorybookAi(
       expect(imageUrl).toMatch(
         /^\/api\/ai\/parent-storybook\/media\/[a-f0-9]{40}$/u
       );
-      const imageResponse = await getWithTransientNetworkRetry(parent, imageUrl, {
+      const imageResponse = await getWithTransientNetworkRetry(teacher, imageUrl, {
         headers: {
           "x-smartchildcare-require-database": "1",
         },
@@ -643,7 +644,7 @@ async function verifyDietAndStorybookAi(
       expect(audioUrl, "storybook scene must have audio media").toMatch(
         /^\/api\/ai\/parent-storybook\/media\/[a-f0-9]{40}$/u
       );
-      const audioResponse = await getWithTransientNetworkRetry(parent, audioUrl, {
+      const audioResponse = await getWithTransientNetworkRetry(teacher, audioUrl, {
         headers: {
           "x-smartchildcare-require-database": "1",
         },
@@ -660,6 +661,65 @@ async function verifyDietAndStorybookAi(
       expect(audioBytes.subarray(8, 12).toString("ascii")).toBe("WAVE");
     }
   }
+
+  const storybookId = String(story.storyId ?? "");
+  const storybookTitle = String(story.title ?? "");
+  expect(storybookId).not.toBe("");
+  expect(storybookTitle).not.toBe("");
+  await expectEnvelope(
+    await teacher.post("/api/storybooks", {
+      data: {
+        storybookId,
+        childId: child.id,
+        generatedAt: story.generatedAt,
+        sourceRecordIds,
+        response: story,
+      },
+    }),
+    201
+  );
+
+  const parentStorybooks = await expectEnvelope<Array<{ storybookId: string }>>(
+    await getWithTransientNetworkRetry(
+      parent,
+      `/api/storybooks?childId=${encodeURIComponent(child.id)}`
+    )
+  );
+  expect(parentStorybooks.some((item) => item.storybookId === storybookId)).toBe(
+    true
+  );
+  const parentExport = await expectEnvelope<{ content: string }>(
+    await getWithTransientNetworkRetry(
+      parent,
+      `/api/storybooks/${encodeURIComponent(storybookId)}/export?format=markdown`
+    )
+  );
+  expect(parentExport.content).toContain(storybookTitle);
+
+  if (requireLiveAi) {
+    const firstScene = scenes[0] as Record<string, unknown> | undefined;
+    for (const mediaUrl of [
+      String(firstScene?.imageUrl ?? firstScene?.assetRef ?? ""),
+      String(firstScene?.audioUrl ?? ""),
+    ]) {
+      expect(mediaUrl).toMatch(
+        /^\/api\/ai\/parent-storybook\/media\/[a-f0-9]{40}$/u
+      );
+      const parentMediaResponse = await getWithTransientNetworkRetry(
+        parent,
+        mediaUrl,
+        {
+          headers: {
+            "x-smartchildcare-require-database": "1",
+          },
+        }
+      );
+      expect(parentMediaResponse.status()).toBe(200);
+      expect((await parentMediaResponse.body()).byteLength).toBeGreaterThan(0);
+    }
+  }
+
+  return { storybookId, storybookTitle };
 }
 
 async function verifyRolePages(
@@ -670,6 +730,7 @@ async function verifyRolePages(
     teacher: Credentials;
     parent: Credentials;
     childId: string;
+    storybookTitle?: string;
   }
 ) {
   const cases = [
@@ -684,9 +745,21 @@ async function verifyRolePages(
       shell: "teacher",
     },
     {
+      credentials: input.teacher,
+      route: `/teacher/storybook?child=${encodeURIComponent(input.childId)}`,
+      shell: "teacher",
+      testId: "teacher-storybook-workspace",
+    },
+    {
       credentials: input.parent,
       route: `/parent?child=${encodeURIComponent(input.childId)}`,
       shell: "parent",
+    },
+    {
+      credentials: input.parent,
+      route: `/parent/storybook?child=${encodeURIComponent(input.childId)}`,
+      shell: "parent",
+      testId: "parent-storybook-workspace",
     },
   ] as const;
 
@@ -703,6 +776,15 @@ async function verifyRolePages(
         "data-role-shell",
         item.shell
       );
+      if ("testId" in item) {
+        await expect(page.getByTestId(item.testId)).toBeVisible();
+      }
+      if (input.storybookTitle && "testId" in item) {
+        await expect(page.locator("body")).toContainText(
+          input.storybookTitle,
+          { timeout: 30_000 }
+        );
+      }
       await expect(page.getByTestId("global-search-trigger")).toBeVisible();
       await expect(page.getByTestId("notification-center-trigger")).toBeVisible();
       await expect(page.getByTestId("message-center-trigger")).toBeVisible();
@@ -770,7 +852,7 @@ test("existing real admin, teacher, and parent share records and AI", async ({
     );
     expect(child, "existing teacher and parent need a shared child").toBeTruthy();
 
-    await expectEnvelope(
+    const existingHealth = await expectEnvelope<{ id: string }>(
       await teacher.post("/api/records", {
         data: {
           type: "health",
@@ -797,11 +879,19 @@ test("existing real admin, teacher, and parent share records and AI", async ({
     }
 
     await callRoleAi(admin, teacher, parent, child!.id, marker);
+    const existingStorybook = await verifyDietAndStorybookAi(
+      teacher,
+      parent,
+      child!,
+      marker,
+      [existingHealth.id]
+    );
     await verifyRolePages(browser, testInfo, {
       admin: adminCredentials,
       teacher: teacherCredentials,
       parent: parentCredentials,
       childId: child!.id,
+      storybookTitle: existingStorybook.storybookTitle,
     });
   } finally {
     await Promise.all([admin.dispose(), teacher.dispose(), parent.dispose()]);
@@ -1244,12 +1334,19 @@ test("fresh real trio completes binding, media, voice, consultation, and AI", as
     }
 
     await callRoleAi(admin, teacher, parent, child.id, marker);
-    await verifyDietAndStorybookAi(teacher, parent, child, marker);
+    const freshStorybook = await verifyDietAndStorybookAi(
+      teacher,
+      parent,
+      child,
+      marker,
+      [health.id, meal.id, growth.id]
+    );
     await verifyRolePages(browser, testInfo, {
       admin: credentials.admin,
       teacher: credentials.teacher,
       parent: credentials.parent,
       childId: child.id,
+      storybookTitle: freshStorybook.storybookTitle,
     });
   } finally {
     await Promise.all([admin.dispose(), teacher.dispose(), parent.dispose()]);

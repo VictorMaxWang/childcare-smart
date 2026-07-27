@@ -23,6 +23,10 @@ test("teacher nav points workbench home to /teacher and hides institution-only e
 
   assert.equal(navItems[0]?.href, "/teacher");
   assert.equal(navItems[0]?.label, "教师工作台");
+  assert.equal(
+    navItems.some((item) => item.href === "/teacher/storybook" && item.label === "成长绘本"),
+    true
+  );
   assert.equal(navItems.some((item) => item.href === "/admin"), false);
   assert.equal(navItems.some((item) => item.href === "/"), false);
 });

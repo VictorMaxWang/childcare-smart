@@ -128,6 +128,7 @@ const ROLE_META: Record<
 const ROUTE_TITLE_MAP = [
   { prefix: "/teacher/high-risk-consultation", title: "高风险会诊" },
   { prefix: "/teacher/health-file-bridge", title: "健康材料解析" },
+  { prefix: "/teacher/storybook", title: "成长绘本" },
   { prefix: "/teacher/agent", title: "教师 AI 助手" },
   { prefix: "/teacher", title: "教师工作台" },
   { prefix: "/admin/agent", title: "园长 AI 助手" },

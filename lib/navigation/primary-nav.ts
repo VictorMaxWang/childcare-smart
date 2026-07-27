@@ -73,6 +73,11 @@ const TEACHER_HOME_ITEM: PrimaryNavItem = {
   icon: "role-home",
 };
 const TEACHER_AGENT_ITEM: PrimaryNavItem = { href: "/teacher/agent", label: "AI 助手", icon: "ai" };
+const TEACHER_STORYBOOK_ITEM: PrimaryNavItem = {
+  href: "/teacher/storybook",
+  label: "成长绘本",
+  icon: "storybook",
+};
 const TEACHER_CONSULTATION_ITEM: PrimaryNavItem = {
   href: "/teacher/high-risk-consultation",
   label: "风险会诊",
@@ -169,6 +174,7 @@ const ADMIN_NAV_ITEMS: PrimaryNavItem[] = [
 const TEACHER_NAV_ITEMS: PrimaryNavItem[] = [
   TEACHER_HOME_ITEM,
   TEACHER_AGENT_ITEM,
+  TEACHER_STORYBOOK_ITEM,
   TEACHER_CONSULTATION_ITEM,
   TEACHER_HEALTH_FILE_ITEM,
   CHILDREN_ITEM,

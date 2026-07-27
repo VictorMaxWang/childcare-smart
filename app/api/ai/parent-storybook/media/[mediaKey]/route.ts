@@ -101,7 +101,10 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ mediaKey: string }> }
 ) {
-  const authResult = await authorizeAiRouteSession(request, { requiredRole: "parent", allowUnscoped: true });
+  const authResult = await authorizeAiRouteSession(request, {
+    requiredRole: "parent-or-teacher",
+    allowUnscoped: true,
+  });
   if (authResult instanceof Response) return authResult;
 
   const { mediaKey } = await context.params;
@@ -134,7 +137,7 @@ export async function GET(
       return aiRouteLimitedResponse({
         reason: "scope_required",
         error: "Storybook media is missing an authorized child scope.",
-        requiredRole: "parent",
+        requiredRole: "parent-or-teacher",
       });
     }
 
@@ -145,7 +148,7 @@ export async function GET(
         return aiRouteLimitedResponse({
           reason: "forbidden_child",
           error: "当前账号无权访问该绘本媒体。",
-          requiredRole: "parent",
+          requiredRole: "parent-or-teacher",
         });
       }
       return handleApiError(error);
