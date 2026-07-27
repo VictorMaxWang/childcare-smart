@@ -171,6 +171,8 @@ function normalizeAttachments(value: unknown, session: SessionUser) {
       if (!attachmentId || !fileName) return null;
       return normalizeAttachmentStorageForSnapshot({
         attachmentId,
+        uploadRequestId: readString(item.uploadRequestId) || undefined,
+        contentSha256: readString(item.contentSha256) || undefined,
         institutionId: readString(item.institutionId),
         childId: readString(item.childId) || undefined,
         relatedType:

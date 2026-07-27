@@ -141,7 +141,7 @@ async function postWithTransientNetworkRetry(
       ) {
         throw error;
       }
-      // 分析请求不直接写业务记录；短暂断连时有限重试，避免网络抖动掩盖真实业务结果。
+      // 仅供无业务写入的分析请求，或携带稳定 uploadRequestId 的幂等上传使用。
       await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
     }
   }
@@ -1001,18 +1001,23 @@ test("fresh real trio completes binding, media, voice, consultation, and AI", as
       attachmentId: string;
       downloadUrl?: string;
     }>(
-      await teacher.post("/api/attachments/upload", {
-        multipart: {
-          file: {
-            name: `growth-${stamp}.webp`,
-            mimeType: "image/webp",
-            buffer: mealImage,
+      await postWithTransientNetworkRetry(
+        teacher,
+        "/api/attachments/upload",
+        {
+          multipart: {
+            file: {
+              name: `growth-${stamp}.webp`,
+              mimeType: "image/webp",
+              buffer: mealImage,
+            },
+            childId: child.id,
+            relatedType: "growth",
+            relatedId: growth.id,
+            uploadRequestId: `upload-growth-${stamp}`,
           },
-          childId: child.id,
-          relatedType: "growth",
-          relatedId: growth.id,
-        },
-      }),
+        }
+      ),
       201
     );
     expect(growthAttachment.downloadUrl).toContain(
@@ -1039,18 +1044,23 @@ test("fresh real trio completes binding, media, voice, consultation, and AI", as
     const healthAttachment = await expectEnvelope<{
       attachmentId: string;
     }>(
-      await teacher.post("/api/attachments/upload", {
-        multipart: {
-          file: {
-            name: `health-${stamp}.webp`,
-            mimeType: "image/webp",
-            buffer: healthImage,
+      await postWithTransientNetworkRetry(
+        teacher,
+        "/api/attachments/upload",
+        {
+          multipart: {
+            file: {
+              name: `health-${stamp}.webp`,
+              mimeType: "image/webp",
+              buffer: healthImage,
+            },
+            childId: child.id,
+            relatedType: "health-material",
+            relatedId: healthMaterial.materialId,
+            uploadRequestId: `upload-health-${stamp}`,
           },
-          childId: child.id,
-          relatedType: "health-material",
-          relatedId: healthMaterial.materialId,
-        },
-      }),
+        }
+      ),
       201
     );
     const healthBridgeResponse = await postWithTransientNetworkRetry(

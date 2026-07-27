@@ -123,6 +123,17 @@ export interface UploadedAttachmentStorage {
   storageEtag?: string;
 }
 
+export interface AttachmentUploadIdentity {
+  uploadRequestId: string;
+  contentSha256: string;
+  childId?: string;
+  relatedType: AttachmentRelatedType;
+  relatedId: string;
+  fileName: string;
+  mimeType: string;
+  byteSize: number;
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -292,6 +303,52 @@ function requireStaff(session: SessionUser) {
 
 function feedbackIdOf(feedback: SnapshotFeedback) {
   return feedback.feedbackId ?? feedback.id ?? "";
+}
+
+function readAttachmentUploadRequestId(value: unknown) {
+  const uploadRequestId = readString(value).trim().toLowerCase();
+  if (!uploadRequestId) return undefined;
+  if (!/^[a-z0-9][a-z0-9_-]{15,127}$/iu.test(uploadRequestId)) {
+    throw new ApiRouteError(
+      "invalid_request",
+      "uploadRequestId 格式无效。"
+    );
+  }
+  return uploadRequestId;
+}
+
+function readAttachmentContentSha256(value: unknown) {
+  const contentSha256 = readString(value).trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/u.test(contentSha256)) {
+    throw new ApiRouteError(
+      "invalid_request",
+      "附件内容指纹格式无效。"
+    );
+  }
+  return contentSha256;
+}
+
+function assertAttachmentUploadReplay(
+  attachment: ApiAttachment,
+  input: AttachmentUploadIdentity
+) {
+  const matchesOriginalRequest =
+    attachment.storageMode === "object_storage" &&
+    attachment.uploadStatus === "uploaded" &&
+    attachment.contentSha256 === input.contentSha256 &&
+    attachment.childId === input.childId &&
+    attachment.relatedType === input.relatedType &&
+    attachment.relatedId === input.relatedId &&
+    attachment.fileName === input.fileName &&
+    attachment.mimeType === input.mimeType &&
+    attachment.byteSize === input.byteSize;
+  if (!matchesOriginalRequest) {
+    throw new ApiRouteError(
+      "conflict",
+      "该 uploadRequestId 已用于另一份附件，请重新选择文件后重试。"
+    );
+  }
+  return attachment;
 }
 
 function storybookSourceOwnerIds(
@@ -2158,6 +2215,29 @@ export class AppDataService {
     return { childId, relatedType, relatedId };
   }
 
+  async findUploadedAttachmentByRequestId(input: AttachmentUploadIdentity) {
+    const uploadRequestId = readAttachmentUploadRequestId(
+      input.uploadRequestId
+    );
+    if (!uploadRequestId) return undefined;
+    const contentSha256 = readAttachmentContentSha256(input.contentSha256);
+    const snapshot = await this.load();
+    const existing = snapshot.attachments.find(
+      (attachment) =>
+        attachment.institutionId === this.session.institutionId &&
+        attachment.createdBy === this.session.id &&
+        attachment.uploadRequestId === uploadRequestId
+    );
+    if (!existing) return undefined;
+    return this.decorateAttachment(
+      assertAttachmentUploadReplay(existing, {
+        ...input,
+        uploadRequestId,
+        contentSha256,
+      })
+    );
+  }
+
   private async createAttachmentInternal(
     input: AnyRecord,
     uploadedStorage?: UploadedAttachmentStorage
@@ -2179,6 +2259,12 @@ export class AppDataService {
       const fileName = readString(input.fileName, "attachment");
       const mimeType = readString(input.mimeType, "application/octet-stream");
       const byteSize = typeof input.byteSize === "number" ? input.byteSize : undefined;
+      const uploadRequestId = uploadedStorage
+        ? readAttachmentUploadRequestId(input.uploadRequestId)
+        : undefined;
+      const contentSha256 = uploadedStorage
+        ? readAttachmentContentSha256(input.contentSha256)
+        : undefined;
       const requestedPreviewUrl = readString(input.localPreviewUrl) || undefined;
       const localPreviewUrl = isLocalDemoPreviewUrl(requestedPreviewUrl) ? requestedPreviewUrl : undefined;
       const storageKey = uploadedStorage?.storageKey.trim();
@@ -2200,6 +2286,39 @@ export class AppDataService {
       ) {
         throw new ApiRouteError("invalid_request", "Attachment must be 5MB or smaller.");
       }
+      if (uploadRequestId) {
+        if (
+          !contentSha256 ||
+          !relatedType ||
+          !relatedId ||
+          typeof byteSize !== "number"
+        ) {
+          throw new ApiRouteError(
+            "invalid_request",
+            "幂等附件上传必须绑定业务记录并提供文件大小。"
+          );
+        }
+        const existing = snapshot.attachments.find(
+          (attachment) =>
+            attachment.institutionId === this.session.institutionId &&
+            attachment.createdBy === this.session.id &&
+            attachment.uploadRequestId === uploadRequestId
+        );
+        if (existing) {
+          return this.decorateAttachment(
+            assertAttachmentUploadReplay(existing, {
+              uploadRequestId,
+              contentSha256,
+              childId,
+              relatedType,
+              relatedId,
+              fileName,
+              mimeType,
+              byteSize,
+            })
+          );
+        }
+      }
       if (relatedType && relatedId) {
         const existingRelatedCount = snapshot.attachments.filter(
           (item) =>
@@ -2213,6 +2332,8 @@ export class AppDataService {
       }
       const attachment: ApiAttachment = {
         attachmentId: createApiId("attch"),
+        uploadRequestId,
+        contentSha256,
         institutionId: this.session.institutionId,
         childId,
         relatedType: relatedType || undefined,

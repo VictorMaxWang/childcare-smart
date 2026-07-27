@@ -1141,6 +1141,8 @@ test("private meal media is scoped to staff and its canonical meal record", asyn
 
     const uploaded = await teacher.createUploadedAttachment(
       {
+        uploadRequestId: "attachment-request-meal-photo-01",
+        contentSha256: "a".repeat(64),
         childId: "c-1",
         relatedType: "meal",
         relatedId: meal.id,
@@ -1158,8 +1160,44 @@ test("private meal media is scoped to staff and its canonical meal record", asyn
     assert.equal(uploaded.storageMode, "object_storage");
     assert.equal(uploaded.uploadStatus, "uploaded");
     assert.equal(
+      uploaded.uploadRequestId,
+      "attachment-request-meal-photo-01"
+    );
+    assert.equal(
       uploaded.downloadUrl,
       `/api/attachments/${uploaded.attachmentId}/content`
+    );
+    const replayIdentity = {
+      uploadRequestId: "attachment-request-meal-photo-01",
+      contentSha256: "a".repeat(64),
+      childId: "c-1",
+      relatedType: "meal" as const,
+      relatedId: meal.id,
+      fileName: "meal-photo.png",
+      mimeType: "image/png",
+      byteSize: 68,
+    };
+    const foundReplay =
+      await teacher.findUploadedAttachmentByRequestId(replayIdentity);
+    assert.equal(foundReplay?.attachmentId, uploaded.attachmentId);
+    const concurrentReplay = await teacher.createUploadedAttachment(
+      replayIdentity,
+      {
+        storageProvider: "vercel_blob",
+        storageKey:
+          "smartchildcare/private-media/v1/institution/child/duplicate.png",
+        storageEtag: "duplicate-etag",
+      }
+    );
+    assert.equal(concurrentReplay.attachmentId, uploaded.attachmentId);
+    assert.equal(concurrentReplay.storageKey, uploaded.storageKey);
+    await assert.rejects(
+      () =>
+        teacher.findUploadedAttachmentByRequestId({
+          ...replayIdentity,
+          contentSha256: "b".repeat(64),
+        }),
+      assertApiError("conflict")
     );
     const updatedMeal = await teacher.updateRecord("meal", meal.id, {
       photoUrls: [

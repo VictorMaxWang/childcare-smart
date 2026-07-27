@@ -363,6 +363,8 @@ export interface ApiAssignment {
 
 export interface ApiAttachment {
   attachmentId: string;
+  uploadRequestId?: string;
+  contentSha256?: string;
   institutionId: string;
   childId?: string;
   relatedType?: AttachmentRelatedType;
