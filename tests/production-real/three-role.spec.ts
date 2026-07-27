@@ -123,6 +123,31 @@ async function login(api: APIRequestContext, credentials: Credentials) {
   expect(body?.ok).toBe(true);
 }
 
+async function postWithTransientNetworkRetry(
+  api: APIRequestContext,
+  url: string,
+  options: Parameters<APIRequestContext["post"]>[1]
+) {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await api.post(url, options);
+    } catch (error) {
+      lastError = error;
+      const reason = error instanceof Error ? error.message : String(error);
+      if (
+        attempt >= 2 ||
+        !/(?:ECONNRESET|ETIMEDOUT|fetch failed|socket hang up)/iu.test(reason)
+      ) {
+        throw error;
+      }
+      // 分析请求不直接写业务记录；短暂断连时有限重试，避免网络抖动掩盖真实业务结果。
+      await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
 async function register(
   api: APIRequestContext,
   role: "admin" | "teacher" | "parent",
@@ -1028,7 +1053,8 @@ test("fresh real trio completes binding, media, voice, consultation, and AI", as
       }),
       201
     );
-    const healthBridgeResponse = await teacher.post(
+    const healthBridgeResponse = await postWithTransientNetworkRetry(
+      teacher,
       "/api/ai/health-file-bridge",
       {
         data: {
