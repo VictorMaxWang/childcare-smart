@@ -4,8 +4,10 @@
 
 ## 当前状态
 
-- 教师成长绘本候选已完成本地实现：教师可在分班授权内选择幼儿、按真实记录生成并保存绘本，家长按监护授权读取同一份结果；切换幼儿会取消上一请求，打开页面不会自动触发付费生成。
-- 本轮本地门禁为 `lint`、`typecheck`、production build、`667/667` Node、`28/28` 媒体状态和 `2/2` 定向浏览器测试通过；生产现有账号与 fresh 三端账号验收仍需等待该候选部署后执行。
+- 教师成长绘本已完成生产实现：教师可在分班授权内选择幼儿、按真实记录生成并保存绘本，家长按监护授权读取同一份结果；切换幼儿会取消上一请求，打开页面不会自动触发付费生成。
+- 首轮生产验收证明教师真实文案、4 页图片/语音、保存和家长 API 读取成功，同时发现重新打开页面按旧 `generatedAt` 恢复了另一绘本；`995de30` 已改为优先按保存/媒体写回 `updatedAt` 排序。
+- 本轮门禁为 `lint`、`typecheck`、production build、`670/670` Node、`28/28` 媒体状态和 `2/2` 定向浏览器测试通过；部署 `dpl_AwQUvbtRtFBKdGtnXC28GgHsMPhs` 的非 formal `all` smoke 为 `2 passed / 0 skipped / 0 flaky / 0 failed`，同时覆盖已有三账号和 fresh 注册绑定三账号。
+- 功能性生产闭环已验证；本轮没有运行需要完整 `.env.release` 和报告签名的 formal gate，因此不能把非 formal 报告表述为正式发布证据。
 - 真实账号注册仍创建独立的个人/机构初始空间；注册成功不等于已经加入同一托育机构。
 - 新增的一次性机构邀请码负责后续正式绑定：园长创建邀请，教师按稳定班级 ID 加入，家长在完整监护同意校验后迁入孩子与历史记录。
 - 规范授权真相位于 `institution_memberships`、`teacher_class_assignments`、`child_registry`、`guardian_child_links`；`app_users` 的机构、班级、child_ids 仅保留兼容投影。

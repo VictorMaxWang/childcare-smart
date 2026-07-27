@@ -6,7 +6,7 @@
 
 ### Teacher Storybook Generation Extension
 
-- 状态：`Local verified / Production smoke pending`
+- 状态：`Production verified / Formal evidence pending`
 - 目标：教师可在自身机构与分班授权范围内选择幼儿，使用真实成长记录生成、补全媒体并保存绘本；对应家长读取同一份服务端绘本。
 - 主改动源：
   - `app/teacher/storybook/page.tsx`
@@ -23,8 +23,13 @@
   - 生产验收同时覆盖现有三示例账号与新注册、邀请码绑定的三端账号。
 - 本地验证：
   - `npm run lint`、`npm run typecheck`、`npm run build` 通过，正式构建已包含 `/teacher/storybook`。
-  - 全量 Node 回归 `667/667` 通过；教师绘本定向 route/guard/nav `39/39`、媒体状态 `28/28` 通过。
+  - 全量 Node 回归 `670/670` 通过；教师绘本定向 route/guard/nav `39/39`、媒体状态 `28/28` 通过。
   - `tests/feature-completion/parent-features.spec.ts` 浏览器回归 `2/2` 通过，教师保存的同一 storybook 可由家长列表与导出接口读取。
+- 生产验证：
+  - 首轮 `all` smoke 已完成已有账号的教师真实生成、4 页图片/语音、保存和家长 API 读取，并发现重新打开页面仍按 provider `generatedAt` 恢复旧绘本。
+  - `995de30` 改为优先按本次保存/媒体写回的 `updatedAt` 排序，旧数据再回退 `generatedAt`；红测和全量门禁通过后已部署。
+  - 生产部署 `dpl_AwQUvbtRtFBKdGtnXC28GgHsMPhs` 上的 `REAL_SMOKE_MODE=all` 为 `2 passed / 0 skipped / 0 flaky / 0 failed`：已有三账号和 fresh 注册绑定三账号均由教师生成，家长读取同一绘本与私有 WebP/WAV 媒体，双方页面显示同一标题。
+  - 本轮使用非 formal smoke；功能闭环已验证，但未生成带完整发布环境字段和签名的 formal release 证据。
 
 ### Three-role Production Hardening & Functional Completion
 
