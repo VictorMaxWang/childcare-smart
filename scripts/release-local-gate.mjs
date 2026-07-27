@@ -1,39 +1,71 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+
+import {
+  assertReleaseSourceClean,
+  normalizeReleaseRunId,
+  readLocalCommitSha,
+} from "./release-commit-proof.mjs";
+import { maybeSignReleaseReport } from "./release-report-proof.mjs";
+import {
+  resolveNpmCliPath,
+  resolveTrustedNpmConfigArgs,
+} from "./release-environment-proof.mjs";
 
 const cwd = process.cwd();
 const args = process.argv.slice(2);
 const allowRealAccountSkip = args.includes("--allow-real-account-skip");
 const requireRealAccounts = args.includes("--require-real-accounts");
-if (allowRealAccountSkip && requireRealAccounts) {
-  console.error(
-    "[FAIL] Choose either --allow-real-account-skip or --require-real-accounts, not both."
-  );
-  process.exit(1);
-}
 const mode = allowRealAccountSkip ? "local-opt-out" : "strict";
+const evidenceRoot = path.resolve(
+  process.env.RELEASE_EVIDENCE_ROOT?.trim() || cwd
+);
 const reportArg = args.find((arg) => arg.startsWith("--report-path="));
 const reportPath = reportArg
   ? reportArg.slice("--report-path=".length)
   : allowRealAccountSkip
     ? "artifacts/release-gate.local.json"
     : "artifacts/release-gate.strict.json";
-const releaseCheckReportPath = "artifacts/release-check.local.json";
-const browserPolicyReportPath = `artifacts/release-browser/policy-${mode}.json`;
-const sqlCheckReportPath = "artifacts/release-sql-check.json";
-const npmBin = "npm";
+const releaseCheckReportPath = path.join(
+  evidenceRoot,
+  "artifacts/release-check.local.json"
+);
+const browserPolicyReportPath = path.join(
+  evidenceRoot,
+  `artifacts/release-browser/policy-${mode}.json`
+);
+const browserPlaywrightReportPath = path.join(
+  evidenceRoot,
+  `artifacts/release-browser/playwright-${mode}.json`
+);
+const sqlCheckReportPath = path.join(
+  evidenceRoot,
+  "artifacts/release-sql-check.json"
+);
+const npmBin = process.execPath;
+let npmCliPath = "";
 const defaultStepTimeoutMs = 60 * 60 * 1_000;
+const releaseRunId =
+  normalizeReleaseRunId(process.env.RELEASE_RUN_ID) || randomUUID();
 
 function resolvePath(filePath) {
-  return path.isAbsolute(filePath) ? filePath : path.join(cwd, filePath);
+  return path.isAbsolute(filePath)
+    ? filePath
+    : path.join(evidenceRoot, filePath);
 }
 
 function writeReport(report) {
   const absReport = resolvePath(reportPath);
   fs.mkdirSync(path.dirname(absReport), { recursive: true });
-  fs.writeFileSync(absReport, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  const signedReport = maybeSignReleaseReport(report);
+  fs.writeFileSync(
+    absReport,
+    `${JSON.stringify(signedReport, null, 2)}\n`,
+    "utf8"
+  );
   console.log(`[OK] Local release gate report written: ${absReport}`);
 }
 
@@ -63,29 +95,67 @@ function runStep(step) {
   };
 }
 
-// 门禁启动时立即作废旧报告，防止中途失败后仍被 readiness 误当成最新结果。
+// 启动门禁时立即废弃旧报告，避免中途失败后被 readiness 误判为新结果。
 fs.rmSync(resolvePath(reportPath), { force: true });
 fs.rmSync(resolvePath(browserPolicyReportPath), { force: true });
+fs.rmSync(resolvePath(browserPlaywrightReportPath), { force: true });
 if (!allowRealAccountSkip) {
   fs.rmSync(resolvePath(sqlCheckReportPath), { force: true });
 }
+if (allowRealAccountSkip && requireRealAccounts) {
+  console.error(
+    "[FAIL] Choose either --allow-real-account-skip or --require-real-accounts, not both."
+  );
+  process.exit(1);
+}
+npmCliPath = resolveNpmCliPath();
+const npmConfigArgs = resolveTrustedNpmConfigArgs(process.env, {
+  required: process.env.RELEASE_ISOLATED_WORKTREE === "1",
+});
+const npmRunArgs = (scriptName) => [
+  npmCliPath,
+  ...npmConfigArgs,
+  "run",
+  scriptName,
+];
+
+const localCommitShaAtStart = readLocalCommitSha(cwd);
+let sourceCleanAtStart = false;
+let sourceCleanAtStartError = "";
+try {
+  assertReleaseSourceClean(cwd);
+  sourceCleanAtStart = true;
+} catch (error) {
+  sourceCleanAtStartError =
+    error instanceof Error ? error.message : "Release source is not clean.";
+}
 
 const steps = [
-  { label: "npm run lint", command: npmBin, args: ["run", "lint"], shell: process.platform === "win32" },
-  { label: "npm run typecheck", command: npmBin, args: ["run", "typecheck"], shell: process.platform === "win32" },
-  { label: "npm run test:node", command: npmBin, args: ["run", "test:node"], shell: process.platform === "win32" },
-  { label: "npm run test:python", command: npmBin, args: ["run", "test:python"], shell: process.platform === "win32" },
+  { label: "npm run lint", command: npmBin, args: npmRunArgs("lint") },
+  {
+    label: "npm run typecheck",
+    command: npmBin,
+    args: npmRunArgs("typecheck"),
+  },
+  {
+    label: "npm run test:node",
+    command: npmBin,
+    args: npmRunArgs("test:node"),
+  },
+  {
+    label: "npm run test:python",
+    command: npmBin,
+    args: npmRunArgs("test:python"),
+  },
   {
     label: "npm run test:release-scripts",
     command: npmBin,
-    args: ["run", "test:release-scripts"],
-    shell: process.platform === "win32",
+    args: npmRunArgs("test:release-scripts"),
   },
   {
     label: "npm run db:check",
     command: npmBin,
-    args: ["run", "db:check"],
-    shell: process.platform === "win32",
+    args: npmRunArgs("db:check"),
     skip: allowRealAccountSkip,
     skipReason:
       "Explicit local opt-out: real database readiness is not being claimed.",
@@ -93,8 +163,7 @@ const steps = [
   {
     label: "npm run build",
     command: npmBin,
-    args: ["run", "build"],
-    shell: process.platform === "win32",
+    args: npmRunArgs("build"),
     captureBuildId: true,
     timeoutMs: 20 * 60 * 1_000,
   },
@@ -109,6 +178,8 @@ const steps = [
         ? "--allow-real-account-skip"
         : "--require-real-accounts",
       "--skip-build",
+      `--policy-report-path=${browserPolicyReportPath}`,
+      `--playwright-report-path=${browserPlaywrightReportPath}`,
     ],
     usesPrebuiltBuild: true,
     timeoutMs: 60 * 60 * 1_000,
@@ -121,11 +192,19 @@ const steps = [
 ];
 
 const report = {
+  schemaVersion: 2,
+  releaseRunId,
   generatedAt: new Date().toISOString(),
   runtime: { node: process.version, cwd },
+  localCommitSha: localCommitShaAtStart,
+  endCommitSha: "",
+  sourceCleanAtStart,
+  sourceCleanAtEnd: false,
   mode,
   explicitLocalOptOut: allowRealAccountSkip,
   realAccountsRequired: !allowRealAccountSkip,
+  isolatedWorktree:
+    process.env.RELEASE_ISOLATED_WORKTREE === "1",
   productionValidated: false,
   summary: { passed: false, blockers: [], warnings: [] },
   local: { passed: false, checks: [] },
@@ -141,8 +220,11 @@ if (allowRealAccountSkip) {
     "Explicit local opt-out enabled: database readiness and normal-session production coverage may be skipped."
   );
 }
+if (!sourceCleanAtStart) {
+  report.summary.blockers.push(sourceCleanAtStartError);
+}
 
-let shouldContinue = true;
+let shouldContinue = sourceCleanAtStart;
 let capturedBuildId = "";
 for (const step of steps) {
   if (step.skip || !shouldContinue) {
@@ -207,8 +289,29 @@ try {
   );
 }
 
+try {
+  report.endCommitSha = readLocalCommitSha(cwd);
+  assertReleaseSourceClean(cwd);
+  report.sourceCleanAtEnd = true;
+} catch (error) {
+  report.sourceCleanAtEnd = false;
+  report.summary.blockers.push(
+    error instanceof Error
+      ? error.message
+      : "Release source changed during the local gate."
+  );
+}
+if (report.endCommitSha !== report.localCommitSha) {
+  report.summary.blockers.push(
+    "The checked-out Git commit changed while the local release gate was running."
+  );
+}
+
 report.local.passed =
   report.steps.every((step) => step.skipped || step.exitCode === 0) &&
+  report.sourceCleanAtStart &&
+  report.sourceCleanAtEnd &&
+  report.endCommitSha === report.localCommitSha &&
   report.summary.blockers.length === 0;
 report.productionValidated =
   report.local.passed &&
@@ -226,12 +329,20 @@ if (!allowRealAccountSkip && dbCheckStep?.exitCode === 0) {
   fs.writeFileSync(
     resolvePath(sqlCheckReportPath),
     `${JSON.stringify(
-      {
+      maybeSignReleaseReport({
+        schemaVersion: 2,
+        releaseRunId,
         generatedAt: new Date().toISOString(),
         overallPassed: true,
         source: "npm run db:check",
         mode,
-      },
+        localCommitSha: report.localCommitSha,
+        step: {
+          label: dbCheckStep.label,
+          exitCode: dbCheckStep.exitCode,
+          durationMs: dbCheckStep.durationMs,
+        },
+      }),
       null,
       2
     )}\n`,
@@ -239,7 +350,13 @@ if (!allowRealAccountSkip && dbCheckStep?.exitCode === 0) {
   );
 }
 if (!report.local.passed) {
-  report.summary.blockers.push("One or more local release gate steps failed.");
+  if (
+    !report.summary.blockers.includes(
+      "One or more local release gate steps failed."
+    )
+  ) {
+    report.summary.blockers.push("One or more local release gate steps failed.");
+  }
 }
 if (report.summary.passed && !report.productionValidated) {
   report.summary.warnings.push(
@@ -255,5 +372,6 @@ if (report.productionValidated) {
   );
 }
 
+report.generatedAt = new Date().toISOString();
 writeReport(report);
 process.exit(report.summary.passed ? 0 : 1);

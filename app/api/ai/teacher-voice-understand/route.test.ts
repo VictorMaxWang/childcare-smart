@@ -172,6 +172,9 @@ test("teacher voice understand rejects disguised audio before invoking ASR", asy
 
 test("teacher voice understand accepts Ogg Opus and passes canonical MIME to ASR", async () => {
   let receivedMimeType: string | undefined;
+  let receivedOperationScope:
+    | { institutionId: string; userId: string }
+    | undefined;
   const provider = providerThatRejectsBrowserAudio();
   const formData = new FormData();
   formData.set(
@@ -189,13 +192,26 @@ test("teacher voice understand accepts Ogg Opus and passes canonical MIME to ASR
     }),
     {
       async authorize() {
-        return null;
+        return {
+          session: {
+            source: "cookie" as const,
+            user: {
+              id: "teacher-normal-1",
+              name: "测试教师",
+              role: "教师" as const,
+              avatar: "",
+              institutionId: "institution-normal-1",
+              accountKind: "normal" as const,
+            },
+          },
+        };
       },
       resolveProvider() {
         return {
           ...provider,
           async transcribe(input) {
             receivedMimeType = input.mimeType;
+            receivedOperationScope = input.operationScope;
             return provider.transcribe(input);
           },
         };
@@ -205,4 +221,8 @@ test("teacher voice understand accepts Ogg Opus and passes canonical MIME to ASR
 
   assert.equal(response.status, 503);
   assert.equal(receivedMimeType, "audio/ogg");
+  assert.deepEqual(receivedOperationScope, {
+    institutionId: "institution-normal-1",
+    userId: "teacher-normal-1",
+  });
 });

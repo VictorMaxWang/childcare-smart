@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveAsrProvider } from "@/lib/ai/providers";
 import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import { apiError } from "@/lib/server/api-errors";
 import { VivoProviderError } from "@/lib/providers/vivo";
 import { buildVoiceUploadResponse } from "@/lib/mobile/voice-assistant-upload";
@@ -19,6 +19,7 @@ import {
 
 const VOICE_AUDIO_MAX_REQUEST_BYTES =
   VOICE_AUDIO_MAX_BYTES + MULTIPART_FORM_DATA_OVERHEAD_BYTES;
+const ASR_REQUEST_DEADLINE_MS = 45_000;
 
 function toNumber(value: FormDataEntryValue | null) {
   if (typeof value !== "string") return undefined;
@@ -43,10 +44,10 @@ export async function POST(request: Request) {
     throw error;
   }
 
-  const authError = await authorizeAiRoute(boundedRequest, {
+  const authorization = await authorizeAiRouteSession(boundedRequest, {
     requiredRole: "staff",
   });
-  if (authError) return authError;
+  if (authorization instanceof Response) return authorization;
 
   let formData: FormData;
   try {
@@ -112,6 +113,12 @@ export async function POST(request: Request) {
         typeof formData.get("scene") === "string"
           ? String(formData.get("scene"))
           : "teacher-global-fab",
+      deadlineAtMs: Date.now() + ASR_REQUEST_DEADLINE_MS,
+      signal: request.signal,
+      operationScope: {
+        institutionId: authorization.session.user.institutionId,
+        userId: authorization.session.user.id,
+      },
     });
 
     if (asrResult.source === "provider_unavailable" && !asrResult.output.transcript.trim()) {

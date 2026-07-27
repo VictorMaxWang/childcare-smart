@@ -37,6 +37,7 @@ import {
   prepareParentStoryBookResponseForDelivery,
 } from "@/lib/server/parent-storybook-cache";
 import {
+  buildParentStoryBookPersistentMediaKey,
   persistParentStoryBookMedia,
   readParentStoryBookMedia,
 } from "@/lib/server/parent-storybook-media-store";
@@ -64,7 +65,11 @@ const MEDIA_STATUS_BRAIN_TIMEOUT_MS = 12_000;
 const MEDIA_STATUS_PROVIDER_TIMEOUT_MS = 25_000;
 const MEDIA_STATUS_PROVIDER_TIMEOUT_MAX_MS = 30_000;
 const MEDIA_STATUS_LOCAL_DEADLINE_MS = 22_000;
-const MEDIA_TASK_COMMIT_BUDGET_MS = 5_000;
+const MEDIA_STATUS_RESPONSE_DEADLINE_MS = 45_000;
+const MEDIA_TASK_COMMIT_BUDGET_MS = 16_000;
+const MEDIA_TASK_FINALIZE_RESERVE_MS = 5_000;
+const MEDIA_TASK_LEDGER_ATTEMPT_TIMEOUT_MS = 2_000;
+const MEDIA_TASK_LEDGER_RETRY_DELAY_MS = 100;
 
 function resolveMediaStatusTimeoutMs() {
   const raw =
@@ -123,6 +128,11 @@ function boundedConcurrency(value: string | undefined, fallback: number, max: nu
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return Math.max(1, Math.min(max, Math.floor(parsed)));
+}
+
+function resolveAudioConcurrency() {
+  // 同步 TTS 没有可恢复 task id；默认串行既降低数据库瞬时压力，也避免并发失败放大付费调用。
+  return boundedConcurrency(process.env.STORYBOOK_TTS_CONCURRENCY, 1, 4);
 }
 
 function normalizePrioritySceneIndices(story: ParentStoryBookResponse, values: unknown) {
@@ -361,11 +371,107 @@ function buildStoryMediaTaskIdentity(input: {
   };
 }
 
-function createMediaTaskCommitOperation() {
+function buildStoryAudioMediaSeed(input: {
+  storyId: string;
+  sceneIndex: number;
+  identity: StorybookMediaTaskIdentity;
+}) {
+  // 持久化媒体键必须随模型、引擎或音色变化，避免配置升级后继续命中旧语音。
+  return JSON.stringify({
+    version: 2,
+    storyId: input.storyId,
+    sceneIndex: input.sceneIndex,
+    providerModel: input.identity.providerModel,
+    inputDigest: input.identity.inputDigest,
+  });
+}
+
+function createMediaTaskCommitOperation(hardDeadlineAtMs?: number) {
   return {
     // 上游已有明确结果后，短时账本提交不能再由浏览器断开信号取消。
-    deadlineAtMs: Date.now() + MEDIA_TASK_COMMIT_BUDGET_MS,
+    deadlineAtMs: Math.min(
+      Date.now() + MEDIA_TASK_COMMIT_BUDGET_MS,
+      hardDeadlineAtMs ?? Number.POSITIVE_INFINITY
+    ),
   };
+}
+
+function isTransientTaskStoreError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String(error.code ?? "").trim().toUpperCase()
+      : "";
+  return (
+    new Set([
+      "ECONNRESET",
+      "EPIPE",
+      "ER_CON_COUNT_ERROR",
+      "ER_LOCK_DEADLOCK",
+      "ER_LOCK_WAIT_TIMEOUT",
+      "ETIMEDOUT",
+      "PROTOCOL_CONNECTION_LOST",
+    ]).has(code) ||
+    /(?:task database (?:query|connection) timed out|\bETIMEDOUT\b|\bECONNRESET\b|too many connections|connection (?:was )?(?:closed|lost))/iu.test(
+      message
+    )
+  );
+}
+
+async function markMediaTaskReadyWithVerification(
+  store: Pick<StorybookMediaTaskStore, "claim" | "markReady">,
+  identity: StorybookMediaTaskIdentity,
+  input: {
+    leaseToken: string;
+    taskId?: string | null;
+    mediaKey: string;
+  },
+  deadlineAtMs: number
+) {
+  let lastTransientError: unknown = null;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    if (deadlineAtMs <= Date.now()) break;
+    const operation = {
+      deadlineAtMs: Math.min(
+        deadlineAtMs,
+        Date.now() + MEDIA_TASK_LEDGER_ATTEMPT_TIMEOUT_MS
+      ),
+    };
+    try {
+      if (await store.markReady(identity, input, operation)) return true;
+    } catch (error) {
+      if (!isTransientTaskStoreError(error)) throw error;
+      lastTransientError = error;
+    }
+
+    if (deadlineAtMs <= Date.now()) break;
+    try {
+      const state = await store.claim(identity, {
+        deadlineAtMs: Math.min(
+          deadlineAtMs,
+          Date.now() + MEDIA_TASK_LEDGER_ATTEMPT_TIMEOUT_MS
+        ),
+      });
+      if (state.action === "ready" && state.mediaKey === input.mediaKey) {
+        return true;
+      }
+      if (state.action === "blocked") return false;
+    } catch (error) {
+      if (!isTransientTaskStoreError(error)) throw error;
+      lastTransientError = error;
+    }
+
+    if (
+      attempt < 2 &&
+      deadlineAtMs - Date.now() > MEDIA_TASK_LEDGER_RETRY_DELAY_MS
+    ) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, MEDIA_TASK_LEDGER_RETRY_DELAY_MS)
+      );
+    }
+  }
+  if (lastTransientError) throw lastTransientError;
+  return false;
 }
 
 function resolveVivoImageUrl(baseUrl: string, path: string) {
@@ -513,13 +619,21 @@ async function completeStoryMediaLocally(input: {
   persistMedia: boolean;
   mediaTaskStore?: StorybookMediaTaskStore;
   signal?: AbortSignal;
+  responseDeadlineAtMs?: number;
 }) {
   const startedAt = Date.now();
-  const deadlineAtMs = startedAt + MEDIA_STATUS_LOCAL_DEADLINE_MS;
+  const responseDeadlineAtMs = Math.min(
+    input.responseDeadlineAtMs ?? Number.POSITIVE_INFINITY,
+    startedAt + MEDIA_STATUS_RESPONSE_DEADLINE_MS
+  );
+  const deadlineAtMs = Math.min(
+    startedAt + MEDIA_STATUS_LOCAL_DEADLINE_MS,
+    responseDeadlineAtMs - MEDIA_TASK_FINALIZE_RESERVE_MS
+  );
   const story = JSON.parse(JSON.stringify(input.payload.story)) as ParentStoryBookResponse;
   const imageConcurrency = boundedConcurrency(process.env.STORYBOOK_IMAGE_CONCURRENCY, 2, 3);
   const imageBatchSize = boundedConcurrency(process.env.STORYBOOK_IMAGE_BATCH_SIZE, VIVO_IMAGE_GROUP_BATCH_SIZE, VIVO_IMAGE_GROUP_BATCH_SIZE);
-  const audioConcurrency = boundedConcurrency(process.env.STORYBOOK_TTS_CONCURRENCY, 4, 4);
+  const audioConcurrency = resolveAudioConcurrency();
   const imageProvider = resolveStoryImageProvider();
   const missingAudioConfig = missingVivoCoreEnv();
   const imageLiveEnabled = imageProvider.enabled;
@@ -662,6 +776,8 @@ async function completeStoryMediaLocally(input: {
             mediaKey: claim.mediaKey,
             allowPersistent: input.persistMedia,
             bypassCache: input.persistMedia,
+            deadlineAtMs,
+            signal: input.signal,
           });
           const valid =
             media?.contentType === "image/webp" &&
@@ -725,7 +841,7 @@ async function completeStoryMediaLocally(input: {
             identity,
             claim.leaseToken,
             submitted.taskId,
-            createMediaTaskCommitOperation()
+            createMediaTaskCommitOperation(responseDeadlineAtMs)
           );
           if (!marked) {
             blockedImageSceneIndices.add(scene.sceneIndex);
@@ -754,7 +870,7 @@ async function completeStoryMediaLocally(input: {
                   Date.now() + resolveImageRetryBackoffMs(reason),
                 reason,
               },
-              createMediaTaskCommitOperation()
+              createMediaTaskCommitOperation(responseDeadlineAtMs)
             );
             if (!retryable || !marked) {
               blockedImageSceneIndices.add(scene.sceneIndex);
@@ -799,7 +915,7 @@ async function completeStoryMediaLocally(input: {
               nextRetryAtMs: Date.now(),
               reason,
             },
-            createMediaTaskCommitOperation()
+            createMediaTaskCommitOperation(responseDeadlineAtMs)
           );
           if (marked) {
             blockedImageSceneIndices.add(scene.sceneIndex);
@@ -826,7 +942,7 @@ async function completeStoryMediaLocally(input: {
             identity,
             claim.taskId,
             claim.leaseToken,
-            createMediaTaskCommitOperation()
+            createMediaTaskCommitOperation(responseDeadlineAtMs)
           );
           scheduleImageRetry(DASHSCOPE_IMAGE_POLL_INTERVAL_MS);
           return;
@@ -847,7 +963,7 @@ async function completeStoryMediaLocally(input: {
               nextRetryAtMs: Date.now() + retryDelayMs,
               reason,
             },
-            createMediaTaskCommitOperation()
+            createMediaTaskCommitOperation(responseDeadlineAtMs)
           );
           if (marked && claim.attemptCount >= 2) {
             blockedImageSceneIndices.add(scene.sceneIndex);
@@ -865,8 +981,17 @@ async function completeStoryMediaLocally(input: {
           deadlineAtMs,
           signal: input.signal,
         });
-        const mediaCommitOperation = createMediaTaskCommitOperation();
-        const mediaSeed = `${story.storyId}:dashscope-qwen-image:${scene.sceneIndex}`;
+        const mediaCommitOperation =
+          createMediaTaskCommitOperation(responseDeadlineAtMs);
+        const mediaPersistenceDeadlineAtMs =
+          mediaCommitOperation.deadlineAtMs -
+          MEDIA_TASK_FINALIZE_RESERVE_MS;
+        if (mediaPersistenceDeadlineAtMs <= Date.now()) {
+          throw new Error(
+            "storybook image persistence deadline exhausted before task finalization"
+          );
+        }
+        const mediaSeed = `${story.storyId}:dashscope-qwen-image:${scene.sceneIndex}:${identity.inputDigest}`;
         const imageDataUrl = `data:${downloaded.contentType};base64,${downloaded.bytes.toString("base64")}`;
         const persisted = input.persistMedia
           ? await persistParentStoryBookMedia({
@@ -876,7 +1001,7 @@ async function completeStoryMediaLocally(input: {
               contentType: downloaded.contentType,
               bytes: downloaded.bytes,
               seed: mediaSeed,
-              deadlineAtMs: mediaCommitOperation.deadlineAtMs,
+              deadlineAtMs: mediaPersistenceDeadlineAtMs,
             })
           : null;
         const imageUrl =
@@ -898,14 +1023,15 @@ async function completeStoryMediaLocally(input: {
             "DashScope story image did not produce a protected media key"
           );
         }
-        const markedReady = await mediaTaskStore!.markReady(
+        const markedReady = await markMediaTaskReadyWithVerification(
+          mediaTaskStore!,
           identity,
           {
             leaseToken: claim.leaseToken,
             taskId: claim.taskId,
             mediaKey,
           },
-          mediaCommitOperation
+          mediaCommitOperation.deadlineAtMs
         );
         if (!markedReady) {
           scheduleImageRetry(DASHSCOPE_IMAGE_POLL_INTERVAL_MS);
@@ -934,7 +1060,7 @@ async function completeStoryMediaLocally(input: {
               nextRetryAtMs: Date.now() + retryDelayMs,
               reason,
             },
-            createMediaTaskCommitOperation()
+            createMediaTaskCommitOperation(responseDeadlineAtMs)
           );
           registerImageFailure(reason, 1, marked);
         } catch (storeError) {
@@ -1002,10 +1128,67 @@ async function completeStoryMediaLocally(input: {
       scene: currentScene,
       channel: "audio",
     });
+    const mediaSeed = buildStoryAudioMediaSeed({
+      storyId: story.storyId,
+      sceneIndex: scene.sceneIndex,
+      identity,
+    });
+    const expectedPersistentMediaKey =
+      buildParentStoryBookPersistentMediaKey({
+        institutionId: input.institutionId,
+        seed: mediaSeed,
+      });
     const operation = {
       deadlineAtMs,
       signal: input.signal,
     };
+    if (input.persistMedia) {
+      try {
+        // 先找回上一次已落库但账本提交未知的媒体；命中时绝不再次调用同步 TTS。
+        const recoveredMedia = await readParentStoryBookMedia({
+          institutionId: input.institutionId,
+          mediaKey: expectedPersistentMediaKey,
+          allowPersistent: true,
+          bypassCache: true,
+          deadlineAtMs,
+          signal: input.signal,
+        });
+        if (recoveredMedia) {
+          const valid =
+            recoveredMedia.contentType === "audio/wav" &&
+            recoveredMedia.ownerChildId === story.childId &&
+            recoveredMedia.ownerStorybookId === story.storyId;
+          if (!valid) {
+            throw new Error(
+              "recovered story audio has the wrong content type or scope"
+            );
+          }
+          try {
+            await mediaTaskStore!.recoverReadyAudio(
+              identity,
+              expectedPersistentMediaKey,
+              createMediaTaskCommitOperation(responseDeadlineAtMs)
+            );
+          } catch {
+            // 媒体本身已通过机构、幼儿和绘本作用域校验；账本可在后续轮询继续修复。
+          }
+          const audioUrl = `/api/ai/parent-storybook/media/${expectedPersistentMediaKey}`;
+          story.scenes[index] = {
+            ...currentScene,
+            audioUrl,
+            audioRef: expectedPersistentMediaKey,
+            audioStatus: "ready",
+            audioProvider: "vivo-story-tts",
+            audioCacheHit: true,
+          };
+          return;
+        }
+      } catch (error) {
+        audioErrorCount += 1;
+        lastAudioError = normalizeErrorReason(error);
+        return;
+      }
+    }
     let claim: StorybookMediaTaskClaim;
     try {
       claim = await mediaTaskStore!.claim(identity, operation);
@@ -1022,6 +1205,8 @@ async function completeStoryMediaLocally(input: {
           mediaKey: claim.mediaKey,
           allowPersistent: input.persistMedia,
           bypassCache: input.persistMedia,
+          deadlineAtMs,
+          signal: input.signal,
         });
         const valid =
           media?.contentType === "audio/wav" &&
@@ -1077,8 +1262,16 @@ async function completeStoryMediaLocally(input: {
         deadlineAtMs,
         signal: input.signal,
       });
-      const mediaCommitOperation = createMediaTaskCommitOperation();
-      const mediaSeed = `${story.storyId}:next-vivo-tts:${scene.sceneIndex}`;
+      const mediaCommitOperation =
+        createMediaTaskCommitOperation(responseDeadlineAtMs);
+      const mediaPersistenceDeadlineAtMs =
+        mediaCommitOperation.deadlineAtMs -
+        MEDIA_TASK_FINALIZE_RESERVE_MS;
+      if (mediaPersistenceDeadlineAtMs <= Date.now()) {
+        throw new Error(
+          "storybook audio persistence deadline exhausted before task finalization"
+        );
+      }
       const audioDataUrl = `data:${result.audioContentType};base64,${result.audioBytes.toString("base64")}`;
       const persisted = input.persistMedia
         ? await persistParentStoryBookMedia({
@@ -1088,7 +1281,7 @@ async function completeStoryMediaLocally(input: {
             contentType: result.audioContentType,
             bytes: result.audioBytes,
             seed: mediaSeed,
-            deadlineAtMs: mediaCommitOperation.deadlineAtMs,
+            deadlineAtMs: mediaPersistenceDeadlineAtMs,
           })
         : null;
       const audioUrl =
@@ -1108,21 +1301,6 @@ async function completeStoryMediaLocally(input: {
       if (!mediaKey) {
         throw new Error("vivo story audio did not produce a protected media key");
       }
-      const marked = await mediaTaskStore!.markReady(
-        identity,
-        {
-          leaseToken: claim.leaseToken,
-          mediaKey,
-        },
-        mediaCommitOperation
-      );
-      if (!marked) {
-        blockedAudioSceneIndices.add(scene.sceneIndex);
-        audioErrorCount += 1;
-        lastAudioError =
-          "storybook audio result could not be committed";
-        return;
-      }
       story.scenes[index] = {
         ...currentScene,
         audioUrl,
@@ -1133,6 +1311,27 @@ async function completeStoryMediaLocally(input: {
         voiceName: result.voiceName,
         audioCacheHit: false,
       };
+      try {
+        const marked = await markMediaTaskReadyWithVerification(
+          mediaTaskStore!,
+          identity,
+          {
+            leaseToken: claim.leaseToken,
+            mediaKey,
+          },
+          mediaCommitOperation.deadlineAtMs
+        );
+        if (!marked) {
+          await mediaTaskStore!.recoverReadyAudio(
+            identity,
+            mediaKey,
+            createMediaTaskCommitOperation(responseDeadlineAtMs)
+          );
+        }
+      } catch (error) {
+        // 已持久化媒体仍可安全交付；下次轮询会按稳定 key 恢复账本，不能将该场景永久 blocked。
+        lastAudioError = `storybook audio ledger recovery deferred: ${normalizeErrorReason(error)}`;
+      }
     } catch (error) {
       blockedAudioSceneIndices.add(scene.sceneIndex);
       audioErrorCount += 1;
@@ -1148,7 +1347,7 @@ async function completeStoryMediaLocally(input: {
             nextRetryAtMs: Date.now() + VIVO_AUDIO_ERROR_BACKOFF_MS,
             reason,
           },
-          createMediaTaskCommitOperation()
+          createMediaTaskCommitOperation(responseDeadlineAtMs)
         );
       } catch (storeError) {
         lastAudioError = `${reason}; task store: ${normalizeErrorReason(storeError)}`;
@@ -1301,6 +1500,8 @@ async function prepareStoryMediaForDelivery(input: {
   institutionId: string;
   requestUrl: string;
   serviceScope: ReturnType<typeof buildServiceScopeClaim>;
+  deadlineAtMs?: number;
+  signal?: AbortSignal;
 }) {
   // Brain 状态接口回退到 Next 时也必须执行同一持久化检查，避免跨实例媒体键变成 404。
   const durableStory = input.allowPersistentMedia
@@ -1309,6 +1510,8 @@ async function prepareStoryMediaForDelivery(input: {
         institutionId: input.institutionId,
         requestUrl: input.requestUrl,
         serviceScope: input.serviceScope,
+        deadlineAtMs: input.deadlineAtMs,
+        signal: input.signal,
       })
     : input.story;
   return prepareParentStoryBookResponseForDelivery(durableStory, {
@@ -1320,8 +1523,14 @@ async function prepareStoryMediaForDelivery(input: {
 export const parentStoryBookMediaStatusRouteInternals = {
   resolveMediaStatusTimeoutMs,
   resolveLocalProviderTimeoutMs,
+  resolveAudioConcurrency,
   buildStoryMediaTaskIdentity,
+  buildStoryAudioMediaSeed,
+  markMediaTaskReadyWithVerification,
   localDeadlineMs: MEDIA_STATUS_LOCAL_DEADLINE_MS,
+  responseDeadlineMs: MEDIA_STATUS_RESPONSE_DEADLINE_MS,
+  commitBudgetMs: MEDIA_TASK_COMMIT_BUDGET_MS,
+  finalizeReserveMs: MEDIA_TASK_FINALIZE_RESERVE_MS,
 };
 
 export async function POST(request: Request) {
@@ -1406,6 +1615,9 @@ export async function POST(request: Request) {
 
   const targetPath = "/api/v1/agents/parent/storybook/media-status";
   const serviceScope = buildServiceScopeClaim(sessionScope);
+  // 认证和作用域校验完成后启动统一截止时间，后续 Brain、本地 provider、数据库和媒体回收共用同一预算。
+  const responseDeadlineAtMs =
+    Date.now() + MEDIA_STATUS_RESPONSE_DEADLINE_MS;
   if (!trustedContinuation) {
     // 旧缓存仍可安全降级展示，但绝不能携带 task id 继续访问任何 provider。
     const preparedStory = prepareParentStoryBookResponseForDelivery(
@@ -1448,11 +1660,14 @@ export async function POST(request: Request) {
         userId: sessionUser.id,
         persistMedia,
         signal: request.signal,
+        responseDeadlineAtMs,
       }),
       allowPersistentMedia: persistMedia,
       institutionId: sessionUser.institutionId,
       requestUrl: request.url,
       serviceScope,
+      deadlineAtMs: responseDeadlineAtMs,
+      signal: request.signal,
     });
     return NextResponse.json(
       attestAiResult(preparedStory, provenanceContext),
@@ -1473,10 +1688,18 @@ export async function POST(request: Request) {
     method: "POST",
     headers: request.headers,
     body: JSON.stringify(payload),
+    signal: request.signal,
   });
   const brainForward = await forwardBrainRequest(brainRequest, targetPath, {
-    timeoutMs: resolveMediaStatusTimeoutMs(),
+    timeoutMs: Math.max(
+      1,
+      Math.min(
+        resolveMediaStatusTimeoutMs(),
+        responseDeadlineAtMs - Date.now()
+      )
+    ),
     serviceScope,
+    bufferResponseBody: true,
   });
   if (!brainForward.response) {
     const preparedStory = await prepareStoryMediaForDelivery({
@@ -1486,11 +1709,14 @@ export async function POST(request: Request) {
         userId: authResult.session.user.id,
         persistMedia,
         signal: request.signal,
+        responseDeadlineAtMs,
       }),
       allowPersistentMedia: persistMedia,
       institutionId: authResult.session.user.institutionId,
       requestUrl: request.url,
       serviceScope,
+      deadlineAtMs: responseDeadlineAtMs,
+      signal: request.signal,
     });
     return NextResponse.json(
       attestAiResult(preparedStory, provenanceContext),
@@ -1517,11 +1743,14 @@ export async function POST(request: Request) {
         userId: authResult.session.user.id,
         persistMedia,
         signal: request.signal,
+        responseDeadlineAtMs,
       }),
       allowPersistentMedia: persistMedia,
       institutionId: authResult.session.user.institutionId,
       requestUrl: request.url,
       serviceScope,
+      deadlineAtMs: responseDeadlineAtMs,
+      signal: request.signal,
     });
     return NextResponse.json(
       attestAiResult(preparedStory, provenanceContext),
@@ -1546,6 +1775,8 @@ export async function POST(request: Request) {
     institutionId: authResult.session.user.institutionId,
     requestUrl: request.url,
     serviceScope,
+    deadlineAtMs: responseDeadlineAtMs,
+    signal: request.signal,
   });
   const preparedRemoteStory = {
     ...durableRemoteStory,

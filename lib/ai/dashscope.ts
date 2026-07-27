@@ -772,6 +772,8 @@ export interface BailianAsrResult {
 export async function requestDashscopeAsr(input: {
   audioBytes: Buffer | Uint8Array;
   mimeType: string;
+  deadlineAtMs?: number;
+  signal?: AbortSignal;
 }): Promise<BailianAsrResult | null> {
   const apiKey = process.env.DASHSCOPE_API_KEY || "";
   const { endpoint, timeoutMs } = resolveBailianRuntimeConfig();
@@ -781,8 +783,17 @@ export async function requestDashscopeAsr(input: {
     return null;
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const remainingMs = Math.max(
+    1,
+    Math.min(
+      timeoutMs,
+      (input.deadlineAtMs ?? Date.now() + timeoutMs) - Date.now()
+    )
+  );
+  const timeoutSignal = AbortSignal.timeout(remainingMs);
+  const signal = input.signal
+    ? AbortSignal.any([input.signal, timeoutSignal])
+    : timeoutSignal;
   try {
     const dataUri = `data:${mimeType};base64,${Buffer.from(input.audioBytes).toString("base64")}`;
     const response = await fetch(endpoint, {
@@ -810,7 +821,7 @@ export async function requestDashscopeAsr(input: {
           enable_itn: true,
         },
       }),
-      signal: controller.signal,
+      signal,
     });
 
     if (!response.ok) {
@@ -857,8 +868,6 @@ export async function requestDashscopeAsr(input: {
       error,
     });
     return null;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 

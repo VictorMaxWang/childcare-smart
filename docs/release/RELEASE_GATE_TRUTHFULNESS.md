@@ -2,8 +2,16 @@
 
 ## 结论口径
 
-发布结论只认 `npm run release:go:all`。该命令现在等价于正式门禁，
-必须同时拿到以下非跳过证据后才以 `0` 退出：
+发布结论只认从干净宿主直接启动的 PowerShell 门禁：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\release-formal-gate.ps1 -EnvFile .env.release
+```
+
+不能把 `npm run release:go:all` 当作敌对宿主下的权威入口，因为 Node 预加载或
+外部 npm 配置可能在 npm 启动 PowerShell 前执行。npm 脚本只保留为命令发现入口；
+正式证明必须使用上面的直接 PowerShell 命令。门禁同时拿到以下非跳过证据后才以
+`0` 退出：
 
 1. 本地 lint、类型检查、构建、Node/Python 测试与 release Playwright 套件通过。
 2. 两个 normal-session 关键规格实际执行，没有 `skip`、`flaky` 或失败。
@@ -23,7 +31,8 @@
 | `npm run release:gate:strict` | 严格本地门禁 | 否 | 仅作为正式门禁的一部分 |
 | `npm run release:go:remote` | 远端健康和受保护 API 检查 | 不包含三账号 smoke | 否 |
 | `npm run release:gate:real` | 正式生产三账号 smoke | 否 | 仅作为正式门禁的一部分 |
-| `npm run release:go:all` | 完整正式发布门禁 | 否 | 是 |
+| 直接运行 `scripts/release-formal-gate.ps1` | 完整正式发布门禁 | 否 | 是 |
+| `npm run release:go:all` | 发现正式命令的便利入口，不证明宿主启动安全 | 否 | 否 |
 
 本地 opt-out 成功时，控制台会打印 `[LOCAL-ONLY]`，报告中的
 `productionValidated` 必须为 `false`。这表示本地可继续开发，不表示生产闭环通过。
@@ -63,5 +72,8 @@
 - 本地显式 opt-out 可以通过，但不能标记为生产已验证。
 - 关键测试缺失、失败或 flaky 时，即使 opt-out 也必须失败。
 - 正式生产环境必须启用写入、live AI、`mode=all`，并使用相同目标 URL。
+- PowerShell 在启动 Node 前拒绝 `NODE_OPTIONS`、外部 npm 配置和 Git 执行配置。
+- 隔离 worktree 禁用外部 hooks，并检查 tracked、untracked 与 ignored 污染。
+- 部署探针和正式 smoke 固定不可变 deployment origin，拒绝跨 origin 重定向。
 
 本地与正式 Playwright 门禁会占用产品测试配置的 `3330` 端口，不应并行运行。

@@ -16,6 +16,12 @@ export interface AsrProviderInput {
   durationMs?: number;
   scene?: string;
   audioBytes?: Buffer;
+  deadlineAtMs?: number;
+  signal?: AbortSignal;
+  operationScope?: {
+    institutionId: string;
+    userId: string;
+  };
 }
 
 export interface AsrProviderStatus extends VivoProviderStatus<"asr"> {
@@ -199,6 +205,8 @@ class DashscopeAsrProvider implements AsrProvider {
     const result = await requestDashscopeAsr({
       audioBytes: input.audioBytes,
       mimeType: input.mimeType,
+      deadlineAtMs: input.deadlineAtMs,
+      signal: input.signal,
     });
     if (!result) {
       return buildFallbackResult(
@@ -264,6 +272,9 @@ class VivoAsrProvider implements AsrProvider {
       fallbackText: input.fallbackText,
       mimeType: input.mimeType,
       transcript: input.transcript,
+      deadlineAtMs: input.deadlineAtMs,
+      signal: input.signal,
+      operationScope: input.operationScope,
     });
 
     return {

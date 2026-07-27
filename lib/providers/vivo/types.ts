@@ -92,6 +92,12 @@ export interface VivoAsrInput {
   durationMs?: number;
   scene?: string;
   requestId?: string;
+  deadlineAtMs?: number;
+  signal?: AbortSignal;
+  operationScope?: {
+    institutionId: string;
+    userId: string;
+  };
 }
 
 export interface VivoAsrSegment {

@@ -31,6 +31,8 @@ type RemoteMediaDependencies = {
     expectedKind: "audio" | "image";
     requestUrl: string;
     serviceScope: BrainServiceScopeClaim;
+    deadlineAtMs?: number;
+    signal?: AbortSignal;
   }) => Promise<LoadedMedia | null>;
 };
 
@@ -39,7 +41,13 @@ async function loadRemoteMedia(input: {
   expectedKind: "audio" | "image";
   requestUrl: string;
   serviceScope: BrainServiceScopeClaim;
+  deadlineAtMs?: number;
+  signal?: AbortSignal;
 }): Promise<LoadedMedia | null> {
+  const remainingMs = Math.floor(
+    (input.deadlineAtMs ?? Date.now() + 10_000) - Date.now()
+  );
+  if (remainingMs <= 0 || input.signal?.aborted) return null;
   const targetPath = `/api/v1/agents/parent/storybook/media/${encodeURIComponent(
     input.mediaKey
   )}`;
@@ -49,9 +57,14 @@ async function loadRemoteMedia(input: {
       headers: {
         accept: `${input.expectedKind}/*`,
       },
+      signal: input.signal,
     }),
     targetPath,
-    { serviceScope: input.serviceScope }
+    {
+      serviceScope: input.serviceScope,
+      timeoutMs: remainingMs,
+      bufferResponseBody: true,
+    }
   );
   if (!forwarded.response?.ok) return null;
 
@@ -105,7 +118,13 @@ async function ensureDurableMediaUrl(input: {
   requestUrl: string;
   serviceScope: BrainServiceScopeClaim;
   dependencies: RemoteMediaDependencies;
+  deadlineAtMs?: number;
+  signal?: AbortSignal;
 }) {
+  const hasBudget = () =>
+    !input.signal?.aborted &&
+    (!input.deadlineAtMs || input.deadlineAtMs > Date.now());
+  if (!hasBudget()) return null;
   const mediaKey = mediaKeyFromUrl(input.url);
   if (!mediaKey) return input.url;
 
@@ -115,6 +134,8 @@ async function ensureDurableMediaUrl(input: {
       mediaKey,
       allowPersistent: true,
       bypassCache: true,
+      deadlineAtMs: input.deadlineAtMs,
+      signal: input.signal,
     })
     .catch(() => null);
   if (
@@ -124,6 +145,7 @@ async function ensureDurableMediaUrl(input: {
     existing.ownerStorybookId === input.storybookId
   ) {
     if (existing.storageMode === "database_media") return input.url;
+    if (!hasBudget()) return null;
     const persistedExisting = await input.dependencies
       .persistLocal({
         institutionId: input.institutionId,
@@ -132,21 +154,27 @@ async function ensureDurableMediaUrl(input: {
         contentType: existing.contentType,
         bytes: existing.bytes,
         seed: `${input.storybookId}:local-cache:${input.expectedKind}:${input.sceneIndex}:${mediaKey}`,
+        deadlineAtMs: input.deadlineAtMs,
+        signal: input.signal,
       })
       .catch(() => null);
     if (persistedExisting) return persistedExisting.mediaUrl;
   }
 
+  if (!hasBudget()) return null;
   const remote = await input.dependencies
     .loadRemote({
       mediaKey,
       expectedKind: input.expectedKind,
       requestUrl: input.requestUrl,
       serviceScope: input.serviceScope,
+      deadlineAtMs: input.deadlineAtMs,
+      signal: input.signal,
     })
     .catch(() => null);
   if (!remote) return null;
 
+  if (!hasBudget()) return null;
   const persisted = await input.dependencies
     .persistLocal({
       institutionId: input.institutionId,
@@ -155,6 +183,8 @@ async function ensureDurableMediaUrl(input: {
       contentType: remote.contentType,
       bytes: remote.bytes,
       seed: `${input.storybookId}:remote-brain:${input.expectedKind}:${input.sceneIndex}:${mediaKey}`,
+      deadlineAtMs: input.deadlineAtMs,
+      signal: input.signal,
     })
     .catch(() => null);
   return persisted?.mediaUrl ?? null;
@@ -167,6 +197,8 @@ async function reconcileScene(input: {
   requestUrl: string;
   serviceScope: BrainServiceScopeClaim;
   dependencies: RemoteMediaDependencies;
+  deadlineAtMs?: number;
+  signal?: AbortSignal;
 }) {
   let scene = { ...input.scene };
   const imageRoute =
@@ -186,6 +218,8 @@ async function reconcileScene(input: {
       requestUrl: input.requestUrl,
       serviceScope: input.serviceScope,
       dependencies: input.dependencies,
+      deadlineAtMs: input.deadlineAtMs,
+      signal: input.signal,
     });
     scene = durableImageUrl
       ? {
@@ -222,6 +256,8 @@ async function reconcileScene(input: {
       requestUrl: input.requestUrl,
       serviceScope: input.serviceScope,
       dependencies: input.dependencies,
+      deadlineAtMs: input.deadlineAtMs,
+      signal: input.signal,
     });
     scene = durableAudioUrl
       ? {
@@ -250,6 +286,8 @@ export async function reconcileRemoteStoryBookMedia(
     institutionId: string;
     requestUrl: string;
     serviceScope: BrainServiceScopeClaim;
+    deadlineAtMs?: number;
+    signal?: AbortSignal;
   },
   dependencies: Partial<RemoteMediaDependencies> = {}
 ) {
@@ -269,6 +307,8 @@ export async function reconcileRemoteStoryBookMedia(
         requestUrl: input.requestUrl,
         serviceScope: input.serviceScope,
         dependencies: resolvedDependencies,
+        deadlineAtMs: input.deadlineAtMs,
+        signal: input.signal,
       })
     )
   );

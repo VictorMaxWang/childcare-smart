@@ -25,14 +25,18 @@
   - 班级使用稳定 `classId`，幼儿写入与 `child_registry` 同事务同步；同名班级不再构成授权依据。
   - AI 结果在服务端绑定用户、机构、能力、幼儿/班级和结果摘要；未签名或作用域不符的 provider 声明不能作为 live AI 结果持久化。
   - 上传按流式大小上限、严格 Base64、MIME 与文件魔数校验；语音确认令牌绑定操作者与作用域，并通过数据库一次性消费防重放。
-  - 本地 `lint`、`typecheck`、production build、545 项 Node、227 项 Python 和 83 项发布浏览器回归已执行；浏览器结果为 80 通过、3 项真实账号规格明确跳过，因此只属于本地验证。
+  - 本地 `lint`、`typecheck`、production build、627 项 Node、227 项 Python、36 项发布证明测试和 83 项发布浏览器回归已执行；浏览器结果为 80 通过、3 项真实账号规格明确跳过，因此只属于本地验证。
   - 正式真实账号 smoke 已扩展为强制执行高风险会诊 live AI、营养评估、成长绘本文本及图片/语音媒体补全，并实际打开右上角搜索、通知和消息面板。
   - `dfc32f8` 已推送并由生产 `/api/health` 确认部署；fresh smoke 已通过注册绑定、三类记录、跨端读取/消息、语音、OCR、食物识别、ASR、高风险会诊、三端 AI、营养评估和绘本文本。
   - 首次 fresh smoke 在绘本媒体状态请求处发生 `ECONNRESET`；媒体接口现限制远端与本地 provider 时间预算，生产测试会按服务端退避提示重试瞬时断连。
   - 媒体补丁部署后的第二轮 fresh smoke 在绑定后会话读取处返回 500；Vercel 日志确认是 MySQL `ETIMEDOUT`。幂等会话读取现有限重试瞬时建连故障，持续失败使用可重试 503 响应。
+  - `0336460` 已部署；正式 smoke 中现有三示例账号通过，fresh 三账号通过注册绑定及三端业务/AI 主链，百炼图片达到 `4/4`，最终仅剩 Vivo TTS 媒体数据库提交超时导致音频 `0/4`。
+  - 当前候选为 TTS 使用稳定机构媒体键，并对未知提交、精确回读、账本 `markReady` 和已落库音频恢复提供有界重试；Vivo ASR 具备端到端截止时间、取消传播、完成度检查和跨请求恢复账本。
+  - 生产 DMC 已执行 `vivo_asr_tasks` 幂等迁移，`SHOW CREATE TABLE` 已验证 18 个字段、主键和 3 个关键索引。
+  - 发布门禁新增启动前环境净化、完整 SHA、HMAC 报告签名、隔离 worktree、禁用外部 Git hooks、固定 deployment origin、`releaseRunId` 与 `deploymentId`/deployment URL 交叉校验，避免旧报告、短 SHA、`.env.local` 或同提交不同部署造成假阳性。
 - 生产待完成：
-  - 推送会话读取重试补丁、确认 Vercel 提交 SHA，并重新完成 fresh smoke 的真实绘本图片/语音闭环。
-  - 用现有三示例账号完成写入、读取、live AI、媒体和语音验收，并用严格 `npm run db:check` 生成新鲜数据库证据。
+  - 推送当前音频恢复与 ASR 截止时间补丁，确认 Vercel 完整提交 SHA 和 `deploymentId`，重新完成现有/fresh 三账号真实图片与语音闭环。
+  - 用现有三示例账号完成写入、读取、live AI、媒体和语音验收；获得真实 `DATABASE_URL` 后再用严格 `npm run db:check` 生成新鲜数据库证据。
   - 核对 Tencent Brain 服务版本、共享签名配置和在线模型可用性；未经服务器证据不宣称已闭环。
 
 ### Real Account Institution Membership Hotfix

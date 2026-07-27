@@ -244,7 +244,7 @@ export function cacheParentStoryBookMediaDataUrl(
     parsed.bytes,
     seed,
     owner,
-    dataUrl.slice(0, 128)
+    { identityPrefix: dataUrl.slice(0, 128) }
   );
 }
 
@@ -257,15 +257,25 @@ export function cacheParentStoryBookMediaBytes(
     childId?: string | null;
     storybookId?: string | null;
   },
-  identityPrefix = bytes.subarray(0, 96).toString("base64")
+  options: {
+    identityPrefix?: string;
+    mediaKey?: string;
+  } = {}
 ) {
   cleanupExpired();
-  const mediaId = crypto
-    .createHash("sha1")
-    .update(
-      `${owner?.institutionId ?? "unscoped"}:${seed}:${identityPrefix}:${bytes.length}`
-    )
-    .digest("hex");
+  const identityPrefix =
+    options.identityPrefix ?? bytes.subarray(0, 96).toString("base64");
+  const mediaId =
+    options.mediaKey ??
+    crypto
+      .createHash("sha1")
+      .update(
+        `${owner?.institutionId ?? "unscoped"}:${seed}:${identityPrefix}:${bytes.length}`
+      )
+      .digest("hex");
+  if (!/^[a-f0-9]{40}$/u.test(mediaId)) {
+    throw new Error("storybook media cache key must be a SHA-1 hex digest");
+  }
 
   mediaAssetCache.set(mediaId, {
     expiresAt: now() + STORYBOOK_MEDIA_TTL_SECONDS * 1000,

@@ -4,7 +4,10 @@ import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import { buildTeacherVoiceUnderstandFallback } from "@/lib/ai/teacher-voice-understand";
 import { VivoProviderError } from "@/lib/providers/vivo";
 import { createBrainTransportHeaders } from "@/lib/server/brain-client";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import {
+  authorizeAiRouteSession,
+  type AuthorizedAiRoute,
+} from "@/lib/server/ai-route-guard";
 import {
   MULTIPART_FORM_DATA_OVERHEAD_BYTES,
   readRequestWithBodyLimit,
@@ -20,14 +23,18 @@ import {
 const TEACHER_VOICE_UNDERSTAND_TARGET = "/api/v1/agents/teacher/voice-understand";
 const VOICE_AUDIO_MAX_REQUEST_BYTES =
   VOICE_AUDIO_MAX_BYTES + MULTIPART_FORM_DATA_OVERHEAD_BYTES;
+const ASR_REQUEST_DEADLINE_MS = 45_000;
 
 export type TeacherVoiceUnderstandRouteDependencies = {
-  authorize: typeof authorizeAiRoute;
+  authorize: (
+    request: Request,
+    options: Parameters<typeof authorizeAiRouteSession>[1]
+  ) => Promise<Response | AuthorizedAiRoute | null>;
   resolveProvider: () => AsrProvider;
 };
 
 const defaultDependencies: TeacherVoiceUnderstandRouteDependencies = {
-  authorize: authorizeAiRoute,
+  authorize: authorizeAiRouteSession,
   resolveProvider: resolveAsrProvider,
 };
 
@@ -131,10 +138,16 @@ export async function handleTeacherVoiceUnderstandRequest(
     throw error;
   }
 
-  const authError = await dependencies.authorize(boundedRequest, {
+  const authorization = await dependencies.authorize(boundedRequest, {
     requiredRole: "staff",
   });
-  if (authError) return authError;
+  if (authorization instanceof Response) return authorization;
+  const operationScope = authorization
+    ? {
+        institutionId: authorization.session.user.institutionId,
+        userId: authorization.session.user.id,
+      }
+    : undefined;
 
   const headers = buildLocalFallbackHeaders();
   const contentType =
@@ -212,6 +225,9 @@ export async function handleTeacherVoiceUnderstandRequest(
         mimeType,
         durationMs,
         scene,
+        deadlineAtMs: Date.now() + ASR_REQUEST_DEADLINE_MS,
+        signal: request.signal,
+        operationScope,
       });
     } catch (error) {
       // 供应商拒绝浏览器音频格式属于可恢复能力降级，不应把真实账号推入 500 错误页。
@@ -322,6 +338,9 @@ export async function handleTeacherVoiceUnderstandRequest(
       mimeType: toOptionalString(payload.mimeType),
       durationMs,
       scene: toOptionalString(payload.scene) || "teacher-global-fab",
+      deadlineAtMs: Date.now() + ASR_REQUEST_DEADLINE_MS,
+      signal: request.signal,
+      operationScope,
     });
   } catch (error) {
     if (error instanceof VivoProviderError) {

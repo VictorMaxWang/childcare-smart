@@ -2,7 +2,7 @@ import { resolveAsrProvider } from "@/lib/ai/providers/asr-provider";
 import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import { VivoProviderError } from "@/lib/providers/vivo/vivo-errors";
 import { apiOk, ApiRouteError, withApiErrors } from "@/lib/server/api-errors";
-import { authorizeAiRoute } from "@/lib/server/ai-route-guard";
+import { authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import {
   MULTIPART_FORM_DATA_OVERHEAD_BYTES,
   readRequestWithBodyLimit,
@@ -20,6 +20,7 @@ export const runtime = "nodejs";
 
 const VOICE_AUDIO_MAX_REQUEST_BYTES =
   VOICE_AUDIO_MAX_BYTES + MULTIPART_FORM_DATA_OVERHEAD_BYTES;
+const ASR_REQUEST_DEADLINE_MS = 45_000;
 
 function readString(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -54,10 +55,10 @@ export function POST(request: Request) {
       rethrowUploadSecurityError(error);
     }
 
-    const authError = await authorizeAiRoute(boundedRequest, {
+    const authorization = await authorizeAiRouteSession(boundedRequest, {
       allowUnscoped: true,
     });
-    if (authError) return authError;
+    if (authorization instanceof Response) return authorization;
 
     let formData: FormData;
     try {
@@ -108,6 +109,12 @@ export function POST(request: Request) {
           undefined,
         scene: readString(formData.get("scene")) || "voice-orb",
         transcript,
+        deadlineAtMs: Date.now() + ASR_REQUEST_DEADLINE_MS,
+        signal: request.signal,
+        operationScope: {
+          institutionId: authorization.session.user.institutionId,
+          userId: authorization.session.user.id,
+        },
       })
       .catch((error: unknown) => {
         if (error instanceof VivoProviderError) {

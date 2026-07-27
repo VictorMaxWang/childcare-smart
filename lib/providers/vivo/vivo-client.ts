@@ -32,7 +32,34 @@ function buildUrl(baseUrl: string, path: string, query?: VivoRequestOptions["que
   return url;
 }
 
-export async function vivoFetch(options: VivoRequestOptions) {
+function wrapVivoTransportError(
+  options: VivoRequestOptions,
+  timeoutSignal: AbortSignal,
+  error: unknown
+) {
+  const failureKind = options.signal?.aborted
+    ? "request-cancelled"
+    : timeoutSignal.aborted
+      ? "request-timeout"
+      : undefined;
+  return new VivoProviderError(
+    failureKind === "request-cancelled"
+      ? "vivo provider request was cancelled"
+      : failureKind === "request-timeout"
+        ? "vivo provider request deadline was exceeded"
+        : error instanceof Error
+          ? error.message
+          : "vivo provider request failed",
+    {
+      capability: options.capability,
+      status: "provider-unavailable",
+      raw: error,
+      failureKind,
+    }
+  );
+}
+
+async function vivoFetchWithDeadline(options: VivoRequestOptions) {
   const env = getVivoEnv();
   const timeoutSignal = AbortSignal.timeout(
     Math.max(1, options.timeoutMs ?? 30_000)
@@ -54,34 +81,25 @@ export async function vivoFetch(options: VivoRequestOptions) {
         signal,
       }
     );
-    return response;
+    return { response, timeoutSignal };
   } catch (error) {
-    const failureKind = options.signal?.aborted
-      ? "request-cancelled"
-      : timeoutSignal.aborted
-        ? "request-timeout"
-        : undefined;
-    throw new VivoProviderError(
-      failureKind === "request-cancelled"
-        ? "vivo provider request was cancelled"
-        : failureKind === "request-timeout"
-          ? "vivo provider request deadline was exceeded"
-          : error instanceof Error
-            ? error.message
-            : "vivo provider request failed",
-      {
-        capability: options.capability,
-        status: "provider-unavailable",
-        raw: error,
-        failureKind,
-      }
-    );
+    throw wrapVivoTransportError(options, timeoutSignal, error);
   }
 }
 
+export async function vivoFetch(options: VivoRequestOptions) {
+  return (await vivoFetchWithDeadline(options)).response;
+}
+
 export async function vivoJsonRequest<T = Record<string, unknown>>(options: VivoRequestOptions) {
-  const response = await vivoFetch(options);
-  const text = await response.text();
+  const { response, timeoutSignal } = await vivoFetchWithDeadline(options);
+  let text: string;
+  try {
+    // Headers 到达并不代表请求完成；正文读取继续受同一截止时间与取消信号约束。
+    text = await response.text();
+  } catch (error) {
+    throw wrapVivoTransportError(options, timeoutSignal, error);
+  }
   let body: unknown = null;
   try {
     body = text ? JSON.parse(text) : null;

@@ -115,6 +115,11 @@ export interface StorybookMediaTaskStore {
     },
     operation?: StorybookMediaTaskOperation
   ): Promise<boolean>;
+  recoverReadyAudio(
+    identity: StorybookMediaTaskIdentity,
+    mediaKey: string,
+    operation?: StorybookMediaTaskOperation
+  ): Promise<boolean>;
   invalidateReadyMedia(
     identity: StorybookMediaTaskIdentity,
     mediaKey: string,
@@ -780,6 +785,41 @@ export class InMemoryStorybookMediaTaskStore
     return true;
   }
 
+  async recoverReadyAudio(
+    identity: StorybookMediaTaskIdentity,
+    mediaKey: string,
+    operation: StorybookMediaTaskOperation = {}
+  ) {
+    assertOperationActive(operation);
+    if (identity.channel !== "audio") return false;
+    const key = taskKey(identity);
+    const current = this.tasks.get(key);
+    if (
+      !current ||
+      current.taskId ||
+      !["submitting", "blocked", "retryable", "ready"].includes(
+        current.status
+      )
+    ) {
+      return false;
+    }
+    const normalizedMediaKey = normalizeMediaKey(mediaKey);
+    if (current.status === "ready" && current.mediaKey === normalizedMediaKey) {
+      return true;
+    }
+    this.tasks.set(key, {
+      ...current,
+      status: "ready",
+      leaseToken: null,
+      leaseExpiresAtMs: null,
+      pollErrorCount: 0,
+      nextRetryAtMs: null,
+      mediaKey: normalizedMediaKey,
+      lastErrorReason: null,
+    });
+    return true;
+  }
+
   async invalidateReadyMedia(
     identity: StorybookMediaTaskIdentity,
     mediaKey: string,
@@ -1326,6 +1366,40 @@ export class DatabaseStorybookMediaTaskStore
         ...(imageChannel
           ? [normalizeTaskId(input.taskId ?? "")]
           : []),
+      ],
+      operation
+    );
+    return (resultRaw as ResultSetHeader).affectedRows === 1;
+  }
+
+  async recoverReadyAudio(
+    identity: StorybookMediaTaskIdentity,
+    mediaKey: string,
+    operation: StorybookMediaTaskOperation = {}
+  ) {
+    if (identity.channel !== "audio") return false;
+    await this.ensureTable(operation);
+    const [resultRaw] = await executeWithBudget(
+      this.pool,
+      `
+        update storybook_media_tasks
+        set
+          status = 'ready',
+          media_key = ?,
+          poll_error_count = 0,
+          next_retry_at = null,
+          lease_token = null,
+          lease_expires_at = null,
+          last_error_reason = null
+        where task_key = ?
+          and task_id is null
+          and status in ('submitting', 'blocked', 'retryable', 'ready')
+          and (media_key is null or media_key = ?)
+      `,
+      [
+        normalizeMediaKey(mediaKey),
+        taskKey(identity),
+        normalizeMediaKey(mediaKey),
       ],
       operation
     );

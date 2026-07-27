@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+
+import { signReleaseReport } from "./release-report-proof.mjs";
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.dirname(scriptsDir);
@@ -13,7 +16,6 @@ const releaseBrowserRunner = path.join(
   scriptsDir,
   "run-release-browser-tests.mjs"
 );
-
 function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
@@ -22,22 +24,50 @@ function createEvidence(overrides = {}) {
   const tempDir = fs.mkdtempSync(
     path.join(os.tmpdir(), "childcare-release-ready-")
   );
+  const runGit = (args) => {
+    const result = spawnSync("git", args, {
+      cwd: tempDir,
+      encoding: "utf8",
+      shell: false,
+      windowsHide: true,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  runGit(["init"]);
+  runGit(["config", "user.name", "Release Fixture"]);
+  runGit(["config", "user.email", "release-fixture@example.test"]);
+  fs.writeFileSync(
+    path.join(tempDir, ".gitignore"),
+    "evidence/\n",
+    "utf8"
+  );
+  fs.writeFileSync(path.join(tempDir, "fixture.txt"), "release fixture\n", "utf8");
+  runGit(["add", ".gitignore", "fixture.txt"]);
+  runGit(["commit", "-m", "test: initialize release fixture"]);
+  const localCommitSha = runGit(["rev-parse", "HEAD"]);
+  const releaseRunId = randomUUID();
+  const signingSecret =
+    "release-readiness-fixture-signing-secret-32-chars";
   const generatedAt = new Date().toISOString();
   const baseUrl = "https://release.test";
+  const evidenceDir = path.join(tempDir, "evidence");
+  fs.mkdirSync(evidenceDir, { recursive: true });
   const paths = {
-    env: path.join(tempDir, ".env.release"),
-    local: path.join(tempDir, "local.json"),
-    remote: path.join(tempDir, "remote.json"),
-    real: path.join(tempDir, "real.json"),
-    sql: path.join(tempDir, "sql.json"),
+    env: path.join(evidenceDir, ".env.release"),
+    local: path.join(evidenceDir, "local.json"),
+    remote: path.join(evidenceDir, "remote.json"),
+    real: path.join(evidenceDir, "real.json"),
+    sql: path.join(evidenceDir, "sql.json"),
   };
 
   fs.writeFileSync(
     paths.env,
     [
       `RELEASE_BASE_URL=${baseUrl}`,
+      `AUTH_SESSION_SECRET=${signingSecret}`,
       "RELEASE_ADMIN_COOKIE=ccs_session=test-cookie",
-      "RELEASE_EXPECTED_COMMIT_SHA=abc123",
+      `RELEASE_EXPECTED_COMMIT_SHA=${localCommitSha}`,
       "CRON_SECRET=test-cron-secret",
       "BRAIN_API_BASE_URL=https://brain.test",
       "DATABASE_URL=mysql://release:secret@db.test:3306/childcare",
@@ -55,41 +85,130 @@ function createEvidence(overrides = {}) {
     ].join("\n"),
     "utf8"
   );
-  writeJson(paths.local, {
+  writeJson(paths.local, signReleaseReport({
+    schemaVersion: 2,
+    releaseRunId,
     generatedAt,
+    localCommitSha,
+    endCommitSha: localCommitSha,
+    sourceCleanAtStart: true,
+    sourceCleanAtEnd: true,
     mode: "strict",
+    isolatedWorktree: true,
     productionValidated: true,
+    browserPolicy: { productionValidated: true },
+    steps: [
+      "npm run lint",
+      "npm run typecheck",
+      "npm run test:node",
+      "npm run test:python",
+      "npm run test:release-scripts",
+      "npm run db:check",
+      "npm run build",
+      "release browser tests (strict, prebuilt)",
+      "node scripts/release-check.mjs",
+    ].map((label) => ({
+      label,
+      skipped: false,
+      exitCode: 0,
+    })),
     summary: { passed: true },
     ...overrides.local,
-  });
-  writeJson(paths.remote, {
+  }, signingSecret));
+  writeJson(paths.remote, signReleaseReport({
+    schemaVersion: 2,
+    releaseRunId,
     generatedAt,
-    remote: { baseUrl },
+    local: {
+      endCommitSha: localCommitSha,
+      sourceCleanAtStart: true,
+      sourceCleanAtEnd: true,
+    },
+    remote: {
+      baseUrl,
+      expectedCommitSha: localCommitSha,
+      localCommitSha,
+      deployedCommitSha: localCommitSha,
+      deploymentId: "dpl_release_fixture",
+      deploymentUrl: "https://release-fixture.vercel.app",
+      enabled: true,
+      checks: [
+        "remote:expected-commit-matches-local-head",
+        `remote:${baseUrl}/`,
+        `remote:${baseUrl}/api/health`,
+        "remote:protected-session",
+        "remote:protected-state",
+        "remote:protected-provider-status",
+        "remote:https://brain.test/api/v1/health",
+      ].map((name) => ({ name, ok: true })),
+    },
     summary: { passed: true },
     ...overrides.remote,
-  });
-  writeJson(paths.real, {
+  }, signingSecret));
+  writeJson(paths.real, signReleaseReport({
+    schemaVersion: 2,
+    releaseRunId,
     generatedAt,
+    expectedCommitSha: localCommitSha,
+    localCommitSha,
+    endCommitSha: localCommitSha,
+    sourceCleanAtStart: true,
+    sourceCleanAtEnd: true,
+    targetCommitShaBefore: localCommitSha,
+    targetCommitShaAfter: localCommitSha,
+    targetDeploymentIdBefore: "dpl_release_fixture",
+    targetDeploymentIdAfter: "dpl_release_fixture",
+    targetDeploymentUrl: "https://release-fixture.vercel.app",
+    deploymentCommitVerified: true,
+    networkOriginPinned: true,
     formalRelease: true,
     mode: "all",
     liveAiRequired: true,
     targetMatchesRelease: true,
     productionValidated: true,
+    playwrightExitCode: 0,
+    criticalCoverage: {
+      totals: {
+        total: 2,
+        passed: 2,
+        skipped: 0,
+        flaky: 0,
+        failed: 0,
+      },
+    },
+    verdict: {
+      passed: true,
+      productionValidated: true,
+    },
     summary: { passed: true },
     ...overrides.real,
-  });
-  writeJson(paths.sql, {
+  }, signingSecret));
+  writeJson(paths.sql, signReleaseReport({
+    schemaVersion: 2,
+    releaseRunId,
     generatedAt,
     overallPassed: true,
     source: "npm run db:check",
     mode: "strict",
+    localCommitSha,
+    step: {
+      label: "npm run db:check",
+      exitCode: 0,
+      durationMs: 1,
+    },
     ...overrides.sql,
-  });
+  }, signingSecret));
 
-  return { tempDir, paths };
+  return {
+    tempDir,
+    paths,
+    localCommitSha,
+    releaseRunId,
+    signingSecret,
+  };
 }
 
-function runReadiness(paths) {
+function runReadiness(paths, extraArgs = []) {
   return spawnSync(
     process.execPath,
     [
@@ -99,9 +218,10 @@ function runReadiness(paths) {
       `--remote-report=${paths.remote}`,
       `--real-smoke-report=${paths.real}`,
       `--sql-check=${paths.sql}`,
+      ...extraArgs,
     ],
     {
-      cwd: repoRoot,
+      cwd: path.dirname(path.dirname(paths.env)),
       encoding: "utf8",
       windowsHide: true,
     }
@@ -167,6 +287,134 @@ test("release readiness rejects manually asserted SQL evidence", (t) => {
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /strict db:check step/u);
+});
+
+test("release readiness rejects evidence from a different deployment commit", (t) => {
+  const evidence = createEvidence();
+  t.after(() => fs.rmSync(evidence.tempDir, { recursive: true, force: true }));
+  const remote = JSON.parse(fs.readFileSync(evidence.paths.remote, "utf8"));
+  remote.remote.deployedCommitSha =
+    "deadbeef00000000000000000000000000000000";
+  writeJson(
+    evidence.paths.remote,
+    signReleaseReport(remote, evidence.signingSecret)
+  );
+
+  const result = runReadiness(evidence.paths);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Remote deployment report/u);
+});
+
+test("release readiness rejects formal smoke from a different commit", (t) => {
+  const evidence = createEvidence();
+  t.after(() => fs.rmSync(evidence.tempDir, { recursive: true, force: true }));
+  const real = JSON.parse(fs.readFileSync(evidence.paths.real, "utf8"));
+  real.targetCommitShaAfter =
+    "deadbeef00000000000000000000000000000000";
+  writeJson(
+    evidence.paths.real,
+    signReleaseReport(real, evidence.signingSecret)
+  );
+
+  const result = runReadiness(evidence.paths);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Formal production smoke report/u);
+});
+
+test("release readiness rejects evidence assembled from different runs", (t) => {
+  const evidence = createEvidence();
+  t.after(() => fs.rmSync(evidence.tempDir, { recursive: true, force: true }));
+  const remote = JSON.parse(fs.readFileSync(evidence.paths.remote, "utf8"));
+  remote.releaseRunId = randomUUID();
+  writeJson(
+    evidence.paths.remote,
+    signReleaseReport(remote, evidence.signingSecret)
+  );
+
+  const result = runReadiness(evidence.paths);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Remote deployment report/u);
+});
+
+test("release readiness rejects a report changed after signing", (t) => {
+  const evidence = createEvidence();
+  t.after(() => fs.rmSync(evidence.tempDir, { recursive: true, force: true }));
+  const remote = JSON.parse(fs.readFileSync(evidence.paths.remote, "utf8"));
+  remote.remote.deploymentId = "dpl_tampered_after_signing";
+  writeJson(evidence.paths.remote, remote);
+
+  const result = runReadiness(evidence.paths);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Remote deployment report/u);
+});
+
+test("release readiness rejects smoke from another deployment id", (t) => {
+  const evidence = createEvidence();
+  t.after(() => fs.rmSync(evidence.tempDir, { recursive: true, force: true }));
+  const real = JSON.parse(fs.readFileSync(evidence.paths.real, "utf8"));
+  real.targetDeploymentIdAfter = "dpl_other_fixture";
+  writeJson(
+    evidence.paths.real,
+    signReleaseReport(real, evidence.signingSecret)
+  );
+
+  const result = runReadiness(evidence.paths);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Formal production smoke report/u);
+});
+
+test("release readiness rejects evidence dated in the future", (t) => {
+  const evidence = createEvidence();
+  t.after(() => fs.rmSync(evidence.tempDir, { recursive: true, force: true }));
+  const local = JSON.parse(fs.readFileSync(evidence.paths.local, "utf8"));
+  local.generatedAt = new Date(Date.now() + 30_000).toISOString();
+  writeJson(
+    evidence.paths.local,
+    signReleaseReport(local, evidence.signingSecret)
+  );
+
+  const result = runReadiness(evidence.paths);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Strict local gate report/u);
+});
+
+test("release readiness cannot disable freshness with Infinity", (t) => {
+  const evidence = createEvidence();
+  t.after(() => fs.rmSync(evidence.tempDir, { recursive: true, force: true }));
+  const local = JSON.parse(fs.readFileSync(evidence.paths.local, "utf8"));
+  local.generatedAt = new Date(Date.now() - 365 * 24 * 60 * 60_000).toISOString();
+  writeJson(
+    evidence.paths.local,
+    signReleaseReport(local, evidence.signingSecret)
+  );
+
+  const result = runReadiness(evidence.paths, [
+    "--max-report-age-minutes=Infinity",
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Strict local gate report/u);
+});
+
+test("release readiness rejects a source tree changed after evidence", (t) => {
+  const evidence = createEvidence();
+  t.after(() => fs.rmSync(evidence.tempDir, { recursive: true, force: true }));
+  fs.writeFileSync(
+    path.join(evidence.tempDir, "uncommitted-runtime.ts"),
+    "export const changed = true;\n",
+    "utf8"
+  );
+
+  const result = runReadiness(evidence.paths);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Unable to prove clean release source/u);
 });
 
 test("release browser runner rejects an unproven prebuilt bundle", (t) => {

@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { normalizeCommitSha } from "./release-commit-proof.mjs";
+
 export const NORMAL_SESSION_CRITICAL_FILES = [
   "tests/product-completion/ai-routes-normal-session.spec.ts",
   "tests/product-completion/auth-login-normal-session.spec.ts",
@@ -10,7 +12,9 @@ export const PRODUCTION_REAL_CRITICAL_FILES = [
 ];
 
 export const FORMAL_REAL_SMOKE_ENV_KEYS = [
+  "AUTH_SESSION_SECRET",
   "RELEASE_BASE_URL",
+  "RELEASE_EXPECTED_COMMIT_SHA",
   "REAL_SMOKE_BASE_URL",
   "REAL_SMOKE_ALLOW_WRITES",
   "REAL_SMOKE_MODE",
@@ -200,6 +204,16 @@ export function validateFormalRealSmokeEnv(env) {
   }
   if (!isTruthy(env?.REAL_SMOKE_REQUIRE_LIVE_AI)) {
     invalid.push("REAL_SMOKE_REQUIRE_LIVE_AI must be true for the formal gate.");
+  }
+  if (!normalizeCommitSha(env?.RELEASE_EXPECTED_COMMIT_SHA)) {
+    invalid.push(
+      "RELEASE_EXPECTED_COMMIT_SHA must be a full 40-character Git SHA."
+    );
+  }
+  if (String(env?.AUTH_SESSION_SECRET ?? "").length < 32) {
+    invalid.push(
+      "AUTH_SESSION_SECRET must contain at least 32 characters for signed release evidence."
+    );
   }
 
   const releaseUrl = normalizeUrl(env?.RELEASE_BASE_URL);

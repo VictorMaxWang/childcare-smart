@@ -154,7 +154,11 @@ test("formal production smoke rejects one skipped three-role journey", () => {
 
 test("formal real smoke env requires all mode, live AI, writes, and matching target", () => {
   const env = {
+    AUTH_SESSION_SECRET:
+      "test-auth-session-secret-at-least-32-characters",
     RELEASE_BASE_URL: "https://staging.example.test",
+    RELEASE_EXPECTED_COMMIT_SHA:
+      "abcdef1234567890abcdef1234567890abcdef12",
     REAL_SMOKE_BASE_URL: "https://staging.example.test",
     REAL_SMOKE_ALLOW_WRITES: "1",
     REAL_SMOKE_MODE: "all",
@@ -168,6 +172,13 @@ test("formal real smoke env requires all mode, live AI, writes, and matching tar
   };
 
   assert.equal(validateFormalRealSmokeEnv(env).ok, true);
+  assert.equal(
+    validateFormalRealSmokeEnv({
+      ...env,
+      RELEASE_EXPECTED_COMMIT_SHA: "abcdef1",
+    }).ok,
+    false
+  );
   assert.equal(
     validateFormalRealSmokeEnv({
       ...env,

@@ -307,6 +307,44 @@ test("audio and image use independent task identities and audio never auto-retri
   assert.equal(audioReplay.attemptCount, 1);
 });
 
+test("persisted audio can recover a blocked ledger without another submission", async () => {
+  const store = new InMemoryStorybookMediaTaskStore();
+  const now = Date.now();
+  const claim = await store.claim(audioIdentity, { nowMs: now });
+  assert.equal(claim.action, "submit");
+  assert.ok(claim.leaseToken);
+  assert.equal(
+    await store.markSubmissionFailure(
+      audioIdentity,
+      claim.leaseToken,
+      {
+        retryable: false,
+        nextRetryAtMs: now + 1_000,
+        reason: "ledger outcome unknown after media persistence",
+      }
+    ),
+    true
+  );
+
+  const mediaKey = "e".repeat(40);
+  assert.equal(
+    await store.recoverReadyAudio(audioIdentity, mediaKey, {
+      nowMs: now + 2_000,
+    }),
+    true
+  );
+  const recovered = await store.claim(audioIdentity, {
+    nowMs: now + 2_001,
+  });
+  assert.equal(recovered.action, "ready");
+  assert.equal(recovered.mediaKey, mediaKey);
+  assert.equal(recovered.attemptCount, 1);
+  assert.equal(
+    await store.recoverReadyAudio(imageIdentity, mediaKey),
+    false
+  );
+});
+
 test("an active audio submission lease is reported as waiting instead of exhausted", async () => {
   const store = new InMemoryStorybookMediaTaskStore();
   const now = Date.now();

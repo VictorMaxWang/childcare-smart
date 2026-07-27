@@ -7,6 +7,20 @@ function configured(value: string | undefined) {
   return Boolean(value?.trim());
 }
 
+function currentDeploymentUrl() {
+  const value = process.env.VERCEL_URL?.trim();
+  if (!value) return null;
+  try {
+    return new URL(
+      value.startsWith("http://") || value.startsWith("https://")
+        ? value
+        : `https://${value}`
+    ).origin;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * 提供无需登录的部署探针，只返回能力是否已配置，不回传连接串、令牌或密钥内容。
  */
@@ -23,6 +37,7 @@ export function GET() {
       deployment: {
         commitSha: process.env.VERCEL_GIT_COMMIT_SHA?.trim() || null,
         deploymentId: process.env.VERCEL_DEPLOYMENT_ID?.trim() || null,
+        deploymentUrl: currentDeploymentUrl(),
       },
       capabilities: {
         database: configured(process.env.DATABASE_URL),

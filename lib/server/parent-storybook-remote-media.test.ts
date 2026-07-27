@@ -218,3 +218,37 @@ test("unreadable ready media is downgraded instead of returning a broken URL", a
   assert.equal(result.scenes[0].audioUrl, null);
   assert.equal(result.scenes[0].audioStatus, "fallback");
 });
+
+test("expired reconciliation budget never starts storage or provider work", async () => {
+  let operationCount = 0;
+  const result = await reconcileRemoteStoryBookMedia(
+    {
+      story: story(),
+      institutionId: "institution-1",
+      requestUrl: "http://localhost/api/ai/parent-storybook/media-status",
+      serviceScope: { institutionId: "institution-1", childIds: ["child-1"] },
+      deadlineAtMs: Date.now() - 1,
+    },
+    {
+      readLocal: async () => {
+        operationCount += 1;
+        return null;
+      },
+      loadRemote: async () => {
+        operationCount += 1;
+        return null;
+      },
+      persistLocal: async () => {
+        operationCount += 1;
+        return {
+          mediaUrl: "/api/ai/parent-storybook/media/unexpected",
+          mediaKey: "unexpected",
+        };
+      },
+    }
+  );
+
+  assert.equal(operationCount, 0);
+  assert.equal(result.scenes[0].imageUrl, null);
+  assert.equal(result.scenes[0].audioUrl, null);
+});

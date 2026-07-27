@@ -1,12 +1,38 @@
 #!/usr/bin/env node
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+
+import {
+  assertReleaseSourceClean,
+  commitMatches,
+  normalizeCommitSha,
+  normalizeDeploymentId,
+  normalizeDeploymentUrl,
+  normalizeReleaseRunId,
+  readLocalCommitSha,
+} from "./release-commit-proof.mjs";
+import { maybeSignReleaseReport } from "./release-report-proof.mjs";
 
 const cwd = process.cwd();
 const args = process.argv.slice(2);
 const requireRemote = args.includes("--require-remote");
 const reportArg = args.find((a) => a.startsWith("--report-path="));
 const envFileArg = args.find((a) => a.startsWith("--release-env-file="));
+const defaultReportPath = requireRemote
+  ? "artifacts/release-report.remote.json"
+  : "artifacts/release-check.json";
+const reportPath = reportArg
+  ? reportArg.slice("--report-path=".length)
+  : defaultReportPath;
+const absReport = path.isAbsolute(reportPath)
+  ? reportPath
+  : path.join(cwd, reportPath);
+const releaseRunId =
+  normalizeReleaseRunId(process.env.RELEASE_RUN_ID) || randomUUID();
+
+fs.mkdirSync(path.dirname(absReport), { recursive: true });
+fs.rmSync(absReport, { force: true });
 
 function readJson(relPath) {
   return JSON.parse(fs.readFileSync(path.join(cwd, relPath), "utf8"));
@@ -97,6 +123,8 @@ function validateWebHealthPayload(payload, expectedCommitSha) {
   const issues = [];
   const capabilities = payload?.capabilities;
   const commitSha = payload?.deployment?.commitSha;
+  const deploymentId = payload?.deployment?.deploymentId;
+  const deploymentUrl = payload?.deployment?.deploymentUrl;
 
   if (payload?.ok !== true) issues.push("ok != true");
   if (payload?.status !== "ok") issues.push("status != ok");
@@ -113,12 +141,14 @@ function validateWebHealthPayload(payload, expectedCommitSha) {
   }
   if (!commitSha) {
     issues.push("deployment.commitSha missing");
-  } else if (
-    expectedCommitSha &&
-    !String(commitSha).startsWith(expectedCommitSha) &&
-    !expectedCommitSha.startsWith(String(commitSha))
-  ) {
+  } else if (expectedCommitSha && !commitMatches(commitSha, expectedCommitSha)) {
     issues.push("deployment.commitSha does not match RELEASE_EXPECTED_COMMIT_SHA");
+  }
+  if (!normalizeDeploymentId(deploymentId)) {
+    issues.push("deployment.deploymentId missing");
+  }
+  if (!normalizeDeploymentUrl(deploymentUrl)) {
+    issues.push("deployment.deploymentUrl missing");
   }
   return issues;
 }
@@ -218,10 +248,30 @@ async function fetchCheck(url, options = {}) {
 }
 
 const report = {
+  schemaVersion: 2,
+  releaseRunId,
   generatedAt: new Date().toISOString(),
   runtime: { node: process.version, cwd },
-  local: { passed: true, checks: [] },
-  remote: { enabled: false, passed: true, baseUrl: "", brainBaseUrl: "", checks: [] },
+  local: {
+    passed: true,
+    commitSha: "",
+    endCommitSha: "",
+    sourceCleanAtStart: false,
+    sourceCleanAtEnd: false,
+    checks: [],
+  },
+  remote: {
+    enabled: false,
+    passed: true,
+    baseUrl: "",
+    brainBaseUrl: "",
+    expectedCommitSha: "",
+    localCommitSha: "",
+    deployedCommitSha: "",
+    deploymentId: "",
+    deploymentUrl: "",
+    checks: [],
+  },
   summary: { passed: false, blockers: [], warnings: [] },
 };
 
@@ -256,6 +306,10 @@ async function main() {
     "scripts/online-smoke-gate.mjs",
     "scripts/real-three-role-smoke-gate.mjs",
     "scripts/release-check.mjs",
+    "scripts/release-commit-proof.mjs",
+    "scripts/release-environment-proof.mjs",
+    "scripts/release-isolated-worktree.mjs",
+    "scripts/release-report-proof.mjs",
     "scripts/release-formal-gate.mjs",
     "scripts/release-local-gate.mjs",
     "scripts/release-readiness.test.mjs",
@@ -362,8 +416,59 @@ async function main() {
   const expectedCommitSha = String(
     process.env.RELEASE_EXPECTED_COMMIT_SHA ?? ""
   ).trim();
+  let localCommitSha = "";
+  try {
+    localCommitSha = readLocalCommitSha(cwd);
+    assertReleaseSourceClean(cwd);
+    report.local.sourceCleanAtStart = true;
+    pushLocal("release-source-clean-at-start", true, {
+      commitSha: localCommitSha,
+    });
+  } catch (error) {
+    pushLocal("release-source-clean-at-start", false, {
+      reason:
+        error instanceof Error
+          ? error.message
+          : "Unable to prove clean release source.",
+    });
+    if (requireRemote) {
+      pushRemote("remote:local-commit-sha", false, {
+        reason:
+          error instanceof Error
+            ? error.message
+            : "Unable to resolve local Git commit.",
+      });
+    }
+  }
+  report.local.commitSha = localCommitSha;
   report.remote.baseUrl = baseUrl;
   report.remote.brainBaseUrl = brainBaseUrl;
+  report.remote.expectedCommitSha = normalizeCommitSha(expectedCommitSha);
+  report.remote.localCommitSha = localCommitSha;
+
+  if (requireRemote) {
+    const expectedMatchesLocal = commitMatches(
+      expectedCommitSha,
+      localCommitSha
+    );
+    pushRemote(
+      "remote:expected-commit-matches-local-head",
+      expectedMatchesLocal,
+      expectedMatchesLocal
+        ? { expectedCommitSha, localCommitSha }
+        : {
+            reason:
+              "RELEASE_EXPECTED_COMMIT_SHA does not match the current local HEAD.",
+            expectedCommitSha,
+            localCommitSha,
+          }
+    );
+    if (!expectedMatchesLocal) {
+      console.error(
+        "[FAIL] RELEASE_EXPECTED_COMMIT_SHA does not match the current local HEAD."
+      );
+    }
+  }
 
   if (!baseUrl) {
     if (requireRemote) {
@@ -413,6 +518,15 @@ async function main() {
     try {
       const r = await fetchCheck(healthEndpoint);
       const payload = parseJsonSafe(r.text);
+      report.remote.deployedCommitSha = normalizeCommitSha(
+        payload?.deployment?.commitSha
+      );
+      report.remote.deploymentId = normalizeDeploymentId(
+        payload?.deployment?.deploymentId
+      );
+      report.remote.deploymentUrl = normalizeDeploymentUrl(
+        payload?.deployment?.deploymentUrl
+      );
       const issues = r.res.ok
         ? validateWebHealthPayload(payload, expectedCommitSha)
         : [diagnoseHttp(r.res.status, healthEndpoint)];
@@ -421,6 +535,8 @@ async function main() {
           status: r.res.status,
           elapsedMs: r.elapsedMs,
           commitSha: payload.deployment?.commitSha,
+          deploymentId: payload.deployment?.deploymentId,
+          deploymentUrl: payload.deployment?.deploymentUrl,
           capabilities: payload.capabilities,
         });
         console.log(`[OK] ${healthEndpoint} reports the expected production deployment`);
@@ -541,17 +657,40 @@ async function main() {
     }
   }
 
+  try {
+    report.local.endCommitSha = readLocalCommitSha(cwd);
+    assertReleaseSourceClean(cwd);
+    report.local.sourceCleanAtEnd = true;
+    pushLocal(
+      "release-source-clean-at-end",
+      report.local.endCommitSha === report.local.commitSha,
+      {
+        startCommitSha: report.local.commitSha,
+        endCommitSha: report.local.endCommitSha,
+      }
+    );
+  } catch (error) {
+    pushLocal("release-source-clean-at-end", false, {
+      reason:
+        error instanceof Error
+          ? error.message
+          : "Unable to prove clean release source at completion.",
+    });
+  }
+
   report.summary.passed = report.local.passed && report.remote.passed;
   if (!report.local.passed) report.summary.blockers.push("One or more local checks failed.");
   if (report.remote.enabled && !report.remote.passed) {
     report.summary.blockers.push("One or more remote checks failed.");
   }
 
-  const defaultReportPath = requireRemote ? "artifacts/release-report.remote.json" : "artifacts/release-check.json";
-  const reportPath = reportArg ? reportArg.slice("--report-path=".length) : defaultReportPath;
-  const absReport = path.isAbsolute(reportPath) ? reportPath : path.join(cwd, reportPath);
-  fs.mkdirSync(path.dirname(absReport), { recursive: true });
-  fs.writeFileSync(absReport, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  report.generatedAt = new Date().toISOString();
+  const signedReport = maybeSignReleaseReport(report);
+  fs.writeFileSync(
+    absReport,
+    `${JSON.stringify(signedReport, null, 2)}\n`,
+    "utf8"
+  );
   console.log(`[OK] Release report written: ${absReport}`);
 
   if (report.summary.passed) {

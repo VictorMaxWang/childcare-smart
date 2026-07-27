@@ -42,6 +42,7 @@ function withEnv(
       | "VIVO_APP_KEY"
       | "VIVO_BASE_URL"
       | "STORYBOOK_IMAGE_RETRY_BACKOFF_MS"
+      | "STORYBOOK_TTS_CONCURRENCY"
       | "PARENT_STORYBOOK_MEDIA_STATUS_TIMEOUT_MS"
       | "STORYBOOK_MEDIA_PROVIDER_TIMEOUT_MS",
       string | undefined
@@ -55,6 +56,7 @@ function withEnv(
     NEXT_STORYBOOK_IMAGE_PROVIDER: undefined,
     STORYBOOK_DASHSCOPE_IMAGE_ENDPOINT: undefined,
     STORYBOOK_IMAGE_PROVIDER: undefined,
+    STORYBOOK_TTS_CONCURRENCY: undefined,
     ...overrides,
   };
   const previous = {
@@ -70,6 +72,7 @@ function withEnv(
     VIVO_APP_KEY: process.env.VIVO_APP_KEY,
     VIVO_BASE_URL: process.env.VIVO_BASE_URL,
     STORYBOOK_IMAGE_RETRY_BACKOFF_MS: process.env.STORYBOOK_IMAGE_RETRY_BACKOFF_MS,
+    STORYBOOK_TTS_CONCURRENCY: process.env.STORYBOOK_TTS_CONCURRENCY,
     PARENT_STORYBOOK_MEDIA_STATUS_TIMEOUT_MS:
       process.env.PARENT_STORYBOOK_MEDIA_STATUS_TIMEOUT_MS,
     STORYBOOK_MEDIA_PROVIDER_TIMEOUT_MS:
@@ -114,8 +117,119 @@ test("media status budgets stay below the browser polling deadline", async () =>
         parentStoryBookMediaStatusRouteInternals.localDeadlineMs,
         22_000
       );
+      assert.equal(
+        parentStoryBookMediaStatusRouteInternals.responseDeadlineMs,
+        45_000
+      );
+      assert.equal(
+        parentStoryBookMediaStatusRouteInternals.commitBudgetMs,
+        16_000
+      );
+      assert.equal(
+        parentStoryBookMediaStatusRouteInternals.finalizeReserveMs,
+        5_000
+      );
+      assert.ok(
+        parentStoryBookMediaStatusRouteInternals.localDeadlineMs +
+          parentStoryBookMediaStatusRouteInternals.commitBudgetMs <
+          parentStoryBookMediaStatusRouteInternals.responseDeadlineMs
+      );
     }
   );
+});
+
+test("storybook TTS defaults to one paid synthesis at a time", async () => {
+  await withEnv({}, () => {
+    assert.equal(
+      parentStoryBookMediaStatusRouteInternals.resolveAudioConcurrency(),
+      1
+    );
+  });
+  await withEnv({ STORYBOOK_TTS_CONCURRENCY: "4" }, () => {
+    assert.equal(
+      parentStoryBookMediaStatusRouteInternals.resolveAudioConcurrency(),
+      4
+    );
+  });
+});
+
+test("storybook audio persistence key changes with the provider model", () => {
+  const story = buildProgressiveStory();
+  const identity =
+    parentStoryBookMediaStatusRouteInternals.buildStoryMediaTaskIdentity({
+      institutionId: "institution-1",
+      userId: "parent-1",
+      story,
+      scene: story.scenes[0],
+      channel: "audio",
+    });
+  const firstSeed =
+    parentStoryBookMediaStatusRouteInternals.buildStoryAudioMediaSeed({
+      storyId: story.storyId,
+      sceneIndex: story.scenes[0].sceneIndex,
+      identity,
+    });
+  const nextSeed =
+    parentStoryBookMediaStatusRouteInternals.buildStoryAudioMediaSeed({
+      storyId: story.storyId,
+      sceneIndex: story.scenes[0].sceneIndex,
+      identity: {
+        ...identity,
+        providerModel: `${identity.providerModel}:next-voice`,
+      },
+    });
+
+  assert.notEqual(firstSeed, nextSeed);
+});
+
+test("an ambiguous task-ready write is accepted only after ledger read-back", async () => {
+  const story = buildProgressiveStory();
+  const identity =
+    parentStoryBookMediaStatusRouteInternals.buildStoryMediaTaskIdentity({
+      institutionId: "institution-1",
+      userId: "parent-1",
+      story,
+      scene: story.scenes[0],
+      channel: "audio",
+    });
+  const mediaKey = "a".repeat(40);
+  let markReadyCalls = 0;
+  let claimCalls = 0;
+  const store = {
+    markReady: async () => {
+      markReadyCalls += 1;
+      throw new Error("storybook media task database query timed out");
+    },
+    claim: async () => {
+      claimCalls += 1;
+      return {
+        action: "ready" as const,
+        leaseToken: null,
+        taskId: null,
+        submittedAtMs: null,
+        attemptCount: 1,
+        pollErrorCount: 0,
+        nextRetryAtMs: null,
+        mediaKey,
+        lastErrorReason: null,
+      };
+    },
+  };
+
+  const marked = await parentStoryBookMediaStatusRouteInternals
+    .markMediaTaskReadyWithVerification(
+      store,
+      identity,
+      {
+        leaseToken: "lease-1",
+        mediaKey,
+      },
+      Date.now() + 5_000
+    );
+
+  assert.equal(marked, true);
+  assert.equal(markReadyCalls, 1);
+  assert.equal(claimCalls, 1);
 });
 
 function buildProgressiveStory(): ParentStoryBookResponse {
@@ -845,6 +959,7 @@ test("concurrent replay synthesizes each missing story audio scene once", async 
         VIVO_APP_ID: "test-app-id",
         VIVO_APP_KEY: "test-app-key",
         VIVO_BASE_URL: `http://127.0.0.1:${address.port}`,
+        STORYBOOK_TTS_CONCURRENCY: "4",
       },
       async () => {
         const payload = buildMediaStatusPayload({ story });

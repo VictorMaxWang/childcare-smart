@@ -371,6 +371,10 @@ function storyMediaDiagnostic(story: Record<string, unknown>) {
     audioDelivery: providerMeta?.audioDelivery ?? null,
     audioJobStatus: audio?.jobStatus ?? null,
     audioReadySceneCount: audio?.readySceneCount ?? null,
+    audioPendingSceneCount: audio?.pendingSceneCount ?? null,
+    audioBlockedSceneCount: audio?.blockedSceneCount ?? null,
+    audioLastErrorStage: audio?.lastErrorStage ?? null,
+    audioLastErrorReason: audio?.lastErrorReason ?? null,
   });
 }
 
