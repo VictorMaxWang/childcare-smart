@@ -10,6 +10,7 @@ import type {
   TeacherWorkbenchData,
 } from "./types";
 import { getCurrentDemoContext, readContextSnapshot } from "./persistence";
+import { compareStorybooksByLatestSave } from "@/lib/storybooks/storybook-order";
 
 function getChild(snapshot: AppStateSnapshot, childId: string) {
   return snapshot.children.find((child) => child.id === childId);
@@ -117,7 +118,7 @@ export function listStorybooks(childId: string, context = getCurrentDemoContext(
   const snapshot = scopeSnapshotForSessionUser(readContextSnapshot(context), context.user);
   return snapshot.storybooks
     .filter((storybook) => storybook.childId === childId)
-    .sort((left, right) => right.generatedAt.localeCompare(left.generatedAt));
+    .sort(compareStorybooksByLatestSave);
 }
 
 export function getDirectorDashboardMetrics(context = getCurrentDemoContext("director")): DirectorDashboardMetrics {

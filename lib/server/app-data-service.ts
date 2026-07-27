@@ -76,6 +76,7 @@ import {
   buildInterventionTasksFromCard,
   buildReminderFromTask,
 } from "@/lib/tasks/task-model";
+import { compareStorybooksByLatestSave } from "@/lib/storybooks/storybook-order";
 
 type Archivable<T> = T & {
   archivedAt?: string;
@@ -1764,7 +1765,7 @@ export class AppDataService {
     if (options.childId) requireChildAccess(this.session, snapshot, options.childId);
     return snapshot.storybooks
       .filter((storybook) => (!options.childId || storybook.childId === options.childId) && canAccessChild(this.session, findChild(snapshot, storybook.childId)))
-      .sort((left, right) => right.generatedAt.localeCompare(left.generatedAt)) as SnapshotStorybook[];
+      .sort(compareStorybooksByLatestSave) as SnapshotStorybook[];
   }
 
   async getStorybook(storybookId: string) {

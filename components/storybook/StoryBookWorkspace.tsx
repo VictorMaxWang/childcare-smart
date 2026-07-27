@@ -52,6 +52,7 @@ import {
   buildLinXiaoyuFixedStorybookResponse,
   resolveLinXiaoyuChildId,
 } from "@/lib/storybooks/lin-xiaoyu-bravery";
+import { compareStorybooksByLatestSave } from "@/lib/storybooks/storybook-order";
 
 type StoryBookPageStatus = "loading" | "storybook" | "card" | "empty" | "error";
 
@@ -226,7 +227,7 @@ export default function StoryBookWorkspace({
     if (!selectedFeed) return [];
     return [
       ...(parentD01.parentHomeData?.storybooks ?? storybooks.filter((item) => item.childId === selectedFeed.child.id)),
-    ].sort((left, right) => right.generatedAt.localeCompare(left.generatedAt));
+    ].sort(compareStorybooksByLatestSave);
   }, [parentD01.parentHomeData?.storybooks, selectedFeed, storybooks]);
   const latestSavedStorybook = savedStorybooks[0] ?? null;
   const storybookSourceRecordIds = useMemo(() => {

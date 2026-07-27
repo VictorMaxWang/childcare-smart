@@ -431,6 +431,39 @@ test("storybook source records cannot reference another family child", async () 
   );
 });
 
+test("storybook list prioritizes the latest save over a stale provider generation time", async () => {
+  const repo = new MemoryRepository();
+  const service = new AppDataService(demoUser("u-teacher2"), repo);
+
+  await service.upsertStorybook({
+    storybookId: "storybook-future-generated",
+    childId: "c-1",
+    generatedAt: "2099-01-01T00:00:00.000Z",
+    pages: [{ title: "较早保存" }],
+  });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await service.upsertStorybook({
+    storybookId: "storybook-latest-saved",
+    childId: "c-1",
+    generatedAt: "2020-01-01T00:00:00.000Z",
+    pages: [{ title: "刚刚保存" }],
+  });
+
+  const storybooks = (await service.listStorybooks({ childId: "c-1" }))
+    .filter((item) =>
+      new Set([
+        "storybook-future-generated",
+        "storybook-latest-saved",
+      ]).has(item.storybookId)
+    )
+    .map((item) => item.storybookId);
+
+  assert.deepEqual(storybooks, [
+    "storybook-latest-saved",
+    "storybook-future-generated",
+  ]);
+});
+
 test("createConsultation preserves rich high-risk result fields", async () => {
   const repo = new MemoryRepository();
   const service = new AppDataService(demoUser("u-teacher2"), repo);
