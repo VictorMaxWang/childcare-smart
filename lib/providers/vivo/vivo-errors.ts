@@ -7,14 +7,26 @@ export class VivoProviderError extends Error {
   status: VivoProviderStatus["status"];
   httpStatus?: number;
   raw?: unknown;
-  failureKind?: "request-cancelled" | "request-timeout";
+  failureKind?:
+    | "authentication"
+    | "provider-response"
+    | "rate-limited"
+    | "request-cancelled"
+    | "request-timeout"
+    | "transport";
 
   constructor(message: string, options: {
     capability: VivoCapability;
     status: VivoProviderStatus["status"];
     httpStatus?: number;
     raw?: unknown;
-    failureKind?: "request-cancelled" | "request-timeout";
+    failureKind?:
+      | "authentication"
+      | "provider-response"
+      | "rate-limited"
+      | "request-cancelled"
+      | "request-timeout"
+      | "transport";
   }) {
     super(message);
     this.name = "VivoProviderError";

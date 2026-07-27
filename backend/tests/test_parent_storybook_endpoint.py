@@ -4,10 +4,15 @@ from copy import deepcopy
 from time import perf_counter
 
 from fastapi.testclient import TestClient
+from pydantic import TypeAdapter
 
 from app.main import app
 from app.providers.base import ProviderResult
-from app.schemas.parent_storybook import ParentStoryBookRequest
+from app.schemas.parent_storybook import (
+    ParentStoryBookDiagnostics,
+    ParentStoryBookRequest,
+    ParentStoryBookResultSource,
+)
 from app.services.parent_storybook_service import await_storybook_media_warming
 from conftest import load_storybook_fixture
 
@@ -404,6 +409,31 @@ def test_parent_storybook_schema_parses_new_v2_fields_with_aliases():
     assert snake_case_request.style_mode == "preset"
     assert snake_case_request.custom_style_prompt == "暖色拼贴"
     assert snake_case_request.custom_style_negative_prompt == "不要写实人脸"
+
+
+def test_parent_storybook_schema_preserves_dashscope_text_diagnostics():
+    source = TypeAdapter(ParentStoryBookResultSource).validate_python("dashscope")
+    diagnostics = ParentStoryBookDiagnostics.model_validate(
+        {
+            "text": {
+                "requestedProvider": "vivo-chat+dashscope",
+                "resolvedProvider": "dashscope",
+                "attemptedProviders": ["vivo-chat", "dashscope"],
+                "attemptCount": 2,
+                "fallbackReason": None,
+                "statusCode": None,
+                "failureKind": None,
+                "model": "qwen3.7-plus",
+                "elapsedMs": 1800,
+            }
+        }
+    )
+
+    assert source == "dashscope"
+    assert diagnostics.text is not None
+    assert diagnostics.text.resolved_provider == "dashscope"
+    assert diagnostics.text.attempted_providers == ["vivo-chat", "dashscope"]
+    assert diagnostics.text.model == "qwen3.7-plus"
 
 
 def test_parent_storybook_endpoint_rejects_invalid_page_count():

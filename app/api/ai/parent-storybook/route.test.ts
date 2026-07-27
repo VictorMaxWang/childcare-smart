@@ -13,15 +13,24 @@ import {
   parentStoryBookCacheInternals,
   readCachedParentStoryBookMedia,
 } from "@/lib/server/parent-storybook-cache";
-import { POST } from "./route.ts";
+import {
+  parentStoryBookRouteInternals,
+  POST,
+} from "./route.ts";
 
 function withEnv(
   overrides: Partial<
     Record<
       | "BACKEND_BASE_URL"
+      | "BAILIAN_ENDPOINT"
+      | "BAILIAN_MODEL"
+      | "BAILIAN_TIMEOUT_MS"
       | "BRAIN_API_BASE_URL"
+      | "DASHSCOPE_API_KEY"
       | "NEXT_PUBLIC_BACKEND_BASE_URL"
       | "NODE_ENV"
+      | "PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS"
+      | "PARENT_STORYBOOK_BRAIN_TIMEOUT_MS"
       | "PARENT_STORYBOOK_REQUIRE_REAL_TEXT"
       | "PARENT_STORYBOOK_REQUEST_TIMEOUT_MS"
       | "VIVO_APP_ID"
@@ -35,9 +44,17 @@ function withEnv(
 ) {
   const previous = {
     BACKEND_BASE_URL: process.env.BACKEND_BASE_URL,
+    BAILIAN_ENDPOINT: process.env.BAILIAN_ENDPOINT,
+    BAILIAN_MODEL: process.env.BAILIAN_MODEL,
+    BAILIAN_TIMEOUT_MS: process.env.BAILIAN_TIMEOUT_MS,
     BRAIN_API_BASE_URL: process.env.BRAIN_API_BASE_URL,
+    DASHSCOPE_API_KEY: process.env.DASHSCOPE_API_KEY,
     NEXT_PUBLIC_BACKEND_BASE_URL: process.env.NEXT_PUBLIC_BACKEND_BASE_URL,
     NODE_ENV: process.env.NODE_ENV,
+    PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS:
+      process.env.PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS,
+    PARENT_STORYBOOK_BRAIN_TIMEOUT_MS:
+      process.env.PARENT_STORYBOOK_BRAIN_TIMEOUT_MS,
     PARENT_STORYBOOK_REQUIRE_REAL_TEXT: process.env.PARENT_STORYBOOK_REQUIRE_REAL_TEXT,
     PARENT_STORYBOOK_REQUEST_TIMEOUT_MS:
       process.env.PARENT_STORYBOOK_REQUEST_TIMEOUT_MS,
@@ -47,7 +64,11 @@ function withEnv(
     VIVO_LLM_MODEL: process.env.VIVO_LLM_MODEL,
   };
 
-  for (const [key, value] of Object.entries(overrides)) {
+  const effectiveOverrides = {
+    DASHSCOPE_API_KEY: undefined,
+    ...overrides,
+  };
+  for (const [key, value] of Object.entries(effectiveOverrides)) {
     if (value === undefined) {
       delete process.env[key];
     } else {
@@ -278,6 +299,30 @@ function buildManualThemePayload(
     ...overrides,
   };
 }
+
+test("parent storybook route caps environment timeout overrides below platform limits", async () => {
+  await withEnv(
+    {
+      PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS: "300000",
+      PARENT_STORYBOOK_BRAIN_TIMEOUT_MS: "300000",
+      PARENT_STORYBOOK_REQUEST_TIMEOUT_MS: "300000",
+    },
+    () => {
+      assert.equal(
+        parentStoryBookRouteInternals.resolveParentStoryBookBrainTimeoutMs(),
+        45_000
+      );
+      assert.equal(
+        parentStoryBookRouteInternals.resolveParentStoryBookBackendMediaTimeoutMs(),
+        45_000
+      );
+      assert.equal(
+        parentStoryBookRouteInternals.resolveParentStoryBookRequestTimeoutMs(),
+        90_000
+      );
+    }
+  );
+});
 
 test("parent storybook route accepts manual-theme with authorized child id and synthetic snapshot", async () => {
   const originalFetch = globalThis.fetch;
@@ -540,9 +585,182 @@ test("parent storybook route upgrades backend rule fallback to real vivo text wh
         assert.equal(body.providerMeta.textProvider, "vivo-chat");
         assert.equal(body.providerMeta.fallbackReason, null);
         assert.equal(body.providerMeta.diagnostics?.brain.fallbackReason, null);
-        assert.equal(body.providerMeta.diagnostics?.brain.upstreamHost, "api-ai.vivo.com.cn");
+        assert.equal(body.providerMeta.diagnostics?.brain.upstreamHost, "brain.example.com");
+        assert.equal(
+          body.providerMeta.diagnostics?.text?.resolvedProvider,
+          "vivo-chat"
+        );
+        assert.deepEqual(
+          body.providerMeta.diagnostics?.text?.attemptedProviders,
+          ["vivo-chat"]
+        );
         assert.equal(body.scenes[0].sceneText, "AI generated scene 1 about naming feelings and asking for help.");
         assert.equal(response.headers.get(SMARTCHILDCARE_TRANSPORT_HEADER), "remote-brain-proxy");
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    parentStoryBookCacheInternals.storyResponseCache.clear();
+    parentStoryBookCacheInternals.mediaAssetCache.clear();
+  }
+});
+
+test("parent storybook route fails over from vivo to dashscope real text", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  let vivoCallCount = 0;
+  let dashscopeCallCount = 0;
+  parentStoryBookCacheInternals.storyResponseCache.clear();
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+    calls.push(url);
+    if (url.includes("api-ai.vivo.com.cn")) {
+      vivoCallCount += 1;
+      return new Response(JSON.stringify({ error: "temporary model failure" }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.includes("dashscope.example.test")) {
+      dashscopeCallCount += 1;
+      return new Response(
+        JSON.stringify({
+          id: "dashscope-story-request",
+          model: "qwen-story-test",
+          choices: [
+            {
+              message: {
+                content: buildVivoStoryText(1),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    return new Response(JSON.stringify(buildRemoteFallbackStory()), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BAILIAN_ENDPOINT: "https://dashscope.example.test/v1/chat/completions",
+        BAILIAN_MODEL: "qwen-story-test",
+        BAILIAN_TIMEOUT_MS: "5000",
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        DASHSCOPE_API_KEY: "dashscope-test-key",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+        PARENT_STORYBOOK_REQUIRE_REAL_TEXT: "1",
+        VIVO_APP_ID: "app-id",
+        VIVO_APP_KEY: "app-key",
+        VIVO_BASE_URL: "https://api-ai.vivo.com.cn",
+        VIVO_LLM_MODEL: "vivo-test-model",
+      },
+      async () => {
+        const response = await POST(buildStorybookRouteRequest());
+        const body = (await response.json()) as ParentStoryBookResponse;
+
+        assert.equal(response.status, 200);
+        assert.equal(calls.length, 3);
+        assert.equal(vivoCallCount, 1);
+        assert.equal(dashscopeCallCount, 1);
+        assert.equal(body.title, "AI emotion story");
+        assert.equal(body.source, "dashscope");
+        assert.equal(body.providerMeta.provider, "dashscope");
+        assert.equal(body.providerMeta.textProvider, "dashscope");
+        assert.equal(body.providerMeta.textDelivery, "real");
+        assert.equal(body.providerMeta.textAttemptCount, 2);
+        assert.equal(
+          body.providerMeta.diagnostics?.brain.upstreamHost,
+          "brain.example.com"
+        );
+        assert.deepEqual(
+          body.providerMeta.diagnostics?.text?.attemptedProviders,
+          ["vivo-chat", "dashscope"]
+        );
+        assert.equal(
+          body.providerMeta.diagnostics?.text?.model,
+          "qwen-story-test"
+        );
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    parentStoryBookCacheInternals.storyResponseCache.clear();
+    parentStoryBookCacheInternals.mediaAssetCache.clear();
+  }
+});
+
+test("parent storybook route does not fail over after an ambiguous vivo transport failure", async () => {
+  const originalFetch = globalThis.fetch;
+  let vivoCallCount = 0;
+  let dashscopeCallCount = 0;
+  parentStoryBookCacheInternals.storyResponseCache.clear();
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+    if (url.includes("api-ai.vivo.com.cn")) {
+      vivoCallCount += 1;
+      throw new TypeError("socket reset after request dispatch");
+    }
+    if (url.includes("dashscope.example.test")) {
+      dashscopeCallCount += 1;
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: buildVivoStoryText(1) } }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    return new Response(JSON.stringify(buildRemoteFallbackStory()), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await withEnv(
+      {
+        BAILIAN_ENDPOINT: "https://dashscope.example.test/v1/chat/completions",
+        BAILIAN_MODEL: "qwen-story-test",
+        BRAIN_API_BASE_URL: "http://brain.example.com",
+        DASHSCOPE_API_KEY: "dashscope-test-key",
+        NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
+        PARENT_STORYBOOK_REQUIRE_REAL_TEXT: "1",
+        VIVO_APP_ID: "app-id",
+        VIVO_APP_KEY: "app-key",
+        VIVO_BASE_URL: "https://api-ai.vivo.com.cn",
+        VIVO_LLM_MODEL: "vivo-test-model",
+      },
+      async () => {
+        const response = await POST(buildStorybookRouteRequest());
+        const body = (await response.json()) as {
+          fallbackReason?: string;
+          diagnostics?: Record<string, unknown>;
+        };
+
+        assert.equal(response.status, 502);
+        assert.equal(body.fallbackReason, "provider-response-error");
+        assert.equal(body.diagnostics?.failureKind, "transport");
+        assert.deepEqual(body.diagnostics?.attemptedProviders, ["vivo-chat"]);
+        assert.equal(vivoCallCount, 1);
+        assert.equal(dashscopeCallCount, 0);
       }
     );
   } finally {
@@ -626,6 +844,7 @@ test("parent storybook route retries one invalid vivo structured response", asyn
 test("parent storybook route reports two invalid structured attempts without looping", async () => {
   const originalFetch = globalThis.fetch;
   let vivoCallCount = 0;
+  let dashscopeCallCount = 0;
   parentStoryBookCacheInternals.storyResponseCache.clear();
   parentStoryBookCacheInternals.mediaAssetCache.clear();
 
@@ -655,6 +874,15 @@ test("parent storybook route reports two invalid structured attempts without loo
         { status: 200, headers: { "content-type": "application/json" } }
       );
     }
+    if (url.includes("dashscope.example.test")) {
+      dashscopeCallCount += 1;
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: buildVivoStoryText(1) } }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
     return new Response(JSON.stringify(buildRemoteFallbackStory()), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -664,7 +892,10 @@ test("parent storybook route reports two invalid structured attempts without loo
   try {
     await withEnv(
       {
+        BAILIAN_ENDPOINT: "https://dashscope.example.test/v1/chat/completions",
+        BAILIAN_MODEL: "qwen-story-test",
         BRAIN_API_BASE_URL: "http://brain.example.com",
+        DASHSCOPE_API_KEY: "dashscope-test-key",
         NEXT_PUBLIC_BACKEND_BASE_URL: undefined,
         PARENT_STORYBOOK_REQUIRE_REAL_TEXT: "1",
         VIVO_APP_ID: "app-id",
@@ -682,6 +913,7 @@ test("parent storybook route reports two invalid structured attempts without loo
         assert.equal(response.status, 502);
         assert.equal(body.fallbackReason, "provider-invalid-page-count");
         assert.equal(vivoCallCount, 2);
+        assert.equal(dashscopeCallCount, 0);
         assert.equal(body.diagnostics?.textAttemptCount, 2);
       }
     );
@@ -814,6 +1046,10 @@ test("parent storybook route reports provider failure instead of successful rule
         assert.equal(body.storyId, undefined);
         assert.equal(vivoCallCount, 1);
         assert.equal(body.diagnostics?.textAttemptCount, 1);
+        assert.equal(body.diagnostics?.textProvider, "vivo-chat");
+        assert.equal(body.diagnostics?.providerHttpStatus, 403);
+        assert.equal(body.diagnostics?.failureKind, "authentication");
+        assert.deepEqual(body.diagnostics?.attemptedProviders, ["vivo-chat"]);
         assert.equal(
           response.headers.get(SMARTCHILDCARE_FALLBACK_REASON_HEADER),
           "provider-authentication-error"

@@ -274,6 +274,8 @@ test("runtime banners hotfix maps brain 504 and local speech honestly", () => {
   });
 
   assert.ok(items.some((item) => item.detail.includes("超时")));
+  assert.ok(items.some((item) => item.label.includes("文案：真实 AI")));
+  assert.ok(items.every((item) => !item.label.includes("文案：AI 生成失败")));
   assert.ok(items.some((item) => item.detail.includes("ready 1")));
   assert.ok(items.some((item) => item.label.includes("朗读：本地朗读兜底")));
   assert.ok(items.every((item) => !item.label.includes("mixed")));

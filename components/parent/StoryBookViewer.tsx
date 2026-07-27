@@ -997,11 +997,15 @@ function resolveStoryBookAiGenerationStatus(story: StoryBookRuntimeResponse): {
   reason: string | null;
 } {
   const reason = resolveStoryBookTextFallbackReason(story);
+  const declaredTextFallbackReason =
+    normalizeStoryBookReason(story.fallbackReason) ??
+    normalizeStoryBookReason(story.providerMeta.fallbackReason);
   const textDelivery = story.providerMeta.textDelivery;
   const textProvider = story.providerMeta.textProvider ?? story.providerMeta.provider;
   const realTextProvider = /(?:vivo|qwen|dashscope|llm|ai)/iu.test(textProvider ?? "");
 
-  if (textDelivery === "real" && realTextProvider && !reason) {
+  // Brain 仅负责脚手架时可以独立降级；真实文本供应商成功后仍应如实显示“真实 AI”。
+  if (textDelivery === "real" && realTextProvider && !declaredTextFallbackReason) {
     return { label: "文案：真实 AI", variant: "success", reason: null };
   }
   if (isProviderUnconfiguredReason(reason)) {
@@ -1152,6 +1156,19 @@ export function getRuntimeBannerItemsHotfix(
       tone: "info",
       label: "故事版本已准备好",
       detail: "如果稍后有更完整的资源，页面会继续补齐。",
+    });
+  }
+
+  if (
+    aiStatus.label === "文案：真实 AI" &&
+    (diagnostics?.brain?.reachable === false || transport === "next-json-fallback")
+  ) {
+    items.push({
+      tone: "warning",
+      label: "故事底稿：降级生成",
+      detail: diagnostics?.brain?.fallbackReason
+        ? formatStoryBookFallbackReason(diagnostics.brain.fallbackReason)
+        : "底稿服务暂不可用，真实 AI 文案已基于本地结构完成。",
     });
   }
 

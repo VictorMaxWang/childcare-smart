@@ -5,7 +5,16 @@ import type {
   ParentStoryBookResponse,
   ParentStoryBookScene,
 } from "@/lib/ai/types";
-import { requestVivoChat, VivoProviderError } from "@/lib/providers/vivo";
+import {
+  DashscopeChatProviderError,
+  isDashscopeChatConfigured,
+  requestDashscopeChat,
+} from "@/lib/providers/dashscope/dashscope-chat-provider";
+import {
+  getVivoEnv,
+  requestVivoChat,
+  VivoProviderError,
+} from "@/lib/providers/vivo";
 
 type StoryTextScene = {
   sceneTitle: string;
@@ -24,7 +33,9 @@ type StoryTextPayload = {
   scenes: StoryTextScene[];
 };
 
-const STORY_TEXT_MAX_ATTEMPTS = 2;
+const VIVO_STORY_TEXT_MAX_ATTEMPTS = 2;
+const DASHSCOPE_STORY_TEXT_MAX_ATTEMPTS = 1;
+const MIN_STORY_TEXT_PROVIDER_START_BUDGET_MS = 5_000;
 const RETRYABLE_STORY_TEXT_FALLBACK_REASONS = new Set([
   "provider-invalid-json",
   "provider-invalid-page-count",
@@ -35,6 +46,10 @@ export class ParentStoryBookRealTextError extends Error {
   fallbackReason: string;
   statusCode: number;
   attemptCount: number;
+  attemptedProviders: string[];
+  provider: string | null;
+  providerHttpStatus: number | null;
+  failureKind: string | null;
 
   constructor(
     message: string,
@@ -42,6 +57,10 @@ export class ParentStoryBookRealTextError extends Error {
       fallbackReason: string;
       statusCode?: number;
       attemptCount?: number;
+      attemptedProviders?: string[];
+      provider?: string | null;
+      providerHttpStatus?: number | null;
+      failureKind?: string | null;
     }
   ) {
     super(message);
@@ -49,6 +68,10 @@ export class ParentStoryBookRealTextError extends Error {
     this.fallbackReason = options.fallbackReason;
     this.statusCode = options.statusCode ?? 503;
     this.attemptCount = options.attemptCount ?? 1;
+    this.attemptedProviders = options.attemptedProviders ?? [];
+    this.provider = options.provider ?? null;
+    this.providerHttpStatus = options.providerHttpStatus ?? null;
+    this.failureKind = options.failureKind ?? null;
   }
 }
 
@@ -334,44 +357,166 @@ function mergeScenesWithRealText(
   });
 }
 
-function classifyVivoTextError(
+type StoryTextErrorClassification = {
+  fallbackReason: string;
+  statusCode: number;
+  provider: string | null;
+  providerHttpStatus: number | null;
+  failureKind: string | null;
+};
+
+function classifyStoryTextError(
   error: unknown,
   context?: {
     signal?: AbortSignal;
     deadlineAtMs?: number;
   }
-) {
-  if (context?.signal?.aborted) {
-    return { fallbackReason: "provider-request-cancelled", statusCode: 408 };
-  }
+): StoryTextErrorClassification {
   if (
     typeof context?.deadlineAtMs === "number" &&
     Date.now() >= context.deadlineAtMs
   ) {
-    return { fallbackReason: "provider-deadline-exceeded", statusCode: 504 };
+    return {
+      fallbackReason: "provider-deadline-exceeded",
+      statusCode: 504,
+      provider: null,
+      providerHttpStatus: null,
+      failureKind: "request-timeout",
+    };
+  }
+  if (context?.signal?.aborted) {
+    return {
+      fallbackReason: "provider-request-cancelled",
+      statusCode: 408,
+      provider: null,
+      providerHttpStatus: null,
+      failureKind: "request-cancelled",
+    };
   }
   if (error instanceof ParentStoryBookRealTextError) {
-    return { fallbackReason: error.fallbackReason, statusCode: error.statusCode };
+    return {
+      fallbackReason: error.fallbackReason,
+      statusCode: error.statusCode,
+      provider: error.provider,
+      providerHttpStatus: error.providerHttpStatus,
+      failureKind: error.failureKind,
+    };
   }
   if (error instanceof VivoProviderError) {
     if (error.failureKind === "request-cancelled") {
-      return { fallbackReason: "provider-request-cancelled", statusCode: 408 };
+      return {
+        fallbackReason: "provider-request-cancelled",
+        statusCode: 408,
+        provider: "vivo-chat",
+        providerHttpStatus: error.httpStatus ?? null,
+        failureKind: error.failureKind,
+      };
     }
     if (error.failureKind === "request-timeout") {
-      return { fallbackReason: "provider-deadline-exceeded", statusCode: 504 };
+      return {
+        fallbackReason: "provider-deadline-exceeded",
+        statusCode: 504,
+        provider: "vivo-chat",
+        providerHttpStatus: error.httpStatus ?? null,
+        failureKind: error.failureKind,
+      };
     }
     if (error.status === "missing-env") {
-      return { fallbackReason: "provider-unconfigured", statusCode: 503 };
+      return {
+        fallbackReason: "provider-unconfigured",
+        statusCode: 503,
+        provider: "vivo-chat",
+        providerHttpStatus: error.httpStatus ?? null,
+        failureKind: "missing-env",
+      };
     }
     if (error.httpStatus === 401 || error.httpStatus === 403) {
-      return { fallbackReason: "provider-authentication-error", statusCode: 502 };
+      return {
+        fallbackReason: "provider-authentication-error",
+        statusCode: 502,
+        provider: "vivo-chat",
+        providerHttpStatus: error.httpStatus,
+        failureKind: "authentication",
+      };
     }
     if (error.httpStatus === 429) {
-      return { fallbackReason: "provider-rate-limited", statusCode: 503 };
+      return {
+        fallbackReason: "provider-rate-limited",
+        statusCode: 503,
+        provider: "vivo-chat",
+        providerHttpStatus: error.httpStatus,
+        failureKind: "rate-limited",
+      };
     }
-    return { fallbackReason: "provider-response-error", statusCode: 502 };
+    return {
+      fallbackReason: "provider-response-error",
+      statusCode: 502,
+      provider: "vivo-chat",
+      providerHttpStatus: error.httpStatus ?? null,
+      failureKind: error.failureKind ?? "provider-response",
+    };
   }
-  return { fallbackReason: "provider-response-error", statusCode: 502 };
+  if (error instanceof DashscopeChatProviderError) {
+    if (error.failureKind === "request-cancelled") {
+      return {
+        fallbackReason: "provider-request-cancelled",
+        statusCode: 408,
+        provider: "dashscope",
+        providerHttpStatus: error.httpStatus ?? null,
+        failureKind: error.failureKind,
+      };
+    }
+    if (error.failureKind === "request-timeout") {
+      return {
+        fallbackReason: "provider-deadline-exceeded",
+        statusCode: 504,
+        provider: "dashscope",
+        providerHttpStatus: error.httpStatus ?? null,
+        failureKind: error.failureKind,
+      };
+    }
+    if (error.failureKind === "missing-env") {
+      return {
+        fallbackReason: "provider-unconfigured",
+        statusCode: 503,
+        provider: "dashscope",
+        providerHttpStatus: null,
+        failureKind: error.failureKind,
+      };
+    }
+    if (error.failureKind === "authentication") {
+      return {
+        fallbackReason: "provider-authentication-error",
+        statusCode: 502,
+        provider: "dashscope",
+        providerHttpStatus: error.httpStatus ?? null,
+        failureKind: error.failureKind,
+      };
+    }
+    if (error.failureKind === "rate-limited") {
+      return {
+        fallbackReason: "provider-rate-limited",
+        statusCode: 503,
+        provider: "dashscope",
+        providerHttpStatus: error.httpStatus ?? null,
+        failureKind: error.failureKind,
+      };
+    }
+    return {
+      fallbackReason: "provider-response-error",
+      statusCode: 502,
+      provider: "dashscope",
+      providerHttpStatus: error.httpStatus ?? null,
+      failureKind: error.failureKind,
+    };
+  }
+  return {
+    fallbackReason: "provider-response-error",
+    statusCode: 502,
+    provider: null,
+    providerHttpStatus: null,
+    failureKind: "provider-response",
+  };
 }
 
 function shouldRetryStoryTextError(error: unknown) {
@@ -381,18 +526,76 @@ function shouldRetryStoryTextError(error: unknown) {
   );
 }
 
+function shouldStopStoryTextFailover(
+  error: unknown,
+  context: {
+    signal?: AbortSignal;
+    deadlineAtMs?: number;
+  }
+) {
+  return (
+    Boolean(context.signal?.aborted) ||
+    (
+      typeof context.deadlineAtMs === "number" &&
+      context.deadlineAtMs <= Date.now()
+    ) ||
+    (
+      error instanceof VivoProviderError &&
+      (
+        error.failureKind === "request-cancelled" ||
+        error.failureKind === "request-timeout" ||
+        error.failureKind === "transport"
+      )
+    )
+  );
+}
+
+function hasStoryTextProviderStartBudget(deadlineAtMs?: number) {
+  return (
+    typeof deadlineAtMs !== "number" ||
+    deadlineAtMs - Date.now() >= MIN_STORY_TEXT_PROVIDER_START_BUDGET_MS
+  );
+}
+
+function shouldFailOverToDashscope(
+  error: unknown,
+  context: {
+    signal?: AbortSignal;
+    deadlineAtMs?: number;
+  }
+) {
+  if (
+    !isDashscopeChatConfigured() ||
+    !hasStoryTextProviderStartBudget(context.deadlineAtMs) ||
+    shouldStopStoryTextFailover(error, context)
+  ) {
+    return false;
+  }
+
+  // 仅在上游明确拒绝、限流、返回错误或本地未配置时切换。
+  // 连接中断的结果可能不确定，自动改投另一供应商会造成重复付费。
+  return (
+    error instanceof VivoProviderError &&
+    (
+      error.status === "missing-env" ||
+      error.failureKind === "authentication" ||
+      error.failureKind === "rate-limited" ||
+      error.failureKind === "provider-response"
+    )
+  );
+}
+
 export function isParentStoryBookRealText(story: ParentStoryBookResponse) {
   const textProvider = story.providerMeta.textProvider ?? story.providerMeta.provider;
   return (
     story.providerMeta.textDelivery === "real" &&
     /(?:vivo|qwen|dashscope|llm|ai)/iu.test(textProvider ?? "") &&
     !story.fallbackReason &&
-    !story.providerMeta.fallbackReason &&
-    !story.providerMeta.diagnostics?.brain?.fallbackReason
+    !story.providerMeta.fallbackReason
   );
 }
 
-export function shouldRequireNextVivoStoryText(story: ParentStoryBookResponse) {
+export function shouldRequireNextRealStoryText(story: ParentStoryBookResponse) {
   if (isParentStoryBookRealText(story)) return false;
   const textProvider = story.providerMeta.textProvider ?? story.providerMeta.provider ?? "";
   const fallbackReason =
@@ -406,7 +609,61 @@ export function shouldRequireNextVivoStoryText(story: ParentStoryBookResponse) {
   );
 }
 
-export async function enhanceParentStoryBookWithVivoText(input: {
+function buildRealStoryTextResponse(input: {
+  story: ParentStoryBookResponse;
+  generated: StoryTextPayload;
+  expectedSceneCount: number;
+  provider: "vivo-chat" | "dashscope";
+  model: string | null;
+  attemptCount: number;
+  attemptedProviders: string[];
+  elapsedMs: number;
+}) {
+  const diagnostics = input.story.providerMeta.diagnostics;
+  return {
+    ...input.story,
+    title: input.generated.title || input.story.title,
+    summary: input.generated.summary || input.story.summary,
+    moral: input.generated.moral || input.story.moral,
+    parentNote: input.generated.parentNote || input.story.parentNote,
+    source: input.provider === "vivo-chat" ? "vivo" : "dashscope",
+    fallback: false,
+    fallbackReason: null,
+    providerMeta: {
+      ...input.story.providerMeta,
+      provider: input.provider,
+      mode: input.story.providerMeta.mode === "live" ? "live" : "mixed",
+      textProvider: input.provider,
+      textDelivery: "real",
+      textAttemptCount: input.attemptCount,
+      fallbackReason: null,
+      realProvider: true,
+      sceneCount: input.expectedSceneCount,
+      diagnostics: diagnostics
+        ? {
+            ...diagnostics,
+            text: {
+              requestedProvider: "vivo-chat+dashscope",
+              resolvedProvider: input.provider,
+              attemptedProviders: [...input.attemptedProviders],
+              attemptCount: input.attemptCount,
+              fallbackReason: null,
+              statusCode: null,
+              failureKind: null,
+              model: input.model,
+              elapsedMs: input.elapsedMs,
+            },
+          }
+        : diagnostics,
+    },
+    scenes: mergeScenesWithRealText(
+      input.story.scenes,
+      input.generated.scenes
+    ),
+  } satisfies ParentStoryBookResponse;
+}
+
+export async function enhanceParentStoryBookWithRealText(input: {
   payload: ParentStoryBookRequest;
   story: ParentStoryBookResponse;
   signal?: AbortSignal;
@@ -422,7 +679,8 @@ export async function enhanceParentStoryBookWithVivoText(input: {
 
   let lastError: unknown = null;
   let attemptCount = 0;
-  for (let attempt = 0; attempt < STORY_TEXT_MAX_ATTEMPTS; attempt += 1) {
+  const attemptedProviders: string[] = [];
+  for (let attempt = 0; attempt < VIVO_STORY_TEXT_MAX_ATTEMPTS; attempt += 1) {
     try {
       // 只有已收到但结构不合约的模型响应才重试；传输结果不明时禁止再次付费调用。
       const isRetry = attempt > 0;
@@ -431,9 +689,13 @@ export async function enhanceParentStoryBookWithVivoText(input: {
         temperature: isRetry ? 0.1 : 0.35,
         maxTokens: expectedSceneCount >= 8 ? 2200 : 1800,
         signal: input.signal,
+        // Vivo 是首选文本供应商，未配置备用供应商时必须保留完整剩余预算。
         deadlineAtMs: input.deadlineAtMs,
         onRequestStart: () => {
           attemptCount += 1;
+          if (!attemptedProviders.includes("vivo-chat")) {
+            attemptedProviders.push("vivo-chat");
+          }
         },
         messages: [
           {
@@ -453,66 +715,121 @@ export async function enhanceParentStoryBookWithVivoText(input: {
       const parsed = extractJsonObject(result.text);
       const generated = validateStoryTextPayload(parsed, expectedSceneCount);
       const elapsedMs = Date.now() - startedAt;
-      const diagnostics = input.story.providerMeta.diagnostics;
-
-      return {
-        ...input.story,
-        title: generated.title || input.story.title,
-        summary: generated.summary || input.story.summary,
-        moral: generated.moral || input.story.moral,
-        parentNote: generated.parentNote || input.story.parentNote,
-        source: "vivo",
-        fallback: false,
-        fallbackReason: null,
-        providerMeta: {
-          ...input.story.providerMeta,
-          provider: "vivo-chat",
-          mode: input.story.providerMeta.mode === "live" ? "live" : "mixed",
-          textProvider: "vivo-chat",
-          textDelivery: "real",
-          textAttemptCount: attemptCount,
-          fallbackReason: null,
-          realProvider: true,
-          sceneCount: expectedSceneCount,
-          diagnostics: diagnostics
-            ? {
-                ...diagnostics,
-                brain: {
-                  ...diagnostics.brain,
-                  reachable: true,
-                  fallbackReason: null,
-                  upstreamHost: "api-ai.vivo.com.cn",
-                  statusCode: null,
-                  retryStrategy: "none",
-                  elapsedMs,
-                },
-              }
-            : diagnostics,
-        },
-        scenes: mergeScenesWithRealText(input.story.scenes, generated.scenes),
-      };
+      return buildRealStoryTextResponse({
+        story: input.story,
+        generated,
+        expectedSceneCount,
+        provider: "vivo-chat",
+        model: result.model || getVivoEnv().llmModel,
+        attemptCount,
+        attemptedProviders,
+        elapsedMs,
+      });
     } catch (error) {
-      lastError = error;
+      const providerError =
+        error instanceof ParentStoryBookRealTextError && !error.provider
+          ? new ParentStoryBookRealTextError(error.message, {
+              fallbackReason: error.fallbackReason,
+              statusCode: error.statusCode,
+              attemptCount,
+              attemptedProviders: [...attemptedProviders],
+              provider: "vivo-chat",
+              failureKind: "invalid-structured-output",
+            })
+          : error;
+      lastError = providerError;
+      if (shouldStopStoryTextFailover(providerError, input)) {
+        break;
+      }
       if (
-        attempt >= STORY_TEXT_MAX_ATTEMPTS - 1 ||
-        !shouldRetryStoryTextError(error)
+        attempt >= VIVO_STORY_TEXT_MAX_ATTEMPTS - 1 ||
+        !shouldRetryStoryTextError(providerError)
       ) {
         break;
       }
     }
   }
 
-  const classified = classifyVivoTextError(lastError, {
+  if (
+    shouldFailOverToDashscope(lastError, input)
+  ) {
+    for (
+      let attempt = 0;
+      attempt < DASHSCOPE_STORY_TEXT_MAX_ATTEMPTS;
+      attempt += 1
+    ) {
+      try {
+        const result = await requestDashscopeChat({
+          temperature: 0.2,
+          maxTokens: expectedSceneCount >= 8 ? 2200 : 1800,
+          signal: input.signal,
+          deadlineAtMs: input.deadlineAtMs,
+          onRequestStart: () => {
+            attemptCount += 1;
+            if (!attemptedProviders.includes("dashscope")) {
+              attemptedProviders.push("dashscope");
+            }
+          },
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a professional early-childhood picture-book writer. Return one valid JSON object only, with exactly the requested number of scenes.",
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+        });
+        const parsed = extractJsonObject(result.text);
+        const generated = validateStoryTextPayload(
+          parsed,
+          expectedSceneCount
+        );
+        return buildRealStoryTextResponse({
+          story: input.story,
+          generated,
+          expectedSceneCount,
+          provider: "dashscope",
+          model: result.model,
+          attemptCount,
+          attemptedProviders,
+          elapsedMs: Date.now() - startedAt,
+        });
+      } catch (error) {
+        lastError =
+          error instanceof ParentStoryBookRealTextError && !error.provider
+            ? new ParentStoryBookRealTextError(error.message, {
+                fallbackReason: error.fallbackReason,
+                statusCode: error.statusCode,
+                attemptCount,
+                attemptedProviders: [...attemptedProviders],
+                provider: "dashscope",
+                failureKind: "invalid-structured-output",
+              })
+            : error;
+        if (shouldStopStoryTextFailover(lastError, input)) break;
+      }
+    }
+  }
+
+  const classified = classifyStoryTextError(lastError, {
     signal: input.signal,
     deadlineAtMs: input.deadlineAtMs,
   });
   throw new ParentStoryBookRealTextError(
     lastError instanceof Error
       ? lastError.message
-      : "vivo storybook text provider failed",
+      : "storybook text providers failed",
     {
       ...classified,
       attemptCount,
+      attemptedProviders,
+      provider:
+        classified.provider ??
+        attemptedProviders[attemptedProviders.length - 1] ??
+        null,
     }
   );
 }

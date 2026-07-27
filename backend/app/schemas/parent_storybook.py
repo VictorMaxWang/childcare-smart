@@ -13,7 +13,7 @@ def _to_camel(value: str) -> str:
 JsonDict = dict[str, Any]
 ParentStoryBookMode = Literal["storybook", "card"]
 ParentStoryBookRequestMode = Literal["storybook", "card", "auto"]
-ParentStoryBookResultSource = Literal["ai", "fallback", "mock", "rule", "vivo"]
+ParentStoryBookResultSource = Literal["ai", "dashscope", "fallback", "mock", "rule", "vivo"]
 ParentStoryBookMediaStatus = Literal["ready", "mock", "fallback", "empty"]
 ParentStoryBookGenerationMode = Literal["child-personalized", "manual-theme", "hybrid"]
 ParentStoryBookPageCount = Literal[4, 5, 6, 8]
@@ -93,8 +93,21 @@ class ParentStoryBookDiagnosticsBrain(ParentStoryBookModel):
     timeout_ms: int | None = None
 
 
+class ParentStoryBookDiagnosticsText(ParentStoryBookModel):
+    requested_provider: str
+    resolved_provider: str | None = None
+    attempted_providers: list[str] = Field(default_factory=list)
+    attempt_count: int = 0
+    fallback_reason: str | None = None
+    status_code: int | None = None
+    failure_kind: str | None = None
+    model: str | None = None
+    elapsed_ms: int | None = None
+
+
 class ParentStoryBookDiagnostics(ParentStoryBookModel):
     brain: ParentStoryBookDiagnosticsBrain = Field(default_factory=ParentStoryBookDiagnosticsBrain)
+    text: ParentStoryBookDiagnosticsText | None = None
     image: ParentStoryBookDiagnosticsMedia = Field(default_factory=ParentStoryBookDiagnosticsMedia)
     audio: ParentStoryBookDiagnosticsMedia = Field(default_factory=ParentStoryBookDiagnosticsMedia)
 

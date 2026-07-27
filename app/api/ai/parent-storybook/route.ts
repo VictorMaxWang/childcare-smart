@@ -25,9 +25,9 @@ import {
   type BrainTransport,
 } from "@/lib/server/brain-client";
 import {
-  enhanceParentStoryBookWithVivoText,
+  enhanceParentStoryBookWithRealText,
   ParentStoryBookRealTextError,
-  shouldRequireNextVivoStoryText,
+  shouldRequireNextRealStoryText,
 } from "@/lib/server/parent-storybook-real-text";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import { ApiRouteError } from "@/lib/server/api-errors";
@@ -39,43 +39,58 @@ import {
 import { logSecurityEvent } from "@/lib/server/security-log";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 const DEFAULT_PARENT_STORYBOOK_BRAIN_TIMEOUT_MS = 45_000;
 const DEFAULT_PARENT_STORYBOOK_REQUEST_TIMEOUT_MS = 70_000;
+const MAX_PARENT_STORYBOOK_BRAIN_TIMEOUT_MS = 45_000;
+const MAX_PARENT_STORYBOOK_REQUEST_TIMEOUT_MS = 90_000;
 const ROLE_PARENT = "家长";
+
+function resolveBoundedTimeoutMs(
+  rawValue: string | undefined,
+  fallbackMs: number,
+  maximumMs: number
+) {
+  const parsed = rawValue?.trim() ? Number(rawValue.trim()) : Number.NaN;
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallbackMs;
+  return Math.min(Math.round(parsed), maximumMs);
+}
 
 function resolveParentStoryBookBrainTimeoutMs() {
   const rawValue =
     process.env.PARENT_STORYBOOK_BRAIN_TIMEOUT_MS?.trim() ??
     process.env.BRAIN_API_TIMEOUT_MS?.trim();
-  const parsed = rawValue ? Number(rawValue) : Number.NaN;
-  return Number.isFinite(parsed) && parsed > 0
-    ? parsed
-    : DEFAULT_PARENT_STORYBOOK_BRAIN_TIMEOUT_MS;
+  return resolveBoundedTimeoutMs(
+    rawValue,
+    DEFAULT_PARENT_STORYBOOK_BRAIN_TIMEOUT_MS,
+    MAX_PARENT_STORYBOOK_BRAIN_TIMEOUT_MS
+  );
 }
-
-const PARENT_STORYBOOK_BRAIN_TIMEOUT_MS = resolveParentStoryBookBrainTimeoutMs();
 
 function resolveParentStoryBookBackendMediaTimeoutMs() {
   const rawValue =
     process.env.PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS?.trim() ??
     process.env.PARENT_STORYBOOK_BACKEND_GRACE_TIMEOUT_MS?.trim();
-  const parsed = rawValue ? Number(rawValue) : Number.NaN;
-  return Number.isFinite(parsed) && parsed > 0
-    ? parsed
-    : PARENT_STORYBOOK_BRAIN_TIMEOUT_MS;
+  return resolveBoundedTimeoutMs(
+    rawValue,
+    resolveParentStoryBookBrainTimeoutMs(),
+    MAX_PARENT_STORYBOOK_BRAIN_TIMEOUT_MS
+  );
 }
-
-const PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS =
-  resolveParentStoryBookBackendMediaTimeoutMs();
 
 function resolveParentStoryBookRequestTimeoutMs() {
-  const parsed = Number(
-    process.env.PARENT_STORYBOOK_REQUEST_TIMEOUT_MS?.trim()
+  return resolveBoundedTimeoutMs(
+    process.env.PARENT_STORYBOOK_REQUEST_TIMEOUT_MS,
+    DEFAULT_PARENT_STORYBOOK_REQUEST_TIMEOUT_MS,
+    MAX_PARENT_STORYBOOK_REQUEST_TIMEOUT_MS
   );
-  return Number.isFinite(parsed) && parsed > 0
-    ? parsed
-    : DEFAULT_PARENT_STORYBOOK_REQUEST_TIMEOUT_MS;
 }
+
+export const parentStoryBookRouteInternals = {
+  resolveParentStoryBookBackendMediaTimeoutMs,
+  resolveParentStoryBookBrainTimeoutMs,
+  resolveParentStoryBookRequestTimeoutMs,
+};
 
 function normalizeStoryBookTransport(transport: BrainTransport): ParentStoryBookTransport {
   if (transport === "brain-proxy-error") {
@@ -376,10 +391,14 @@ function buildTextProviderUnavailableResponse(input: {
   fallbackReason: string;
   statusCode?: number;
   attemptCount?: number;
+  attemptedProviders?: string[];
+  provider?: string | null;
+  providerHttpStatus?: number | null;
+  failureKind?: string | null;
 }) {
   const providerTrace = buildAiProviderTrace({
     capability: "llm",
-    provider: "vivo-chat",
+    provider: input.provider ?? "vivo-chat+dashscope",
     source: "fallback",
     mode: "fallback",
     fallback: true,
@@ -409,8 +428,11 @@ function buildTextProviderUnavailableResponse(input: {
         retryStrategy: input.brainForward?.retryStrategy ?? "none",
         elapsedMs: input.brainForward?.elapsedMs ?? null,
         timeoutMs: input.brainForward?.timeoutMs ?? null,
-        textProvider: "vivo-chat",
+        textProvider: input.provider ?? "vivo-chat+dashscope",
         textAttemptCount: input.attemptCount ?? 0,
+        attemptedProviders: input.attemptedProviders ?? [],
+        providerHttpStatus: input.providerHttpStatus ?? null,
+        failureKind: input.failureKind ?? null,
       },
     },
     {
@@ -428,7 +450,7 @@ function buildTextProviderUnavailableResponse(input: {
   );
 }
 
-async function requireVivoStoryTextResponse(input: {
+async function requireRealStoryTextResponse(input: {
   payload: ParentStoryBookRequest;
   story: ParentStoryBookResponse;
   institutionId: string;
@@ -438,7 +460,7 @@ async function requireVivoStoryTextResponse(input: {
   deadlineAtMs?: number;
 }) {
   try {
-    const enhanced = await enhanceParentStoryBookWithVivoText({
+    const enhanced = await enhanceParentStoryBookWithRealText({
       payload: input.payload,
       story: input.story,
       signal: input.signal,
@@ -471,10 +493,30 @@ async function requireVivoStoryTextResponse(input: {
       error instanceof ParentStoryBookRealTextError ? error.statusCode : 502;
     const attemptCount =
       error instanceof ParentStoryBookRealTextError ? error.attemptCount : 1;
+    const attemptedProviders =
+      error instanceof ParentStoryBookRealTextError
+        ? error.attemptedProviders
+        : [];
+    const provider =
+      error instanceof ParentStoryBookRealTextError
+        ? error.provider
+        : null;
+    const providerHttpStatus =
+      error instanceof ParentStoryBookRealTextError
+        ? error.providerHttpStatus
+        : null;
+    const failureKind =
+      error instanceof ParentStoryBookRealTextError
+        ? error.failureKind
+        : null;
     logSecurityEvent("warn", "ai.parent_storybook.text_provider_unavailable", {
       fallbackReason,
       statusCode,
       attemptCount,
+      attemptedProviders,
+      provider,
+      providerHttpStatus,
+      failureKind,
       upstreamHost: input.brainForward?.upstreamHost ?? null,
       brainStatusCode: input.brainForward?.statusCode ?? null,
     });
@@ -483,13 +525,22 @@ async function requireVivoStoryTextResponse(input: {
       fallbackReason,
       statusCode,
       attemptCount,
+      attemptedProviders,
+      provider,
+      providerHttpStatus,
+      failureKind,
     });
   }
 }
 
 export async function POST(request: Request) {
-  const requestDeadlineAtMs =
-    Date.now() + resolveParentStoryBookRequestTimeoutMs();
+  const requestTimeoutMs = resolveParentStoryBookRequestTimeoutMs();
+  const requestDeadlineAtMs = Date.now() + requestTimeoutMs;
+  const routeTimeoutSignal = AbortSignal.timeout(requestTimeoutMs);
+  const routeSignal = AbortSignal.any([
+    request.signal,
+    routeTimeoutSignal,
+  ]);
   const authResult = await authorizeAiRouteSession(request, {
     requiredRole: "parent",
     collectJsonClassNames: false,
@@ -653,11 +704,11 @@ export async function POST(request: Request) {
     method: "POST",
     headers: request.headers,
     body: JSON.stringify(payload),
-    signal: request.signal,
+    signal: routeSignal,
   });
   const configuredBrainTimeoutMs = requireRealStoryText
-    ? PARENT_STORYBOOK_BACKEND_MEDIA_TIMEOUT_MS
-    : PARENT_STORYBOOK_BRAIN_TIMEOUT_MS;
+    ? resolveParentStoryBookBackendMediaTimeoutMs()
+    : resolveParentStoryBookBrainTimeoutMs();
   const remainingRequestBudgetMs = requestDeadlineAtMs - Date.now();
   if (remainingRequestBudgetMs <= 0) {
     logSecurityEvent("warn", "ai.parent_storybook.deadline_before_brain", {
@@ -714,14 +765,14 @@ export async function POST(request: Request) {
       }
     );
 
-    if (requireRealStoryText && shouldRequireNextVivoStoryText(preparedStory)) {
-      const enhancedStory = await requireVivoStoryTextResponse({
+    if (requireRealStoryText && shouldRequireNextRealStoryText(preparedStory)) {
+      const enhancedStory = await requireRealStoryTextResponse({
         payload,
         story: preparedStory,
         institutionId: sessionScope.institutionId,
         cacheState: shouldCacheParentStoryBookResponse(preparedStory) ? "miss" : "bypass",
         brainForward,
-        signal: request.signal,
+        signal: routeSignal,
         deadlineAtMs: requestDeadlineAtMs,
       });
       if (enhancedStory instanceof NextResponse) {
@@ -766,13 +817,13 @@ export async function POST(request: Request) {
       fallbackReason,
       cacheState: "bypass",
     });
-    const enhancedStory = await requireVivoStoryTextResponse({
+    const enhancedStory = await requireRealStoryTextResponse({
       payload,
       story: localStory,
       institutionId: sessionScope.institutionId,
       cacheState: "bypass",
       brainForward,
-      signal: request.signal,
+      signal: routeSignal,
       deadlineAtMs: requestDeadlineAtMs,
     });
     if (enhancedStory instanceof NextResponse) {

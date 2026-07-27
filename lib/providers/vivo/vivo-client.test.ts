@@ -69,3 +69,55 @@ test("vivo JSON response-body cancellation remains distinguishable from timeout"
     globalThis.fetch = originalFetch;
   }
 });
+
+test("vivo HTTP authentication failures are not reported as missing environment", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ error: "invalid credential" }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    })) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      vivoJsonRequest({
+        capability: "chat",
+        baseUrl: "https://vivo.example.test",
+        path: "/chat",
+        timeoutMs: 5_000,
+      }),
+      (error: unknown) =>
+        error instanceof VivoProviderError &&
+        error.status === "provider-unavailable" &&
+        error.httpStatus === 401 &&
+        error.failureKind === "authentication"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("vivo transport failures remain distinguishable from explicit provider responses", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    throw new TypeError("socket reset");
+  }) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      vivoJsonRequest({
+        capability: "chat",
+        baseUrl: "https://vivo.example.test",
+        path: "/chat",
+        timeoutMs: 5_000,
+      }),
+      (error: unknown) =>
+        error instanceof VivoProviderError &&
+        error.status === "provider-unavailable" &&
+        error.httpStatus === undefined &&
+        error.failureKind === "transport"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

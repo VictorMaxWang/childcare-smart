@@ -643,7 +643,13 @@ export interface ParentMessageReflexionResponse {
 }
 
 export type ParentStoryBookMode = "storybook" | "card";
-export type ParentStoryBookResultSource = "ai" | "fallback" | "mock" | "rule" | "vivo";
+export type ParentStoryBookResultSource =
+  | "ai"
+  | "dashscope"
+  | "fallback"
+  | "mock"
+  | "rule"
+  | "vivo";
 export type ParentStoryBookMediaStatus = "ready" | "mock" | "fallback" | "empty";
 export type ParentStoryBookGenerationMode =
   | "child-personalized"
@@ -716,6 +722,17 @@ export interface ParentStoryBookDiagnostics {
     retryStrategy?: "none" | "normalized-base-retry";
     elapsedMs?: number | null;
     timeoutMs?: number | null;
+  };
+  text?: {
+    requestedProvider: string;
+    resolvedProvider: string | null;
+    attemptedProviders: string[];
+    attemptCount: number;
+    fallbackReason: string | null;
+    statusCode?: number | null;
+    failureKind?: string | null;
+    model?: string | null;
+    elapsedMs?: number | null;
   };
   image: ParentStoryBookDiagnosticsChannel;
   audio: ParentStoryBookDiagnosticsChannel;

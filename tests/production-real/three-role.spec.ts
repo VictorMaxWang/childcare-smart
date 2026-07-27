@@ -418,6 +418,29 @@ function storyMediaDiagnostic(story: Record<string, unknown>) {
   });
 }
 
+function storyTextResponseDiagnostic(
+  response: APIResponse,
+  body: Record<string, unknown> | null
+) {
+  const diagnostics = body?.diagnostics as
+    | Record<string, unknown>
+    | undefined;
+  return JSON.stringify({
+    status: response.status(),
+    code: body?.code ?? null,
+    fallbackReason: body?.fallbackReason ?? null,
+    provider: body?.provider ?? null,
+    textProvider: diagnostics?.textProvider ?? null,
+    textAttemptCount: diagnostics?.textAttemptCount ?? null,
+    attemptedProviders: diagnostics?.attemptedProviders ?? [],
+    providerHttpStatus: diagnostics?.providerHttpStatus ?? null,
+    failureKind: diagnostics?.failureKind ?? null,
+    transport: response.headers()["x-smartchildcare-transport"] ?? null,
+    transportFallbackReason:
+      response.headers()["x-smartchildcare-fallback-reason"] ?? null,
+  });
+}
+
 async function completeStorybookMedia(
   parent: APIRequestContext,
   childId: string,
@@ -561,8 +584,11 @@ async function verifyDietAndStorybookAi(
       ],
     },
   });
-  expect(storyResponse.status()).toBe(200);
   let story = (await readJson(storyResponse)) ?? {};
+  expect(
+    storyResponse.status(),
+    storyTextResponseDiagnostic(storyResponse, story)
+  ).toBe(200);
   expectMeaningfulAiResult(story, "parent storybook", {
     requireLive: requireLiveAi,
   });

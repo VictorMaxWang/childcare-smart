@@ -41,7 +41,7 @@ function wrapVivoTransportError(
     ? "request-cancelled"
     : timeoutSignal.aborted
       ? "request-timeout"
-      : undefined;
+      : "transport";
   return new VivoProviderError(
     failureKind === "request-cancelled"
       ? "vivo provider request was cancelled"
@@ -108,11 +108,19 @@ export async function vivoJsonRequest<T = Record<string, unknown>>(options: Vivo
   }
 
   if (!response.ok) {
+    const failureKind =
+      response.status === 401 || response.status === 403
+        ? "authentication"
+        : response.status === 429
+          ? "rate-limited"
+          : "provider-response";
     throw new VivoProviderError(`vivo provider returned HTTP ${response.status}`, {
       capability: options.capability,
-      status: response.status === 401 ? "missing-env" : "provider-unavailable",
+      // 已发出请求后的 401/403 是凭据被拒绝，不是本地缺少环境变量。
+      status: "provider-unavailable",
       httpStatus: response.status,
       raw: body,
+      failureKind,
     });
   }
 

@@ -77,6 +77,7 @@ export async function requestVivoChat(input: VivoChatInput): Promise<VivoChatRes
       capability: "chat",
       status: "error",
       raw,
+      failureKind: "provider-response",
     });
   }
 
