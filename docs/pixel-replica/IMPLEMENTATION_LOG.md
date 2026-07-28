@@ -5,7 +5,7 @@
 - Created the `docs/pixel-replica/` control directory.
 - Created the P00 task map, ownership rules, visual-only rules, crop plan, and pixel acceptance criteria.
 - Created prompts for P01, P02, P10, P20, P30, P40, P50, and P99.
-- Indexed the fixed design source directory: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Indexed the fixed design source directory: `<design-source-root>`.
 - Confirmed the physical design source contains 247 PNG files, 17 JSON files, 8 TXT files, and no actual `.zip` files.
 - Generated `artifacts/pixel-replica/design-source.index.json`.
 - Generated `docs/pixel-replica/DESIGN_SOURCE_INDEX.md`.
@@ -15,7 +15,7 @@ No UI, backend, route, permission, or login behavior was changed in P00.
 
 ## 2026-04-28 - P01 Asset Extraction and Pixel Tools
 
-- Confirmed the fixed physical design source directory exists: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Confirmed the fixed physical design source directory exists: `<design-source-root>`.
 - Added `scripts/extract-pixel-assets.mjs`, `scripts/capture-pixel-pages.mjs`, and `scripts/compare-pixel-parity.mjs`.
 - Added npm scripts: `pixel:extract-assets`, `pixel:capture`, and `pixel:compare`.
 - Added dev dependencies for image processing and diffing: `sharp`, `pixelmatch`, and `pngjs`.
@@ -47,7 +47,7 @@ All P01 outputs are generated from the fixed sibling design source directory, no
 
 ## 2026-04-28 - P02 Global Shell, Navigation, and Core Visual Frame
 
-- Used the fixed original design source directory: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Used the fixed original design source directory: `<design-source-root>`.
 - Used shell/design references copied by P01:
   - `artifacts/pixel-replica/references/components-navbar-reference.png`
   - `artifacts/pixel-replica/references/components-navbar-reference-2.png`
@@ -92,14 +92,14 @@ All P01 outputs are generated from the fixed sibling design source directory, no
 
 ## 2026-04-28 - P30 Teacher Pixel Replica
 
-- Used the fixed original design source directory: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Used the fixed original design source directory: `<design-source-root>`.
 - Used P30 primary design references from the original source directory:
-  - Teacher workbench: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\teacher_dashboard_with_class_overview_and_tasks.png`.
-  - Teacher mobile workbench: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\teacher_dashboard_mobile_app_ui_design.png`.
-  - Teacher AI assistant: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\teacher_ai_assistant_dashboard_overview.png`.
-  - Home-school communication: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\teacher_parent_communication_dashboard_in_pastel_u.png`.
-  - Health material parsing: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\teacher_health_document_processing_dashboard.png`.
-  - High-risk consultation: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_05_of_08\images\high_risk_child_consultation_dashboard_interface.png`.
+  - Teacher workbench: `<design-source-root>\smartchildcare_images_part_08_of_08\images\teacher_dashboard_with_class_overview_and_tasks.png`.
+  - Teacher mobile workbench: `<design-source-root>\smartchildcare_images_part_08_of_08\images\teacher_dashboard_mobile_app_ui_design.png`.
+  - Teacher AI assistant: `<design-source-root>\smartchildcare_images_part_08_of_08\images\teacher_ai_assistant_dashboard_overview.png`.
+  - Home-school communication: `<design-source-root>\smartchildcare_images_part_08_of_08\images\teacher_parent_communication_dashboard_in_pastel_u.png`.
+  - Health material parsing: `<design-source-root>\smartchildcare_images_part_08_of_08\images\teacher_health_document_processing_dashboard.png`.
+  - High-risk consultation: `<design-source-root>\smartchildcare_images_part_05_of_08\images\high_risk_child_consultation_dashboard_interface.png`.
 - Confirmed `src/assets/pixel-replica/manifest.json` does not exist in this repository; the active P01 manifest is `public/pixel-replica/manifest.json`.
 - Added P30-only teacher UI primitives in `components/teacher/TeacherPixelReplicaPrimitives.tsx`.
 - Rebuilt the teacher workbench body in `components/teacher/TeacherWorkbenchPage.tsx`:
@@ -147,13 +147,13 @@ All P01 outputs are generated from the fixed sibling design source directory, no
 
 ## 2026-04-28 - P10 Login Page Pixel Replica
 
-- Used the fixed original design source directory: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Used the fixed original design source directory: `<design-source-root>`.
 - Primary desktop reference:
-  - `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\smart_childcare_platform_login_page_design.png`.
+  - `<design-source-root>\smartchildcare_images_part_08_of_08\images\smart_childcare_platform_login_page_design.png`.
 - Mobile reference:
-  - `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_06_of_08\images\modern_mobile_app_login_ui_design.png`.
+  - `<design-source-root>\smartchildcare_images_part_06_of_08\images\modern_mobile_app_login_ui_design.png`.
 - Registration modal reference:
-  - `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_06_of_08\images\modern_childcare_platform_registration_modal.png`.
+  - `<design-source-root>\smartchildcare_images_part_06_of_08\images\modern_childcare_platform_registration_modal.png`.
 - Confirmed `src/assets/pixel-replica/manifest.json` does not exist in this repository; P10 used the original source directory plus P01 references under `artifacts/pixel-replica/references/`.
 - Refreshed baseline before editing:
   - `PIXEL_CAPTURE_PHASE=current npm run pixel:capture`: passed.
@@ -208,12 +208,12 @@ All P01 outputs are generated from the fixed sibling design source directory, no
 
 ## 2026-04-28 - P20 Director Pixel Replica
 
-- Used the fixed original design source directory: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Used the fixed original design source directory: `<design-source-root>`.
 - Primary P20 references from the original source directory:
-  - Director home/dashboard: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\smartchildcare_dashboard_for_childcare_management.png`.
-  - Director home hybrid child-archive module: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_03_of_08\images\childcare_management_platform_dashboard_ui.png`.
-  - Director AI assistant: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_01_of_08\images\ai_powered_childcare_management_dashboard.png`.
-  - Director weekly report: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_03_of_08\images\childcare_management_dashboard_report_overview.png`.
+  - Director home/dashboard: `<design-source-root>\smartchildcare_images_part_08_of_08\images\smartchildcare_dashboard_for_childcare_management.png`.
+  - Director home hybrid child-archive module: `<design-source-root>\smartchildcare_images_part_03_of_08\images\childcare_management_platform_dashboard_ui.png`.
+  - Director AI assistant: `<design-source-root>\smartchildcare_images_part_01_of_08\images\ai_powered_childcare_management_dashboard.png`.
+  - Director weekly report: `<design-source-root>\smartchildcare_images_part_03_of_08\images\childcare_management_dashboard_report_overview.png`.
 - Confirmed `src/assets/pixel-replica/manifest.json` does not exist in this repository; P20 used the original source directory plus P01 runtime assets under `public/pixel-replica/`.
 - Used cropped assets:
   - `/pixel-replica/visual-cards/director-dashboard-card-cluster.png`
@@ -271,13 +271,13 @@ All P01 outputs are generated from the fixed sibling design source directory, no
 
 ## 2026-04-28 - P40 Parent Pixel Replica
 
-- Used the fixed original design source directory: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Used the fixed original design source directory: `<design-source-root>`.
 - Primary P40 references from the original source directory:
-  - Parent home: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\soft_pastel_parenting_dashboard_ui_design.png`.
-  - Parent mobile supplement: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_07_of_08\images\playful_mobile_app_dashboard_design.png`.
-  - AI/care suggestions: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_01_of_08\images\ai_powered_parenting_assistant_interface.png`.
-  - Parent feedback: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_06_of_08\images\parent_feedback_app_interface_design.png`.
-  - Storybook: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_07_of_08\images\parenting_storybook_web_app_dashboard.png`.
+  - Parent home: `<design-source-root>\smartchildcare_images_part_08_of_08\images\soft_pastel_parenting_dashboard_ui_design.png`.
+  - Parent mobile supplement: `<design-source-root>\smartchildcare_images_part_07_of_08\images\playful_mobile_app_dashboard_design.png`.
+  - AI/care suggestions: `<design-source-root>\smartchildcare_images_part_01_of_08\images\ai_powered_parenting_assistant_interface.png`.
+  - Parent feedback: `<design-source-root>\smartchildcare_images_part_06_of_08\images\parent_feedback_app_interface_design.png`.
+  - Storybook: `<design-source-root>\smartchildcare_images_part_07_of_08\images\parenting_storybook_web_app_dashboard.png`.
 - Confirmed `src/assets/pixel-replica/manifest.json` does not exist in this repository; P40 used the original source directory and parent-only assets under `public/pixel-replica/parent/`.
 - Added parent-only cropped/runtime assets:
   - `/pixel-replica/parent/parent-home-ai-robot.png`

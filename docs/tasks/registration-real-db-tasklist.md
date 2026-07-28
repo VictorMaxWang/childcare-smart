@@ -252,7 +252,7 @@
 
 - `README.md`
 - `AGENTS.md`
-- `docs/auth-registration-next-phase.md`
+- `docs/auth/auth-registration-next-phase.md`
 - `docs/tasks/registration-real-db-tasklist.md`
 - 相关测试文件
 

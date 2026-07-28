@@ -4,7 +4,8 @@ Updated: 2026-05-31
 
 ## Baseline
 
-- Repository: `C:\Users\12804\Desktop\childcare-smart源代码\childcare-smart`
+- Repository: `<repo-root>`
+- Path notation: `<repo-root>` means the root of the current Git checkout.
 - Branch: `main`
 - Baseline commit: `47139a4 chore: publish latest childcare smart updates`
 - Pre-report worktree state: `git status --short --untracked-files=all` returned no tracked modifications and no untracked source/docs files.

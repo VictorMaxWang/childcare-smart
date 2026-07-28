@@ -6,16 +6,16 @@
 
 ## 已读取依据
 
-- `docs/feature-implementation/FINAL_FUNCTIONAL_COMPLETION_REPORT.md`
-- `docs/feature-implementation/IMPLEMENTATION_STATUS.md`
-- `docs/feature-implementation/IMPLEMENTATION_SUMMARY.md`
-- `docs/feature-audit/INCOMPLETE_FEATURES.updated.md`
-- `docs/feature-audit/INCOMPLETE_FEATURES.updated.json`
-- `docs/feature-implementation/DATA_MODEL_SPEC.md`
-- `docs/feature-implementation/DEMO_PERSISTENCE_SPEC.md`
-- `docs/feature-implementation/API_OR_LOCAL_STORE_DECISIONS.md`
-- `docs/bug-bash/FINAL_BUG_BASH_REPORT.md`
-- `docs/refactor/ROUTE_PAGE_MAP.md`
+- `docs/archive/2026-q2/feature-implementation/FINAL_FUNCTIONAL_COMPLETION_REPORT.md`
+- `docs/archive/2026-q2/feature-implementation/IMPLEMENTATION_STATUS.md`
+- `docs/archive/2026-q2/feature-implementation/IMPLEMENTATION_SUMMARY.md`
+- `docs/archive/2026-q2/feature-audit/INCOMPLETE_FEATURES.updated.md`
+- `docs/archive/2026-q2/feature-audit/INCOMPLETE_FEATURES.updated.json`
+- `docs/archive/2026-q2/feature-implementation/DATA_MODEL_SPEC.md`
+- `docs/archive/2026-q2/feature-implementation/DEMO_PERSISTENCE_SPEC.md`
+- `docs/archive/2026-q2/feature-implementation/API_OR_LOCAL_STORE_DECISIONS.md`
+- `docs/archive/2026-q2/bug-bash/FINAL_BUG_BASH_REPORT.md`
+- `docs/archive/2026-q2/refactor/ROUTE_PAGE_MAP.md`
 - `package.json`
 - 当前 `app/api`、`lib/demo-data`、`lib/persistence`、`lib/ai/providers`、`components`、`backend/app`、`tests` 结构
 

@@ -168,10 +168,10 @@ SmartChildcare Agent 是一个面向托育场景的**移动端优先、多角色
 3. 再读 `docs/task-registry.md`
 4. 最后回到 `AGENTS.md`，按这里的协议完成 kickoff
 5. 按任务类型补读对应 QA / demo 文档，例如：
-   - 会诊相关：`docs/teacher-consultation-qa.md`
-   - Teacher 语音相关：`docs/teacher-voice-smoke.md`
-   - Parent 趋势相关：`docs/parent-trend-smoke.md`
-   - 录屏与答辩相关：`docs/demo-script.md`、`docs/freeze-checklists.md`
+   - 会诊相关：`docs/qa/teacher-consultation-qa.md`
+   - Teacher 语音相关：`docs/qa/teacher-voice-smoke.md`
+   - Parent 趋势相关：`docs/qa/parent-trend-smoke.md`
+   - 录屏与答辩相关：`docs/demo/demo-script.md`、`docs/demo/freeze-checklists.md`
 
 启动后必须做的判断：
 
@@ -391,8 +391,8 @@ Task ID:
 如果任务与当前 5 条展示路径强相关，再补读：
 
 - `docs/agent-workflows.md`
-- `docs/demo-script.md`
-- `docs/freeze-checklists.md`
+- `docs/demo/demo-script.md`
+- `docs/demo/freeze-checklists.md`
 
 ## 11. 永远不要用的旧口径
 
@@ -408,67 +408,16 @@ Task ID:
 
 <!-- BEGIN FRONTEND VISUAL REFACTOR RULES -->
 
-# SmartChildcare Frontend Visual Refactor Rules
+# SmartChildcare Frontend Visual Refactor Archive
 
-Updated: 2026-04-27
+Updated: 2026-07-28
 
-This section governs the SmartChildcare frontend visual refactor and preserves the existing agent handbook in this file.
+The 2026-04-27 frontend refactor phase is complete. Its plans, status tables, decisions, and implementation logs are frozen under `docs/archive/2026-q2/refactor/` for historical review only.
 
-## Required Reading Before Any Refactor Thread
-
-Every Codex follow-up thread must read these files before changing code:
-
-1. `AGENTS.md`
-2. `docs/refactor/TASK_SEQUENCE.md`
-3. `docs/refactor/TASK_STATUS.md`
-4. `docs/refactor/DESIGN_SYSTEM_SPEC.md`
-5. `docs/refactor/ROUTE_PAGE_MAP.md`
-6. `docs/refactor/DESIGN_ASSET_INDEX.md`
-
-## Non-Negotiable UI Refactor Rules
-
-- Do not change business logic.
-- Do not change backend APIs.
-- Do not break demo account entry points.
-- Do not delete existing routes.
-- Do not delete core fields.
-- Do not turn pages into static images.
-- Do not treat GPT Image 2 text as business-field truth.
-- Business fields, routes, permissions, interactions, and data flow come from the current codebase.
-- Design images are references for layout, color, component style, information hierarchy, and visual tone only.
-
-## Unified Visual Direction
-
-- Chinese B2B SaaS management system.
-- Professional, trustworthy, warm, and approachable.
-- Soft blue-violet and blue-green primary palette.
-- Light backgrounds.
-- Lightweight cards.
-- Moderate radius.
-- Clear tables.
-- Unified buttons, tags, inputs, dialogs, drawers, empty states, and error states.
-- Director pages emphasize data and management.
-- Teacher pages emphasize high-frequency operation and records.
-- Parent pages emphasize review, feedback, and mobile readability.
-- The product must not feel visually fragmented across modules.
-
-## Thread Closeout Requirements
-
-Before finishing, each refactor thread must:
-
-- Update `docs/refactor/TASK_STATUS.md`.
-- Update `docs/refactor/IMPLEMENTATION_LOG.md`.
-- Update `docs/refactor/DECISIONS.md` if there is an important design tradeoff.
-- Run needed checks, prioritizing `npm run lint` and `npm run build`.
-- If a check fails, record the failure reason.
-- In the final reply, list changed files, completed task, check results, and open issues.
-
-## Large File and Asset Rules
-
-- Do not commit or add `node_modules`.
-- Do not include Playwright trace/video/debug-heavy files in refactor deliverables.
-- `artifacts/refactor-design-assets/` is a local reference asset directory, not production UI dependency.
-- Production UI must not depend on these PNG design images as page bodies.
+- Do not use the archived refactor task table as the current task registry.
+- Do not update archived status, implementation-log, or decision files.
+- Current frontend work follows the Pixel Replica rules below and the active task documents listed at the start of this file.
+- If the historical workflow must be revived, register a new task and create new active documentation first.
 
 <!-- END FRONTEND VISUAL REFACTOR RULES -->
 
@@ -486,9 +435,9 @@ Every pixel-replica thread must read that file before changing code.
 
 The fixed original GPT Image 2 design source directory is:
 
-`C:\Users\12804\Desktop\childcare-smart源代码\前端重构`
+`<design-source-root>`
 
-This directory is a sibling of the project repository, not a directory inside `childcare-smart`.
+`<design-source-root>` means the external sibling directory that normally resolves to `../前端重构`; it is not inside `childcare-smart`. Use the script-specific `PIXEL_DESIGN_SOURCE_DIR` or `FRONTEND_REPLICA_DESIGN_*` environment variable when the source is stored elsewhere.
 
 Pixel Replica Mode changes the frontend priority order:
 

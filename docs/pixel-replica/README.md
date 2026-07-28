@@ -8,9 +8,9 @@ The phase is no longer a conservative visual refactor. The goal is to make the r
 
 Original design source directory:
 
-`C:\Users\12804\Desktop\childcare-smart源代码\前端重构`
+`<design-source-root>`
 
-This path is fixed. It is a sibling of the `childcare-smart` repository, not a directory inside the repository.
+`<design-source-root>` denotes the external sibling directory that normally resolves to `../前端重构`; it is not inside the repository. Set `PIXEL_DESIGN_SOURCE_DIR` for asset extraction or the relevant `FRONTEND_REPLICA_DESIGN_*` variable for audit/diff scripts when the source lives elsewhere.
 
 ## Main Files
 
@@ -33,4 +33,3 @@ This path is fixed. It is a sibling of the `childcare-smart` repository, not a d
 3. Run P10, P20, P30, and P40 in parallel only after P01 and P02 are stable.
 4. Run P50 after role pages converge.
 5. Run P99 last for final merge, visual QA, and scoring.
-

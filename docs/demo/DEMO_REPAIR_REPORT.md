@@ -51,7 +51,7 @@
 ## 答辩当天步骤
 
 ```powershell
-cd "C:\Users\12804\Desktop\childcare-smart源代码\childcare-smart"
+cd "<repo-root>"
 npm run dev -- --hostname 127.0.0.1 --port 3000
 ```
 

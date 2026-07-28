@@ -14,7 +14,7 @@
 
 ![慧育童行三端核心能力总览](./public/demo/system-tour/v3/display/page-08.webp)
 
-> 上图与文末绘本图片均为仓库内的 demo-safe 展示素材，不是真实儿童或真实机构业务数据。
+> README 与公开演示中出现的人物、儿童档案、业务记录、表单内容、图片和音频均为合成的 demo-safe 数据，仅用于说明产品流程，不对应任何真实儿童、监护人、教师或托育机构。
 
 ## 目录
 
@@ -35,6 +35,7 @@
 - [演示路线与素材](#演示路线与素材)
 - [文档索引](#文档索引)
 - [已知边界](#已知边界)
+- [许可证](#许可证)
 
 ## 一分钟了解项目
 
@@ -62,6 +63,7 @@ SmartChildcare Agent 围绕同一名儿童，把三类角色放进同一条工�
 | Web 生产站 | 在线；健康接口返回 `production`，并公开当前部署提交、部署 ID 及数据库、认证、私有媒体、DashScope 配置存在性 | [`/api/health`](https://www.smartchildcare.cn/api/health) |
 | 三角色生产业务链 | 现有账号与 fresh 账号两条真实浏览器链路已完成生产 smoke；园长、教师、家长业务写入、跨端读取和 live AI 主链均有通过记录 | [当前状态账本](./docs/current-status-ledger.md) |
 | 绘本媒体 | 最近一次生产 smoke 中，fresh 链路首 4 页图片与音频均完成 `private_blob` 冷读，并通过 WebP/WAV 文件魔数验证 | [任务账本](./docs/task-registry.md) |
+| 教师成长绘本 | `/teacher/storybook` 的生产功能闭环已验证：已有账号与 fresh 账号均完成教师生成、媒体补全和保存，家长按监护授权读取同一绘本及私有媒体；本轮为非 formal smoke，正式发布证据仍待补齐 | [教师绘本任务记录](./docs/task-registry.md#teacher-storybook-generation-extension) |
 | 本地工程验证 | 最近一轮账本记录包含 lint、typecheck、production build、Node/Python 测试、发布脚本测试与浏览器回归 | [当前状态账本](./docs/current-status-ledger.md) |
 | 正式发布证明 | **尚未完成**。当前只可声明“生产业务与 live AI smoke 已通过”，不能声明 `productionValidated=true` | [发布门禁真实性](./docs/release/RELEASE_GATE_TRUTHFULNESS.md) |
 | 严格生产数据库证据 | 仍需在不暴露连接串的受控环境运行严格 `npm run db:check` 并生成新鲜签名证据 | [任务账本](./docs/task-registry.md) |
@@ -98,6 +100,7 @@ flowchart LR
 - 晨检、饮食、成长等业务记录的创建、更新、归档与跨端读取。
 - 语音理解、OCR/健康材料解析、结构化草稿和 Teacher Copilot。
 - 高风险会诊发起、SSE 阶段流、证据链、干预卡与 48 小时复查。
+- 成长绘本工作台允许教师在同机构、已分班的授权范围内选择幼儿，基于真实成长记录生成并保存绘本；图片和音频状态写回同一服务端记录，供授权家长读取。
 - 全局搜索、通知、消息和账号菜单均读取当前登录作用域内的数据。
 
 主要入口：
@@ -106,6 +109,7 @@ flowchart LR
 | --- | --- |
 | `/teacher` | 教师工作台与记录入口 |
 | `/teacher/agent` | Teacher Agent、草稿确认与周报预览 |
+| `/teacher/storybook?child=c-1` | 为已授权幼儿生成、补全媒体并保存成长绘本 |
 | `/teacher/high-risk-consultation` | 高风险会诊、证据链与干预建议 |
 | `/teacher/health-file-bridge` | 健康材料上传与解析入口 |
 | `/health`、`/diet`、`/growth` | 晨检、饮食与成长记录 |
@@ -135,7 +139,7 @@ flowchart LR
 
 - 家长首页、孩子状态、趋势解释、今晚行动、提醒和家庭周报。
 - 关怀模式、统一意图入口与更短的家庭执行链路。
-- 个性化成长绘本，支持文本、图片、音频、媒体状态、持久化，以及本地/受控分享与导出入口；生产级公开外链和 PDF 交付仍受已知边界约束。
+- 个性化成长绘本按监护授权读取教师保存的同一份服务端记录，支持文本、图片、音频、媒体状态、持久化，以及本地/受控分享与导出入口；生产级公开外链和 PDF 交付仍受已知边界约束。
 - 结构化反馈记录执行状态、次数、执行者、孩子反应、改善情况和困难。
 - 首次儿童建档前完成最小必要信息与监护人同意。
 - 无权访问的 `childId` 会被明确拒绝，不会自动回退到其他儿童。
@@ -288,8 +292,8 @@ flowchart TB
 childcare-smart/
 ├─ app/                         # Next.js 页面、角色入口与 Route Handlers
 │  ├─ admin/                    # 园长端
-│  ├─ teacher/                  # 教师端
-│  ├─ parent/                   # 家长端
+│  ├─ teacher/                  # 教师端，含 /teacher/storybook 绘本生成工作台
+│  ├─ parent/                   # 家长端，含授权绘本读取与反馈
 │  └─ api/                      # 认证、业务、AI、媒体与状态 API
 ├─ components/                  # 角色页面、结构化卡片、全局工具中心
 ├─ lib/                         # 认证、作用域、业务服务、AI contract 与客户端 store
@@ -302,9 +306,12 @@ childcare-smart/
 ├─ supabase/sql/                # MySQL 基础表与受控迁移脚本
 ├─ scripts/                     # smoke、发布门禁、数据库预检与演示素材工具
 ├─ tests/                       # Playwright 产品、功能、发布与视觉回归
-├─ public/demo/                 # 系统导览与公开 demo 素材
+│  └─ fixtures/                 # 测试夹具与 frontend-replica Page Specs
+├─ public/demo/                 # 系统导览 PDF 与当前 v3 展示图
 ├─ public/demo-media/           # demo-safe 绘本和多媒体资产
-├─ docs/                        # 架构、状态、发布、安全、QA 与任务账本
+├─ docs/                        # 当前文档总览、事实账本与分类文档
+│  ├─ auth/ demo/ qa/ release/ security/
+│  └─ archive/2026-q2/         # 冻结的 Q2 历史交付与审计材料
 ├─ .env.example                 # 根环境变量模板；不含真实密钥
 ├─ package.json
 └─ docker-compose.yml
@@ -533,7 +540,7 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 - [`backend/Dockerfile`](./backend/Dockerfile)
 - [`docker-compose.yml`](./docker-compose.yml)
 - [`Caddyfile`](./Caddyfile)
-- [腾讯云 VPS staging runbook](./docs/deployment-vps.md)
+- [腾讯云 VPS staging runbook](./docs/release/deployment-vps.md)
 
 Docker Compose 拓扑用于 FastAPI backend + Caddy staging，读取根目录未跟踪的 `.env.release`，并通过 `/data` 持久卷保存本地 memory。该拓扑是部署配置和 runbook，不应被扩写成未经核验的当前生产事实。
 
@@ -551,11 +558,12 @@ Docker Compose 拓扑用于 FastAPI backend + Caddy staging，读取根目录未
 
 1. `/login`：品牌首屏、示例账号与系统导览。
 2. `/teacher`：教师工作台、记录与语音/草稿入口。
-3. `/teacher/high-risk-consultation`：高风险会诊、证据链与干预卡。
-4. `/admin`：风险优先级、会诊承接、治理区与周报预览。
-5. `/parent`：今晚行动、趋势入口、关怀模式与反馈入口。
-6. `/parent/storybook?child=c-1`：成长微绘本。
-7. `/parent/agent?child=c-1`：趋势追问与结构化反馈。
+3. `/teacher/storybook?child=c-1`：教师为授权幼儿生成、补全媒体并保存成长绘本。
+4. `/teacher/high-risk-consultation`：高风险会诊、证据链与干预卡。
+5. `/admin`：风险优先级、会诊承接、治理区与周报预览。
+6. `/parent`：今晚行动、趋势入口、关怀模式与反馈入口。
+7. `/parent/storybook?child=c-1`：家长读取教师保存的同一份成长绘本。
+8. `/parent/agent?child=c-1`：趋势追问与结构化反馈。
 
 `/teacher/agent` 与 `/admin/agent?action=weekly-report` 作为补充路线。
 
@@ -572,7 +580,7 @@ npm run demo:video-storyboard
 
 - `demo:materials` 打包已有截图、系统导览、preflight 与架构素材。
 - `demo:materials:capture` 会重新采集页面，运行前应确认目标 URL、账号和脱敏策略。
-- 输出主要位于 `artifacts/demo-materials/`，详见 [演示素材说明](./docs/demo-materials.md)。
+- 输出主要位于已忽略的 `artifacts/demo-materials/`，详见 [演示素材说明](./docs/demo/demo-materials.md)。运行采集命令前必须使用合成 demo 数据，并检查截图、网络日志和导出包中没有账号凭据或真实个人信息。
 
 <table>
   <tr>
@@ -591,6 +599,8 @@ npm run demo:video-storyboard
 
 ## 文档索引
 
+完整导航与当前文档、历史归档的边界见 [文档总览](./docs/README.md)。`docs/archive/` 只保存阶段性证据，不作为当前实现或发布状态的事实源。
+
 ### 当前事实与比赛口径
 
 - [当前状态账本](./docs/current-status-ledger.md)
@@ -600,24 +610,31 @@ npm run demo:video-storyboard
 
 ### 认证、数据与安全
 
-- [认证注册下一阶段说明](./docs/auth-registration-next-phase.md)
+- [认证注册下一阶段说明](./docs/auth/auth-registration-next-phase.md)
 - [真实数据库注册任务清单](./docs/tasks/registration-real-db-tasklist.md)
 - [租户隔离审计](./docs/security/tenant-isolation-audit.md)
 
 ### 发布与部署
 
 - [发布门禁真实性](./docs/release/RELEASE_GATE_TRUTHFULNESS.md)
-- [VPS staging 部署与修复](./docs/deployment-vps.md)
-- [演示素材说明](./docs/demo-materials.md)
+- [VPS staging 部署与修复](./docs/release/deployment-vps.md)
+
+### 演示与 QA
+
+- [演示素材说明](./docs/demo/demo-materials.md)
+- [教师高风险会诊 QA](./docs/qa/teacher-consultation-qa.md)
+- [教师语音 Smoke](./docs/qa/teacher-voice-smoke.md)
+- [家长趋势 Smoke](./docs/qa/parent-trend-smoke.md)
 
 ### 开发协作
 
 新线程或贡献者应按以下顺序阅读：
 
-1. [`docs/current-status-ledger.md`](./docs/current-status-ledger.md)
-2. [`docs/competition-architecture.md`](./docs/competition-architecture.md)
-3. [`docs/task-registry.md`](./docs/task-registry.md)
-4. [`AGENTS.md`](./AGENTS.md)
+1. [`docs/README.md`](./docs/README.md)
+2. [`docs/current-status-ledger.md`](./docs/current-status-ledger.md)
+3. [`docs/competition-architecture.md`](./docs/competition-architecture.md)
+4. [`docs/task-registry.md`](./docs/task-registry.md)
+5. [`AGENTS.md`](./AGENTS.md)
 
 代码事实始终高于旧文档描述。遇到 dirty worktree 时，不要回滚或顺手提交他人的在途改动。
 
@@ -630,9 +647,13 @@ npm run demo:video-storyboard
 - Vivo/DashScope 的代码接入与 smoke 记录不等于所有上游能力长期稳定。
 - Provider 未配置、不可用或超时时，部分链路会显式进入 mock、规则降级或 unavailable；降级结果不能标记为 live AI。
 - 正式签名发布门禁与严格生产数据库证明仍待受控环境补齐。
-- demo 数据、系统导览和绘本示意图不能作为真实儿童或真实机构业务事实。
+- 生产功能 smoke 已验证教师生成、保存与家长读取同一成长绘本，但本轮没有运行 formal gate，因此不能据此宣称正式发布证明已经完成。
+- 所有人物、儿童档案、业务记录、表单、图片、音频、demo 数据、系统导览和绘本示意图均为合成展示材料，不能作为真实儿童或真实机构业务事实。
 - Brain MySQL memory 的物理表仍需继续强化机构维度；当前主要依赖签名后的 child scope 与服务端作用域隔离。
-- Teacher Storybook 尚未纳入本 README 的已发布能力；相关代码只有进入已跟踪提交并完成验证后，才应更新公开口径。
+
+## 许可证
+
+仓库代码采用 [MIT License](./LICENSE) 开源。第三方依赖与第三方素材仍分别遵循其原始许可证和使用条款。
 
 ---
 

@@ -16,6 +16,8 @@ const manifestPath = path.join(mediaRoot, "manifest.json");
 const m02NamingManifestPath = path.join(
   repoRoot,
   "docs",
+  "archive",
+  "2026-q2",
   "demo-media",
   "gpt-image2-batches",
   "gpt-image2-file-naming-manifest.json"
@@ -25,8 +27,6 @@ const rawRoot = path.join(artifactsRoot, "raw");
 const extractedRoot = path.join(artifactsRoot, "extracted");
 const rejectedRoot = path.join(artifactsRoot, "rejected");
 const artifactReportsRoot = path.join(artifactsRoot, "reports");
-const docsRoot = path.join(repoRoot, "docs", "demo-media");
-const docsResultsRoot = path.join(docsRoot, "results");
 
 const IMAGE_EXT_RE = /\.(png|jpe?g|webp)$/i;
 const ZIP_EXT_RE = /\.zip$/i;
@@ -552,14 +552,12 @@ ${duplicateRows.length ? markdownTable(["Duplicate", "Kept", "sha256"], duplicat
 ${markdownTable(["Category", "Count"], Object.entries(summary.byCategory))}
 `;
 
-  ensureDir(docsResultsRoot);
-  fs.writeFileSync(path.join(docsRoot, "GPT_IMAGE2_LOCAL_INGEST_REPORT.md"), localReport, "utf8");
-  fs.writeFileSync(path.join(docsRoot, "GPT_IMAGE2_ASSET_COVERAGE.md"), coverageReport, "utf8");
-  fs.writeFileSync(path.join(docsRoot, "GPT_IMAGE2_REJECTED_ASSETS.md"), rejectedReport, "utf8");
-  fs.writeFileSync(path.join(docsRoot, "GPT_IMAGE2_DUPLICATE_ASSETS.md"), duplicateReport, "utf8");
-  fs.writeFileSync(path.join(docsResultsRoot, "M03-local-ingest-result.md"), resultMd, "utf8");
-  writeJson(path.join(docsResultsRoot, "M03-local-ingest-result.json"), summary);
-
+  fs.writeFileSync(path.join(artifactReportsRoot, "GPT_IMAGE2_LOCAL_INGEST_REPORT.md"), localReport, "utf8");
+  fs.writeFileSync(path.join(artifactReportsRoot, "GPT_IMAGE2_ASSET_COVERAGE.md"), coverageReport, "utf8");
+  fs.writeFileSync(path.join(artifactReportsRoot, "GPT_IMAGE2_REJECTED_ASSETS.md"), rejectedReport, "utf8");
+  fs.writeFileSync(path.join(artifactReportsRoot, "GPT_IMAGE2_DUPLICATE_ASSETS.md"), duplicateReport, "utf8");
+  fs.writeFileSync(path.join(artifactReportsRoot, "M03-local-ingest-result.md"), resultMd, "utf8");
+  writeJson(path.join(artifactReportsRoot, "M03-local-ingest-result.json"), summary);
   writeJson(path.join(artifactReportsRoot, "accepted-assets.json"), acceptedRecords);
   writeJson(path.join(artifactReportsRoot, "rejected-assets.json"), rejectedRecords);
   writeJson(path.join(artifactReportsRoot, "duplicate-assets.json"), duplicateRecords);
@@ -570,12 +568,12 @@ function changedFilesFor(acceptedRecords) {
     "scripts/ingest-gpt-image2-local-assets.mjs",
     "public/demo-media/manifest.json",
     ...acceptedRecords.map((record) => toPosix(path.relative(repoRoot, record.outputPath))),
-    "docs/demo-media/GPT_IMAGE2_LOCAL_INGEST_REPORT.md",
-    "docs/demo-media/GPT_IMAGE2_ASSET_COVERAGE.md",
-    "docs/demo-media/GPT_IMAGE2_REJECTED_ASSETS.md",
-    "docs/demo-media/GPT_IMAGE2_DUPLICATE_ASSETS.md",
-    "docs/demo-media/results/M03-local-ingest-result.md",
-    "docs/demo-media/results/M03-local-ingest-result.json",
+    "artifacts/demo-media/M03-local-ingest/reports/GPT_IMAGE2_LOCAL_INGEST_REPORT.md",
+    "artifacts/demo-media/M03-local-ingest/reports/GPT_IMAGE2_ASSET_COVERAGE.md",
+    "artifacts/demo-media/M03-local-ingest/reports/GPT_IMAGE2_REJECTED_ASSETS.md",
+    "artifacts/demo-media/M03-local-ingest/reports/GPT_IMAGE2_DUPLICATE_ASSETS.md",
+    "artifacts/demo-media/M03-local-ingest/reports/M03-local-ingest-result.md",
+    "artifacts/demo-media/M03-local-ingest/reports/M03-local-ingest-result.json",
     "package.json",
     "lib/demo-media/assets.ts",
     "lib/demo-data/seed.ts",
@@ -590,7 +588,7 @@ async function main() {
     throw new Error(`Source directory not found: ${sourceDir}`);
   }
 
-  for (const dir of [rawRoot, extractedRoot, rejectedRoot, artifactReportsRoot, docsResultsRoot]) {
+  for (const dir of [rawRoot, extractedRoot, rejectedRoot, artifactReportsRoot]) {
     ensureDir(dir);
   }
 

@@ -2,7 +2,7 @@
 
 Design source:
 
-`C:\Users\12804\Desktop\childcare-smart源代码\前端重构`
+`<design-source-root>`
 
 ## Purpose
 

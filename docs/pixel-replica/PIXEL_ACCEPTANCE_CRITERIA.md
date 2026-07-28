@@ -13,7 +13,7 @@ This phase is judged by whether pages clearly look like the GPT Image 2 design r
 Every page must have:
 
 - Current screenshot before changes.
-- Reference design image from `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Reference design image from `<design-source-root>`.
 - Modified screenshot after changes.
 - Difference list.
 - Fix list.

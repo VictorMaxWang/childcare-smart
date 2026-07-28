@@ -6,9 +6,10 @@ This document governs the SmartChildcare pixel replica phase.
 
 ## Fixed Inputs
 
-- Project repository: `C:\Users\12804\Desktop\childcare-smart源代码\childcare-smart`
-- Original design source directory: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`
+- Project repository: `<repo-root>`
+- Original design source directory: `<design-source-root>`
 - The design source directory is outside the project repository and is a sibling of `childcare-smart`.
+- `<repo-root>` means the current checkout root. `<design-source-root>` normally resolves to `../前端重构`; scripts allow the corresponding `PIXEL_DESIGN_SOURCE_DIR` or `FRONTEND_REPLICA_DESIGN_*` override.
 - Do not guess design files inside the repository.
 - Do not treat `artifacts/refactor-design-assets/` as the only source of truth.
 
@@ -55,7 +56,7 @@ Every pixel-replica subthread must:
 1. Read this file before changing code.
 2. Read `docs/pixel-replica/DESIGN_SOURCE_INDEX.md`.
 3. Read `docs/pixel-replica/DESIGN_TO_ROUTE_MAP.md`.
-4. Use design references from `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+4. Use design references from `<design-source-root>`.
 5. Capture the current page screenshot before edits.
 6. Compare the current screenshot with the target design reference.
 7. Implement visual changes.
@@ -70,4 +71,3 @@ Completion thresholds:
 - High-priority pages: visual closeness >= 90.
 - Medium-priority pages: visual closeness >= 85.
 - Any page below 90 cannot be declared complete if its assigned target is critical or high.
-

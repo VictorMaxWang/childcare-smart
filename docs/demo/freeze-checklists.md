@@ -127,6 +127,6 @@
 
 ## 4. 相关细分清单
 
-- `docs/teacher-voice-smoke.md`
-- `docs/teacher-consultation-qa.md`
-- `docs/parent-trend-smoke.md`
+- `docs/qa/teacher-voice-smoke.md`
+- `docs/qa/teacher-consultation-qa.md`
+- `docs/qa/parent-trend-smoke.md`

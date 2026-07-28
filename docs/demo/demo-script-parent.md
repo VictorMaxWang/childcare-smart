@@ -1,6 +1,6 @@
 # Parent Demo Script
 
-本稿服从 `docs/demo-script.md`，只保留 Parent 微绘本与趋势线的 drill-down。
+本稿服从 `docs/demo/demo-script.md`，只保留 Parent 微绘本与趋势线的 drill-down。
 
 ## 目标
 

@@ -4,11 +4,11 @@ You are P02 for SmartChildcare Pixel Replica Mode.
 
 Fixed project repository:
 
-`C:\Users\12804\Desktop\childcare-smart源代码\childcare-smart`
+`<repo-root>`
 
 Fixed original design source directory:
 
-`C:\Users\12804\Desktop\childcare-smart源代码\前端重构`
+`<design-source-root>`
 
 ## Required Reading
 

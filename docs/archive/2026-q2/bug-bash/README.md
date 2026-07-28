@@ -2,7 +2,10 @@
 
 Updated: 2026-04-29
 
-This directory is the single coordination point for the SmartChildcare bug bash after Pixel Replica Mode.
+> [!WARNING]
+> Historical snapshot only. This phase is frozen; do not restart its threads or write new results into this archive. Register any new bug bash in the active task documents and write generated evidence to `artifacts/`.
+
+This directory was the single coordination point for the SmartChildcare bug bash after Pixel Replica Mode.
 
 ## Scope
 
@@ -11,25 +14,25 @@ This directory is the single coordination point for the SmartChildcare bug bash 
 - Artifact directory: `artifacts/bug-bash/`
 - First-round goal: find, record, and triage bugs. Do not fix business code before B99.
 
-## Required Reading
+## Historical Required Reading
 
-Every bug bash thread must read these files before starting:
+At the time, every bug bash thread was required to read these files before starting:
 
 1. `AGENTS.md`
 2. `docs/pixel-replica/agent.md`
 3. `docs/pixel-replica/TASK_STATUS.md`
 4. `docs/pixel-replica/FINAL_PIXEL_REPLICA_REPORT.md` if it exists
 5. `docs/pixel-replica/DESIGN_TO_ROUTE_MAP.md`
-6. `docs/refactor/ROUTE_PAGE_MAP.md`
+6. `docs/archive/2026-q2/refactor/ROUTE_PAGE_MAP.md`
 7. `package.json`
 8. Existing Playwright, Browser Use, smoke, and screenshot scripts when relevant
 
-## First-Round Rules
+## Historical First-Round Rules
 
 - Browser Use threads only simulate real users and record bugs. They must not modify source code.
 - Code scanning threads should record bugs and risks, not perform broad fixes.
 - If a tiny helper test or script is necessary, keep it scoped to bug bash or regression evidence and avoid business source edits.
-- All bugs must be recorded in both `docs/bug-bash/BUGS.md` and `docs/bug-bash/BUGS.json`.
+- All bugs were recorded in both `docs/archive/2026-q2/bug-bash/BUGS.md` and `docs/archive/2026-q2/bug-bash/BUGS.json`.
 - Screenshots, videos, traces, logs, and other evidence go under `artifacts/bug-bash/`.
 - Do not let multiple threads modify the same `src`, `app`, `components`, `lib`, `backend`, or shared business file in parallel.
 - Fixes wait until B99 completes triage and creates the module-based fix plan.
@@ -57,19 +60,19 @@ Browser Use should normally use the URL printed by `npm run dev`, such as `http:
 
 ## Bug Record Source Of Truth
 
-- Human-readable ledger: `docs/bug-bash/BUGS.md`
-- Machine-readable ledger: `docs/bug-bash/BUGS.json`
-- Triage policy: `docs/bug-bash/BUG_TRIAGE.md`
-- Thread ownership: `docs/bug-bash/THREAD_ASSIGNMENTS.md`
-- Fix planning after triage: `docs/bug-bash/BUG_FIX_PLAN.md`
+- Human-readable ledger: `docs/archive/2026-q2/bug-bash/BUGS.md`
+- Machine-readable ledger: `docs/archive/2026-q2/bug-bash/BUGS.json`
+- Triage policy: `docs/archive/2026-q2/bug-bash/BUG_TRIAGE.md`
+- Thread ownership: `docs/archive/2026-q2/bug-bash/THREAD_ASSIGNMENTS.md`
+- Fix planning after triage: `docs/archive/2026-q2/bug-bash/BUG_FIX_PLAN.md`
 
 ## Follow-Up Prompts
 
-Prompts live in `docs/bug-bash/prompts/`.
+Prompts live in `docs/archive/2026-q2/bug-bash/prompts/`.
 
 - Primary Browser Use prompts: B10-B15.
 - Optional reserved Browser Use prompts: B16-B19.
 - Code scanning prompts: B20-B26.
 - Triage prompt: B99.
 
-Default parallel startup remains B10-B15 and B20-B26. Start B16-B19 only when extra coverage is requested.
+The default parallel startup was B10-B15 and B20-B26. B16-B19 were reserved for requests that needed extra coverage.

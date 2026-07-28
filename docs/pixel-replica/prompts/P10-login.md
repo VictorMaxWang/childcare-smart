@@ -4,11 +4,11 @@ You are P10 for SmartChildcare Pixel Replica Mode.
 
 Fixed project repository:
 
-`C:\Users\12804\Desktop\childcare-smart源代码\childcare-smart`
+`<repo-root>`
 
 Fixed original design source directory:
 
-`C:\Users\12804\Desktop\childcare-smart源代码\前端重构`
+`<design-source-root>`
 
 ## Mission
 
@@ -16,7 +16,7 @@ Replicate the login page, registration dialog, and demo account entry visuals as
 
 ## Primary Design Reference
 
-`C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_08_of_08\images\smart_childcare_platform_login_page_design.png`
+`<design-source-root>\smartchildcare_images_part_08_of_08\images\smart_childcare_platform_login_page_design.png`
 
 ## Owned Scope
 

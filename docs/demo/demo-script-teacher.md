@@ -1,6 +1,6 @@
 # Teacher Demo Script
 
-本稿服从 `docs/demo-script.md`，只保留 Teacher 相关 drill-down。
+本稿服从 `docs/demo/demo-script.md`，只保留 Teacher 相关 drill-down。
 
 ## 目标
 

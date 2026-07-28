@@ -4,11 +4,11 @@ You are P20 for SmartChildcare Pixel Replica Mode.
 
 Fixed project repository:
 
-`C:\Users\12804\Desktop\childcare-smart源代码\childcare-smart`
+`<repo-root>`
 
 Fixed original design source directory:
 
-`C:\Users\12804\Desktop\childcare-smart源代码\前端重构`
+`<design-source-root>`
 
 ## Mission
 
@@ -16,9 +16,9 @@ Replicate director pages, including director home, AI assistant, weekly report m
 
 ## Primary References
 
-- `/admin`: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_03_of_08\images\childcare_management_platform_dashboard_ui.png`
-- `/admin/agent`: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_01_of_08\images\ai_powered_childcare_management_dashboard.png`
-- `/admin/agent?action=weekly-report`: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_03_of_08\images\childcare_management_dashboard_report_overview.png`
+- `/admin`: `<design-source-root>\smartchildcare_images_part_03_of_08\images\childcare_management_platform_dashboard_ui.png`
+- `/admin/agent`: `<design-source-root>\smartchildcare_images_part_01_of_08\images\ai_powered_childcare_management_dashboard.png`
+- `/admin/agent?action=weekly-report`: `<design-source-root>\smartchildcare_images_part_03_of_08\images\childcare_management_dashboard_report_overview.png`
 
 ## Owned Scope
 

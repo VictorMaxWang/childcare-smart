@@ -4,15 +4,22 @@ import path from "node:path";
 import sharp from "sharp";
 
 const REPO_ROOT = process.cwd();
-const DOC_ROOT = path.join(REPO_ROOT, "docs", "frontend-replica");
-const PAGE_SPECS_ROOT = path.join(DOC_ROOT, "PAGE_SPECS");
-const RESULTS_ROOT = path.join(DOC_ROOT, "results");
+const ARCHIVE_DOC_ROOT = path.join(REPO_ROOT, "docs", "archive", "2026-q2", "frontend-replica");
+const PAGE_SPECS_ROOT = path.join(
+  REPO_ROOT,
+  "tests",
+  "fixtures",
+  "frontend-replica",
+  "page-specs"
+);
+const AUDIT_ROOT = path.join(REPO_ROOT, "artifacts", "frontend-replica", "audit");
+const RESULTS_ROOT = path.join(AUDIT_ROOT, "results");
 const DESIGN_ROOT =
   process.env.FRONTEND_REPLICA_DESIGN_ROOT ||
   path.resolve(REPO_ROOT, "..", "前端重构");
 
-const INVENTORY_PATH = path.join(DOC_ROOT, "DESIGN_INVENTORY.md");
-const ROUTE_MAP_PATH = path.join(DOC_ROOT, "DESIGN_ROUTE_MAP.md");
+const INVENTORY_PATH = path.join(ARCHIVE_DOC_ROOT, "DESIGN_INVENTORY.md");
+const ROUTE_MAP_PATH = path.join(ARCHIVE_DOC_ROOT, "DESIGN_ROUTE_MAP.md");
 const VIVO_REFERENCE = "https://aigc.vivo.com.cn/#/document/index?id=1746";
 
 const KNOWN_PATH_FIXES = new Map([
@@ -52,6 +59,7 @@ main().catch((error) => {
 
 async function main() {
   await fs.mkdir(PAGE_SPECS_ROOT, { recursive: true });
+  await fs.mkdir(AUDIT_ROOT, { recursive: true });
   await fs.mkdir(RESULTS_ROOT, { recursive: true });
 
   const pngIndex = await buildPngIndex(DESIGN_ROOT);
@@ -102,9 +110,9 @@ async function main() {
   }
 
   const summary = buildSummary(specs);
-  await fs.writeFile(path.join(DOC_ROOT, "R01_DESIGN_AUDIT_REPORT.md"), buildDesignAuditReport(specs, summary), "utf8");
-  await fs.writeFile(path.join(DOC_ROOT, "R01_CHART_AUDIT.md"), buildChartAudit(specs, summary), "utf8");
-  await fs.writeFile(path.join(DOC_ROOT, "R01_AI_ASSISTANT_AUDIT.md"), buildAiAudit(specs, summary), "utf8");
+  await fs.writeFile(path.join(AUDIT_ROOT, "R01_DESIGN_AUDIT_REPORT.md"), buildDesignAuditReport(specs, summary), "utf8");
+  await fs.writeFile(path.join(AUDIT_ROOT, "R01_CHART_AUDIT.md"), buildChartAudit(specs, summary), "utf8");
+  await fs.writeFile(path.join(AUDIT_ROOT, "R01_AI_ASSISTANT_AUDIT.md"), buildAiAudit(specs, summary), "utf8");
 
   const result = buildResultJson(summary);
   await fs.writeFile(path.join(RESULTS_ROOT, "R01-result.json"), `${JSON.stringify(result, null, 2)}\n`, "utf8");
@@ -876,7 +884,7 @@ function buildChartAudit(specs, summary) {
     spec.chartSpec.title,
     spec.chartSpec.metrics.join(", "),
     spec.chartSpec.currentApiOrSelector,
-    `PAGE_SPECS/${spec.designId}.md`,
+    `tests/fixtures/frontend-replica/page-specs/${spec.designId}.md`,
   ]);
   return [
     "# R01 Chart Audit",
@@ -912,7 +920,7 @@ function buildAiAudit(specs, summary) {
     spec.viewport,
     spec.assistantSpec.entryPosition,
     spec.assistantSpec.recommendedPrompts.join(" / "),
-    `PAGE_SPECS/${spec.designId}.md`,
+    `tests/fixtures/frontend-replica/page-specs/${spec.designId}.md`,
   ]);
   return [
     "# R01 AI Assistant Audit",
@@ -1003,11 +1011,11 @@ function buildResultMarkdown(result, summary) {
     ...result.nextRecommendedTasks.map((item) => `- ${item}`),
     "",
     "## Generated Files",
-    "- `docs/frontend-replica/PAGE_SPECS/*.md`",
-    "- `docs/frontend-replica/R01_DESIGN_AUDIT_REPORT.md`",
-    "- `docs/frontend-replica/R01_CHART_AUDIT.md`",
-    "- `docs/frontend-replica/R01_AI_ASSISTANT_AUDIT.md`",
-    "- `docs/frontend-replica/results/R01-result.json`",
+    "- `tests/fixtures/frontend-replica/page-specs/*.md`",
+    "- `artifacts/frontend-replica/audit/R01_DESIGN_AUDIT_REPORT.md`",
+    "- `artifacts/frontend-replica/audit/R01_CHART_AUDIT.md`",
+    "- `artifacts/frontend-replica/audit/R01_AI_ASSISTANT_AUDIT.md`",
+    "- `artifacts/frontend-replica/audit/results/R01-result.json`",
     "",
     "## Route Coverage",
     table(["Route", "Count"], summary.byRoute),
@@ -1034,7 +1042,7 @@ function specIndexTable(specs) {
       spec.hasCharts ? "yes" : "no",
       spec.hasAiAssistant ? "yes" : "no",
       spec.hasModalState ? "yes" : "no",
-      `PAGE_SPECS/${spec.designId}.md`,
+      `tests/fixtures/frontend-replica/page-specs/${spec.designId}.md`,
     ])
   );
 }

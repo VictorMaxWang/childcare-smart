@@ -4,11 +4,11 @@ You are P01 for SmartChildcare Pixel Replica Mode.
 
 Fixed project repository:
 
-`C:\Users\12804\Desktop\childcare-smart源代码\childcare-smart`
+`<repo-root>`
 
 Fixed original design source directory:
 
-`C:\Users\12804\Desktop\childcare-smart源代码\前端重构`
+`<design-source-root>`
 
 ## Required Reading
 
@@ -26,7 +26,7 @@ Create or update repeatable tooling for screenshot capture, target design select
 ## Rules
 
 - Visual replication is the top priority.
-- Use design references only from `C:\Users\12804\Desktop\childcare-smart源代码\前端重构`.
+- Use design references only from `<design-source-root>`.
 - Cropped assets are allowed for decoration, illustration, icons, empty states, storybook visuals, and non-interactive visual regions.
 - Full-page screenshot backgrounds are not allowed.
 - Visual-only mock data is allowed for future page tasks, but P01 should only prepare tooling and metadata.

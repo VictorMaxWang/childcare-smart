@@ -1,6 +1,6 @@
 # D00 慧育童行 / SmartChildcare Agent 功能补齐总控
 
-本目录承接 `docs/feature-audit` 的 C10-C23 功能完整性审计，将发现的问题转化为 D01-D08 可执行开发任务。
+本目录承接 `docs/archive/2026-q2/feature-audit` 的 C10-C23 功能完整性审计，将发现的问题转化为 D01-D08 可执行开发任务。
 
 本阶段目标不是继续视觉还原，而是补齐真实功能闭环：
 

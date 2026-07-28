@@ -4,11 +4,11 @@ You are P50 for SmartChildcare Pixel Replica Mode.
 
 Fixed project repository:
 
-`C:\Users\12804\Desktop\childcare-smart源代码\childcare-smart`
+`<repo-root>`
 
 Fixed original design source directory:
 
-`C:\Users\12804\Desktop\childcare-smart源代码\前端重构`
+`<design-source-root>`
 
 ## Mission
 
@@ -16,10 +16,10 @@ Replicate shared business pages and shared states: child records, health, growth
 
 ## Primary References
 
-- `/children`: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_02_of_08\images\child_records_management_dashboard_ui.png`
-- `/health`: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_02_of_08\images\child_health_monitoring_dashboard_interface.png`
-- `/growth`: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_01_of_08\images\child_growth_tracking_dashboard_interface.png`
-- `/diet`: `C:\Users\12804\Desktop\childcare-smart源代码\前端重构\smartchildcare_images_part_04_of_08\images\childcare_platform_diet_record_management.png`
+- `/children`: `<design-source-root>\smartchildcare_images_part_02_of_08\images\child_records_management_dashboard_ui.png`
+- `/health`: `<design-source-root>\smartchildcare_images_part_02_of_08\images\child_health_monitoring_dashboard_interface.png`
+- `/growth`: `<design-source-root>\smartchildcare_images_part_01_of_08\images\child_growth_tracking_dashboard_interface.png`
+- `/diet`: `<design-source-root>\smartchildcare_images_part_04_of_08\images\childcare_platform_diet_record_management.png`
 
 ## Owned Scope
 

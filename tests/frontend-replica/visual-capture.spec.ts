@@ -42,7 +42,13 @@ type CaptureFailure = PageSpec & {
 };
 
 const REPO_ROOT = process.cwd();
-const PAGE_SPECS_ROOT = path.join(REPO_ROOT, "docs", "frontend-replica", "PAGE_SPECS");
+const PAGE_SPECS_ROOT = path.join(
+  REPO_ROOT,
+  "tests",
+  "fixtures",
+  "frontend-replica",
+  "page-specs"
+);
 const OUTPUT_ROOT = path.join(REPO_ROOT, "artifacts", "frontend-replica", "current");
 const VIEWPORTS: Record<ViewportName, { width: number; height: number }> = {
   mobile: { width: 390, height: 844 },
@@ -119,7 +125,7 @@ test("capture frontend replica visual pages", async ({ browser }) => {
   const manifest = {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
-    source: "docs/frontend-replica/PAGE_SPECS",
+    source: "tests/fixtures/frontend-replica/page-specs",
     viewportPolicy: VIEWPORTS,
     summary: {
       specs: specs.length,

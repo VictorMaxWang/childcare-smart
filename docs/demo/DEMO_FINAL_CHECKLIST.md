@@ -1,7 +1,9 @@
 # 答辩 Demo 最终验收清单
 
 验收日期：2026-05-19  
-工作目录：`C:\Users\12804\Desktop\childcare-smart源代码\childcare-smart`
+工作目录：`<repo-root>`
+
+下列命令中的 `<repo-root>` 表示当前 Git checkout 根目录，执行前替换为本机实际路径。
 
 ## 六步主链
 
@@ -21,7 +23,7 @@
 从项目根目录执行：
 
 ```powershell
-cd "C:\Users\12804\Desktop\childcare-smart源代码\childcare-smart"
+cd "<repo-root>"
 npm run lint
 npm run build
 npm run demo:preflight
@@ -31,14 +33,14 @@ npm run product:smoke
 AI smoke 需要先有 `localhost:3000` 前端服务：
 
 ```powershell
-cd "C:\Users\12804\Desktop\childcare-smart源代码\childcare-smart"
+cd "<repo-root>"
 npm run dev -- --hostname 127.0.0.1 --port 3000
 ```
 
 另开一个 PowerShell 窗口执行：
 
 ```powershell
-cd "C:\Users\12804\Desktop\childcare-smart源代码\childcare-smart"
+cd "<repo-root>"
 npm run ai:smoke
 npm run ai:smoke:storybook
 npm run storybook:xiaoyu:test
@@ -59,7 +61,7 @@ npm run storybook:xiaoyu:test
 1. 启动前端：
 
 ```powershell
-cd "C:\Users\12804\Desktop\childcare-smart源代码\childcare-smart"
+cd "<repo-root>"
 npm run dev -- --hostname 127.0.0.1 --port 3000
 ```
 

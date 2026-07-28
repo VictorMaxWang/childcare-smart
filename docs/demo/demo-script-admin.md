@@ -1,6 +1,6 @@
 # Admin Demo Script
 
-本稿服从 `docs/demo-script.md`，只保留 Admin 决策区的 drill-down。
+本稿服从 `docs/demo/demo-script.md`，只保留 Admin 决策区的 drill-down。
 
 ## 目标
 
