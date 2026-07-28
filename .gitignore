@@ -12,6 +12,10 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/.smoke-artifacts/
+/.tmp-smoke/
 
 # next.js
 /.next/
@@ -29,6 +33,17 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+
+# local Codex, QA, and smoke-test artifacts
+/.codex-*
+/.e04-*
+/.hotfix-*
+/.qa-*
+/.smoke-*
+/.tmp-*
+/smoke-*
+/.admin-text.txt
+/.weekly-text.txt
 
 # env files (can opt-in for committing if needed)
 .env

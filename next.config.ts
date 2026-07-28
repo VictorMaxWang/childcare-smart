@@ -14,14 +14,6 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        source: "/demo/system-tour/v1/:path*",
-        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
-      },
-      {
-        source: "/demo/system-tour/v2/:path*",
-        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
-      },
-      {
         source: "/demo/system-tour/v3/:path*",
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },

@@ -84,7 +84,7 @@ test.describe("login system tour presentation", () => {
 
     page.on("request", (request) => {
       const url = request.url();
-      if (url.includes("/demo/huiyu-tongxing.pdf") || url.includes("/vendor/pdfjs/pdf.worker.mjs")) {
+      if (url.includes("/demo/huiyu-tongxing.pdf")) {
         blockedTourRendererRequests.push(url);
       }
 
