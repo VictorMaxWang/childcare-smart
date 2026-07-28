@@ -406,54 +406,31 @@ Task ID:
 - “Parent trend 是本地完整能力”
 - “高风险会诊已经等于完整 T8 全量交付”
 
-<!-- BEGIN FRONTEND VISUAL REFACTOR RULES -->
-
-# SmartChildcare Frontend Visual Refactor Archive
-
-Updated: 2026-07-28
-
-The 2026-04-27 frontend refactor phase is complete. Its plans, status tables, decisions, and implementation logs are frozen under `docs/archive/2026-q2/refactor/` for historical review only.
-
-- Do not use the archived refactor task table as the current task registry.
-- Do not update archived status, implementation-log, or decision files.
-- Current frontend work follows the Pixel Replica rules below and the active task documents listed at the start of this file.
-- If the historical workflow must be revived, register a new task and create new active documentation first.
-
-<!-- END FRONTEND VISUAL REFACTOR RULES -->
-
 <!-- BEGIN PIXEL REPLICA MODE -->
 
 # SmartChildcare Pixel Replica Mode
 
-Updated: 2026-04-28
+更新基准：`2026-07-28`
 
-The current frontend phase is Pixel Replica Mode. The governing document is:
+当前视觉复刻规则统一以以下文档为入口：
 
-`docs/pixel-replica/agent.md`
-
-Every pixel-replica thread must read that file before changing code.
-
-The fixed original GPT Image 2 design source directory is:
-
-`<design-source-root>`
-
-`<design-source-root>` means the external sibling directory that normally resolves to `../前端重构`; it is not inside `childcare-smart`. Use the script-specific `PIXEL_DESIGN_SOURCE_DIR` or `FRONTEND_REPLICA_DESIGN_*` environment variable when the source is stored elsewhere.
-
-Pixel Replica Mode changes the frontend priority order:
-
-- Visual match to the design images is the highest priority.
-- Layout, colors, cards, navigation, tables, buttons, dialogs, illustration, and responsive behavior should match the target references as closely as possible.
-- Visual-only frontend modules, mock/display-only data, and cropped design assets are allowed when they improve visual fidelity and do not create real backend side effects.
-- Core interactive areas should still be implemented with HTML/CSS where feasible.
-- Full-page static screenshot backgrounds are not allowed.
-- Login, routes, demo accounts, role permissions, and backend API protocols must not be broken.
-
-Parallel work must follow:
-
-- `docs/pixel-replica/PARALLEL_TASKS.md`
-- `docs/pixel-replica/FILE_OWNERSHIP.md`
+- `docs/pixel-replica/README.md`
+- `docs/pixel-replica/DESIGN_SOURCE_INDEX.md`
 - `docs/pixel-replica/DESIGN_TO_ROUTE_MAP.md`
+- `docs/pixel-replica/VISUAL_ONLY_RULES.md`
+- `docs/pixel-replica/PIXEL_ACCEPTANCE_CRITERIA.md`
 
-Each subthread must capture screenshots, compare against the selected design references, assign a visual closeness score, and continue rework if the score is below the threshold in `docs/pixel-replica/PIXEL_ACCEPTANCE_CRITERIA.md`.
+每个 Pixel Replica 线程在修改代码前必须依次阅读上述入口。
+
+固定的 GPT Image 2 原始设计源为仓库外的 `<design-source-root>`，通常解析为同级目录 `../前端重构`。设计源位于其他位置时，使用脚本对应的 `PIXEL_DESIGN_SOURCE_DIR` 或 `FRONTEND_REPLICA_DESIGN_*` 环境变量，不得从仓库内资产反推原稿。
+
+固定边界：
+
+- 视觉匹配优先，但不得破坏登录、路由、演示账号、角色权限、route guard、API 协议或真实业务入口。
+- 核心交互区域应使用真实 HTML/CSS 和现有组件，不得用整页静态截图冒充页面。
+- visual-only 数据和裁图只能用于无真实副作用的展示区域，不得伪造发送、写入、删除、上传或 AI 成功。
+- 每次修改都要保留修改前后截图、差异与视觉评分；低于验收阈值时继续修正。
+- 截图、差异、评分和测试结果统一写入已忽略的 `artifacts/pixel-replica/`，不得提交运行日志、trace、视频或一次性提示词。
+- 并行边界继续遵循本文件和当前任务登记，不再使用历史任务所有权表。
 
 <!-- END PIXEL REPLICA MODE -->

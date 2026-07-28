@@ -311,7 +311,7 @@ childcare-smart/
 ├─ public/demo-media/           # demo-safe 绘本和多媒体资产
 ├─ docs/                        # 当前文档总览、事实账本与分类文档
 │  ├─ auth/ demo/ qa/ release/ security/
-│  └─ archive/2026-q2/         # 冻结的 Q2 历史交付与审计材料
+│  └─ pixel-replica/            # 当前视觉复刻规则与验收入口
 ├─ .env.example                 # 根环境变量模板；不含真实密钥
 ├─ package.json
 └─ docker-compose.yml
@@ -599,7 +599,7 @@ npm run demo:video-storyboard
 
 ## 文档索引
 
-完整导航与当前文档、历史归档的边界见 [文档总览](./docs/README.md)。`docs/archive/` 只保存阶段性证据，不作为当前实现或发布状态的事实源。
+完整导航和当前事实源边界见 [文档总览](./docs/README.md)。阶段性提示词、状态表、执行日志和生成报告不再进入当前文件树；历史材料可通过 Git 提交追溯，可再生成产物统一写入已忽略的 `artifacts/`。
 
 ### 当前事实与比赛口径
 

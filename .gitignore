@@ -66,6 +66,10 @@ next-env.d.ts
 release-report.json
 artifacts/
 
+# retired historical process-document locations
+/docs/archive/
+/docs/pixel-replica/prompts/
+
 # local release gate secrets
 .env.release
 

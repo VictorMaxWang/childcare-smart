@@ -4,7 +4,14 @@ import path from "node:path";
 import sharp from "sharp";
 
 const REPO_ROOT = process.cwd();
-const ARCHIVE_DOC_ROOT = path.join(REPO_ROOT, "docs", "archive", "2026-q2", "frontend-replica");
+// 可复用输入留在测试夹具区；生成报告继续写入已忽略的 artifacts，避免污染活动文档。
+const AUDIT_INPUT_ROOT = path.join(
+  REPO_ROOT,
+  "tests",
+  "fixtures",
+  "frontend-replica",
+  "audit-inputs"
+);
 const PAGE_SPECS_ROOT = path.join(
   REPO_ROOT,
   "tests",
@@ -18,8 +25,8 @@ const DESIGN_ROOT =
   process.env.FRONTEND_REPLICA_DESIGN_ROOT ||
   path.resolve(REPO_ROOT, "..", "前端重构");
 
-const INVENTORY_PATH = path.join(ARCHIVE_DOC_ROOT, "DESIGN_INVENTORY.md");
-const ROUTE_MAP_PATH = path.join(ARCHIVE_DOC_ROOT, "DESIGN_ROUTE_MAP.md");
+const INVENTORY_PATH = path.join(AUDIT_INPUT_ROOT, "DESIGN_INVENTORY.md");
+const ROUTE_MAP_PATH = path.join(AUDIT_INPUT_ROOT, "DESIGN_ROUTE_MAP.md");
 const VIVO_REFERENCE = "https://aigc.vivo.com.cn/#/document/index?id=1746";
 
 const KNOWN_PATH_FIXES = new Map([

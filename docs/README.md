@@ -1,6 +1,6 @@
 # 文档导航
 
-本目录只保留仍在维护的事实源、运行手册和验收入口。2026 年第二季度已经收口的阶段材料统一放在 [`archive/`](archive/README.md)，不再作为当前实现依据或生成器输出目录。
+本目录只保留仍在维护的事实源、运行手册和验收入口。2026 年第二季度已经收口的提示词、状态表、执行日志和审计结果已从当前文件树移除；需要追溯时使用 Git 历史。
 
 ## 先读这些
 
@@ -31,5 +31,7 @@
 ## 文件与生成物约定
 
 - 可重复使用的 Playwright 页面规格位于 [`../tests/fixtures/frontend-replica/page-specs/`](../tests/fixtures/frontend-replica/page-specs/)。
+- Frontend Replica 审计输入位于 [`../tests/fixtures/frontend-replica/audit-inputs/`](../tests/fixtures/frontend-replica/audit-inputs/)，Demo Media 命名输入位于 [`../scripts/fixtures/demo-media/`](../scripts/fixtures/demo-media/)。
 - 审计、截图、测试结果等可再生成材料写入已忽略的 `artifacts/`，不得回写活动文档目录。
-- 归档材料只用于追溯历史决策。新任务不得更新归档状态表，也不得把归档内容重新提升为当前事实源。
+- 不再提交按任务拆分的提示词、一次性实施日志、阶段状态表或生成结果；长期有效的规则应合并进对应主题 README 或事实源。
+- `docs/archive/` 与 `docs/pixel-replica/prompts/` 已被明确忽略，避免退休的过程文档再次进入 GitHub 当前树。

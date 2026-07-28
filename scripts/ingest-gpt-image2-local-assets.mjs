@@ -13,13 +13,12 @@ const publicRoot = path.join(repoRoot, "public");
 const mediaRoot = path.join(publicRoot, "demo-media");
 const outputRoot = path.join(mediaRoot, "gpt-image2");
 const manifestPath = path.join(mediaRoot, "manifest.json");
+// 命名清单是脚本的长期输入，不再依赖已经退出当前树的历史文档归档。
 const m02NamingManifestPath = path.join(
   repoRoot,
-  "docs",
-  "archive",
-  "2026-q2",
+  "scripts",
+  "fixtures",
   "demo-media",
-  "gpt-image2-batches",
   "gpt-image2-file-naming-manifest.json"
 );
 const artifactsRoot = path.join(repoRoot, "artifacts", "demo-media", TASK_ID);
