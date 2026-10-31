@@ -341,6 +341,18 @@ test("runtime banners split real text from fallback illustrations", () => {
   assert.ok(labels.every((label) => !label.includes("真实 AI 生成")));
 });
 
+test("runtime banners accept MaaS text and preserve per-capability media progress", () => {
+  const base = buildStory();
+  const story = buildStory({ source: "ai", fallback: false, fallbackReason: null, providerMeta: { ...base.providerMeta,
+    provider: "maas", textProvider: "maas", textDelivery: "real", imageProvider: "maas-z-image", audioProvider: "maas-tts",
+    imageDelivery: "mixed", audioDelivery: "mixed", diagnostics: { ...base.providerMeta.diagnostics!, image: { ...base.providerMeta.diagnostics!.image, jobStatus: "warming", pendingSceneCount: 1, readySceneCount: 0 }, audio: { ...base.providerMeta.diagnostics!.audio, jobStatus: "warming", pendingSceneCount: 1, readySceneCount: 0 } } } });
+  const items = getRuntimeBannerItemsHotfix(story, true);
+  assert.ok(items.some(item => item.label === "文案：真实 AI"));
+  assert.ok(items.some(item => item.label === "插图生成中"));
+  assert.ok(items.some(item => item.label === "朗读生成中"));
+  assert.ok(items.every(item => !item.label.includes("vivo")));
+});
+
 test("runtime banners hotfix keeps mixed backend audio visible even if current playback was local", () => {
   const baseStory = buildStory();
   const story = buildStory({

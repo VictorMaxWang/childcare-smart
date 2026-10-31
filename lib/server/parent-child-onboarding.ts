@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 
 import { DEFAULT_PARENT_CHILD_CLASS_NAME, getRoleHomePath, type SessionUser } from "@/lib/auth/accounts";
 import type { ApiChild, ApiChildInput, ApiExtendedSnapshot, ApiParentChildOnboardingInput } from "@/lib/api/types";
@@ -120,8 +121,11 @@ function resolveBirthDate(
   }
 
   const ageMonth = typeof input.ageMonth === "number" ? input.ageMonth : 0;
-  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  date.setUTCMonth(date.getUTCMonth() - ageMonth);
+  const [year, month, day] = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(now).split("-").map(Number);
+  // 先定位目标月，再截断日期，避免 3 月 31 日减一月溢出回 3 月。
+  const date = new Date(Date.UTC(year, month - 1 - ageMonth, 1));
+  const daysInMonth = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+  date.setUTCDate(Math.min(day, daysInMonth));
   return date.toISOString().slice(0, 10);
 }
 
@@ -350,7 +354,7 @@ export async function createParentChildWithConsent(
     throw new ApiRouteError("forbidden_scope", "示例账号不能写入真实孩子档案。", 403);
   }
 
-  const validated = validateChildOnboardingInput(input);
+  const validated = validateChildOnboardingInput(input, dependencies.now());
   if (!validated.ok) {
     throw new ApiRouteError("invalid_request", validated.error, 400);
   }
@@ -384,7 +388,27 @@ export async function createParentChildWithConsent(
           createdAt: nowIso,
         });
       const snapshot = normalizeExtendedSnapshot(rawSnapshot, session);
-      const childId = dependencies.createId("c");
+      // 请求 ID 绑定机构和家长，重试命中原档案；不同家长不能借同一 ID 复用他人的儿童。
+      const childId = validated.payload.requestId
+        ? `c-${createHash("sha256").update(`${session.institutionId}\0${session.id}\0${validated.payload.requestId}`).digest("hex").slice(0, 32)}`
+        : dependencies.createId("c");
+      const existingChild = snapshot.children.find((item) => item.id === childId);
+      if (existingChild) {
+        if (!parseChildIds(parentRow.child_ids).includes(childId)) {
+          throw new ApiRouteError("forbidden_scope", "该孩子已不在当前账号的绑定范围内，请确认授权后再操作。", 403);
+        }
+        // 月龄换算固定到首次创建日，跨午夜重试仍命中同一儿童，不产生日期漂移。
+        const createdAt = "createdAt" in existingChild && typeof existingChild.createdAt === "string" ? existingChild.createdAt : "";
+        const originalDate = createdAt ? new Date(createdAt) : now;
+        const identityDate = Number.isNaN(originalDate.getTime()) ? now : originalDate;
+        if (existingChild.parentUserId !== session.id || existingChild.name !== validated.payload.name ||
+            existingChild.birthDate !== resolveBirthDate(validated.payload, identityDate) ||
+            (existingChild.nickname ?? "") !== (validated.payload.nickname ?? "") ||
+            existingChild.gender !== (validated.payload.gender ?? "女")) {
+          throw new ApiRouteError("conflict", "该创建请求已用于其他档案内容，请重新提交。", 409);
+        }
+        return existingChild;
+      }
       const classBinding = session.classId
         ? {
             classId: session.classId,

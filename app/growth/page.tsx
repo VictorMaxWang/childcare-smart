@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   BookHeart,
@@ -71,6 +71,8 @@ export default function GrowthPage() {
     growthRecords,
     addGrowthRecord,
     reloadAppSnapshotFromApi,
+    lastDataSyncAt,
+    dataError,
   } = useApp();
   const [selectedChildId, setSelectedChildId] = useState<string>(visibleChildren[0]?.id ?? "");
   const [category, setCategory] = useState<BehaviorCategory>("情绪表现");
@@ -79,6 +81,8 @@ export default function GrowthPage() {
   const [needsAttention, setNeedsAttention] = useState(false);
   const [selectedIndicators, setSelectedIndicators] = useState<string[]>([]);
   const [savingGrowthRecord, setSavingGrowthRecord] = useState(false);
+  const savingGrowthRecordRef = useRef(false);
+  const [syncingRecords, setSyncingRecords] = useState(false);
   const [filterValue, setFilterValue] = useState("全部");
   const [reviewFilter, setReviewFilter] = useState("全部");
   const [followUpAction, setFollowUpAction] = useState("");
@@ -290,6 +294,13 @@ export default function GrowthPage() {
   }
 
   async function submitRecord() {
+    // React 状态提交前的连续点击也只能启动一次写入，照片重传沿用已保存记录。
+    if (savingGrowthRecordRef.current) return;
+    savingGrowthRecordRef.current = true;
+    try { await persistGrowthRecord(); } finally { savingGrowthRecordRef.current = false; }
+  }
+
+  async function persistGrowthRecord() {
     if (!selectedChildId || !description.trim()) {
       toast.warning("请先补充观察描述。", {
         description: "成长记录至少需要明确对象和具体观察内容。",
@@ -443,7 +454,7 @@ export default function GrowthPage() {
                   {parentChild.className}
                 </Badge>
                 <Badge variant={parentGrowthRecords.length > 0 ? "success" : "outline"} className="rounded-full px-3 py-1">
-                  D01 成长记录 {parentGrowthRecords.length} 条
+                  成长记录 {parentGrowthRecords.length} 条
                 </Badge>
               </div>
               <h1 className="mt-4 flex items-center gap-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
@@ -451,9 +462,17 @@ export default function GrowthPage() {
                 成长档案
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                这里展示老师在成长记录中写入的真实档案数据，刷新后仍来自 D01 store，不插入静态示例。
+                这里汇总老师保存的成长观察与照片，切换孩子后只展示该孩子的授权记录。
+              </p>
+              <p className="mt-2 text-xs text-slate-500" role="status">
+                {syncingRecords ? "正在同步最新记录…" : lastDataSyncAt ? `最近同步：${new Date(lastDataSyncAt).toLocaleString("zh-CN")}` : "正在读取记录"}
+                {dataError ? ` · 同步失败：${dataError}` : ""}
               </p>
             </div>
+            <Button type="button" variant="outline" disabled={syncingRecords} onClick={async () => {
+              setSyncingRecords(true);
+              try { await reloadAppSnapshotFromApi(); } finally { setSyncingRecords(false); }
+            }}>同步最新记录</Button>
             <Button
               type="button"
               variant="outline"
@@ -487,7 +506,7 @@ export default function GrowthPage() {
               <EmptyState
                 icon={<Workflow className="h-6 w-6" />}
                 title="暂无成长记录"
-                description="D01 store 中当前 childId 还没有成长档案记录。"
+                description="当前孩子还没有成长档案记录，老师保存后会在这里展示。"
               />
             </CardContent>
           </Card>
@@ -519,6 +538,7 @@ export default function GrowthPage() {
                             <Badge variant="secondary">{record.createdAt}</Badge>
                           </div>
                           <p className="mt-3 text-sm leading-6 text-slate-700">{description}</p>
+                          <p className="mt-2 text-xs text-slate-500">记录人：{record.createdBy || "未注明"} · 更新：{record.updatedAt || record.createdAt}</p>
                           <GrowthRecordMediaStrip
                             sources={getGrowthMediaSources(payload)}
                             alt={`${parentChild.name} ${category} 成长影像`}

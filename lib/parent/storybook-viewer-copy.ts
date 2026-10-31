@@ -58,6 +58,9 @@ function mapProviderName(kind: "image" | "audio", providerName: string) {
   if (normalized === "vivo-llm") {
     return "vivo 文本生成";
   }
+  if (normalized === "maas-z-image") return "MaaS Z-Image 真实图片";
+  if (normalized === "maas-tts") return "MaaS 真实朗读";
+  if (normalized === "maas" || normalized === "maas-llm") return "MaaS 文本生成";
   if (normalized === "parent-storybook-rule") {
     return "规则故事引擎";
   }

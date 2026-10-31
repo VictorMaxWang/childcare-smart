@@ -62,18 +62,27 @@ export function isChildOnboardingConsentComplete(consents: Partial<ChildOnboardi
   return CHILD_ONBOARDING_CONSENT_KEYS.every((key) => consents[key] === true);
 }
 
-export function validateChildOnboardingInput(input: ApiParentChildOnboardingInput): ChildOnboardingValidationResult {
+export function validateChildOnboardingInput(input: ApiParentChildOnboardingInput, now = new Date()): ChildOnboardingValidationResult {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return { ok: false, error: "档案资料格式无效，请重新填写。" };
+  }
   const name = normalizeText(input.name) || normalizeText(input.nickname);
   const nickname = normalizeText(input.nickname);
   const birthDate = normalizeText(input.birthDate);
   const ageMonthResult = normalizeAgeMonth(input.ageMonth);
 
-  if (!input.consentAccepted) {
+  if (input.consentAccepted !== true) {
     return { ok: false, error: "请先完成监护人确认与协议同意。", field: "consentAccepted" };
   }
 
   if (!name) {
     return { ok: false, error: "请填写孩子姓名或昵称。", field: "name" };
+  }
+  if (name.length > 80 || nickname.length > 80) {
+    return { ok: false, error: "姓名或昵称不能超过 80 个字符。", field: "name" };
+  }
+  if (input.requestId !== undefined && (typeof input.requestId !== "string" || !/^[A-Za-z0-9_-]{16,100}$/.test(input.requestId))) {
+    return { ok: false, error: "创建请求标识无效，请刷新后重试。", field: "requestId" };
   }
 
   if (!ageMonthResult.ok) {
@@ -91,6 +100,16 @@ export function validateChildOnboardingInput(input: ApiParentChildOnboardingInpu
   if (birthDate && !isValidDateKey(birthDate)) {
     return { ok: false, error: "出生日期格式无效。", field: "birthDate" };
   }
+  if (birthDate) {
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+    if (birthDate > today) {
+      return { ok: false, error: "出生日期不能晚于今天。", field: "birthDate" };
+    }
+    const oldest = `${Number(today.slice(0, 4)) - MAX_CHILD_AGE_MONTH / 12}${today.slice(4)}`;
+    if (birthDate < oldest) {
+      return { ok: false, error: "出生日期超出可登记的儿童年龄范围。", field: "birthDate" };
+    }
+  }
 
   const gender = input.gender === "男" || input.gender === "女" ? input.gender : undefined;
   return {
@@ -101,6 +120,7 @@ export function validateChildOnboardingInput(input: ApiParentChildOnboardingInpu
       ...(birthDate ? { birthDate } : { ageMonth: ageMonthResult.value }),
       ...(gender ? { gender } : {}),
       consentAccepted: true,
+      ...(input.requestId ? { requestId: input.requestId } : {}),
     },
   };
 }

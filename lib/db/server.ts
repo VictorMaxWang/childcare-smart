@@ -94,7 +94,8 @@ function getDatabasePoolConfig() {
     connectionLimit: 3,
     maxIdle: 3,
     idleTimeout: 10000,
-    queueLimit: 0,
+    // 2GB 主机保持连接数不变，但限制等待者，避免高峰占满内存后仍无限排队。
+    queueLimit: 20,
     connectTimeout: 5000,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,

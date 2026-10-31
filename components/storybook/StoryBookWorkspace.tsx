@@ -35,7 +35,9 @@ import type {
 } from "@/lib/ai/types";
 import {
   buildParentStoryBookCacheKey,
+  hasParentStoryBookMediaFailure,
   readParentStoryBookCache,
+  resolveParentStoryBookMediaPollDelayMs,
   shouldPollParentStoryBookMedia,
   shouldBypassParentStoryBookCacheOnFirstLoad,
   type ParentStoryBookClientCacheState,
@@ -68,8 +70,6 @@ type StoryBookControls = {
 };
 
 const PAGE_COUNT_OPTIONS = [4, 5, 6, 8] as const satisfies readonly ParentStoryBookPageCount[];
-const MEDIA_POLL_INTERVAL_MS = 2_000;
-const MEDIA_POLL_MAX_DELAY_MS = 70_000;
 const MEDIA_POLL_MAX_ATTEMPTS = 40;
 const STORYBOOK_USER_REQUEST_TIMEOUT_MS = 75_000;
 const STORYBOOK_MEDIA_POLL_TIMEOUT_MS = 50_000;
@@ -87,18 +87,6 @@ function buildMediaStatusPrioritySceneIndices(
     sceneIndex <= sceneCount &&
     list.indexOf(sceneIndex) === index
   );
-}
-
-function resolveMediaPollDelayMs(story: ParentStoryBookResponse) {
-  const imageNextRetryAtMs = story.providerMeta.diagnostics?.image?.nextRetryAtMs;
-  const retryAt = Number(imageNextRetryAtMs);
-  if (Number.isFinite(retryAt) && retryAt > Date.now()) {
-    return Math.min(
-      MEDIA_POLL_MAX_DELAY_MS,
-      Math.max(MEDIA_POLL_INTERVAL_MS, retryAt - Date.now() + 500)
-    );
-  }
-  return MEDIA_POLL_INTERVAL_MS;
 }
 
 function buildStorybookMediaStateKey(story: ParentStoryBookResponse | null) {
@@ -192,10 +180,14 @@ export default function StoryBookWorkspace({
   const [reloadToken, setReloadToken] = useState(0);
   const [fixedStorybookReloadToken, setFixedStorybookReloadToken] = useState(0);
   const [hasManualStorybookOverride, setHasManualStorybookOverride] = useState(false);
+  const [isPageVisible, setIsPageVisible] = useState(true);
+  const [mediaPollStopped, setMediaPollStopped] = useState(false);
   const hasManualStorybookOverrideRef = useRef(false);
   const networkOnlyRef = useRef(false);
   const refreshCurrentOnlyRef = useRef(false);
   const backgroundMediaPollRef = useRef(false);
+  const mediaRequestInFlightRef = useRef(false);
+  const retryFailedMediaRef = useRef(false);
   const activeSceneIndexRef = useRef(0);
   const storyRef = useRef<ParentStoryBookResponse | null>(null);
   const requestRef = useRef<ParentStoryBookRequest | null>(null);
@@ -206,7 +198,7 @@ export default function StoryBookWorkspace({
   const manualStorybookGenerationInFlightRef = useRef(false);
   const activeStoryRequestControllerRef = useRef<AbortController | null>(null);
 
-  const feeds = getParentFeed();
+  const feeds = useMemo(() => getParentFeed(), [getParentFeed]);
   const selectedFeed = useMemo(() => {
     if (parentD01.invalidChildId) {
       return undefined;
@@ -308,6 +300,10 @@ export default function StoryBookWorkspace({
       lastStoryLoadKeyRef.current = null;
       pollingStoryIdRef.current = null;
       pollAttemptRef.current = 0;
+      mediaRequestInFlightRef.current = false;
+      retryFailedMediaRef.current = false;
+      manualStorybookGenerationInFlightRef.current = false;
+      setMediaPollStopped(false);
       setStory(null);
       setStatus(workspaceRole === "teacher" ? "empty" : "loading");
       setErrorMessage(null);
@@ -434,7 +430,14 @@ export default function StoryBookWorkspace({
   ]);
 
   useEffect(() => {
-    if (isRefreshing) {
+    const syncVisibility = () => setIsPageVisible(document.visibilityState !== "hidden");
+    syncVisibility();
+    document.addEventListener("visibilitychange", syncVisibility);
+    return () => document.removeEventListener("visibilitychange", syncVisibility);
+  }, []);
+
+  useEffect(() => {
+    if (isRefreshing || !isPageVisible || mediaPollStopped) {
       return;
     }
     if (!story || !shouldPollParentStoryBookMedia(story)) {
@@ -449,17 +452,20 @@ export default function StoryBookWorkspace({
     }
 
     if (pollAttemptRef.current >= MEDIA_POLL_MAX_ATTEMPTS) {
+      setRefreshMessage("媒体补齐已暂停，已保留当前绘本。可手动刷新查看，失败媒体需确认后重试。");
+      setMediaPollStopped(true);
       return;
     }
 
     const timer = window.setTimeout(() => {
+      if (document.visibilityState === "hidden" || mediaRequestInFlightRef.current) return;
       pollAttemptRef.current += 1;
       backgroundMediaPollRef.current = true;
       setReloadToken((previousToken) => previousToken + 1);
-    }, resolveMediaPollDelayMs(story));
+    }, resolveParentStoryBookMediaPollDelayMs(story, pollAttemptRef.current));
 
     return () => window.clearTimeout(timer);
-  }, [isRefreshing, story]);
+  }, [isRefreshing, isPageVisible, mediaPollStopped, story]);
 
   const requiresTheme =
     draftControls.generationMode === "manual-theme" ||
@@ -547,8 +553,10 @@ export default function StoryBookWorkspace({
 
   const cacheKey = useMemo(() => {
     if (!request) return null;
-    return buildParentStoryBookCacheKey(request, appliedControls.preset);
-  }, [appliedControls.preset, request]);
+    const owner = parentD01.currentUser;
+    return buildParentStoryBookCacheKey(request, appliedControls.preset,
+      `${owner.institutionId}:${owner.id}:${owner.authzVersion ?? 0}`);
+  }, [appliedControls.preset, request, parentD01.currentUser]);
 
   useEffect(() => {
     requestRef.current = request;
@@ -572,7 +580,6 @@ export default function StoryBookWorkspace({
     }
 
     let cancelled = false;
-    let backgroundRetryTimer: number | undefined;
     const controller = new AbortController();
     activeStoryRequestControllerRef.current = controller;
     const bypassCache = networkOnlyRef.current;
@@ -582,8 +589,9 @@ export default function StoryBookWorkspace({
       isLockedLinXiaoyuStorybook && hasManualStorybookOverrideActive && !refreshCurrentOnly;
     const keepUserGenerationRequestAlive =
       !backgroundMediaPoll && (bypassCache || forceNetworkForManualOverride);
-    const shouldTrackManualGeneration =
-      forceNetworkForManualOverride && !backgroundMediaPoll;
+    const shouldTrackManualGeneration = !backgroundMediaPoll && (bypassCache || forceNetworkForManualOverride);
+    const retryFailedMedia = backgroundMediaPoll && retryFailedMediaRef.current;
+    retryFailedMediaRef.current = false;
     backgroundMediaPollRef.current = false;
     const resolvedCacheKey = cacheKey;
     const activeRequestChildId = activeRequest.childId ?? activeRequest.snapshot.child.id;
@@ -598,34 +606,7 @@ export default function StoryBookWorkspace({
     }
     lastStoryLoadKeyRef.current = storyLoadKey;
     if (shouldTrackManualGeneration) {
-      if (manualStorybookGenerationInFlightRef.current) return;
       manualStorybookGenerationInFlightRef.current = true;
-    }
-
-    function scheduleBackgroundMediaRetry() {
-      const currentStory = storyRef.current;
-      if (
-        cancelled ||
-        !backgroundMediaPoll ||
-        !currentStory ||
-        !shouldPollParentStoryBookMedia(currentStory) ||
-        pollAttemptRef.current >= MEDIA_POLL_MAX_ATTEMPTS
-      ) {
-        return;
-      }
-
-      backgroundRetryTimer = window.setTimeout(() => {
-        if (
-          cancelled ||
-          !storyRef.current ||
-          !shouldPollParentStoryBookMedia(storyRef.current) ||
-          pollAttemptRef.current >= MEDIA_POLL_MAX_ATTEMPTS
-        ) {
-          return;
-        }
-        backgroundMediaPollRef.current = true;
-        setReloadToken((previousToken) => previousToken + 1);
-      }, resolveMediaPollDelayMs(currentStory));
     }
 
     if (!backgroundMediaPoll && !bypassCache && !forceNetworkForManualOverride) {
@@ -694,7 +675,7 @@ export default function StoryBookWorkspace({
         workspaceRole === "teacher"
           ? null
           : readParentStoryBookCache(resolvedCacheKey);
-      if (cached && !shouldBypassParentStoryBookCacheOnFirstLoad(cached.story)) {
+      if (cached && (parentD01.currentUser.accountKind === "normal" || !shouldBypassParentStoryBookCacheOnFirstLoad(cached.story))) {
         if (
           storyRef.current?.storyId === cached.story.storyId &&
           storyRef.current.generatedAt === cached.story.generatedAt
@@ -729,7 +710,7 @@ export default function StoryBookWorkspace({
     }
 
     if (
-      workspaceRole === "teacher" &&
+      (workspaceRole === "teacher" || parentD01.currentUser.accountKind === "normal") &&
       !backgroundMediaPoll &&
       !bypassCache &&
       !forceNetworkForManualOverride
@@ -772,6 +753,7 @@ export default function StoryBookWorkspace({
         controller.abort();
       }, backgroundMediaPoll ? STORYBOOK_MEDIA_POLL_TIMEOUT_MS : STORYBOOK_USER_REQUEST_TIMEOUT_MS);
       try {
+        if (backgroundMediaPoll) mediaRequestInFlightRef.current = true;
         const requestHeaders = new Headers({
           "Content-Type": "application/json",
         });
@@ -784,7 +766,7 @@ export default function StoryBookWorkspace({
           if (
             !mediaStatusStory ||
             mediaStatusStory.childId !== activeRequestChildId ||
-            !shouldPollParentStoryBookMedia(mediaStatusStory)
+            (!retryFailedMedia && !shouldPollParentStoryBookMedia(mediaStatusStory))
           ) {
             return;
           }
@@ -798,7 +780,8 @@ export default function StoryBookWorkspace({
                   mediaStatusStory,
                   activeSceneIndexRef.current
                 ),
-                retryFailed: true,
+                // 轮询只补未开始的页；失败任务仅经专门按钮确认后才允许重开。
+                retryFailed: retryFailedMedia,
                 story: mediaStatusStory,
               }
             : null;
@@ -869,6 +852,14 @@ export default function StoryBookWorkspace({
         const shouldPersistGeneratedStorybook =
           !forceNetworkForManualOverride &&
           (!backgroundMediaPoll || mediaStateChanged);
+        if (!backgroundMediaPoll) {
+          // 先展示已返回的文字，持久化与媒体补齐不阻塞阅读。
+          startTransition(() => {
+            setStory(data);
+            setStatus(data.mode);
+            setIsRefreshing(false);
+          });
+        }
         const storybookSaveResult =
           parentD01.currentUser.accountKind !== "normal" &&
           selectedFeed &&
@@ -914,9 +905,9 @@ export default function StoryBookWorkspace({
               storybookSaveResult?.status === "failed"
                 ? `生成完成，但保存到 D01 失败：${storybookSaveResult.error ?? storybookSaveResult.message}`
                 : apiStorybookSaveError
-                  ? `本地演示已保存，但 E01 绘本服务保存失败：${apiStorybookSaveError}`
+                  ? `绘本已生成，但服务端保存失败：${apiStorybookSaveError}。请勿重新生成，可保留页面后重试保存。`
                   : apiStorybookSaved
-                    ? "绘本已保存到 E01 服务，语音可分享/导出；刷新后仍存在。"
+                    ? "绘本已保存，刷新后仍可继续阅读；图片和音频的完成状态以各页标识为准。"
                     : storybookSaveResult?.status === "local_only"
                       ? "本地演示已保存到 D01，刷新后仍存在。"
                       : null
@@ -942,8 +933,9 @@ export default function StoryBookWorkspace({
         if (backgroundMediaPoll && storyRef.current) {
           startTransition(() => {
             setIsRefreshing(false);
+            setMediaPollStopped(true);
+            setRefreshMessage("媒体补齐请求未完成，已保留当前绘本并暂停自动请求；结果未知时不会自动重复计费。可确认后重试失败媒体。");
           });
-          scheduleBackgroundMediaRetry();
           return;
         }
 
@@ -965,6 +957,7 @@ export default function StoryBookWorkspace({
           setCacheState({ kind: "none" });
         });
       } finally {
+        if (backgroundMediaPoll) mediaRequestInFlightRef.current = false;
         window.clearTimeout(requestTimeout);
         if (activeStoryRequestControllerRef.current === controller) {
           activeStoryRequestControllerRef.current = null;
@@ -978,9 +971,6 @@ export default function StoryBookWorkspace({
     void loadStory();
 
     return () => {
-      if (backgroundRetryTimer !== undefined) {
-        window.clearTimeout(backgroundRetryTimer);
-      }
       if (!keepUserGenerationRequestAlive) {
         cancelled = true;
         controller.abort();
@@ -1063,7 +1053,8 @@ export default function StoryBookWorkspace({
       const shared = await shareStorybook(story.storyId, { summary: shareSummary });
       let copied = false;
       try {
-        await navigator.clipboard?.writeText(shared.copyText);
+        if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+        await navigator.clipboard.writeText(shared.copyText);
         copied = true;
       } catch {
         copied = false;
@@ -1074,8 +1065,8 @@ export default function StoryBookWorkspace({
             ? "已复制带今晚行动的绘本分享文案。"
             : "已复制绘本分享文案。"
           : shareIncludesTonightAction
-            ? "已生成带今晚行动的绘本分享文案；浏览器未允许自动复制。"
-            : "已生成绘本分享文案；浏览器未允许自动复制。"
+            ? `已生成带今晚行动的绘本分享文案，浏览器未允许自动复制。\n${shared.copyText}`
+            : `已生成绘本分享文案，浏览器未允许自动复制。\n${shared.copyText}`
       );
     } catch (error) {
       setStorybookActionStatus(error instanceof Error ? error.message : "成长绘本分享失败。");
@@ -1199,13 +1190,24 @@ export default function StoryBookWorkspace({
         setDraftControls((current) => ({ ...current, customStyleNegativePrompt }))
       }
       onGenerate={() => {
-        if (!canGenerate) return;
+        if (!canGenerate || manualStorybookGenerationInFlightRef.current) return;
+        manualStorybookGenerationInFlightRef.current = true;
+        setMediaPollStopped(false);
+        pollAttemptRef.current = 0;
         hasManualStorybookOverrideRef.current = true;
         setHasManualStorybookOverride(true);
         networkOnlyRef.current = true;
         setAppliedControls(draftControls);
         setReloadToken((previousToken) => previousToken + 1);
       }}
+      onRetryMedia={story && (mediaPollStopped || hasParentStoryBookMediaFailure(story)) ? () => {
+        if (mediaRequestInFlightRef.current || !window.confirm("仅重试失败媒体，可能产生新的 API 费用；结果未知的请求不会自动重发。确认继续吗？")) return;
+        setMediaPollStopped(false);
+        pollAttemptRef.current = 0;
+        retryFailedMediaRef.current = true;
+        backgroundMediaPollRef.current = true;
+        setReloadToken((previousToken) => previousToken + 1);
+      } : undefined}
       onRetry={() => {
         if (isLockedLinXiaoyuStorybook && !hasManualStorybookOverrideActive) {
           setFixedStorybookReloadToken((previousToken) => previousToken + 1);
@@ -1222,6 +1224,9 @@ export default function StoryBookWorkspace({
         const currentStory = storyRef.current;
         if (
           !isRefreshing &&
+          !mediaPollStopped &&
+          !mediaRequestInFlightRef.current &&
+          document.visibilityState !== "hidden" &&
           currentStory &&
           shouldPollParentStoryBookMedia(currentStory)
         ) {

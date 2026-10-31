@@ -28,6 +28,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { buildParentHomeStatusCopy } from "@/lib/parent/home-status-copy";
 
 type ParentPixelTone = "blue" | "green" | "orange" | "violet" | "sky";
 type ParentPixelBadgeVariant = "success" | "warning" | "info" | "secondary" | "outline";
@@ -73,6 +74,8 @@ export interface PixelParentHomeReplicaProps {
   allergies: string[];
   statusLabel: string;
   statusVariant: ParentPixelBadgeVariant;
+  hasRecords?: boolean;
+  dataUpdatedAt?: string | null;
   careMode: boolean;
   onCareModeChange: (nextValue: boolean) => void;
   agentHref: string;
@@ -85,6 +88,7 @@ export interface PixelParentHomeReplicaProps {
   statusItems: ParentPixelStatusItem[];
   reminders: ParentPixelReminderItem[];
   aiTitle: string;
+  aiProvenance?: "loading" | "ai" | "local-rule";
   aiDescription: string;
   tonightTitle: string;
   tonightDescription: string;
@@ -120,6 +124,8 @@ export default function PixelParentHomeReplica({
   allergies,
   statusLabel,
   statusVariant,
+  hasRecords = false,
+  dataUpdatedAt,
   careMode,
   onCareModeChange,
   agentHref,
@@ -132,6 +138,7 @@ export default function PixelParentHomeReplica({
   statusItems,
   reminders,
   aiTitle,
+  aiProvenance = "local-rule",
   aiDescription,
   tonightTitle,
   tonightDescription,
@@ -141,6 +148,7 @@ export default function PixelParentHomeReplica({
   trendPoints,
   hasPendingFeedback,
 }: PixelParentHomeReplicaProps) {
+  const statusCopy = buildParentHomeStatusCopy({ childName, todayText, hasRecords, dataUpdatedAt, aiProvenance });
   const displayImages = growthImages.slice(0, 4);
   const temperaturePoints = trendPoints.filter((point) => typeof point.temp === "number");
   const moodPoints = trendPoints.filter((point) => typeof point.mood === "number");
@@ -181,7 +189,7 @@ export default function PixelParentHomeReplica({
                 {currentUserName}，晚上好！
               </h1>
               <p className="mt-2 break-words text-sm leading-6 text-slate-600 sm:mt-3 sm:text-lg sm:leading-8">
-                {todayText}，{childName} 今天状态良好，快来看看今晚建议吧～
+                {statusCopy.greeting}
               </p>
             </div>
           </section>
@@ -246,7 +254,7 @@ export default function PixelParentHomeReplica({
               <div className="flex items-center gap-2 sm:gap-4">
                 <h2 className="text-xl font-black tracking-normal text-slate-950 sm:text-2xl">今日状态</h2>
                 <span className="h-5 w-px bg-slate-200" />
-                <span className="text-xs text-slate-400 sm:text-sm">更新于 18:30</span>
+                <span className="text-xs text-slate-400 sm:text-sm">{statusCopy.updateLabel}</span>
               </div>
               <Badge variant={statusVariant} className="rounded-full px-3 py-1.5 text-sm sm:px-4 sm:py-2 sm:text-base">
                 <ShieldCheck className="mr-1.5 h-4 w-4" />
@@ -331,16 +339,16 @@ export default function PixelParentHomeReplica({
                 <div className="flex items-center gap-3">
                   <MoonStar className="h-7 w-7 text-violet-600" />
                   <h2 className="text-2xl font-black tracking-normal text-slate-950">今晚建议怎么做</h2>
-                  <Badge variant="info" className="rounded-full">AI</Badge>
+                  <Badge variant="info" className="rounded-full">{aiProvenance === "ai" ? "AI" : "记录提示"}</Badge>
                 </div>
-                <p className="mt-3 font-semibold text-violet-600">根据{childName}近7天数据分析</p>
+                <p className="mt-3 font-semibold text-violet-600">{aiProvenance === "ai" ? `AI 根据${childName}近7天记录生成` : `根据${childName}已保存记录整理，尚未生成 AI 方案`}</p>
                 <p className="mt-2 text-lg leading-8 text-slate-700">{aiTitle}</p>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   {[
                     [tonightTitle, tonightDescription],
                     ["为什么推荐", whyRecommended],
                     ["温和陪伴", aiDescription],
-                    ["营养加分", teacherFocus],
+                    ["建议回看", teacherFocus],
                   ].map(([title, helper]) => (
                     <div key={title} className="rounded-[18px] border border-white bg-white/80 px-4 py-3">
                       <p className="font-semibold text-slate-950">{title}</p>
@@ -510,13 +518,13 @@ export default function PixelParentHomeReplica({
           <section className="rounded-[28px] border border-amber-200 bg-[linear-gradient(135deg,#fffaf0_0%,#fff_58%,#f4fbff_100%)] p-5 shadow-[0_18px_56px_rgb(251_191_36_/_0.12)]">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-xl font-black text-slate-950">明天老师将重点关注</h3>
+                <h3 className="text-xl font-black text-slate-950">{statusCopy.focusTitle}</h3>
                 <p className="mt-2 text-base leading-7 text-slate-600">{teacherFocus}</p>
               </div>
-              <Badge variant="warning" className="rounded-full">明日重点</Badge>
+              <Badge variant="warning" className="rounded-full">{statusCopy.focusSource}</Badge>
             </div>
             <div className="mt-5 rounded-[22px] bg-white/80 px-4 py-3 text-sm leading-6 text-slate-600">
-              情绪稳定与同伴互动，鼓励主动表达与分享。
+              可把这条建议发给老师，共同确认后续观察安排。
             </div>
           </section>
 

@@ -74,3 +74,8 @@ test("getStoryBookPresetCopy returns preset metadata", () => {
   assert.equal(preset.shortLabel, "森林");
   assert.match(preset.description, /活泼|绘本|演示/);
 });
+
+test("MaaS media labels identify the configured provider without a Vivo claim", () => {
+  assert.equal(formatStoryBookProviderLabel("image", "maas-z-image"), "插画：MaaS Z-Image 真实图片");
+  assert.equal(formatStoryBookProviderLabel("audio", "maas-tts"), "音频：MaaS 真实朗读");
+});

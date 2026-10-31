@@ -166,6 +166,47 @@ test("parent child onboarding rejects consentAccepted=false before DB writes", a
   assert.deepEqual(fixture.state().consents, []);
 });
 
+test("retrying an onboarding request returns the existing child and does not duplicate consent", async () => {
+  const fixture = createFixture();
+  const input = { name: "重试验收儿童", birthDate: "2023-05-10", consentAccepted: true, requestId: "onboarding-retry-20261031" };
+  const first = await createParentChildWithConsent(parentSession(), input, {}, fixture.dependencies);
+  const retry = await createParentChildWithConsent(parentSession(), input, {}, fixture.dependencies);
+  assert.equal(first.id, retry.id);
+  assert.equal((fixture.state().snapshot as ApiExtendedSnapshot).children.length, 1);
+  assert.equal(fixture.state().consents.length, 3);
+  assert.equal((fixture.state().userRow.child_ids as string[]).length, 1);
+  await assert.rejects(createParentChildWithConsent(parentSession(), { ...input, name: "另一个儿童" }, {}, fixture.dependencies), assertApiError("conflict"));
+  assert.equal((fixture.state().snapshot as ApiExtendedSnapshot).children.length, 1);
+});
+
+test("onboarding a month-old child at month end clamps the inferred birthday", async () => {
+  const fixture = createFixture();
+  const child = await createParentChildWithConsent(parentSession(), { name: "月末验收", ageMonth: 1, consentAccepted: true }, {}, { ...fixture.dependencies, now: () => new Date("2026-03-31T12:00:00Z") });
+  assert.equal(child.birthDate, "2026-02-28");
+});
+
+test("onboarding retry cannot return a child after the current database binding is removed", async () => {
+  const fixture = createFixture();
+  const input = { name: "解除绑定验收", ageMonth: 24, consentAccepted: true, requestId: "revoked-retry-20261031" };
+  await createParentChildWithConsent(parentSession(), input, {}, fixture.dependencies);
+  fixture.state().userRow.child_ids = [];
+  await assert.rejects(createParentChildWithConsent(parentSession(), input, {}, fixture.dependencies), assertApiError("forbidden_scope"));
+  assert.equal(fixture.state().consents.length, 3);
+});
+
+test("age-based onboarding follows the business date and remains idempotent across midnight", async () => {
+  const fixture = createFixture();
+  let now = new Date("2026-10-31T18:00:00Z");
+  const dependencies = { ...fixture.dependencies, now: () => now };
+  const input = { name: "跨日验收", ageMonth: 0, consentAccepted: true, requestId: "business-date-request-20261031" };
+  const first = await createParentChildWithConsent(parentSession(), input, {}, dependencies);
+  assert.equal(first.birthDate, "2026-11-01");
+  now = new Date("2026-11-02T01:00:00Z");
+  const retry = await createParentChildWithConsent(parentSession(), input, {}, dependencies);
+  assert.equal(retry.id, first.id); assert.equal(retry.birthDate, first.birthDate);
+  assert.equal(fixture.state().consents.length, 3);
+});
+
 test("parent child onboarding creates child, child_ids, and three consent records in scope", async () => {
   const fixture = createFixture();
   const child = await createParentChildWithConsent(

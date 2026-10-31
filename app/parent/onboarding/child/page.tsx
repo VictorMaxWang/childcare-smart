@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Baby, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
@@ -55,6 +55,9 @@ export default function ParentChildOnboardingPage() {
   const [consents, setConsents] = useState<ChildOnboardingConsentState>(() => createEmptyChildOnboardingConsents());
   const [submitting, setSubmitting] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const submittingRef = useRef(false);
+  const lastRequestRef = useRef<{ input: string; id: string } | null>(null);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const validation = useMemo(
     () =>
       buildParentChildOnboardingPayload({
@@ -75,6 +78,7 @@ export default function ParentChildOnboardingPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submittingRef.current) return;
     const result = buildParentChildOnboardingPayload({
       name,
       nickname,
@@ -89,10 +93,15 @@ export default function ParentChildOnboardingPage() {
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     setLastError(null);
     try {
-      const child = await createParentChildWithConsent(result.payload);
+      const serialized = JSON.stringify(result.payload);
+      if (lastRequestRef.current?.input !== serialized) {
+        lastRequestRef.current = { input: serialized, id: crypto.randomUUID() };
+      }
+      const child = await createParentChildWithConsent({ ...result.payload, requestId: lastRequestRef.current.id });
       const reloadResult = await reloadAppSnapshotFromApi();
       if (reloadResult.status === "failed") {
         toast.warning("孩子档案已创建，但本地快照刷新失败，请手动刷新页面。");
@@ -105,6 +114,7 @@ export default function ParentChildOnboardingPage() {
       setLastError(message);
       toast.error("孩子成长档案创建失败", { description: message });
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -133,7 +143,7 @@ export default function ParentChildOnboardingPage() {
           </div>
         </div>
 
-        <form className="mt-6 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-6 space-y-6" onSubmit={handleSubmit} aria-busy={submitting}>
           <div className="grid gap-5 sm:grid-cols-2">
             <FormField label="孩子姓名 / 昵称" htmlFor="child-name" required>
               <Input
@@ -142,6 +152,8 @@ export default function ParentChildOnboardingPage() {
                 onChange={(event) => setName(event.target.value)}
                 placeholder="小雨"
                 autoComplete="off"
+                maxLength={80}
+                disabled={submitting}
               />
             </FormField>
             <FormField label="常用昵称" htmlFor="child-nickname">
@@ -151,18 +163,22 @@ export default function ParentChildOnboardingPage() {
                 onChange={(event) => setNickname(event.target.value)}
                 placeholder="可选"
                 autoComplete="off"
+                maxLength={80}
+                disabled={submitting}
               />
             </FormField>
             <FormField label="出生日期" htmlFor="child-birth-date" required>
               <Input
                 id="child-birth-date"
                 type="date"
+                max={today}
+                disabled={submitting}
                 value={birthDate}
                 onChange={(event) => setBirthDate(event.target.value)}
               />
             </FormField>
             <FormField label="性别" htmlFor="child-gender">
-              <Select value={gender || "unspecified"} onValueChange={(value) => setGender(value === "unspecified" ? "" : (value as ApiChildInput["gender"]))}>
+              <Select disabled={submitting} value={gender || "unspecified"} onValueChange={(value) => setGender(value === "unspecified" ? "" : (value as ApiChildInput["gender"]))}>
                 <SelectTrigger id="child-gender">
                   <SelectValue placeholder="可选" />
                 </SelectTrigger>
@@ -189,6 +205,7 @@ export default function ParentChildOnboardingPage() {
                   <input
                     type="checkbox"
                     checked={consents[item.key]}
+                    disabled={submitting}
                     onChange={(event) => updateConsent(item.key, event.target.checked)}
                     className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                   />
@@ -206,7 +223,7 @@ export default function ParentChildOnboardingPage() {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-5 text-slate-500">
-              提交后将写入当前家长账号的真实家庭空间，并记录三项同意。
+              {!validation.ok ? validation.error : "提交后将写入当前家长账号的真实家庭空间，并记录三项同意。"}
             </p>
             <Button type="submit" loading={submitting} disabled={!canSubmit}>
               创建孩子成长档案

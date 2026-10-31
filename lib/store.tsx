@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { normalizeAppStateSnapshot, type AppStateSnapshot } from "@/lib/persistence/snapshot";
+import { fetchSessionState } from "@/lib/persistence/state-client";
 import {
   filterChildrenForSessionUser,
   mergeScopedSnapshotIntoInstitutionSnapshot,
@@ -384,6 +385,7 @@ interface AppContextType {
   authError: string | null;
   retryAuth: () => void;
   dataError: string | null;
+  lastDataSyncAt: string | null;
   retryData: () => void;
   login: (phone: string, password: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
   loginWithDemo: (accountId: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
@@ -4764,6 +4766,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   const [authRetryToken, setAuthRetryToken] = useState(0);
   const [dataLoading, setDataLoading] = useState(true);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [lastDataSyncAt, setLastDataSyncAt] = useState<string | null>(null);
   const [dataRetryToken, setDataRetryToken] = useState(0);
   const [childrenList, setChildrenList] = useState<Child[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -4793,6 +4796,9 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       : isDemoUser
         ? buildDemoNamespaceForInstitution(currentUser.institutionId)
         : null;
+  const snapshotOwnerToken = `${currentStorageNamespace}:${currentUser.authzVersion ?? 0}:${currentUser.classId ?? ""}:${(currentUser.childIds ?? []).join(",")}`;
+  const snapshotOwnerRef = useRef(snapshotOwnerToken);
+  snapshotOwnerRef.current = snapshotOwnerToken;
   const snapshotStateRef = useRef({
     children: [] as Child[],
     attendance: [] as AttendanceRecord[],
@@ -5053,6 +5059,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     let active = true;
     setDataLoading(true);
     setDataError(null);
+    setLastDataSyncAt(null);
 
     const loadSnapshotForUser = async () => {
       if (!isAuthenticated) {
@@ -5088,12 +5095,13 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         const hydratedDemoSnapshot = hydrateDemoSnapshotForToday(demoSnapshot);
         let nextDemoSnapshot = hydratedDemoSnapshot;
         try {
-          const response = await fetch("/api/state", { cache: "no-store" });
+          const response = await fetchSessionState(`${currentStorageNamespace}:${currentUser.id}:${currentUser.authzVersion ?? 0}:${currentUser.classId ?? ""}:${(currentUser.childIds ?? []).join(",")}`);
           const data = (await response.json().catch(() => null)) as
             | { ok?: boolean; snapshot?: AppStateSnapshot | null }
             | null;
           const apiSnapshot = normalizeAppStateSnapshot(data?.snapshot);
           if (active && response.ok && data?.ok && apiSnapshot) {
+            setLastDataSyncAt(new Date().toISOString());
             nextDemoSnapshot = mergeScopedSnapshotIntoInstitutionSnapshot({
               currentSnapshot: hydratedDemoSnapshot,
               incomingSnapshot: apiSnapshot,
@@ -5129,7 +5137,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       lastSyncedSnapshotKeyRef.current = null;
 
       try {
-        const response = await fetch("/api/state", { cache: "no-store" });
+        const response = await fetchSessionState(`${currentStorageNamespace}:${currentUser.id}:${currentUser.authzVersion ?? 0}:${currentUser.classId ?? ""}:${(currentUser.childIds ?? []).join(",")}`);
         const data = (await response.json().catch(() => null)) as
           | {
               ok?: boolean;
@@ -5157,6 +5165,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         const scopedSnapshot = scopeSnapshotForSessionUser(data.snapshot, currentUser);
         applySnapshot(scopedSnapshot);
         lastSyncedSnapshotKeyRef.current = JSON.stringify(scopedSnapshot);
+        setLastDataSyncAt(new Date().toISOString());
       } catch {
         if (active) {
           setDataError(
@@ -5240,13 +5249,19 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
 
   const reloadAppSnapshotFromApi = useCallback(async (): Promise<PersistAppSnapshotResult> => {
     const persistedAt = new Date().toISOString();
+    const ownerNamespace = currentStorageNamespace;
+    const ownerToken = `${currentStorageNamespace}:${currentUser.authzVersion ?? 0}:${currentUser.classId ?? ""}:${(currentUser.childIds ?? []).join(",")}`;
     try {
-      const response = await fetch("/api/state", { cache: "no-store" });
+      const response = await fetchSessionState(`${ownerNamespace}:${currentUser.id}:${currentUser.authzVersion ?? 0}:${currentUser.classId ?? ""}:${(currentUser.childIds ?? []).join(",")}`);
       const data = (await response.json().catch(() => null)) as
         | { ok?: boolean; snapshot?: AppStateSnapshot | null; isDemo?: boolean; error?: string }
         | null;
       const apiSnapshot = normalizeAppStateSnapshot(data?.snapshot);
+      if (snapshotOwnerRef.current !== ownerToken) {
+        return { status: "failed", syncStatus: "failed", message: "账号已切换，未应用旧账号的同步结果。", persistedAt, error: "snapshot_owner_changed" };
+      }
       if (!response.ok || !data?.ok || !apiSnapshot) {
+        setDataError(data?.error || "读取最新记录失败，请稍后重新同步。");
         return {
           status: "failed",
           syncStatus: "failed",
@@ -5254,6 +5269,11 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
           persistedAt,
           error: data?.error ?? "api_state_reload_failed",
         };
+      }
+      setLastDataSyncAt(persistedAt);
+      setDataError(null);
+      if (!isDemoUser && lastSyncedSnapshotKeyRef.current === JSON.stringify(apiSnapshot)) {
+        return { status: "saved", syncStatus: "remote_synced", message: "已是最新记录。", persistedAt };
       }
 
       const baseSnapshot = isDemoUser
@@ -5273,7 +5293,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       if (isDemoUser) {
         fullDemoSnapshotRef.current = mergedSnapshot;
       }
-      if (currentStorageNamespace) {
+      if (isDemoUser && currentStorageNamespace) {
         writeScopedSnapshot(currentStorageNamespace, mergedSnapshot);
       }
       const scopedSnapshot = scopeSnapshotForSessionUser(mergedSnapshot, currentUser);
@@ -5286,6 +5306,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         persistedAt,
       };
     } catch (error) {
+      if (snapshotOwnerRef.current === ownerToken) setDataError("暂时无法同步最新记录，当前保留上次读取的内容。");
       return {
         status: "failed",
         syncStatus: "failed",
@@ -5303,6 +5324,25 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
   ]);
 
   useEffect(() => {
+    if (!isNormalUser || authLoading || dataLoading) return;
+    let refreshedAt = 0;
+    const refreshVisible = () => {
+      if (document.visibilityState !== "visible" || Date.now() - refreshedAt < 10_000) return;
+      refreshedAt = Date.now();
+      void reloadAppSnapshotFromApi();
+    };
+    // 只在可见页面同步；家长无需重新登录即可看到教师另一会话刚写入的记录。
+    window.addEventListener("focus", refreshVisible);
+    document.addEventListener("visibilitychange", refreshVisible);
+    const timer = window.setInterval(refreshVisible, 30_000);
+    return () => {
+      window.removeEventListener("focus", refreshVisible);
+      document.removeEventListener("visibilitychange", refreshVisible);
+      window.clearInterval(timer);
+    };
+  }, [authLoading, dataLoading, isNormalUser, reloadAppSnapshotFromApi]);
+
+  useEffect(() => {
     if (authLoading || dataLoading || !currentStorageNamespace) {
       return;
     }
@@ -5318,7 +5358,9 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       return;
     }
 
-    writeScopedSnapshot(currentStorageNamespace, remoteSnapshot);
+    // 普通账号的服务端数据已持久化，此处仅维护本地读取缓存，合并短时间连续变更。
+    const timer = window.setTimeout(() => writeScopedSnapshot(currentStorageNamespace, remoteSnapshot), 150);
+    return () => window.clearTimeout(timer);
   }, [authLoading, currentStorageNamespace, currentUser, dataLoading, isDemoUser, remoteSnapshot]);
 
   const visibleChildren = useMemo(() => filterChildrenByUser(childrenList, currentUser), [childrenList, currentUser]);
@@ -6475,6 +6517,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     authError,
     retryAuth,
     dataError,
+    lastDataSyncAt,
     retryData,
     loginWithDemo,
     register,
@@ -6561,6 +6604,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     authError,
     retryAuth,
     dataError,
+    lastDataSyncAt,
     retryData,
     loginWithDemo,
     register,

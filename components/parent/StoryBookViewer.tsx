@@ -64,6 +64,7 @@ import {
   getStoryBookPresetCopy,
 } from "@/lib/parent/storybook-viewer-copy";
 import { cn } from "@/lib/utils";
+import { buildPrimaryNavItems } from "@/lib/navigation/primary-nav";
 import {
   getBrowserTtsSupport,
   resolvePreferredBrowserTtsVoice,
@@ -1010,7 +1011,7 @@ function resolveStoryBookAiGenerationStatus(story: StoryBookRuntimeResponse): {
     normalizeStoryBookReason(story.providerMeta.fallbackReason);
   const textDelivery = story.providerMeta.textDelivery;
   const textProvider = story.providerMeta.textProvider ?? story.providerMeta.provider;
-  const realTextProvider = /(?:vivo|qwen|dashscope|llm|ai)/iu.test(textProvider ?? "");
+  const realTextProvider = /(?:vivo|qwen|dashscope|llm|ai|maas)/iu.test(textProvider ?? "");
 
   // Brain 仅负责脚手架时可以独立降级；真实文本供应商成功后仍应如实显示“真实 AI”。
   if (textDelivery === "real" && realTextProvider && !declaredTextFallbackReason) {
@@ -1349,6 +1350,7 @@ export default function StoryBookViewer({
   onCustomStyleNegativePromptChange,
   onGenerate,
   onRetry,
+  onRetryMedia,
   onActiveSceneChange,
   onExportStorybook,
   onShareStorybook,
@@ -1394,6 +1396,7 @@ export default function StoryBookViewer({
   onCustomStyleNegativePromptChange: (value: string) => void;
   onGenerate: () => void;
   onRetry?: () => void;
+  onRetryMedia?: () => void;
   onActiveSceneChange?: (index: number) => void;
   onExportStorybook?: (format: StorybookExportFormat) => void;
   onShareStorybook?: () => void;
@@ -1507,21 +1510,15 @@ export default function StoryBookViewer({
   const previewScenes = story?.scenes.slice(0, 3) ?? [];
   const firstPreviewScene = previewScenes[0];
   const storyStats = [
-    { label: "故事记录", value: story ? `${story.scenes.length}` : `${pageCount}`, icon: BookOpenText },
-    { label: "成长里程碑", value: story ? `${story.providerMeta.highlightCount}` : "7", icon: Sparkles },
-    { label: "教师评论", value: story ? `${Math.max(3, story.providerMeta.sceneCount + 2)}` : "15", icon: MessageCircle },
-    { label: "精彩瞬间", value: story ? `${story.providerMeta.sceneCount * 8}` : "68", icon: ImageIcon },
+    { label: "绘本页数", value: `${story?.scenes.length ?? 0}`, icon: BookOpenText },
+    { label: "成长记录", value: `${sourceSummary.find(item => item.label === "成长")?.value ?? 0}`, icon: Sparkles },
+    { label: "家园反馈", value: `${sourceSummary.find(item => item.label === "家园反馈")?.value ?? 0}`, icon: MessageCircle },
+    { label: "真实插图", value: `${story?.scenes.filter(scene => scene.imageSourceKind === "real" && scene.imageStatus === "ready" && scene.imageUrl).length ?? 0}`, icon: ImageIcon },
   ];
-  const milestoneItems = previewScenes.length > 0
-    ? previewScenes.map((scene) => ({
+  const milestoneItems = previewScenes.map((scene) => ({
         title: scene.sceneTitle,
         helper: formatStoryBookHighlightSource(scene.highlightSource),
-      }))
-    : [
-        { title: "独立进餐", helper: "学会独立使用勺子进餐" },
-        { title: "语言表达", helper: "使用完整句子表达想法" },
-        { title: "社交互动", helper: "主动与小朋友分享玩具" },
-      ];
+      }));
 
   return (
     <div
@@ -1553,27 +1550,23 @@ export default function StoryBookViewer({
               </div>
             </div>
             <nav className="mt-8 space-y-2 text-sm font-semibold text-slate-500">
-              {[
-                ["家园沟通", MessageCircle],
-                ["成长档案", CalendarDays],
-                ["成长绘本", BookOpenText],
-                ["健康管理", Sparkles],
-                ["营养餐谱", ImageIcon],
-                ["日常提醒", Radio],
-              ].map(([label, Icon]) => {
-                const IconComponent = Icon as typeof BookOpenText;
-                const active = label === "成长绘本";
+              {buildPrimaryNavItems("家长", { childId: selectedChildId ?? undefined }).filter(item => !["parent", "ai"].includes(item.icon)).map(item => {
+                // 绘本独立侧栏复用全站导航，避免所有入口回到首页或遗漏新增课程。
+                const icons = { feedback: MessageCircle, growth: CalendarDays, storybook: BookOpenText, health: Sparkles, diet: ImageIcon, reminders: Radio };
+                const IconComponent = icons[item.icon as keyof typeof icons] ?? BookOpenText;
+                const active = item.href.split("?")[0] === "/parent/storybook";
                 return (
                   <a
-                    key={label as string}
-                    href={active ? undefined : parentHref}
+                    key={item.href}
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
                     className={cn(
                       "flex items-center gap-3 rounded-2xl px-3 py-3 transition",
                       active ? "bg-violet-50 text-violet-600" : "hover:bg-slate-50"
                     )}
                   >
                     <IconComponent className="h-4 w-4" />
-                    {label as string}
+                    {item.label}
                   </a>
                 );
               })}
@@ -1694,7 +1687,7 @@ export default function StoryBookViewer({
               <Button
                 type="button"
                 className={cn("w-full rounded-full shadow-sm sm:w-auto", theme.accent)}
-                disabled={!canGenerate}
+                disabled={!canGenerate || isRefreshing}
                 data-testid={isTeacherWorkspace ? "teacher-storybook-generate" : undefined}
                 onClick={onGenerate}
               >
@@ -1774,27 +1767,27 @@ export default function StoryBookViewer({
             <div className="rounded-[1.5rem] border border-white bg-white/90 p-4 shadow-sm">
               <div className="flex items-start gap-4">
                 <div className="hidden w-20 shrink-0 text-center text-sm font-semibold text-violet-500 sm:block">
-                  今天<br />05-12
+                  {story ? "生成于" : "待生成"}<br />
+                  {story?.generatedAt ? new Date(story.generatedAt).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" }) : "—"}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="info">探索发现</Badge>
-                    <Badge variant="secondary">户外活动</Badge>
-                    <Badge variant="warning">教师精选</Badge>
+                    <Badge variant="info">绘本片段</Badge>
+                    <Badge variant="secondary">{firstPreviewScene ? formatStoryBookHighlightSource(firstPreviewScene.highlightSource) : "尚未生成"}</Badge>
                   </div>
                   <h3 className="mt-3 text-xl font-bold text-slate-950">
-                    {firstPreviewScene?.sceneTitle ?? `与大自然的亲密接触`}
+                    {firstPreviewScene?.sceneTitle ?? "还没有成长故事"}
                   </h3>
                   <p className="mt-2 text-sm leading-7 text-slate-600">
-                    {firstPreviewScene?.sceneText ?? `${selectedChildName ?? "孩子"}和伙伴们一起观察小花和小昆虫，用放大镜发现了属于自己的秘密。`}
+                    {firstPreviewScene?.sceneText ?? "生成后将在这里展示故事第一页。故事情节不等同于孩子的真实成长记录。"}
                   </p>
                   <div className="relative mt-4 aspect-[455/147] overflow-hidden rounded-2xl bg-slate-100">
-                    <StoryBookImage
-                      src="/pixel-replica/parent/parent-storybook-main-photos.png"
-                      alt="成长瞬间"
+                    {firstPreviewScene?.imageUrl ? <StoryBookImage
+                      src={firstPreviewScene.imageUrl}
+                      alt={firstPreviewScene.sceneTitle}
                       loading="eager"
                       className="absolute inset-0 h-full w-full object-cover"
-                    />
+                    /> : <p className="flex h-full items-center justify-center text-sm text-slate-500">插图生成后展示</p>}
                   </div>
                 </div>
               </div>
@@ -1803,10 +1796,11 @@ export default function StoryBookViewer({
             <aside className="space-y-4">
               <div className="rounded-[1.5rem] border border-white bg-white/90 p-4 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-slate-950">成长里程碑</h3>
-                  <span className="text-xs font-semibold text-violet-500">查看全部</span>
+                  <h3 className="font-bold text-slate-950">故事线索</h3>
+                  <span className="text-xs text-slate-500">绘本内容</span>
                 </div>
                 <div className="mt-4 space-y-3">
+                  {milestoneItems.length === 0 ? <p className="text-sm text-slate-500">尚未生成故事，没有可展示的线索。</p> : null}
                   {milestoneItems.slice(0, 3).map((item, index) => (
                     <div key={`${item.title}-${index}`} className="flex items-start gap-3">
                       <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-50 text-violet-600">
@@ -1823,21 +1817,9 @@ export default function StoryBookViewer({
               <div className="rounded-[1.5rem] border border-white bg-white/90 p-4 shadow-sm">
                 <div className="flex items-center gap-2">
                   <CalendarDays className="h-5 w-5 text-violet-500" />
-                  <h3 className="font-bold text-slate-950">故事日历</h3>
+                  <h3 className="font-bold text-slate-950">本书生成日期</h3>
                 </div>
-                <div className="mt-4 grid grid-cols-7 gap-1 text-center text-xs text-slate-500">
-                  {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => (
-                    <span
-                      key={day}
-                      className={cn(
-                        "rounded-full py-1",
-                        [2, 9, 11, 12].includes(day) ? "bg-violet-500 font-semibold text-white" : "bg-slate-50"
-                      )}
-                    >
-                      {day}
-                    </span>
-                  ))}
-                </div>
+                <p className="mt-4 text-sm text-slate-600">{story?.generatedAt ? new Date(story.generatedAt).toLocaleString("zh-CN") : "尚未生成"}</p>
               </div>
             </aside>
           </div>
@@ -2149,7 +2131,7 @@ export default function StoryBookViewer({
                     <Button
                       type="button"
                       className={cn("rounded-full shadow-sm", theme.accent)}
-                      disabled={!canGenerate}
+                      disabled={!canGenerate || isRefreshing}
                       data-testid="parent-storybook-regenerate"
                       onClick={onGenerate}
                     >
@@ -2169,6 +2151,12 @@ export default function StoryBookViewer({
               >
                 {refreshMessage}
               </div>
+            ) : null}
+            {story && onRetryMedia ? (
+              <Button type="button" variant="outline" className={cn("rounded-full", theme.quiet)}
+                disabled={isRefreshing} data-testid="parent-storybook-retry-media" onClick={onRetryMedia}>
+                重试失败媒体
+              </Button>
             ) : null}
             {storybookActionStatus ? (
               <div
@@ -2746,7 +2734,7 @@ function StoryBookSceneStream({
       }
       setPlaybackErrorMessage(
         canUseLocalSpeech
-          ? "vivo 朗读暂不可用，已切换为本地朗读。"
+          ? "服务器音频播放失败，已切换为本机朗读；此朗读不会保存或导出。"
           : "朗读暂不可用，图片和文字可继续阅读。"
       );
       if (canUseLocalSpeech) {
@@ -2755,14 +2743,20 @@ function StoryBookSceneStream({
       }
       startPreview(scene, index, options);
     };
-    audio.play().catch(() => {
+    audio.play().catch((error: unknown) => {
       if (tokenRef.current !== token) return;
+      if (error instanceof DOMException && error.name === "NotAllowedError") {
+        setPlaybackErrorMessage("浏览器暂停了自动播放，请点击本页朗读按钮继续播放服务器音频。");
+        setPlaybackState("paused");
+        setIsBookPlaying(false);
+        return;
+      }
       if (tryRuntimeTtsFallback()) {
         return;
       }
       setPlaybackErrorMessage(
         canUseLocalSpeech
-          ? "vivo 朗读暂不可用，已切换为本地朗读。"
+          ? "服务器音频播放失败，已切换为本机朗读；此朗读不会保存或导出。"
           : "朗读暂不可用，图片和文字可继续阅读。"
       );
       if (canUseLocalSpeech) {

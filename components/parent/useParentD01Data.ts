@@ -80,10 +80,12 @@ function normalizeEmbeddedStorybookResponse(
       "This MVP storybook uses local export and local share text only.",
     source: (readString(response.source) || "rule") as ParentStoryBookResponse["source"],
     fallback: response.fallback ?? true,
-    fallbackReason: response.fallbackReason ?? "stored-storybook",
+    fallbackReason: response.fallbackReason ?? (response.fallback === false ? null : "stored-storybook"),
     generatedAt: readString(response.generatedAt) || storybook.generatedAt,
     stylePreset: (readString(response.stylePreset) || "sunrise-watercolor") as ParentStoryBookResponse["stylePreset"],
     providerMeta: {
+      // 保存后恢复必须保留文本来源与媒体任务诊断，否则会误报兜底且无法继续补齐。
+      ...response.providerMeta,
       provider: readString(providerMeta.provider) || "d01-demo-store",
       mode: readString(providerMeta.mode) || "saved-storybook",
       transport: (readString(providerMeta.transport) || "next-json-fallback") as ParentStoryBookResponse["providerMeta"]["transport"],
@@ -93,7 +95,7 @@ function normalizeEmbeddedStorybookResponse(
       audioDelivery: (readString(providerMeta.audioDelivery) || "preview-only") as ParentStoryBookResponse["providerMeta"]["audioDelivery"],
       stylePreset: (readString(providerMeta.stylePreset) || readString(response.stylePreset) || "sunrise-watercolor") as ParentStoryBookResponse["providerMeta"]["stylePreset"],
       requestSource: readString(providerMeta.requestSource) || "stored-storybook",
-      fallbackReason: readString(providerMeta.fallbackReason) || "stored-storybook",
+      fallbackReason: readString(providerMeta.fallbackReason) || (providerMeta.realProvider === true ? null : "stored-storybook"),
       realProvider: providerMeta.realProvider === true,
       highlightCount: readNumber(providerMeta.highlightCount) ?? highlightCount,
       sceneCount: readNumber(providerMeta.sceneCount) ?? sceneCount,
@@ -250,7 +252,7 @@ export function useParentD01Data(requestedChildId?: string | null) {
           payload: { ...record },
           createdBy: record.checkedBy,
           createdAt: record.date,
-          updatedAt: record.date,
+          updatedAt: readString((record as unknown as Record<string, unknown>).updatedAt) || record.date,
           visibleToParent: true,
         })),
       ...mealRecords
@@ -263,7 +265,7 @@ export function useParentD01Data(requestedChildId?: string | null) {
           payload: { ...record },
           createdBy: record.recordedBy,
           createdAt: record.date,
-          updatedAt: record.date,
+          updatedAt: readString((record as unknown as Record<string, unknown>).updatedAt) || record.date,
           visibleToParent: true,
         })),
       ...growthRecords
@@ -276,7 +278,7 @@ export function useParentD01Data(requestedChildId?: string | null) {
           payload: { ...record },
           createdBy: record.recorder,
           createdAt: record.createdAt,
-          updatedAt: record.createdAt,
+          updatedAt: readString((record as unknown as Record<string, unknown>).updatedAt) || record.createdAt,
           visibleToParent: true,
         })),
     ].sort((left, right) => right.createdAt.localeCompare(left.createdAt));

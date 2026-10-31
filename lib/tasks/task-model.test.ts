@@ -150,6 +150,33 @@ test("task to reminder projection preserves canonical linkage", () => {
   assert.equal(reminder?.status, "acknowledged");
 });
 
+test("care-day deadlines and elapsed 48-hour reviews are independent of the host time zone", () => {
+  const previousTimeZone = process.env.TZ;
+  try {
+    for (const timeZone of ["UTC", "Asia/Taipei", "America/New_York"]) {
+      process.env.TZ = timeZone;
+      for (const [createdAt, dueAt] of [
+        ["2026-04-10T08:00:00.000Z", "2026-04-10T15:59:59.999Z"],
+        // UTC 尚未跨日，东八区已经进入翌日。
+        ["2026-04-10T20:00:00.000Z", "2026-04-11T15:59:59.999Z"],
+        // 跨过纽约的夏令时边界仍须保留完整 48 小时。
+        ["2026-03-07T16:00:00.000Z", "2026-03-08T15:59:59.999Z"],
+      ]) {
+        const { parentTask, followUpTask } = buildInterventionTasksFromCard(buildTestInterventionCard({
+          id: "care-day-boundary", title: "Boundary observation", targetChildId: "synthetic-child",
+          tonightHomeAction: "Record tonight's observation.", reviewIn48h: "Review after 48 hours.",
+          createdAt, updatedAt: createdAt,
+        }));
+        assert.equal(parentTask.dueAt, dueAt, timeZone);
+        assert.equal(new Date(followUpTask.dueAt).getTime() - new Date(createdAt).getTime(), 48 * 60 * 60 * 1000, timeZone);
+      }
+    }
+  } finally {
+    if (previousTimeZone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTimeZone;
+  }
+});
+
 test("legacy reminders, guardian feedback and check-ins reconcile into canonical task status", () => {
   const card = buildTestInterventionCard({
     id: "card-c-1-demo",

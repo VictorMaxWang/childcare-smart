@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { ParentStoryBookResponse } from "@/lib/ai/types";
+import type { ParentStoryBookRequest, ParentStoryBookResponse } from "@/lib/ai/types";
 import {
+  buildParentStoryBookCacheKey,
+  hasParentStoryBookMediaFailure,
+  resolveParentStoryBookMediaPollDelayMs,
   shouldBypassParentStoryBookCacheOnFirstLoad,
   shouldPersistParentStoryBook,
+  shouldPollParentStoryBookMedia,
 } from "./storybook-cache.ts";
 
 function buildStory(
@@ -116,6 +120,34 @@ test("storybook cache bypasses stale demo or preview-only results on first load"
     ),
     false
   );
+});
+
+test("media polling resumes pending pages but never retries a failed or unknown job just because live is enabled", () => {
+  const warming = buildStory({ providerMeta: { textProvider: "maas", imageProvider: "maas-z-image", audioProvider: "maas-tts",
+    diagnostics: { image: { liveEnabled: true, jobStatus: "warming", pendingSceneCount: 3 }, audio: { liveEnabled: true, jobStatus: "ready", pendingSceneCount: 0 } } } });
+  assert.equal(shouldPollParentStoryBookMedia(warming), true);
+  const failed = buildStory({ providerMeta: { imageDelivery: "mixed", audioDelivery: "preview-only",
+    diagnostics: { image: { liveEnabled: true, jobStatus: "error", pendingSceneCount: 3, errorSceneCount: 1, lastErrorReason: "media-result-unknown" }, audio: { liveEnabled: true, jobStatus: "disabled" } } } });
+  assert.equal(shouldPollParentStoryBookMedia(failed), false);
+  assert.equal(hasParentStoryBookMediaFailure(failed), true);
+  const inactive = buildStory({ providerMeta: { imageDelivery: "mixed", audioDelivery: "preview-only",
+    diagnostics: { image: { liveEnabled: true, jobStatus: "idle", pendingSceneCount: 0 }, audio: { liveEnabled: true, jobStatus: "ready" } } } });
+  assert.equal(shouldPollParentStoryBookMedia(inactive), false);
+});
+
+test("media polling respects image and audio retry delays with bounded backoff", () => {
+  const pending = buildStory({ providerMeta: { diagnostics: { image: { jobStatus: "warming", retryAfterMs: 4_000 }, audio: { jobStatus: "warming", nextRetryAtMs: 12_000 } } } });
+  assert.equal(resolveParentStoryBookMediaPollDelayMs(pending, 0, 10_000), 4_000);
+  assert.equal(resolveParentStoryBookMediaPollDelayMs(pending, 8, 10_000), 8_000);
+  const limited = buildStory({ providerMeta: { diagnostics: { audio: { retryAfterMs: 200_000 } } } });
+  assert.equal(resolveParentStoryBookMediaPollDelayMs(limited, 0, 10_000), 70_000);
+  assert.equal(resolveParentStoryBookMediaPollDelayMs(buildStory(), 100, 10_000), 32_000);
+});
+
+test("client story cache keys separate signed-in owners even when a child is shared", () => {
+  const request = { childId: "child-1", snapshot: { child: { id: "child-1" } } } as ParentStoryBookRequest;
+  assert.notEqual(buildParentStoryBookCacheKey(request, "forest-crayon", "org:parent-a:1"), buildParentStoryBookCacheKey(request, "forest-crayon", "org:parent-b:1"));
+  assert.notEqual(buildParentStoryBookCacheKey(request, "forest-crayon", "org:parent-a:1"), buildParentStoryBookCacheKey(request, "forest-crayon", "org:parent-a:2"));
 });
 
 test("storybook cache persists dynamic-fallback stories so the main fallback stays stable", () => {

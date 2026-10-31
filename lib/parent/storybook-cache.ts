@@ -34,11 +34,19 @@ type ParentStoryBookRuntimeProviderMeta = ParentStoryBookResponse["providerMeta"
       jobStatus?: string | null;
       pendingSceneCount?: number;
       liveEnabled?: boolean;
+      retryAfterMs?: number | null;
+      nextRetryAtMs?: number | null;
+      errorSceneCount?: number;
+      lastErrorReason?: string | null;
     } | null;
     audio?: {
       jobStatus?: string | null;
       pendingSceneCount?: number;
       liveEnabled?: boolean;
+      retryAfterMs?: number | null;
+      nextRetryAtMs?: number | null;
+      errorSceneCount?: number;
+      lastErrorReason?: string | null;
     } | null;
   } | null;
 };
@@ -57,21 +65,19 @@ export function hasActiveParentStoryBookMediaWarming(
 ) {
   if (!story) return false;
   const runtime = story as ParentStoryBookRuntimeStory;
-  const imagePending = runtime.providerMeta.diagnostics?.image?.pendingSceneCount ?? 0;
-  const audioPending = runtime.providerMeta.diagnostics?.audio?.pendingSceneCount ?? 0;
-  return (
-    runtime.providerMeta.diagnostics?.image?.jobStatus === "warming" ||
-    runtime.providerMeta.diagnostics?.audio?.jobStatus === "warming" ||
-    imagePending > 0 ||
-    audioPending > 0
-  );
+  return [runtime.providerMeta.diagnostics?.image, runtime.providerMeta.diagnostics?.audio]
+    .some((diagnostics) => diagnostics &&
+      diagnostics.jobStatus !== "error" && diagnostics.jobStatus !== "disabled" &&
+      (diagnostics.jobStatus === "warming" || (diagnostics.pendingSceneCount ?? 0) > 0));
 }
 
 export function buildParentStoryBookCacheKey(
   request: ParentStoryBookRequest,
-  presetId: ParentStoryBookStylePreset
+  presetId: ParentStoryBookStylePreset,
+  ownerScope?: string,
 ) {
   const seed = JSON.stringify({
+    ownerScope,
     childId: request.childId,
     requestSource: request.requestSource,
     storyMode: request.storyMode,
@@ -133,26 +139,30 @@ export function shouldPollParentStoryBookMedia(
   story: ParentStoryBookResponse | null | undefined
 ) {
   if (!story) return false;
-  const runtime = story as ParentStoryBookRuntimeStory;
-  if (hasActiveParentStoryBookMediaWarming(runtime)) return true;
+  // 已启用能力不代表还有安全可执行的任务；失败/结果未知必须由用户明确处理。
+  return hasActiveParentStoryBookMediaWarming(story);
+}
 
-  const imageDiagnostics = runtime.providerMeta.diagnostics?.image;
-  if (
-    imageDiagnostics?.liveEnabled &&
-    runtime.providerMeta.imageDelivery !== "real"
-  ) {
-    return true;
-  }
+export function hasParentStoryBookMediaFailure(story: ParentStoryBookResponse | null | undefined) {
+  if (!story) return false;
+  return [story.providerMeta.diagnostics?.image, story.providerMeta.diagnostics?.audio]
+    .some((diagnostics) => diagnostics?.jobStatus === "error" || (diagnostics?.errorSceneCount ?? 0) > 0);
+}
 
-  const audioDiagnostics = runtime.providerMeta.diagnostics?.audio;
-  if (
-    audioDiagnostics?.liveEnabled &&
-    runtime.providerMeta.audioDelivery !== "real"
-  ) {
-    return true;
-  }
-
-  return false;
+/** 遵从两种媒体的限流时间，并逐渐降低空轮询频率；后台页面由调用方暂停。 */
+export function resolveParentStoryBookMediaPollDelayMs(
+  story: ParentStoryBookResponse,
+  attempt = 0,
+  now = Date.now(),
+) {
+  const diagnostics = [story.providerMeta.diagnostics?.image, story.providerMeta.diagnostics?.audio];
+  const serverDelay = Math.max(0, ...diagnostics.flatMap((item) => {
+    const after = Number(item?.retryAfterMs);
+    const at = Number(item?.nextRetryAtMs);
+    return [Number.isFinite(after) ? Math.max(after, 0) : 0, Number.isFinite(at) ? Math.max(at - now + 500, 0) : 0];
+  }));
+  const backoff = 2_000 * 2 ** Math.min(Math.floor(Math.max(attempt, 0) / 4), 4);
+  return Math.min(70_000, Math.max(backoff, serverDelay));
 }
 
 export function readParentStoryBookCache(cacheKey: string) {

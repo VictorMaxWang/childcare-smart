@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { ApiParentChildOnboardingInput } from "@/lib/api/types";
 
 import {
   buildParentChildOnboardingPayload,
@@ -18,6 +19,12 @@ test("child onboarding form rejects unchecked consent", () => {
   assert.equal(result.ok, false);
   if (!result.ok) {
     assert.equal(result.field, "consentAccepted");
+  }
+});
+
+test("onboarding rejects malformed JSON values and truthy non-boolean consent before writes", () => {
+  for (const input of [null, [], "child", { name: "小雨", ageMonth: 24, consentAccepted: "false" }, { name: "小雨", ageMonth: 24, consentAccepted: 1 }]) {
+    assert.equal(validateChildOnboardingInput(input as unknown as ApiParentChildOnboardingInput).ok, false);
   }
 });
 
@@ -76,4 +83,19 @@ test("child onboarding API accepts ageMonth fallback", () => {
     assert.equal(result.payload.ageMonth, 24);
     assert.equal(result.payload.birthDate, undefined);
   }
+});
+
+test("child onboarding rejects future and over-age birthdays without narrowing the existing age range", () => {
+  const now = new Date("2026-10-31T08:00:00Z");
+  const future = validateChildOnboardingInput({ name: "小雨", birthDate: "2026-11-01", consentAccepted: true }, now);
+  const tooOld = validateChildOnboardingInput({ name: "小雨", birthDate: "2008-10-30", consentAccepted: true }, now);
+  const boundary = validateChildOnboardingInput({ name: "小雨", birthDate: "2008-10-31", consentAccepted: true }, now);
+  assert.equal(future.ok, false); assert.equal(tooOld.ok, false); assert.equal(boundary.ok, true);
+});
+
+test("child onboarding accepts only bounded request identifiers and preserves them", () => {
+  const valid = validateChildOnboardingInput({ name: "小雨", ageMonth: 24, consentAccepted: true, requestId: "parent-request-20261031" });
+  assert.equal(valid.ok, true);
+  if (valid.ok) assert.equal(valid.payload.requestId, "parent-request-20261031");
+  assert.equal(validateChildOnboardingInput({ name: "小雨", ageMonth: 24, consentAccepted: true, requestId: "invalid!" }).ok, false);
 });

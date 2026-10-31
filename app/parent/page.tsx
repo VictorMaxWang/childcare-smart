@@ -1,5 +1,7 @@
 "use client";
 
+import ParentDailyOverview from "@/components/parent/ParentDailyOverview";
+
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -131,10 +133,13 @@ export default function ParentHomePage() {
     getLatestConsultationForChild,
     parentHomeData,
     invalidChildId,
+    reloadAppSnapshotFromApi,
+    dataError,
+    lastDataSyncAt,
   } = useParentD01Data(childFromQuery);
   const { careMode, setCareMode } = useCareMode();
   const [showMoreContent, setShowMoreContent] = useState(false);
-  const parentFeed = getParentFeed();
+  const parentFeed = useMemo(() => getParentFeed(), [getParentFeed]);
   const authorizedChildIds = useMemo(
     () => new Set(parentFeed.map((item) => item.child.id)),
     [parentFeed]
@@ -147,14 +152,23 @@ export default function ParentHomePage() {
         : parentFeed[0]?.child.id ?? "";
   const feed = parentFeed.find((item) => item.child.id === resolvedChildId);
   const viewModel = buildParentHomeViewModel(feed);
-  const [previewResult, setPreviewResult] = useState<ParentAgentResult | null>(null);
+  const [storedPreviewResult, setPreviewResult] = useState<ParentAgentResult | null>(null);
+  const [previewStateKey, setPreviewStateKey] = useState("");
   const [previewProvenance, setPreviewProvenance] = useState<
     "loading" | "ai" | "local-rule"
   >("loading");
   const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
-  const [weeklyReport, setWeeklyReport] = useState<WeeklyReportResponse | null>(null);
+  const [storedWeeklyReport, setWeeklyReport] = useState<WeeklyReportResponse | null>(null);
+  const [reportStateKey, setReportStateKey] = useState("");
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
   const [weeklyReportError, setWeeklyReportError] = useState<string | null>(null);
+  const [suggestionRequest, setSuggestionRequest] = useState<{ key: string; nonce: number; confirmRetryUnknown?: boolean } | null>(null);
+  const [reportRequest, setReportRequest] = useState<{ key: string; nonce: number; confirmRetryUnknown?: boolean } | null>(null);
+  const [previewRetryUnknown, setPreviewRetryUnknown] = useState(false);
+  const [reportRetryUnknown, setReportRetryUnknown] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const latestInterventionCard = feed ? getChildInterventionCard(feed.child.id) : undefined;
   const latestConsultation = feed ? getLatestConsultationForChild(feed.child.id) : undefined;
   const latestHealthMaterial = useMemo(() => {
@@ -224,6 +238,12 @@ export default function ParentHomePage() {
     () => (previewContext ? buildParentChildSuggestionSnapshot(previewContext) : null),
     [previewContext]
   );
+  const aiCacheOwner = `${currentUser.institutionId}:${currentUser.id}:${currentUser.role}:${currentUser.authzVersion ?? 0}`;
+  const suggestionKey = snapshot ? JSON.stringify({ owner: aiCacheOwner, snapshot }) : "";
+  // 切换儿童或账号的同一帧也不能展示上一作用域的 AI 结果。
+  const previewResult = previewStateKey === suggestionKey ? storedPreviewResult : null;
+  const previewContextRef = useRef(previewContext);
+  previewContextRef.current = previewContext;
   const weeklyReportPayload = useMemo(
     () =>
       previewContext
@@ -239,9 +259,10 @@ export default function ParentHomePage() {
     [previewContext]
   );
   const weeklyReportKey = useMemo(
-    () => (weeklyReportPayload ? JSON.stringify(weeklyReportPayload) : null),
-    [weeklyReportPayload]
+    () => (weeklyReportPayload ? JSON.stringify({ owner: aiCacheOwner, payload: weeklyReportPayload }) : null),
+    [weeklyReportPayload, aiCacheOwner]
   );
+  const weeklyReport = reportStateKey === weeklyReportKey ? storedWeeklyReport : null;
   const homeTransparencyModel = useMemo(
     () =>
       feed && previewContext
@@ -258,30 +279,38 @@ export default function ParentHomePage() {
   );
 
   useEffect(() => {
-    if (!previewContext || !snapshot) return;
+    const currentContext = previewContextRef.current;
+    if (!currentContext || !suggestionKey) return;
+    const context: NonNullable<typeof previewContext> = currentContext;
 
     let cancelled = false;
     const controller = new AbortController();
-    const context = previewContext;
-    const snapshotPayload = snapshot;
+    const snapshotPayload = (JSON.parse(suggestionKey) as { snapshot: NonNullable<typeof snapshot> }).snapshot;
+    const requested = suggestionRequest?.key === suggestionKey;
     setPreviewResult(null);
     setPreviewProvenance("loading");
+    setPreviewLoading(requested);
+    setPreviewError(null);
+    setPreviewRetryUnknown(false);
 
     async function fetchPreview() {
       try {
         const response = await fetch("/api/ai/suggestions", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(!requested ? { "x-ai-cache-only": "1" } : {}), ...(requested && suggestionRequest?.confirmRetryUnknown ? { "x-ai-confirm-retry": "1" } : {}) },
           body: JSON.stringify({ snapshot: snapshotPayload }),
           signal: controller.signal,
         });
 
         if (!response.ok) {
-          throw new Error("fetch preview failed");
+          const error = await response.json().catch(() => null) as { error?: string; code?: string } | null;
+          throw Object.assign(new Error(error?.error || "个性化方案暂时无法读取，请稍后重试。"), { code: error?.code });
         }
 
+        if (response.headers.get("x-ai-cache") === "miss") throw new Error("当前记录版本尚未生成个性化方案，可点击生成后查看。");
         const data = (await response.json()) as AiSuggestionResponse;
         if (!cancelled) {
+          setPreviewStateKey(suggestionKey);
           setPreviewResult(buildParentAgentSuggestionResult({ context, suggestion: data }));
           const trace = data as AiSuggestionResponse & {
             fallback?: boolean;
@@ -291,12 +320,18 @@ export default function ParentHomePage() {
             trace.fallback || trace.source === "fallback" ? "local-rule" : "ai"
           );
         }
-      } catch {
-        if (!cancelled) {
+      } catch (error) {
+        if (!cancelled && !controller.signal.aborted) {
           const fallback = buildFallbackSuggestion(snapshotPayload);
+          setPreviewStateKey(suggestionKey);
           setPreviewResult(buildParentAgentSuggestionResult({ context, suggestion: fallback }));
           setPreviewProvenance("local-rule");
+          const unconfirmed = (error as { code?: string })?.code === "generation_result_unknown";
+          setPreviewRetryUnknown(unconfirmed);
+          if (requested || unconfirmed) setPreviewError(error instanceof Error ? error.message : "个性化方案生成失败。");
         }
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
       }
     }
 
@@ -306,17 +341,19 @@ export default function ParentHomePage() {
       cancelled = true;
       controller.abort();
     };
-  }, [previewContext, snapshot]);
+  }, [suggestionKey, suggestionRequest]);
 
   useEffect(() => {
-    const payload = weeklyReportPayload;
     const key = weeklyReportKey;
-    if (!payload || !key) return;
+    if (!key) return;
+    const payload = (JSON.parse(key) as { payload: NonNullable<typeof weeklyReportPayload> }).payload;
+    const requested = reportRequest?.key === key;
     const cacheKey = key;
     const nextPayload = payload;
 
     const cached = weeklyReportCacheRef.current.get(cacheKey);
     if (cached) {
+      setReportStateKey(key);
       setWeeklyReport(cached);
       setWeeklyReportError(null);
       setWeeklyReportLoading(false);
@@ -327,23 +364,30 @@ export default function ParentHomePage() {
     const controller = new AbortController();
 
     async function loadWeeklyReportPreview() {
+      setWeeklyReport(null);
+      setReportRetryUnknown(false);
       setWeeklyReportLoading(true);
       setWeeklyReportError(null);
 
       try {
         const data = await fetchWeeklyReport(nextPayload, {
           signal: controller.signal,
+          cacheOnly: !requested,
+          confirmRetryUnknown: requested && reportRequest?.confirmRetryUnknown,
         });
 
         if (!cancelled) {
+          setReportStateKey(cacheKey);
           weeklyReportCacheRef.current.set(cacheKey, data);
           setWeeklyReport(data);
         }
       } catch (requestError) {
         if (!cancelled && !controller.signal.aborted) {
-          setWeeklyReportError(
+          const unconfirmed = (requestError as { code?: string })?.code === "generation_result_unknown";
+          setReportRetryUnknown(unconfirmed);
+          setWeeklyReportError(requested || unconfirmed ? (
             requestError instanceof Error ? requestError.message : "家长周报预览暂时不可用。"
-          );
+          ) : "当前记录版本尚未生成周报，可点击生成后查看。");
         }
       } finally {
         if (!cancelled) {
@@ -358,7 +402,7 @@ export default function ParentHomePage() {
       cancelled = true;
       controller.abort();
     };
-  }, [weeklyReportKey, weeklyReportPayload]);
+  }, [weeklyReportKey, reportRequest]);
 
   if (!viewModel || !feed || !previewContext) {
     if (!invalidChildId) {
@@ -414,9 +458,11 @@ export default function ParentHomePage() {
     previewProvenance === "local-rule"
       ? "基于记录的本地提示"
       : previewProvenance === "loading"
-        ? "正在生成今日提示"
+        ? "正在读取已有方案"
         : "AI 今日提醒";
-  const displayInterventionCard = latestInterventionCard ?? previewResult?.interventionCard;
+  const displayInterventionCard = previewProvenance === "ai"
+    ? previewResult?.interventionCard ?? latestInterventionCard
+    : latestInterventionCard ?? previewResult?.interventionCard;
   const displayTonightTaskTitle = displayInterventionCard?.title ?? viewModel.tonightTask.title;
   const displayTonightTaskDescription =
     displayInterventionCard?.tonightHomeAction ??
@@ -483,7 +529,7 @@ export default function ParentHomePage() {
     ? "今晚待反馈"
     : hasHealthWarning
       ? "需留意晨检"
-      : "今日状态稳定";
+      : (parentHomeData?.dailyRecords.length ?? 0) > 0 ? "已有记录，待查看" : "暂无已同步记录";
   const parentStatusVariant = hasPendingFeedback
     ? "warning"
     : hasHealthWarning
@@ -493,7 +539,7 @@ export default function ParentHomePage() {
     {
       id: "health",
       title: "晨检结果",
-      meta: latestHealthCheck ? formatDisplayDate(latestHealthCheck.date) : "今日暂无晨检",
+      meta: latestHealthCheck ? `${formatDisplayDate(latestHealthCheck.date)} · 记录人：${latestHealthCheck.checkedBy || "未注明"}` : "今日暂无晨检",
       description: latestHealthCheck
         ? `${latestHealthCheck.temperature.toFixed(1)}°C · 情绪${latestHealthCheck.mood} · 手口眼${latestHealthCheck.handMouthEye}${latestHealthCheck.remark ? ` · ${latestHealthCheck.remark}` : ""}`
         : "当前还没有同步到晨检记录。",
@@ -523,7 +569,7 @@ export default function ParentHomePage() {
     {
       id: "meal",
       title: "饮食摘要",
-      meta: latestMeal ? `${formatDisplayDate(latestMeal.date)} · ${latestMeal.meal}` : "今日暂无饮食记录",
+      meta: latestMeal ? `${formatDisplayDate(latestMeal.date)} · ${latestMeal.meal} · 记录人：${latestMeal.recordedBy || "未注明"}` : "今日暂无饮食记录",
       description: latestMeal
         ? `${latestMealFoodSummary || "暂无食物明细"} · 饮水 ${latestMeal.waterMl} ml · 营养评分 ${latestMeal.nutritionScore}`
         : "还没有可展示的餐食记录。",
@@ -535,7 +581,7 @@ export default function ParentHomePage() {
     {
       id: "growth",
       title: "成长动态",
-      meta: latestGrowthRecord ? formatTimelineTime(latestGrowthRecord.createdAt) : "今日暂无成长记录",
+      meta: latestGrowthRecord ? `${formatTimelineTime(latestGrowthRecord.createdAt)} · 记录人：${latestGrowthRecord.recorder || "未注明"}` : "今日暂无成长记录",
       description: latestGrowthRecord?.description ?? "还没有可展示的成长观察。",
       tone: latestGrowthRecord?.needsAttention ? "amber" : "emerald",
       icon: <BookOpenText className="h-4 w-4" />,
@@ -814,6 +860,25 @@ export default function ParentHomePage() {
     </div>
   );
 
+  const generationControls = (
+    <section className="mb-5 rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm" data-testid="parent-ai-generation-controls">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 text-sm text-slate-600">
+          <p className="font-semibold text-slate-900">根据最新成长档案更新家庭方案</p>
+          <p className="mt-1">页面只读取已有结果；点击后才发起生成，相同记录版本会复用已保存结果。</p>
+          <p className="mt-1 text-xs">{lastDataSyncAt ? `上次同步：${formatTimelineTime(lastDataSyncAt)}` : "等待首次同步"}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" disabled={syncing} onClick={async () => { setSyncing(true); try { await reloadAppSnapshotFromApi(); } finally { setSyncing(false); } }}>{syncing ? "同步中…" : "同步最新记录"}</Button>
+          <Button type="button" disabled={previewLoading || !suggestionKey} onClick={() => { if (previewRetryUnknown && !window.confirm("上次生成结果无法确认，再次生成可能重复计费。确认重新生成吗？")) return; setSuggestionRequest((previous) => ({ key: suggestionKey, nonce: (previous?.nonce ?? 0) + 1, confirmRetryUnknown: previewRetryUnknown })); }}>{previewLoading ? "方案生成中…" : previewRetryUnknown ? "确认后重新生成方案" : "生成个性化方案"}</Button>
+          <Button type="button" variant="outline" disabled={weeklyReportLoading || !weeklyReportKey} onClick={() => { if (reportRetryUnknown && !window.confirm("上次生成结果无法确认，再次生成可能重复计费。确认重新生成吗？")) return; setReportRequest((previous) => ({ key: weeklyReportKey!, nonce: (previous?.nonce ?? 0) + 1, confirmRetryUnknown: reportRetryUnknown })); }}>{weeklyReportLoading ? "读取周报中…" : reportRetryUnknown ? "确认后重新生成周报" : "生成家庭周报"}</Button>
+        </div>
+      </div>
+      {previewError || dataError ? <p role="alert" className="mt-3 text-sm text-rose-700">{previewError || dataError}</p> : null}
+      {weeklyReport ? <p className="mt-3 text-sm text-emerald-700">已有家庭周报：{weeklyReport.summary}</p> : weeklyReportError ? <p className="mt-3 text-sm text-slate-500">{weeklyReportError}</p> : null}
+    </section>
+  );
+
   if (careMode) {
     return (
       <RolePageShell
@@ -824,6 +889,8 @@ export default function ParentHomePage() {
         className="max-w-[84rem]"
         actions={headerActions}
       >
+        {generationControls}
+        <ParentDailyOverview key={feed.child.id} childId={feed.child.id} childName={feed.child.name} records={parentHomeData?.dailyRecords ?? []} />
         <RoleSplitLayout
           stacked
           main={
@@ -972,7 +1039,6 @@ export default function ParentHomePage() {
     const growthCount = growthRecords.filter(
       (record) => record.childId === feed.child.id && record.createdAt.slice(0, 10) === date
     ).length;
-    const mealCount = dayMeals.length;
     const feedbackCount = guardianFeedbacks.filter((record) => record.childId === feed.child.id && record.date === date).length;
     const reminderCount = childScopedReminders.filter((record) => record.scheduledAt.slice(0, 10) === date).length;
 
@@ -982,7 +1048,8 @@ export default function ParentHomePage() {
         day: "numeric",
       }),
       temp: health?.temperature ?? null,
-      mood: health ? Math.min(4.4, 3 + growthCount * 0.2 + mealCount * 0.1) : null,
+      // 历史页面用成长/餐食条数拼出情绪分数，不能把它当作真实情绪观测。
+      mood: null,
       mealScore: average(dayMeals.map((record) => record.nutritionScore)),
       growthCount,
       feedbackCount,
@@ -1096,6 +1163,8 @@ export default function ParentHomePage() {
         testId="r07-parent-page"
       >
         <InstitutionJoinPanel user={currentUser} />
+        {generationControls}
+        <ParentDailyOverview key={feed.child.id} childId={feed.child.id} childName={feed.child.name} records={parentHomeData?.dailyRecords ?? []} />
         <PixelParentHomeReplica
           todayText={TODAY_TEXT}
           currentUserName={currentUser.name}
@@ -1105,6 +1174,8 @@ export default function ParentHomePage() {
           allergies={viewModel.child.allergies}
           statusLabel={parentStatusLabel}
           statusVariant={parentStatusVariant}
+          hasRecords={(parentHomeData?.dailyRecords.length ?? 0) > 0}
+          dataUpdatedAt={parentHomeData?.dailyRecords.map(record => record.updatedAt || record.createdAt).filter(Boolean).sort().at(-1) ?? null}
           careMode={careMode}
           onCareModeChange={setCareMode}
           agentHref={agentHref}
@@ -1117,6 +1188,7 @@ export default function ParentHomePage() {
           statusItems={pixelStatusItems}
           reminders={pixelReminders}
           aiTitle={previewResult?.title ?? viewModel.aiReminder.title}
+          aiProvenance={previewStateKey === suggestionKey ? previewProvenance : "loading"}
           aiDescription={displayPreviewWhyNow}
           tonightTitle={displayTonightTaskTitle}
           tonightDescription={displayTonightTaskDescription}
@@ -1141,6 +1213,8 @@ export default function ParentHomePage() {
       actions={headerActions}
     >
       <InstitutionJoinPanel user={currentUser} />
+      {generationControls}
+      <ParentDailyOverview key={feed.child.id} childId={feed.child.id} childName={feed.child.name} records={parentHomeData?.dailyRecords ?? []} />
       <RoleSplitLayout
         main={
           <div className="space-y-6">

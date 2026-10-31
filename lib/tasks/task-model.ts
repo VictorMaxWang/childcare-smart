@@ -40,6 +40,9 @@ export interface ReminderProjectionOptions {
 
 const DEFAULT_TASK_TITLE = "Intervention Task";
 const DEFAULT_LEGACY_TASK_DESCRIPTION = "Recovered from legacy task data.";
+const HOUR_MS = 60 * 60 * 1000;
+// 当前托育业务按东八区归日，与家长每日视图一致；宿主服务器可能运行在 UTC。
+const CARE_DAY_UTC_OFFSET_MS = 8 * HOUR_MS;
 const STATUS_PRIORITY: Record<TaskCoreStatus, number> = {
   pending: 0,
   in_progress: 1,
@@ -67,15 +70,17 @@ function maxIso(...values: Array<string | undefined>) {
 function endOfLocalDay(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return new Date().toISOString();
-  date.setHours(23, 59, 59, 999);
-  return date.toISOString();
+  const careClock = new Date(date.getTime() + CARE_DAY_UTC_OFFSET_MS);
+  return new Date(Date.UTC(
+    careClock.getUTCFullYear(), careClock.getUTCMonth(), careClock.getUTCDate() + 1
+  ) - CARE_DAY_UTC_OFFSET_MS - 1).toISOString();
 }
 
 function addHours(value: string, hours: number) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return new Date().toISOString();
-  date.setHours(date.getHours() + hours);
-  return date.toISOString();
+  // “48 小时内”是实际经过的时长，不能受运行机器的夏令时切换影响。
+  return new Date(date.getTime() + hours * HOUR_MS).toISOString();
 }
 
 function toStableHash(input: string) {
