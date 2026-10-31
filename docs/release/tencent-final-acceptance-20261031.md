@@ -32,7 +32,7 @@ AI 已采用服务端 MaaS 适配，按能力使用不同协议。实际业务�
 
 | 范围 | 已完成结果 | 证据 |
 | --- | --- | --- |
-| 最终静态与服务端回归 | Node **858/858**、Python **286/286**，无跳过；lint、类型检查通过。Python 有 1 条依赖弃用警告 | [Node](../../artifacts/implementation-20261031/node-final-public-routes.log)、[Python](../../artifacts/implementation-20261031/python-ac5b8d5.log)、[lint](../../artifacts/implementation-20261031/lint-final-public-routes.log)、[类型检查](../../artifacts/implementation-20261031/types-final-public-routes.log) |
+| 最终静态与服务端回归 | Node **859/859**、Python **286/286**，无跳过；lint、类型检查通过。Python 有 1 条依赖弃用警告 | [Node](../../artifacts/implementation-20261031/node-final-ssr.log)、[Python](../../artifacts/implementation-20261031/python-ac5b8d5.log)、[lint](../../artifacts/implementation-20261031/lint-final-ssr.log)、[类型检查](../../artifacts/implementation-20261031/types-final-ssr.log) |
 | 普通核心闭环 | 20 项通过：记录、私有照片、家长读回及反馈、教师读取、授权隔离、并发防丢写和防重、退出与过期会话 | [核心业务](../../artifacts/implementation-20261031/prod-core-0639de1-report.json) |
 | 核心 AI 与结果保存 | 8 项真实 AI 通过，另 7 项持久化检查通过，复用已收到结果不重发模型 | [核心 AI](../../artifacts/implementation-20261031/prod-core-0639de1-ai-report.json)、[保存与读取](../../artifacts/implementation-20261031/prod-core-0639de1-ai-persistence-report.json) |
 | 既有 AI 入口 | 10 项通过：视觉、膳食、健康材料、教师语音、ASR、追问、趋势及园长三工作流 | [10 入口](../../artifacts/implementation-20261031/prod-entrances-0639de1-report.json) |

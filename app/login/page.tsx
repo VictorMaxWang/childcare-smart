@@ -2,7 +2,7 @@
 
 import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Baby,
@@ -112,6 +112,11 @@ function useDesktopReplicaImage() {
 }
 
 export default function LoginPage() {
+  // next参数只影响登录后的落点；查询钩子在边界内，不阻断公共页面生产预渲染。
+  return <Suspense fallback={<main className="min-h-screen p-6"><p role="status">正在加载登录页面…</p></main>}><LoginPageContent /></Suspense>;
+}
+
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { demoAccounts, login, loginWithDemo, isAuthenticated, authLoading, currentUser } = useApp();

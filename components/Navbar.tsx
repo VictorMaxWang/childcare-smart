@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -146,6 +146,17 @@ const ROUTE_TITLE_MAP = [
 ] as const;
 
 export default function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  // 公共文档不读取查询参数，保留匿名正文的服务端输出，不能因业务壳的查询钩子整体退回客户端。
+  if (isPublicPagePath(pathname)) return <main className="min-h-screen bg-(--background)">{children}</main>;
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-(--background) p-6"><LoadingState title="正在校验登录状态" description="系统正在确认当前账号身份与页面访问权限。" /></main>}>
+      <ProtectedAppShell>{children}</ProtectedAppShell>
+    </Suspense>
+  );
+}
+
+function ProtectedAppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -163,11 +174,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const accessDeniedNoticeKeyRef = useRef<string | null>(null);
   const currentLocation = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
 
-  // 条款和隐私正文必须与代理白名单一致，匿名阅读不能再次被客户端送回登录。
-  const hideShell = isPublicPagePath(pathname);
-
   useEffect(() => {
-    if (hideShell || authLoading || authError) {
+    if (authLoading || authError) {
       return;
     }
 
@@ -184,10 +192,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
     if (!canRoleAccessPath(currentUser.role, pathname)) {
       router.replace(resolveUnauthorizedRedirectPath(currentUser.role));
     }
-  }, [authError, authLoading, currentUser.role, hideShell, isAuthenticated, pathname, router]);
+  }, [authError, authLoading, currentUser.role, isAuthenticated, pathname, router]);
 
   useEffect(() => {
-    if (hideShell || authLoading || authError || !isAuthenticated || typeof window === "undefined") {
+    if (authLoading || authError || !isAuthenticated || typeof window === "undefined") {
       return;
     }
 
@@ -208,11 +216,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
     url.searchParams.delete(ACCESS_DENIED_QUERY_PARAM);
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [authError, authLoading, hideShell, isAuthenticated, pathname]);
-
-  if (hideShell) {
-    return <main className="min-h-screen bg-(--background)">{children}</main>;
-  }
+  }, [authError, authLoading, isAuthenticated, pathname]);
 
   if (authLoading) {
     return (

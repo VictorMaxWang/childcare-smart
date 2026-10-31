@@ -9,7 +9,7 @@
 | 项目 | 当前已运行版本 |
 | --- | --- |
 | `/api/health` 的 `deployment.commitSha` | 与交付 GitHub main 同一SHA，以健康接口及本机最终交付清单核对 |
-| `deploymentId` | `restoration-20261031-final` |
+| `deploymentId` | `restoration-20261031-final2` |
 | web/backend 镜像 | `smartchildcare-web:restoration-20261031` / `smartchildcare-backend:restoration-20261031`；精确摘要见最终交付清单，不能单靠可变tag回滚 |
 | 数据/证书卷 | 保留 `smartchildcare-production` 既有四卷，重启前后核验通过 |
 

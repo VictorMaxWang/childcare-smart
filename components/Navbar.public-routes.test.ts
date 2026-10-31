@@ -9,10 +9,10 @@ import PrivacyPage from "@/app/privacy/page";
 import TermsPage from "@/app/terms/page";
 import { AppProvider } from "@/lib/store";
 
-function renderAnonymousPage(pathname: string, content: ReturnType<typeof createElement>) {
+function renderAnonymousPage(pathname: string, content: ReturnType<typeof createElement>, searchParams: URLSearchParams | null = new URLSearchParams()) {
   return renderToStaticMarkup(createElement(AppRouterContext.Provider, { value: {} as never },
     createElement(PathnameContext.Provider, { value: pathname },
-      createElement(SearchParamsContext.Provider, { value: new URLSearchParams() },
+      createElement(SearchParamsContext.Provider, { value: searchParams },
         createElement(AppProvider, null, createElement(AppShell, null, content))))));
 }
 
@@ -20,6 +20,14 @@ test("anonymous privacy and terms render their actual document through the clien
   for (const [pathname, Component, title] of [["/privacy", PrivacyPage, "隐私政策"], ["/terms", TermsPage, "用户服务协议"]] as const) {
     const html = renderAnonymousPage(pathname, createElement(Component));
     assert.ok(html.includes(title), `${pathname} document was hidden by the client authentication guard`);
+    assert.doesNotMatch(html, /正在校验登录状态|正在进入登录页/);
+  }
+});
+
+test("public document rendering does not need a query context or query-hook bailout", () => {
+  for (const [pathname, Component, title] of [["/privacy", PrivacyPage, "隐私政策"], ["/terms", TermsPage, "用户服务协议"]] as const) {
+    const html = renderAnonymousPage(pathname, createElement(Component), null);
+    assert.ok(html.includes(title));
     assert.doesNotMatch(html, /正在校验登录状态|正在进入登录页/);
   }
 });

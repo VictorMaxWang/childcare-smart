@@ -2,14 +2,14 @@
 
 本清单记录2026-10-31工作树的源码入口和当时已落盘的验收证据。静态扫描得到 **28个页面、90条API路由、110个HTTP方法操作**；25条路由有同目录单元测试。这些数量不代表全量验收通过。发布前应重新运行 `node scripts/acceptance-inventory.mjs`，生成的 `artifacts/implementation-20261031/acceptance-source-inventory.json` 保留每个入口的源码、方法和测试文件。
 
-最终交付以 [最终验收报告](release/tencent-final-acceptance-20261031.md) 为准。正式完整业务报告锁定0639，晚期修复、只读复验及四容器重启锁定ac5；最后公共页面补丁通过最终Node **858**、Python **286**、lint和types，保留不同报告原SHA。下表说明每一份证据实际能证明什么；它不能单独代表全部页面、按钮、设备或错误组合均通过。
+最终交付以 [最终验收报告](release/tencent-final-acceptance-20261031.md) 为准。正式完整业务报告锁定0639，晚期修复、只读复验及四容器重启锁定ac5；最后公共页面补丁通过最终Node **859**、Python **286**、lint和types，保留不同报告原SHA。下表说明每一份证据实际能证明什么；它不能单独代表全部页面、按钮、设备或错误组合均通过。
 ## 正式发布证据及边界
 
 报告均位于忽略的 `artifacts/implementation-20261031/`，完整凭据、Cookie、模型body及儿童ID只保留在私有manifest/journal。下表不包含私人内容。
 
 | 代号 | 正式证据 | 实际完成 | 尚未由该证据证明 |
 |---|---|---|---|
-| F-STATIC | [ac5 Node](../artifacts/implementation-20261031/node-final-public-routes.log)、[Python](../artifacts/implementation-20261031/python-ac5b8d5.log)、[lint](../artifacts/implementation-20261031/lint-final-public-routes.log)、[types](../artifacts/implementation-20261031/types-final-public-routes.log)、[web](../artifacts/implementation-20261031/web-ac5b8d5.log)、[backend](../artifacts/implementation-20261031/backend-ac5b8d5.log) | 最终Node858/858、Python286/286，0跳过；lint/types/Linux构建通过，1条依赖弃用警告 | 不代替ac5生产复测、浏览器或重启；0639的825/281属于前一轮次 |
+| F-STATIC | [ac5 Node](../artifacts/implementation-20261031/node-final-ssr.log)、[Python](../artifacts/implementation-20261031/python-ac5b8d5.log)、[lint](../artifacts/implementation-20261031/lint-final-ssr.log)、[types](../artifacts/implementation-20261031/types-final-ssr.log)、[web](../artifacts/implementation-20261031/web-ac5b8d5.log)、[backend](../artifacts/implementation-20261031/backend-ac5b8d5.log) | 最终Node859/859、Python286/286，0跳过；lint/types/Linux构建通过，1条依赖弃用警告 | 不代替ac5生产复测、浏览器或重启；0639的825/281属于前一轮次 |
 | F-CORE | [正式核心20项](../artifacts/implementation-20261031/prod-core-0639de1-report.json) | 教师三类记录/私有照片/家长读回/执行反馈教师读回、四类隔离、匿名、并发防丢写/防重、退出和过期会话 | 全部CRUD、录音/播放/布局；退出只清客户端Cookie，不代表服务端撤销所有历史令牌 |
 | F-AI | [正式核心AI8项](../artifacts/implementation-20261031/prod-core-0639de1-ai-report.json) | 实际Qwen初次/更新方案及各自缓存、教师沟通、周报、SSE、家长反馈润色 | SSE取消/断网、所有workflow、所有页面按钮 |
 | F-PERSIST | [正式AI结果持久化7项](../artifacts/implementation-20261031/prod-core-0639de1-ai-persistence-report.json) | 复用已收到结果，按现有业务保存/读取验证，新增模型请求0 | 生产容器重启后的耐久性 |

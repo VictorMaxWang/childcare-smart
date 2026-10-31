@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -107,6 +107,11 @@ function PasswordToggleButton({
 }
 
 export default function RegisterPage() {
+  // 注册同样保留next跳转兼容，查询参数读取放在本页边界内，不能依赖鉴权加载幕遮住SSR。
+  return <Suspense fallback={<main className="min-h-screen p-6"><p role="status">正在加载注册页面…</p></main>}><RegisterPageContent /></Suspense>;
+}
+
+function RegisterPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { register, isAuthenticated, authLoading, currentUser } = useApp();
