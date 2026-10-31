@@ -1834,11 +1834,16 @@ export async function POST(request: Request) {
 
   if (isMaasSelected()) {
     try {
-      const prepared = await completeMaasStoryMedia({ payload, institutionId: sessionUser.institutionId, userId: sessionUser.id, signal: request.signal, deadlineAtMs: responseDeadlineAtMs });
-      return NextResponse.json(attestAiResult(prepared, provenanceContext), { headers: { "cache-control": "no-store" } });
+      const reconcileOnly = payload.reconcileOnly === true;
+      const prepared = await completeMaasStoryMedia({ payload, institutionId: sessionUser.institutionId, userId: sessionUser.id, signal: request.signal, deadlineAtMs: responseDeadlineAtMs, reconcileOnly });
+      return NextResponse.json(attestAiResult(prepared, provenanceContext), { headers: { "cache-control": "no-store", ...(reconcileOnly ? { "x-storybook-reconcile-only": "1" } : {}) } });
     } catch (error) {
       return handleApiError(error);
     }
+  }
+  if (payload.reconcileOnly === true) {
+    // 免费恢复模式不能静默落入旧供应商生成链路。
+    return NextResponse.json({ ok: false, code: "unsupported_reconciliation", error: "当前媒体供应商不支持此恢复模式，未重新生成。" }, { status: 400 });
   }
   const selectedImageProvider = resolveStoryImageProvider();
   const persistMedia =

@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 from copy import deepcopy
 import json
+from datetime import UTC, datetime
 import pytest
+from app.core.config import Settings
 from threading import Event
 from time import perf_counter
 
@@ -204,6 +206,24 @@ def test_parent_storybook_service_returns_six_page_storybook_by_default():
     assert "storybook_image_provider" in result["providerMeta"]["diagnostics"]["image"]["missingConfig"]
     assert result["providerMeta"]["diagnostics"]["brain"]["statusCode"] is None
     assert result["providerMeta"]["diagnostics"]["brain"]["retryStrategy"] == "none"
+
+
+def test_mock_storybook_keeps_seed_timestamp_when_current_clock_changes(monkeypatch):
+    class Clock(datetime):
+        moment = datetime(2025, 1, 1, tzinfo=UTC)
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.moment
+
+    monkeypatch.setattr(parent_storybook_service, "datetime", Clock)
+    monkeypatch.setattr(parent_storybook_service, "get_settings", lambda: Settings(ai_provider="legacy", brain_provider="mock", enable_mock_provider=True))
+    first = asyncio.run(run_parent_storybook(_base_payload()))
+    Clock.moment = datetime(2030, 1, 1, tzinfo=UTC)
+    second = asyncio.run(run_parent_storybook(_base_payload()))
+    assert first["generatedAt"] == second["generatedAt"]
+    assert first["storyId"] == second["storyId"]
+    assert first["fallback"] is True and second["fallback"] is True
 
 
 def test_parent_storybook_service_first_byte_payload_trims_rich_fixture_fields():
@@ -641,6 +661,7 @@ def test_parent_storybook_media_status_schedules_only_non_real_media(monkeypatch
 
     assert [call["scene_index"] for call in image_provider.calls] == [1]
     assert [call["scene_index"] for call in audio_provider.calls] == [1]
+    assert result["generatedAt"] == story["generatedAt"], "media status must retain the initial generation time"
     assert result["title"] == story["title"]
     assert result["scenes"][1]["imageSourceKind"] == "dynamic-fallback"
     assert result["providerMeta"]["diagnostics"]["image"]["pendingSceneCount"] == 1

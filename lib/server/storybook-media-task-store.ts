@@ -73,7 +73,30 @@ export interface StorybookMediaTaskClaim {
   lastErrorReason: string | null;
 }
 
+/** 私有上游成果回执，只供媒体保存器读取，绝不混入公开claim/诊断响应。 */
+export interface StorybookMediaProviderReceipt {
+  version: 1;
+  model: string;
+  requestId: string | null;
+  contentType: string;
+  kind: "url" | "base64";
+  data: string;
+  receivedAtMs: number;
+}
+export type StorybookMediaReceiptClaim = { action: "none" | "wait" } | {
+  action: "resume";
+  leaseToken: string;
+  receipt: StorybookMediaProviderReceipt;
+};
+
 export interface StorybookMediaTaskStore {
+  saveProviderReceipt?(
+    identity: StorybookMediaTaskIdentity, leaseToken: string, receipt: StorybookMediaProviderReceipt,
+    operation?: StorybookMediaTaskOperation
+  ): Promise<boolean>;
+  claimProviderReceipt?(
+    identity: StorybookMediaTaskIdentity, operation?: StorybookMediaTaskOperation
+  ): Promise<StorybookMediaReceiptClaim>;
   claim(
     identity: StorybookMediaTaskIdentity,
     operation?: StorybookMediaTaskOperation
@@ -243,6 +266,20 @@ function normalizeMediaKey(value: string) {
     throw new Error("storybook media key is invalid");
   }
   return mediaKey;
+}
+
+function normalizeProviderReceipt(identity: StorybookMediaTaskIdentity, receipt: StorybookMediaProviderReceipt): StorybookMediaProviderReceipt {
+  if (!["maas-z-image", "maas-tts"].includes(identity.provider) || receipt.version !== 1 || receipt.model !== identity.providerModel ||
+      !Number.isFinite(receipt.receivedAtMs) || !["url", "base64"].includes(receipt.kind) || typeof receipt.data !== "string" || !receipt.data.length ||
+      !receipt.contentType.startsWith(`${identity.channel}/`)) throw new Error("Invalid private storybook provider receipt");
+  const max = identity.channel === "image" ? 16 * 1024 * 1024 : 12 * 1024 * 1024;
+  if (receipt.kind === "base64" && (receipt.data.length > Math.ceil(max / 3) * 4 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(receipt.data))) throw new Error("Private storybook provider receipt exceeds limit or has invalid bytes");
+  if (receipt.kind === "url") {
+    let url: URL; try { url = new URL(receipt.data); } catch { throw new Error("Invalid private storybook provider receipt URL"); }
+    if (receipt.data.length > 16000 || !["http:", "https:"].includes(url.protocol) || !url.hostname.endsWith(".aliyuncs.com") || url.username || url.password || (url.port && url.port !== "443")) throw new Error("Unsafe private storybook provider receipt URL");
+  }
+  return { version: 1, model: receipt.model, requestId: typeof receipt.requestId === "string" ? receipt.requestId.slice(0, 191) : null,
+    contentType: receipt.contentType.slice(0, 128), kind: receipt.kind, data: receipt.data, receivedAtMs: receipt.receivedAtMs };
 }
 
 function asEpochMs(value: Date | string | null) {
@@ -548,6 +585,26 @@ export class InMemoryStorybookMediaTaskStore
   implements StorybookMediaTaskStore
 {
   private readonly tasks = new Map<string, StoredTask>();
+  private readonly providerReceipts = new Map<string, StorybookMediaProviderReceipt>();
+
+  async saveProviderReceipt(identity: StorybookMediaTaskIdentity, leaseToken: string, rawReceipt: StorybookMediaProviderReceipt, operation: StorybookMediaTaskOperation = {}) {
+    assertOperationActive(operation);
+    const key = taskKey(identity), state = this.tasks.get(key), receipt = normalizeProviderReceipt(identity, rawReceipt);
+    if (!state || state.status !== "submitting" || state.taskId || state.leaseToken !== leaseToken || this.providerReceipts.has(key)) return false;
+    this.providerReceipts.set(key, structuredClone(receipt));
+    return true;
+  }
+
+  async claimProviderReceipt(identity: StorybookMediaTaskIdentity, operation: StorybookMediaTaskOperation = {}): Promise<StorybookMediaReceiptClaim> {
+    assertOperationActive(operation);
+    const key = taskKey(identity), receipt = this.providerReceipts.get(key), state = this.tasks.get(key), nowMs = resolveNow(operation);
+    if (!receipt || !state || state.mediaKey) return { action: "none" };
+    if ((state.leaseExpiresAtMs ?? 0) > nowMs || !["submitting", "blocked", "retryable"].includes(state.status)) return { action: "wait" };
+    const leaseToken = randomUUID();
+    // 已有上游成果只领取下载/保存租约，不增加生成attempt，也不把无回执unknown改成可重试。
+    this.tasks.set(key, { ...state, status: "submitting", leaseToken, leaseExpiresAtMs: nowMs + SUBMISSION_LEASE_MS });
+    return { action: "resume", leaseToken, receipt: structuredClone(normalizeProviderReceipt(identity, receipt)) };
+  }
 
   async claim(
     rawIdentity: StorybookMediaTaskIdentity,
@@ -804,7 +861,7 @@ export class InMemoryStorybookMediaTaskStore
     const key = taskKey(identity);
     const current = this.tasks.get(key);
     const taskMatches =
-      identity.channel === "image"
+      identity.channel === "image" && identity.provider !== "maas-z-image"
         ? current?.status === "polling" &&
           current.taskId === normalizeTaskId(input.taskId ?? "")
         : current?.status === "submitting" && !current.taskId;
@@ -898,6 +955,42 @@ export class DatabaseStorybookMediaTaskStore
   private tableReady?: Promise<void>;
 
   constructor(private readonly pool: Pool = getDatabasePool()) {}
+
+  async saveProviderReceipt(identity: StorybookMediaTaskIdentity, leaseToken: string, rawReceipt: StorybookMediaProviderReceipt, operation: StorybookMediaTaskOperation = {}) {
+    await this.ensureTable(operation);
+    const normalized = normalizeIdentity(identity), receipt = normalizeProviderReceipt(normalized, rawReceipt);
+    // 独立表由显式增量迁移创建。缺表会在下一次生成前失败关闭，不能静默退回易丢的内存回执。
+    const [raw] = await executeWithBudget(this.pool, `
+      insert ignore into storybook_media_receipts (
+        task_key,institution_id,creator_user_id,child_id,storybook_id,scene_index,channel,provider,provider_model,input_digest,result_json
+      ) select task_key,institution_id,actor_user_id,child_id,storybook_id,scene_index,channel,provider,provider_model,input_digest,?
+        from storybook_media_tasks where task_key=? and actor_user_id=? and status='submitting' and task_id is null and lease_token=?
+    `, [Buffer.from(JSON.stringify(receipt), "utf8"), taskKey(normalized), normalized.userId, leaseToken], operation);
+    return (raw as ResultSetHeader).affectedRows === 1;
+  }
+
+  async claimProviderReceipt(identity: StorybookMediaTaskIdentity, operation: StorybookMediaTaskOperation = {}): Promise<StorybookMediaReceiptClaim> {
+    await this.ensureTable(operation);
+    const normalized = normalizeIdentity(identity), key = taskKey(normalized), nowMs = resolveNow(operation);
+    return runInTransaction(this.pool, operation, async (connection, lifecycle) => {
+      const [rawRows] = await executeOnConnectionWithBudget(connection, lifecycle, `
+        select r.result_json,t.media_key,t.status,t.lease_expires_at from storybook_media_receipts r
+        inner join storybook_media_tasks t on t.task_key=r.task_key
+        where r.task_key=? and r.institution_id=? and r.child_id=? and r.storybook_id=?
+          and r.provider=? and r.provider_model=? and r.input_digest=? for update
+      `, [key, normalized.institutionId, normalized.childId, normalized.storybookId, normalized.provider, normalized.providerModel, normalized.inputDigest], operation);
+      const row = (rawRows as Array<{ result_json: Buffer | string; media_key: string | null; status: string; lease_expires_at: Date | string | null }>)[0];
+      if (!row || row.media_key) return { action: "none" };
+      if ((asEpochMs(row.lease_expires_at) ?? 0) > nowMs || !["submitting", "blocked", "retryable"].includes(row.status)) return { action: "wait" };
+      let receipt: StorybookMediaProviderReceipt;
+      try { receipt = normalizeProviderReceipt(normalized, JSON.parse(Buffer.isBuffer(row.result_json) ? row.result_json.toString("utf8") : row.result_json)); }
+      catch { throw new Error("Invalid private storybook provider receipt"); }
+      const leaseToken = randomUUID();
+      await executeOnConnectionWithBudget(connection, lifecycle, `update storybook_media_tasks set actor_user_id=?,status='submitting',lease_token=?,lease_expires_at=? where task_key=?`,
+        [normalized.userId, leaseToken, new Date(nowMs + SUBMISSION_LEASE_MS), key], operation);
+      return { action: "resume", leaseToken, receipt };
+    });
+  }
 
   private async ensureTable(operation?: StorybookMediaTaskOperation) {
     if (!this.tableReady) {
@@ -1410,7 +1503,7 @@ export class DatabaseStorybookMediaTaskStore
     operation: StorybookMediaTaskOperation = {}
   ) {
     await this.ensureTable(operation);
-    const imageChannel = identity.channel === "image";
+    const imageChannel = identity.channel === "image" && identity.provider !== "maas-z-image";
     const [resultRaw] = await executeWithBudget(
       this.pool,
       `

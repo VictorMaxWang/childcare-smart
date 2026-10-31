@@ -111,6 +111,22 @@ function embeddedStory(saved) {
   return story;
 }
 
+/** 免费恢复必须已有已保存、严格通过的文字，以及实际收到的媒体正文；未知请求不能凭空重建。 */
+export function receivedStoryForReconciliation(state, expectedTextModel) {
+  assert.equal(state.saved, true, "先保存已通过的真实文字，再恢复媒体。");
+  assert.ok(state.calls.some(call => call.stage === "text" && call.status === "completed"), "缺少已完成的文字意图，不能免费恢复代替重新生成。");
+  assertStoryText(state.story, state.childId, expectedTextModel);
+  const call = state.calls.findLast(item => item.stage === "media" && Object.hasOwn(item, "responseBody") && ["received-needs-validation", "completed", "superseded-by-reconciliation"].includes(item.status));
+  assert.ok(call, "没有已收到的媒体正文；网络未知结果不会被自动重发或伪恢复。");
+  assertStoryText(call.responseBody, state.childId, expectedTextModel);
+  assert.equal(call.responseBody.storyId, state.story.storyId, "收到的媒体正文必须属于当前已保存绘本。");
+  return { requestId: call.requestId, story: structuredClone(call.responseBody) };
+}
+export function canonicalStoryMediaType(value) {
+  const mime = (value || "").split(";", 1)[0].trim().toLowerCase();
+  return mime === "audio/x-wav" ? "audio/wav" : mime;
+}
+
 /**
  * 业务正文已收到与网络结果未知是两种恢复边界。先原子保存原body，验证失败也不丢失，
  * 恢复只重验原body；只有通过原有严格断言后才替换可继续使用的story。
@@ -234,11 +250,11 @@ async function run(options) {
     assert.equal(state.version, 1); assert.equal(state.baseUrl, baseUrl); assert.equal(state.childId, child.id);
     assert.equal(state.actorKey, options.actor); assert.equal(state.actorUserId, manifest.accounts[options.actor].user.id);
   } else {
-    assert.ok(!options.verifyOnly, "verify-only 需要已有任务进度；不会创建或生成新绘本。");
+    assert.ok(!options.verifyOnly && !options.reconcileOnly, "只读或恢复模式需要已有任务进度；不会创建或生成新绘本。");
     state = { version: 1, taskId: randomUUID(), baseUrl, actorKey: options.actor, actorUserId: manifest.accounts[options.actor].user.id,
       childId: child.id, createdAt: nowIso(), stage: "new", calls: [], checks: [], timings: {}, story: null, sourceRecordIds: [], saved: false };
   }
-  const report = { taskId: state.taskId, baseUrl, mode: options.verifyOnly ? "verify-only" : "real-ai", startedAt: nowIso(), status: "running", checks: [], paidAiRequestsThisRun: 0,
+  const report = { taskId: state.taskId, baseUrl, mode: options.reconcileOnly ? "reconcile-only" : options.verifyOnly ? "verify-only" : "real-ai", startedAt: nowIso(), status: "running", checks: [], paidAiRequestsThisRun: 0,
     notes: ["仅使用独立合成账号与儿童。", "费用字段为已核验上限的预留，不冒充供应商实际账单。", "不启动独立浏览器；真实 Chrome 播放与视觉验收由主任务另行完成。"] };
   const persist = () => atomicJson(options.progress, state);
   const check = (name, details) => { report.checks.push({ name, status: "passed", ...(details ? { details } : {}) }); };
@@ -246,7 +262,7 @@ async function run(options) {
     const pricing = options.pricing ? await jsonFile(options.pricing) : state.budget?.pricing;
     const expectedModels = validateModelIdentities(pricing?.models);
     if (state.budget) assert.deepEqual(state.budget.pricing.models, expectedModels, "已有任务的模型身份不能静默变化；改用独立任务或核验原发布配置。");
-    if (!options.verifyOnly) {
+    if (!options.verifyOnly && !options.reconcileOnly) {
       validatePricing(pricing, options.capCny);
       const bookMaximum = validatePricing(pricing, options.capCny);
       // 先为整册一文四图四音预留。HTTP 轮询有可能只补一类媒体，不能把未开始的
@@ -281,6 +297,36 @@ async function run(options) {
       state.saved = true; state.savedAt = nowIso(); await persist();
     }
     const bookEndpoint = () => `/api/storybooks/${encodeURIComponent(state.story.storyId)}`;
+    if (options.reconcileOnly) {
+      assert.match(options.expectedCommit || "", /^[a-f0-9]{40}$/u, "免费恢复需显式指定修复后候选的完整SHA。");
+      const { payload: health } = await anonymous("/api/health"); assert.equal(health.deployment?.commitSha, options.expectedCommit); report.candidateCommit = options.expectedCommit;
+      const previous = receivedStoryForReconciliation(state, expectedModels.text), before = mediaReadiness(previous.story);
+      const reconciliation = { id: randomUUID(), previousRequestId: previous.requestId, startedAt: nowIso(), mode: "provider-generation-forbidden", status: "started-result-unknown" };
+      state.reconciliations ??= []; state.reconciliations.push(reconciliation); await persist();
+      const { payload, response } = await creator("/api/ai/parent-storybook/media-status", { body: { childId: child.id, storyId: previous.story.storyId, story: previous.story, prioritySceneIndices: [1, 2, 3, 4], retryFailed: false, reconcileOnly: true }, timeoutMs: 65_000 });
+      reconciliation.responseBody = payload; reconciliation.status = "received-needs-validation"; await persist();
+      assert.equal(response.headers.get("x-storybook-reconcile-only"), "1", "服务端未确认禁止生成模式；停止，不重复请求。");
+      assertStoryText(payload, child.id, expectedModels.text); const after = mediaReadiness(payload);
+      assert.ok(after.image >= before.image && after.audio >= before.audio, "免费恢复不得使已知完成媒体倒退。");
+      for (const scene of payload.scenes) for (const kind of ["image", "audio"]) {
+        if (scene[`${kind}Status`] !== "ready") continue;
+        assert.equal(scene[`${kind}Provider`], kind === "image" ? "maas-z-image" : "maas-tts"); const url = scene[`${kind}Url`]; assert.match(url, MEDIA_PATH);
+        const { response: mediaResponse, bytes } = await otherParentSession(url, { binary: true, headers: { "x-smartchildcare-require-database": "1" } });
+        assert.equal(canonicalStoryMediaType(mediaResponse.headers.get("content-type")), kind === "image" ? "image/webp" : "audio/wav");
+        assert.equal(mediaResponse.headers.get("x-smartchildcare-storage-mode"), "private_blob"); await inspectMediaBytes(kind, bytes);
+      }
+      const complete = after.image === 4 && after.audio === 4;
+      assert.ok(complete || after.image > before.image || after.audio > before.audio, "未恢复任何新媒体；旧unknown不能被改成通过。");
+      state.story = payload; await saveStory();
+      reconciliation.status = complete ? "reconciled-complete" : "reconciled-partial"; reconciliation.validatedAt = nowIso(); reconciliation.before = before; reconciliation.after = after;
+      const previousCall = state.calls.find(call => call.requestId === previous.requestId);
+      previousCall.status = "superseded-by-reconciliation"; previousCall.reconciledBy = reconciliation.id;
+      // 原responseBody和失败validationStatus保持原样；新结果由独立恢复记录证明，不把旧错误冒充passed。
+      state.stage = reconciliation.status; await persist(); report.status = reconciliation.status;
+      check("operator-requested recovery read actual durable private media without provider generation", { before, after, complete, newProviderRequests: 0 });
+      if (!complete) { report.checks.push({ name: "remaining pages require separately authorized generation", status: "blocked", reason: "免费恢复只处理已有成果，不生成尚无成果的页。" }); process.exitCode = 1; }
+      return;
+    }
     if (options.verifyOnly) {
       assert.ok(state.story?.storyId, "任务尚无可读取的绘本 ID，不能猜测或重新生成。");
       const saved = await envelope(parent, bookEndpoint()); state.story = embeddedStory(saved); assertStoryText(state.story, child.id, expectedModels.text);
@@ -362,7 +408,7 @@ async function run(options) {
       const url = kind === "image" ? scene.imageUrl : scene.audioUrl; assert.match(url, MEDIA_PATH);
       assert.equal(scene[`${kind}Provider`], kind === "image" ? "maas-z-image" : "maas-tts");
       const { response, bytes } = await otherParentSession(url, { binary: true, headers: { "x-smartchildcare-require-database": "1" } });
-      assert.equal((response.headers.get("content-type") || "").split(";")[0], kind === "image" ? "image/webp" : "audio/wav");
+      assert.equal(canonicalStoryMediaType(response.headers.get("content-type")), kind === "image" ? "image/webp" : "audio/wav");
       assert.equal(response.headers.get("x-smartchildcare-storage-mode"), "private_blob"); assert.match(response.headers.get("cache-control") || "", /private/iu);
       const details = await inspectMediaBytes(kind, bytes); check(`scene ${scene.sceneIndex} ${kind}: decoded real bytes from private Blob`, details);
       for (const [name, client] of [["parentA2", parentA2], ["parentB1", parentB1], ["anonymous", anonymous]]) {
@@ -409,8 +455,8 @@ async function run(options) {
 }
 
 async function main() {
-  const execute = process.argv.includes("--execute"), ai = process.argv.includes("--ai"), verifyOnly = process.argv.includes("--verify-only");
-  const options = { ai, verifyOnly, actor: arg("--actor", "teacherA1"), childIndex: Number(arg("--child-index", "0")), baseUrl: arg("--base-url", ""),
+  const execute = process.argv.includes("--execute"), ai = process.argv.includes("--ai"), verifyOnly = process.argv.includes("--verify-only"), reconcileOnly = process.argv.includes("--reconcile");
+  const options = { ai, verifyOnly, reconcileOnly, expectedCommit: arg("--expected-commit-sha", ""), actor: arg("--actor", "teacherA1"), childIndex: Number(arg("--child-index", "0")), baseUrl: arg("--base-url", ""),
     capCny: Number(arg("--budget-cny", "5")), manifest: artifactPath(arg("--manifest", `${DEFAULT_ARTIFACT}/real-matrix.private.json`)),
     progress: artifactPath(arg("--progress", `${DEFAULT_ARTIFACT}/storybook-media-real.private.json`)),
     report: artifactPath(arg("--report", `${DEFAULT_ARTIFACT}/storybook-media-real-report.json`)),
@@ -418,12 +464,12 @@ async function main() {
   if (!execute) {
     console.log(JSON.stringify({ mode: "plan-only", maxReservedCny: MAX_RESERVED_CNY, actor: options.actor, childIndex: options.childIndex,
       actions: ["读取已有 8 角色普通账号 manifest 与合成儿童真实记录", "生成 1 册 4 页文字并先保存", "整册预留一文四图四音的费用上界，最多 8 轮单调补齐，每轮至多一图一音频，retryFailed=false，当前页优先", "检查 4 个 WebP 与 4 个 WAV 的真实字节及私有 Blob", "独立家长会话重开；同机构其他家长/跨机构家长/匿名均拒绝", "验证保存、五种导出格式和分享文本", "2xx正文先原子保留为received-needs-validation；验证失败仅重验原body，任意未知立即停止，不自动重试收费请求"],
-      execute: "--execute --ai --pricing-file=artifacts/.../verified-pricing.json", verifyAfterRestart: "--execute --verify-only（不调用任何 AI 路由）",
+      execute: "--execute --ai --pricing-file=artifacts/.../verified-pricing.json", verifyAfterRestart: "--execute --verify-only（不调用任何 AI 路由）", reconcile: "--execute --reconcile --expected-commit-sha=<修复后SHA>（只恢复已有成果，不调用生成器）",
       allowedVerifiedTextModels: VERIFIED_TEXT_MODELS, expectedTextModel: "读取 verified-pricing.json 的 models.text；真实响应必须逐字一致",
       pricingSchema: { currency: "CNY", provider: "maas", models: MODELS, verifiedAt: "实际核验时间 ISO", evidence: "实际价格/配额证据路径或网址", verifiedForFourPagesAndServerTokenLimits: true, maxCny: { text: "正数：单次文本最大费用", imagePerPage: "正数：单页图片最大费用", audioPerPage: "正数：单页音频最大费用" } },
       requestsMade: 0, manifest: options.manifest, progress: options.progress, report: options.report }, null, 2)); return;
   }
-  assert.ok(verifyOnly !== ai, "执行时必须二选一：--ai 或 --verify-only。");
+  assert.equal([ai, verifyOnly, reconcileOnly].filter(Boolean).length, 1, "执行时必须三选一：--ai、--verify-only或--reconcile。");
   assert.ok(Number.isInteger(options.childIndex) && options.childIndex >= 0);
   assert.ok(options.capCny > 0 && options.capCny <= MAX_RESERVED_CNY);
   assert.notEqual(options.progress, options.manifest); assert.notEqual(options.report, options.manifest); assert.notEqual(options.report, options.progress);

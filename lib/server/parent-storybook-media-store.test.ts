@@ -18,6 +18,32 @@ import {
   readParentStoryBookMedia,
 } from "./parent-storybook-media-store.ts";
 
+test("cold Blob reads allow two remote objects but keep a single bounded fallback deadline", async () => {
+  parentStoryBookCacheInternals.mediaAssetCache.clear();
+  const previous = Date.now;
+  const startedAt = 1_800_000_000_000;
+  let now = startedAt;
+  let databaseReads = 0;
+  Date.now = () => now;
+  try {
+    const result = await readParentStoryBookMedia({ institutionId: "cold-read-scope", mediaKey: "d".repeat(40), bypassCache: true }, {
+      objectStorageConfigured: () => true,
+      readObject: async input => {
+        assert.ok(input.deadlineAtMs >= startedAt + 9_000, "manifest and media must receive a usable cold-read budget");
+        now += 13_000;
+        return null;
+      },
+      readPersistent: async input => {
+        databaseReads++;
+        assert.ok(input.timeoutMs! > 0 && input.timeoutMs! <= 2_000, "database fallback cannot reset the whole request deadline");
+        return null;
+      },
+    });
+    assert.equal(result, null);
+    assert.equal(databaseReads, 1);
+  } finally { Date.now = previous; }
+});
+
 test("persisted storybook media survives a cold in-memory cache", async () => {
   parentStoryBookCacheInternals.mediaAssetCache.clear();
   const bytes = Buffer.from("durable-audio");

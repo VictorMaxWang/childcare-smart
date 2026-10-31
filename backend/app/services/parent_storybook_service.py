@@ -2881,7 +2881,8 @@ async def run_parent_storybook(payload: dict[str, Any]) -> dict[str, Any]:
         ]
     )
     story_id = f"storybook-{_stable_hash(story_seed)}"
-    generated_at = _stable_timestamp(story_seed)
+    # 真实生成应保留实际完成时刻；稳定种子时间只服务演示/规则材料，旧书与媒体轮询不重算。
+    generated_at = datetime.now(UTC).isoformat().replace("+00:00", "Z") if text_generation.real_provider else _stable_timestamp(story_seed)
     scene_build_ms = _elapsed_ms(scene_build_started_at)
 
     if maas_selected(settings) and text_generation.real_provider and text_generation.provider in {"maas", "maas-llm"}:

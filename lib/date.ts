@@ -61,6 +61,18 @@ export function normalizeLocalDate(value: string) {
   return formatLocalDate(parsed);
 }
 
+/** 查询业务日使用固定UTC+8，避免服务端UTC与浏览器本地时区在跨日时间戳上取到不同日期。 */
+export function normalizeBusinessDate(value: string | null | undefined) {
+  const text = value?.trim();
+  if (!text) return "";
+  if (/^\d{8}$/u.test(text)) return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
+  if (/[T\s]\d{2}:\d{2}.*(?:Z|[+-]\d{2}:?\d{2})$/iu.test(text)) {
+    const timestamp = Date.parse(text);
+    return Number.isFinite(timestamp) ? new Date(timestamp + 8 * 60 * 60 * 1000).toISOString().slice(0, 10) : "";
+  }
+  return normalizeLocalDate(text);
+}
+
 /**
  * 格式化业务记录中的时钟时间。
  *

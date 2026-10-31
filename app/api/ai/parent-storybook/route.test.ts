@@ -1248,9 +1248,16 @@ test("parent storybook route reports provider failure instead of successful rule
   }
 });
 
-test("parent storybook route shares one deadline across vivo text attempts", async () => {
+test("parent storybook route shares one deadline across vivo text attempts", async (context) => {
   const originalFetch = globalThis.fetch;
   let vivoCallCount = 0;
+  context.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-31T08:00:00Z") });
+  const deadlines: Array<{ milliseconds: number; controller: AbortController }> = [];
+  context.mock.method(AbortSignal, "timeout", (milliseconds: number) => {
+    const controller = new AbortController();
+    deadlines.push({ milliseconds, controller });
+    return controller.signal;
+  });
   parentStoryBookCacheInternals.storyResponseCache.clear();
   parentStoryBookCacheInternals.mediaAssetCache.clear();
 
@@ -1272,6 +1279,11 @@ test("parent storybook route shares one deadline across vivo text attempts", asy
     }
 
     vivoCallCount += 1;
+    // 等到唯一 provider 调用真正受理后才推进统一截止时间；不依赖并行全测的机器调度速度。
+    queueMicrotask(() => {
+      context.mock.timers.tick(100);
+      deadlines[0].controller.abort(new DOMException("Timed out", "TimeoutError"));
+    });
     return new Promise<Response>((_resolve, reject) => {
       const signal = init?.signal;
       const fallbackTimer = setTimeout(
@@ -1314,7 +1326,9 @@ test("parent storybook route shares one deadline across vivo text attempts", asy
         assert.equal(body.fallbackReason, "provider-deadline-exceeded");
         assert.equal(vivoCallCount, 1);
         assert.equal(body.diagnostics?.textAttemptCount, 1);
-        assert.ok(Date.now() - startedAt < 1_000);
+        assert.equal(deadlines[0].milliseconds, 100);
+        assert.equal(deadlines[0].controller.signal.aborted, true);
+        assert.equal(Date.now() - startedAt, 100);
       }
     );
   } finally {
@@ -1324,9 +1338,16 @@ test("parent storybook route shares one deadline across vivo text attempts", asy
   }
 });
 
-test("parent storybook route keeps the deadline active while reading vivo response body", async () => {
+test("parent storybook route keeps the deadline active while reading vivo response body", async (context) => {
   const originalFetch = globalThis.fetch;
   let vivoCallCount = 0;
+  context.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-31T08:00:00Z") });
+  const deadlines: Array<{ milliseconds: number; controller: AbortController }> = [];
+  context.mock.method(AbortSignal, "timeout", (milliseconds: number) => {
+    const controller = new AbortController();
+    deadlines.push({ milliseconds, controller });
+    return controller.signal;
+  });
   parentStoryBookCacheInternals.storyResponseCache.clear();
   parentStoryBookCacheInternals.mediaAssetCache.clear();
 
@@ -1351,6 +1372,10 @@ test("parent storybook route keeps the deadline active while reading vivo respon
     const signal = init?.signal;
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
+        queueMicrotask(() => {
+          context.mock.timers.tick(100);
+          deadlines[0].controller.abort(new DOMException("Timed out", "TimeoutError"));
+        });
         const fallbackTimer = setTimeout(
           () => controller.error(new Error("vivo body deadline was not propagated")),
           1_000
@@ -1396,7 +1421,9 @@ test("parent storybook route keeps the deadline active while reading vivo respon
         assert.equal(body.fallbackReason, "provider-deadline-exceeded");
         assert.equal(vivoCallCount, 1);
         assert.equal(body.diagnostics?.textAttemptCount, 1);
-        assert.ok(Date.now() - startedAt < 1_000);
+        assert.equal(deadlines[0].milliseconds, 100);
+        assert.equal(deadlines[0].controller.signal.aborted, true);
+        assert.equal(Date.now() - startedAt, 100);
       }
     );
   } finally {

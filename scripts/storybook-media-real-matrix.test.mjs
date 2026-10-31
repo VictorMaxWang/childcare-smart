@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import sharp from "sharp";
-import { assertNoMediaFailure, assertStoryText, buildStoryRequest, executePaidStoryRequest, inspectMediaBytes, mediaReadiness, validatePricing } from "./storybook-media-real-matrix.mjs";
+import { assertNoMediaFailure, assertStoryText, buildStoryRequest, canonicalStoryMediaType, executePaidStoryRequest, inspectMediaBytes, mediaReadiness, receivedStoryForReconciliation, validatePricing } from "./storybook-media-real-matrix.mjs";
 
 function pricing() {
   return { currency: "CNY", provider: "maas", models: { text: "ZHIPU/GLM-5.3-Flash", image: "z-image-turbo", audio: "qwen3-tts-flash" }, verifiedAt: "2026-10-31T00:00:00Z", evidence: "synthetic-test-fixture-not-real-pricing", verifiedForFourPagesAndServerTokenLimits: true, maxCny: { text: 0.2, imagePerPage: 0.3, audioPerPage: 0.1 } };
@@ -96,6 +96,23 @@ test("failed media validation preserves both the raw received body and the prior
   assert.deepEqual(state.story, previous); assert.deepEqual(state.calls[0].responseBody, body);
   assert.equal(state.calls[0].status, "received-needs-validation");
   await assert.rejects(executePaidStoryRequest(input), /失败或结果未知/u); assert.equal(requests, 1);
+});
+
+test("operator reconciliation requires saved real text and a received media body, preserving original failed evidence", () => {
+  const text = story("qwen3.8-flash"), media = structuredClone(text); media.providerMeta.diagnostics.image = { jobStatus: "error", lastErrorReason: "original-failure" };
+  const state = { childId: "child-a", saved: true, story: text, calls: [{ stage: "text", status: "completed" }, { requestId: "synthetic-media-receipt", stage: "media", status: "received-needs-validation", validationStatus: "failed", responseBody: media }] };
+  const original = JSON.stringify(state), recovered = receivedStoryForReconciliation(state, "qwen3.8-flash");
+  assert.equal(recovered.requestId, "synthetic-media-receipt"); recovered.story.providerMeta.diagnostics.image.jobStatus = "ready";
+  assert.equal(JSON.stringify(state), original, "恢复输入必须复制原正文，不能把旧失败改成通过。");
+  const unknown = structuredClone(state); unknown.calls[1].status = "unknown"; delete unknown.calls[1].responseBody;
+  assert.throws(() => receivedStoryForReconciliation(unknown, "qwen3.8-flash"));
+  const unsaved = structuredClone(state); unsaved.saved = false; assert.throws(() => receivedStoryForReconciliation(unsaved, "qwen3.8-flash"));
+  const unverifiedText = structuredClone(state); unverifiedText.story.providerMeta.textDelivery = "preview-only"; assert.throws(() => receivedStoryForReconciliation(unverifiedText, "qwen3.8-flash"));
+});
+
+test("legacy x-wav is a WAV MIME alias while unrelated audio and image types remain distinct", () => {
+  assert.equal(canonicalStoryMediaType("audio/x-wav; charset=binary"), "audio/wav"); assert.equal(canonicalStoryMediaType("audio/wav"), "audio/wav");
+  assert.equal(canonicalStoryMediaType("audio/mpeg"), "audio/mpeg"); assert.equal(canonicalStoryMediaType("image/png"), "image/png");
 });
 test("unknown and failed media stop continuation; real readiness requires the exact provider and protected route", () => {
   assert.throws(() => assertNoMediaFailure({ providerMeta: { diagnostics: { image: { jobStatus: "error", lastErrorReason: "media-result-unknown" } } } }));

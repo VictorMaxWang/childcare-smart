@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -57,13 +58,16 @@ def test_brain_returns_real_maas_text_and_pending_media_without_invoking_mock_me
         "summary": {"growth": {"recordCount": 2}, "feedback": {"count": 1}}},
         "highlightCandidates": [{"kind": "todayGrowth", "title": "照护者陪伴", "detail": "照护者陪伴观察软布球", "priority": 1}],
         "pageCount": 4, "generationMode": "child-personalized"}
+    before = datetime.now(UTC)
     result = asyncio.run(parent_storybook_service.run_parent_storybook(payload))
+    after = datetime.now(UTC)
     wire = ParentStoryBookResponse.model_validate(result).model_dump(mode="json", by_alias=True)
     assert len(calls) == 1 and wire["source"] == "ai" and wire["fallback"] is False
     assert wire["providerMeta"]["provider"] == "maas" and wire["providerMeta"]["textProvider"] == "maas"
     assert wire["providerMeta"]["textDelivery"] == "real" and wire["providerMeta"]["realProvider"] is True
     assert wire["providerMeta"]["diagnostics"]["text"]["model"] == "qwen3.8-flash", "use actual returned model, not configured GLM"
     assert wire["providerMeta"]["diagnostics"]["text"]["requestId"] == "synthetic-request"
+    assert before <= datetime.fromisoformat(wire["generatedAt"].replace("Z", "+00:00")) <= after
     assert calls[0]["payload"]["snapshot"]["child"]["ageBandContext"]["birthDate"] == "2026-02-10"
     for channel in ("image", "audio"):
         assert wire["providerMeta"]["diagnostics"][channel]["pendingSceneCount"] == 4

@@ -1,5 +1,8 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { getAgeBandLabel, resolveAgeBandContext } from "@/lib/age-band/policy";
+import { normalizeBusinessDate } from "@/lib/date";
+import { feedbackBusinessDate } from "@/lib/feedback/date";
 
 import type {
   AiFollowUpPayload,
@@ -425,23 +428,47 @@ export function buildAdminAgentPayloadFromScope(
 
 export function buildWeeklyReportPayloadFromScope(
   source: WeeklyReportPayload,
-  scope: SessionScope
+  scope: SessionScope,
+  asOfDate = new Date().toISOString(),
 ): WeeklyReportPayload {
   const role = (source.role ?? (source.scopeType === "institution" ? "admin" : scope.user.role.includes("师") ? "teacher" : "parent")) as WeeklyReportRole;
-  const periodLabel = asString((source.snapshot as unknown as AnyRecord).periodLabel, "Current period");
+  const endDate = normalizeBusinessDate(asOfDate);
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(endDate)) throw new Error("Invalid weekly report business date");
+  const startDate = new Date(Date.parse(`${endDate}T00:00:00Z`) - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const inPeriod = (value: string) => Boolean(value) && value >= startDate && value <= endDate;
+  const periodLabel = "近 7 天";
   // 会话快照只保证“账号可见”，这里继续按本次请求 scope 收窄，避免多孩家庭或回退到单孩周报时混入其他幼儿。
   const visibleChildren = resolveWeeklyReportChildren(source, scope);
   const childIds = new Set(visibleChildren.map((child) => child.id));
-  const attendance = filterWeeklyRecordsByChildren(scope.scopedSnapshot.attendance, childIds);
-  const meals = filterWeeklyRecordsByChildren(scope.scopedSnapshot.meals, childIds);
-  const health = filterWeeklyRecordsByChildren(scope.scopedSnapshot.health, childIds);
-  const growth = filterWeeklyRecordsByChildren(scope.scopedSnapshot.growth, childIds);
-  const feedback = filterWeeklyRecordsByChildren(scope.scopedSnapshot.feedback, childIds);
+  const attendance = filterWeeklyRecordsByChildren(scope.scopedSnapshot.attendance, childIds).filter(item => inPeriod(normalizeBusinessDate(item.date)));
+  const meals = filterWeeklyRecordsByChildren(scope.scopedSnapshot.meals, childIds).filter(item => inPeriod(normalizeBusinessDate(item.date)));
+  const health = filterWeeklyRecordsByChildren(scope.scopedSnapshot.health, childIds).filter(item => inPeriod(normalizeBusinessDate(item.date)));
+  const growth = filterWeeklyRecordsByChildren(scope.scopedSnapshot.growth, childIds).filter(item => inPeriod(normalizeBusinessDate(item.createdAt)));
+  const feedback = filterWeeklyRecordsByChildren(scope.scopedSnapshot.feedback, childIds).filter(item => inPeriod(feedbackBusinessDate(item)));
+  const stableValue = (value: unknown): unknown => Array.isArray(value) ? value.map(stableValue)
+    : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, stableValue(item)])) : value;
+  const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(stableValue(value))).digest("hex");
+  // 哈希所有授权期内记录的内容，不能只依赖数量或可能缺失的updatedAt；同数量的处理状态变更也必须使缓存失效。
+  const dataVersion = hash({ startDate, endDate, records: { attendance, meals, health, growth, feedback } });
+  const recentFeedback = latestByDate(feedback, item => asString(item.submittedAt) || asString(item.date))
+    .slice(0, 50).map(item => {
+      const record = item as unknown as Record<string, unknown>;
+      return { feedbackId: asString(record.feedbackId) || asString(record.id), childId: item.childId,
+        businessDate: feedbackBusinessDate(item), submittedAt: asString(record.submittedAt), updatedAt: asString(record.updatedAt),
+        recordVersion: typeof record.version === "number" || typeof record.version === "string" ? record.version
+          : typeof record.recordVersion === "number" || typeof record.recordVersion === "string" ? record.recordVersion : null,
+        status: asString(record.status), executionStatus: asString(record.executionStatus), childReaction: asString(record.childReaction),
+        improvementStatus: asString(record.improvementStatus), notes: (asString(record.notes) || asString(record.freeNote) || asString(record.content)).slice(0, 1200),
+        barriers: asStringArray(record.barriers).slice(0, 8), contentVersion: hash(record) };
+    });
   const healthAbnormalCount = health.filter((item) => Boolean((item as AnyRecord).isAbnormal)).length;
   const growthAttention = growth.filter((item) => Boolean((item as AnyRecord).needsAttention));
   const snapshot: WeeklyReportSnapshot = {
     institutionName: scope.institutionId,
     periodLabel,
+    period: { startDate, endDate, timeZone: "Asia/Taipei" },
+    dataVersion,
+    recentFeedback,
     role,
     overview: {
       visibleChildren: visibleChildren.length,

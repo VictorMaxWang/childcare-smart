@@ -72,6 +72,8 @@ const defaultDependencies: ParentStoryBookMediaStoreDependencies = {
 const MEDIA_OBJECT_PERSISTENCE_MAX_ATTEMPTS = 2;
 const MEDIA_PERSISTENCE_MAX_ATTEMPTS = 3;
 const MEDIA_PERSISTENCE_ATTEMPT_TIMEOUT_MS = 5_000;
+// 冷读需要依次获取私有 manifest 和媒体正文，跨境链路不能沿用单次 SQL 的五秒预算。
+const MEDIA_READ_DEFAULT_DEADLINE_MS = 15_000;
 const MEDIA_PERSISTENCE_DEFAULT_DEADLINE_MS = 16_000;
 const MEDIA_PERSISTENCE_READBACK_RESERVE_MS = 2_000;
 const MEDIA_DATABASE_FALLBACK_MAX_RESERVE_MS = 8_000;
@@ -446,6 +448,7 @@ export async function readParentStoryBookMedia(
   },
   dependencies: Partial<ParentStoryBookMediaStoreDependencies> = {}
 ): Promise<ParentStoryBookMediaAsset | null> {
+  const deadlineAtMs = input.deadlineAtMs ?? Date.now() + MEDIA_READ_DEFAULT_DEADLINE_MS;
   const cached = input.bypassCache
     ? null
     : readCachedParentStoryBookMedia(input.mediaKey, {
@@ -463,8 +466,7 @@ export async function readParentStoryBookMedia(
     throw new Error("storybook media database operation aborted");
   }
   const remainingMs = Math.floor(
-    (input.deadlineAtMs ??
-      Date.now() + MEDIA_PERSISTENCE_ATTEMPT_TIMEOUT_MS) - Date.now()
+    deadlineAtMs - Date.now()
   );
   if (remainingMs <= 0) {
     throw new Error("storybook media read deadline exhausted");
@@ -477,9 +479,7 @@ export async function readParentStoryBookMedia(
   let objectReadError: unknown = null;
   if (objectStorageConfigured()) {
     const objectReadDeadlineAtMs =
-      (input.deadlineAtMs ??
-        Date.now() + MEDIA_PERSISTENCE_ATTEMPT_TIMEOUT_MS) -
-      resolveDatabaseFallbackReserveMs(remainingMs);
+      deadlineAtMs - resolveDatabaseFallbackReserveMs(remainingMs);
     try {
       const objectAsset = await readObject({
         institutionId: input.institutionId,
@@ -513,8 +513,7 @@ export async function readParentStoryBookMedia(
   }
 
   const databaseRemainingMs = Math.floor(
-    (input.deadlineAtMs ??
-      Date.now() + MEDIA_PERSISTENCE_ATTEMPT_TIMEOUT_MS) - Date.now()
+    deadlineAtMs - Date.now()
   );
   if (databaseRemainingMs <= 0) {
     if (objectReadError) throw objectReadError;

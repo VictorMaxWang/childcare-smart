@@ -3,7 +3,7 @@ import test from "node:test";
 import sharp from "sharp";
 import type { ParentStoryBookResponse } from "@/lib/ai/types";
 import { MaasProviderError } from "@/lib/providers/maas/maas-provider";
-import { buildMaasStoryImagePrompt, completeMaasStoryMedia, downloadMaasStoryMedia, prepareMaasStoryForMedia } from "./parent-storybook-maas-media";
+import { MaasStoryMediaDownloadError, buildMaasStoryImagePrompt, completeMaasStoryMedia, downloadMaasStoryMedia, prepareMaasStoryForMedia } from "./parent-storybook-maas-media";
 import { shouldCacheParentStoryBookResponse } from "./parent-storybook-cache";
 import { buildParentStoryBookPersistentMediaKey, type ParentStoryBookMediaAsset } from "./parent-storybook-media-store";
 import { InMemoryStorybookMediaTaskStore } from "./storybook-media-task-store";
@@ -184,4 +184,75 @@ test("generated media downloader limits streamed bytes and rejects redirects", a
     globalThis.fetch = (async () => new Response(new Uint8Array(12 * 1024 * 1024 + 1), { headers: { "content-type": "audio/wav" } })) as typeof fetch;
     await assert.rejects(downloadMaasStoryMedia("https://safe.oss-cn-beijing.aliyuncs.com/a.wav", "audio"), /exceeds limit/);
   } finally { globalThis.fetch = previous; }
+});
+
+test("a charged image URL survives a failed download and resumes saving without another generation", async () => {
+  const fixture = await harness(), png = await sharp({ create: { width: 2, height: 3, channels: 3, background: "#557799" } }).png().toBuffer();
+  const privateUrl = "https://synthetic.oss-cn-beijing.aliyuncs.com/private.png?Signature=must-never-be-public";
+  fixture.dependencies.image = async () => { fixture.calls.image++; return { imageUrl: privateUrl, base64: null, mimeType: "image/png", model: "z-image-turbo", requestId: "synthetic-receipt-image" }; };
+  let downloads = 0;
+  fixture.dependencies.download = async url => { assert.equal(url, privateUrl); downloads++; if (downloads === 1) throw new MaasStoryMediaDownloadError("download-aborted", "safe synthetic interruption"); return { bytes: png, contentType: "image/png" }; };
+  const first = await completeMaasStoryMedia(fixture.input, fixture.dependencies);
+  assert.equal(first.scenes[0].imageStatus, "empty"); assert.match(first.providerMeta.diagnostics!.image.lastErrorReason!, /可重试保存/u);
+  assert.ok(!JSON.stringify(first).includes("Signature=")); assert.equal(fixture.calls.image, 1);
+  fixture.input.payload.story = first;
+  const resumed = await completeMaasStoryMedia(fixture.input, fixture.dependencies);
+  assert.equal(resumed.scenes[0].imageStatus, "ready"); assert.equal(resumed.providerMeta.imageDelivery, "real");
+  assert.equal(fixture.calls.image, 1); assert.equal(fixture.calls.audio, 1); assert.equal(downloads, 2);
+  assert.ok(!JSON.stringify(resumed).includes(privateUrl));
+});
+
+test("inline paid media receipts survive Blob persistence failure without repeating either paid provider", async () => {
+  const fixture = await harness(), persist = fixture.dependencies.persist!; let rejectOnce = true;
+  fixture.dependencies.persist = async request => { if (request.contentType.startsWith("image/") && rejectOnce) { rejectOnce = false; throw new Error("synthetic Blob outage"); } return persist(request); };
+  const first = await completeMaasStoryMedia(fixture.input, fixture.dependencies); fixture.input.payload.story = first;
+  assert.equal(first.scenes[0].imageStatus, "empty"); const result = await completeMaasStoryMedia(fixture.input, fixture.dependencies);
+  assert.equal(result.scenes[0].imageStatus, "ready"); assert.equal(fixture.calls.image, 1); assert.equal(fixture.calls.audio, 1);
+});
+
+test("a false completion acknowledgement never pretends ready and stable bytes permit free reconciliation", async () => {
+  const fixture = await harness(), mark = fixture.store.markReady.bind(fixture.store); let rejectOnce = true;
+  fixture.store.markReady = async (identity, args, operation) => { if (identity.channel === "image" && rejectOnce) { rejectOnce = false; return false; } return mark(identity, args, operation); };
+  const first = await completeMaasStoryMedia(fixture.input, fixture.dependencies); assert.equal(first.scenes[0].imageStatus, "empty");
+  const result = await completeMaasStoryMedia(fixture.input, fixture.dependencies); assert.equal(result.scenes[0].imageStatus, "ready"); assert.equal(fixture.calls.image, 1);
+});
+
+test("a blocked priority page prevents silent later-page charging until the user explicitly changes priority", async () => {
+  const fixture = await harness(2), image = fixture.dependencies.image!;
+  fixture.dependencies.image = async () => { fixture.calls.image++; throw new MaasProviderError("synthetic unknown", "request-timeout"); };
+  const first = await completeMaasStoryMedia(fixture.input, fixture.dependencies); fixture.input.payload.story = first;
+  await completeMaasStoryMedia(fixture.input, fixture.dependencies); assert.equal(fixture.calls.image, 1, "不能跳过blocked首图偷偷为下一页扣费。");
+  fixture.dependencies.image = image; fixture.input.payload.prioritySceneIndices = [2];
+  const selected = await completeMaasStoryMedia(fixture.input, fixture.dependencies); assert.equal(fixture.calls.image, 2); assert.equal(selected.scenes[1].imageStatus, "ready"); assert.equal(selected.scenes[0].imageStatus, "empty");
+});
+
+test("WAV MIME aliases are normalized before new durable persistence", async () => {
+  const fixture = await harness();
+  fixture.dependencies.tts = async () => { fixture.calls.audio++; return { audioUrl: "https://synthetic.oss-cn-beijing.aliyuncs.com/audio.wav", audioBytes: null, mimeType: "audio/wav", model: "qwen3-tts-flash", requestId: "synthetic-alias-audio" }; };
+  fixture.dependencies.download = async () => ({ bytes: Buffer.from(syntheticPcmWav()), contentType: "audio/x-wav" });
+  const result = await completeMaasStoryMedia(fixture.input, fixture.dependencies);
+  const asset = fixture.assets.get(`${fixture.input.institutionId}:${result.scenes[0].audioRef}`); assert.equal(asset?.contentType, "audio/wav");
+});
+
+test("download transport diagnostics expose only whitelisted codes, never the signed URL or upstream message", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => { throw Object.assign(new TypeError("secret https://example.invalid?Signature=private"), { cause: { code: "ENOTFOUND" } }); }) as typeof fetch;
+  try { await assert.rejects(downloadMaasStoryMedia("https://safe.aliyuncs.com/image.png?Signature=private", "image"), error => {
+    assert.ok(error instanceof MaasStoryMediaDownloadError); assert.equal(error.code, "ENOTFOUND"); assert.ok(!error.message.includes("Signature")); assert.equal(error.cause, undefined); return true;
+  }); } finally { globalThis.fetch = original; }
+});
+
+test("free reconciliation never reserves a new generation when no recoverable result exists", async () => {
+  const fixture = await harness(4); fixture.input.reconcileOnly = true;
+  const result = await completeMaasStoryMedia(fixture.input, fixture.dependencies);
+  assert.equal(fixture.calls.image, 0); assert.equal(fixture.calls.audio, 0);
+  assert.ok(result.scenes.every(scene => scene.imageStatus !== "ready" && scene.audioStatus !== "ready"));
+  assert.match(result.providerMeta.diagnostics!.image.lastErrorReason!, /未重新调用/u);
+});
+
+test("one media round stops cold lookups after its single image and audio rather than reading every remaining page", async () => {
+  const fixture = await harness(4), read = fixture.dependencies.read!; let reads = 0;
+  fixture.dependencies.read = async input => { reads++; return read(input); };
+  await completeMaasStoryMedia(fixture.input, fixture.dependencies);
+  assert.equal(fixture.calls.image, 1); assert.equal(fixture.calls.audio, 1); assert.equal(reads, 2);
 });

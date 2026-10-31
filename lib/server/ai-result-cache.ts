@@ -22,7 +22,7 @@ export interface AiResultStore {
 }
 export type AiResultContext = {
   session: SessionUser;
-  capability: "suggestions" | "weekly-report";
+  capability: "suggestions" | "weekly-report" | "parent-storybook";
   scopeId: string;
   input: unknown;
 };

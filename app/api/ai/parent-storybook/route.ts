@@ -38,7 +38,8 @@ import {
   requireScopedChild,
 } from "@/lib/server/session-scope";
 import { logSecurityEvent } from "@/lib/server/security-log";
-import { buildChildSuggestionSnapshotFromScope } from "@/lib/server/ai-scoped-payloads";
+import { buildParentStoryBookPayloadFromScope } from "@/lib/server/parent-storybook-scoped-payload";
+import { withParentStoryBookTextResult } from "@/lib/server/parent-storybook-text-result";
 import { prepareMaasStoryForMedia } from "@/lib/server/parent-storybook-maas-media";
 
 export const runtime = "nodejs";
@@ -648,10 +649,12 @@ export async function POST(request: Request) {
     ...payload,
     childId: requestedChildId,
   };
-  if (isMaasSelected() && !isDemoSeedRequest(payload)) {
-    // 月龄必须来自服务端已授权档案；客户端不能把8月龄儿童改成3岁以改变照护边界。
-    const trustedSnapshot = buildChildSuggestionSnapshotFromScope(sessionScope, requestedChildId);
-    if (trustedSnapshot) payload = { ...payload, snapshot: { ...payload.snapshot, child: trustedSnapshot.child } };
+  let dataVersion = "legacy";
+  const durableText = isMaasSelected() && !isDemoSeedRequest(payload);
+  if (durableText) {
+    const trusted = buildParentStoryBookPayloadFromScope(payload, sessionScope, requestedChildId);
+    payload = trusted.payload;
+    dataVersion = trusted.dataVersion;
   }
   const provenanceContext: AiProvenanceContext = {
     userId: sessionUser.id,
@@ -660,7 +663,9 @@ export async function POST(request: Request) {
     scopeId: requestedChildId,
   };
 
-  const bypassCache = shouldBypassStoryCache(request);
+  const generateStory = async () => {
+  // 普通 MaaS 账号只使用持久账本；进程 Map 不能在模型切换或重启后替代收费幂等。
+  const bypassCache = durableText && sessionUser.accountKind === "normal" || shouldBypassStoryCache(request);
   const cacheKey = buildParentStoryBookRequestCacheKey(payload);
   const cachedResponse = bypassCache ? null : getCachedParentStoryBookResponse(cacheKey);
 
@@ -894,4 +899,9 @@ export async function POST(request: Request) {
       }),
     }
   );
+  };
+  return durableText
+    ? withParentStoryBookTextResult({ session: sessionUser, childId: requestedChildId, payload, dataVersion }, generateStory,
+      { cacheOnly: request.headers.get("x-ai-cache-only") === "1", confirmRetryUnknown: request.headers.get("x-ai-confirm-retry") === "1" })
+    : generateStory();
 }

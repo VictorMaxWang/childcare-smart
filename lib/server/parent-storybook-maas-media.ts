@@ -6,12 +6,16 @@ import { ApiRouteError } from "@/lib/server/api-errors";
 import type { ParentStoryBookMediaStatusRequest, ParentStoryBookResponse, ParentStoryBookScene } from "@/lib/ai/types";
 import { MaasProviderError, requestMaasImage, requestMaasTts, resolveMaasConfig } from "@/lib/providers/maas/maas-provider";
 import { buildParentStoryBookPersistentMediaKey, persistParentStoryBookMedia, readParentStoryBookMedia } from "@/lib/server/parent-storybook-media-store";
-import { getStorybookMediaTaskStore, type StorybookMediaTaskIdentity } from "@/lib/server/storybook-media-task-store";
+import { getStorybookMediaTaskStore, type StorybookMediaTaskIdentity, type StorybookMediaProviderReceipt } from "@/lib/server/storybook-media-task-store";
 import { buildAiProviderTraceFromProviderMeta } from "@/lib/ai/provider-trace";
 
 type Channel = "image" | "audio";
 const mediaPath = (key: string) => `/api/ai/parent-storybook/media/${key}`;
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+
+export class MaasStoryMediaDownloadError extends Error {
+  constructor(readonly code: string, message: string) { super(message); this.name = "MaasStoryMediaDownloadError"; }
+}
 
 /**
  * 语音服务可能返回流式 WAV，以接近 2^31 的长度占位并靠 EOF 结束。
@@ -47,29 +51,38 @@ export function normalizeMaasStoryWav(input: Buffer): Buffer {
 
 /** 临时媒体只允许可信 OSS 域名；逐跳检查，避免把模型响应当作任意 URL 下载器。 */
 export async function downloadMaasStoryMedia(url: string, channel: Channel, signal?: AbortSignal, deadlineAtMs = Date.now() + 20000) {
-  const parsed = new URL(url);
-  if (!parsed.hostname.endsWith(".aliyuncs.com") || parsed.username || parsed.password || (parsed.port && parsed.port !== "443")) throw new Error("Unsafe generated media URL");
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { throw new MaasStoryMediaDownloadError("invalid-url", "Invalid generated media URL"); }
+  if (!parsed.hostname.endsWith(".aliyuncs.com") || parsed.username || parsed.password || (parsed.port && parsed.port !== "443")) throw new MaasStoryMediaDownloadError("unsafe-target", "Unsafe generated media URL");
   if (parsed.protocol === "http:") parsed.protocol = "https:";
-  if (parsed.protocol !== "https:") throw new Error("Generated media requires HTTPS");
+  if (parsed.protocol !== "https:") throw new MaasStoryMediaDownloadError("unsafe-scheme", "Generated media requires HTTPS");
   const remaining = deadlineAtMs - Date.now();
-  if (remaining <= 0) throw new Error("Media download deadline exceeded");
+  if (remaining <= 0) throw new MaasStoryMediaDownloadError("deadline-exhausted", "Media download deadline exceeded");
   const requestSignal = AbortSignal.any([AbortSignal.timeout(Math.min(20000, remaining)), ...(signal ? [signal] : [])]);
-  const response = await fetch(parsed, { redirect: "error", cache: "no-store", signal: requestSignal });
+  let response: Response;
+  try { response = await fetch(parsed, { redirect: "error", cache: "no-store", signal: requestSignal }); }
+  catch (error) {
+    const cause = error && typeof error === "object" ? (error as { cause?: { code?: unknown } }).cause : undefined;
+    const code = typeof cause?.code === "string" && ["ENOTFOUND", "EAI_AGAIN", "ECONNRESET", "ETIMEDOUT", "CERT_HAS_EXPIRED", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_SOCKET"].includes(cause.code) ? cause.code : requestSignal.aborted ? "download-aborted" : "transport-failed";
+    // 不带cause或原始message，避免Node网络错误把签名URL和query带进生产日志。
+    throw new MaasStoryMediaDownloadError(code, "Generated media transport failed");
+  }
   const type = (response.headers.get("content-type") || "").split(";")[0].toLowerCase();
-  if (!response.ok || !type.startsWith(`${channel}/`)) { await response.body?.cancel(); throw new Error("Generated media response is invalid"); }
+  if (!response.ok || !type.startsWith(`${channel}/`)) { await response.body?.cancel(); throw new MaasStoryMediaDownloadError(!response.ok ? `http-status-${response.status}` : "invalid-content-type", "Generated media response is invalid"); }
   const limit = channel === "image" ? 16 * 1024 * 1024 : 12 * 1024 * 1024;
-  if (Number(response.headers.get("content-length")) > limit || !response.body) { await response.body?.cancel(); throw new Error("Generated media exceeds limit"); }
+  if (Number(response.headers.get("content-length")) > limit || !response.body) { await response.body?.cancel(); throw new MaasStoryMediaDownloadError("body-limit-or-missing", "Generated media exceeds limit"); }
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let length = 0;
   while (true) {
-    const part = await reader.read();
+    let part: ReadableStreamReadResult<Uint8Array>;
+    try { part = await reader.read(); } catch { throw new MaasStoryMediaDownloadError("body-stream-failed", "Generated media body read failed"); }
     if (part.done) break;
     length += part.value.length;
-    if (length > limit) { await reader.cancel(); throw new Error("Generated media exceeds limit"); }
+    if (length > limit) { await reader.cancel(); throw new MaasStoryMediaDownloadError("body-limit", "Generated media exceeds limit"); }
     chunks.push(part.value);
   }
-  if (!length) throw new Error("Generated media is empty");
+  if (!length) throw new MaasStoryMediaDownloadError("body-empty", "Generated media is empty");
   return { bytes: Buffer.concat(chunks), contentType: type };
 }
 
@@ -141,6 +154,7 @@ export async function completeMaasStoryMedia(input: {
   userId: string;
   signal?: AbortSignal;
   deadlineAtMs: number;
+  reconcileOnly?: boolean;
 }, overrides: Partial<Dependencies> = {}): Promise<ParentStoryBookResponse> {
   const dependencies: Dependencies = {
     store: overrides.store ?? getStorybookMediaTaskStore(), image: requestMaasImage, tts: requestMaasTts,
@@ -193,52 +207,87 @@ export async function completeMaasStoryMedia(input: {
       else Object.assign(scene, { audioUrl: null, audioRef: null, audioStatus: "empty", audioProvider: provider });
       if (input.signal?.aborted || input.deadlineAtMs - Date.now() < 2500) continue;
       let leaseToken: string | null = null;
+      let receiptPersisted = false;
+      let stage = "lookup";
       try {
+        if (submitted[channel]) continue;
         const asset = await dependencies.read({ institutionId: input.institutionId, mediaKey: stableKey, authorizedChildIds: new Set([input.payload.childId]), ...operation });
         if (asset && asset.ownerChildId === input.payload.childId && asset.ownerStorybookId === story.storyId && asset.storageMode !== "cached_media") {
           const claim = await dependencies.store.claim(identity, operation);
-          if (claim.action !== "ready") await dependencies.store.recoverReadyAudio(identity, stableKey, operation);
+          if (claim.action !== "ready" && !await dependencies.store.recoverReadyAudio(identity, stableKey, operation)) throw new Error("Verified media could not be reconciled with task state");
           setReady(stableKey, true);
           continue;
         }
         // 尚未向 provider 发送的页面不抢租约，避免轮询本身耗尽付费尝试次数。
-        if (submitted[channel]) continue;
-        let claim = await dependencies.store.claim(identity, operation);
-        if (claim.action === "ready" && claim.mediaKey) {
-          await dependencies.store.invalidateReadyMedia(identity, claim.mediaKey, "persistent-media-missing", operation);
-          problems[channel] = "已保存媒体暂时无法读取，已停止重复生成。";
-          continue;
+        stage = "receipt-read";
+        if (!dependencies.store.claimProviderReceipt || !dependencies.store.saveProviderReceipt) throw new Error("Durable provider receipt store unavailable");
+        const recovery = await dependencies.store.claimProviderReceipt(identity, operation);
+        if (recovery.action === "wait") { submitted[channel] = true; continue; }
+        let receipt: StorybookMediaProviderReceipt;
+        if (recovery.action === "resume") {
+          leaseToken = recovery.leaseToken; receipt = recovery.receipt; receiptPersisted = true; submitted[channel] = true;
+        } else {
+          if (input.reconcileOnly || input.payload.reconcileOnly) {
+            submitted[channel] = true;
+            problems[channel] = "未找到可恢复的已生成媒体，未重新调用生成服务。";
+            continue;
+          }
+          let claim = await dependencies.store.claim(identity, operation);
+          if (claim.action === "ready" && claim.mediaKey) {
+            await dependencies.store.invalidateReadyMedia(identity, claim.mediaKey, "persistent-media-missing", operation);
+            problems[channel] = "已保存媒体暂时无法读取，已停止重复生成。";
+            submitted[channel] = true;
+            continue;
+          }
+          if (claim.action === "blocked" && input.payload.retryFailed && claim.lastErrorReason?.startsWith("provider-rejected-") && dependencies.store.retryBlockedSubmission) {
+            await dependencies.store.retryBlockedSubmission(identity, operation);
+            claim = await dependencies.store.claim(identity, operation);
+          }
+          if (claim.action === "blocked") { submitted[channel] = true; problems[channel] = claim.lastErrorReason?.startsWith("provider-rejected-") ? "模型拒绝了媒体请求，可主动重试。" : "媒体请求结果待确认，已停止自动重复扣费。"; continue; }
+          if (claim.action !== "submit" || !claim.leaseToken) { submitted[channel] = true; continue; }
+          leaseToken = claim.leaseToken;
+          submitted[channel] = true;
+          stage = "provider";
+          if (channel === "image") {
+            const result = await dependencies.image({ prompt: text, size: "768*1024", ...providerOperation });
+            receipt = { version: 1, model: result.model, requestId: result.requestId, contentType: result.mimeType, kind: result.base64 ? "base64" : "url", data: result.base64 || result.imageUrl || "", receivedAtMs: Date.now() };
+          } else {
+            const result = await dependencies.tts({ text, voice: "Cherry", ...providerOperation });
+            receipt = { version: 1, model: result.model, requestId: result.requestId, contentType: result.mimeType, kind: result.audioBytes ? "base64" : "url", data: result.audioBytes ? Buffer.from(result.audioBytes).toString("base64") : result.audioUrl || "", receivedAtMs: Date.now() };
+          }
+          stage = "receipt-save";
+          // 已收费成果的回执不依赖浏览器连接继续存在；单独保留5秒DB预算，仍然有界。
+          const receiptOperation = { deadlineAtMs: Math.max(Date.now() + 5000, input.deadlineAtMs) };
+          if (!await dependencies.store.saveProviderReceipt(identity, leaseToken, receipt, receiptOperation)) throw new Error("Provider receipt lease was lost");
+          receiptPersisted = true;
         }
-        if (claim.action === "blocked" && input.payload.retryFailed && claim.lastErrorReason?.startsWith("provider-rejected-") && dependencies.store.retryBlockedSubmission) {
-          await dependencies.store.retryBlockedSubmission(identity, operation);
-          claim = await dependencies.store.claim(identity, operation);
-        }
-        if (claim.action === "blocked") { problems[channel] = claim.lastErrorReason?.startsWith("provider-rejected-") ? "模型拒绝了媒体请求，可主动重试。" : "媒体请求结果待确认，已停止自动重复扣费。"; continue; }
-        if (claim.action !== "submit" || !claim.leaseToken) continue;
-        leaseToken = claim.leaseToken;
-        submitted[channel] = true;
         let bytes: Buffer;
         let contentType: string;
+        stage = "download";
+        const media = receipt.kind === "base64" ? { bytes: Buffer.from(receipt.data, "base64"), contentType: receipt.contentType } : await dependencies.download(receipt.data, channel, input.signal, input.deadlineAtMs);
+        stage = "transcode";
         if (channel === "image") {
-          const result = await dependencies.image({ prompt: text, size: "768*1024", ...providerOperation });
-          const raw = result.base64 ? Buffer.from(result.base64, "base64") : (await dependencies.download(result.imageUrl!, channel, input.signal, input.deadlineAtMs)).bytes;
-          bytes = await sharp(raw, { limitInputPixels: 16_000_000 }).rotate().resize({ width: 1024, height: 1366, fit: "inside", withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
+          bytes = await sharp(media.bytes, { limitInputPixels: 16_000_000 }).rotate().resize({ width: 1024, height: 1366, fit: "inside", withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
           contentType = "image/webp";
         } else {
-          const result = await dependencies.tts({ text, voice: "Cherry", ...providerOperation });
-          const media = result.audioBytes ? { bytes: Buffer.from(result.audioBytes), contentType: result.mimeType } : await dependencies.download(result.audioUrl!, channel, input.signal, input.deadlineAtMs);
-          contentType = media.contentType;
-          bytes = /audio\/(?:x-)?wav/iu.test(contentType) ? normalizeMaasStoryWav(media.bytes) : media.bytes;
+          const wav = /audio\/(?:x-)?wav/iu.test(media.contentType);
+          contentType = wav ? "audio/wav" : media.contentType;
+          bytes = wav ? normalizeMaasStoryWav(media.bytes) : media.bytes;
         }
+        stage = "persist";
         const saved = await dependencies.persist({ institutionId: input.institutionId, childId: input.payload.childId, storybookId: story.storyId, bytes, contentType, seed, ...operation });
-        await dependencies.store.markReady(identity, { leaseToken, mediaKey: saved.mediaKey }, operation);
+        stage = "task-ready";
+        if (!await dependencies.store.markReady(identity, { leaseToken, mediaKey: saved.mediaKey }, operation)) throw new Error("Persisted media task lease was lost");
         setReady(saved.mediaKey, false);
       } catch (error) {
+        submitted[channel] = true;
         // 只把明确的 HTTP 拒绝标记为可人工重试；超时/下载/落盘失败均可能已收费。
         const knownRejection = error instanceof MaasProviderError && [400, 401, 403, 429].includes(error.httpStatus ?? 0);
-        const reason = knownRejection ? `provider-rejected-${(error as MaasProviderError).httpStatus}` : "media-result-unknown";
+        const safeCode = error instanceof MaasStoryMediaDownloadError ? error.code : knownRejection ? `http-${(error as MaasProviderError).httpStatus}` : "operation-failed";
+        const reason = knownRejection ? `provider-rejected-${(error as MaasProviderError).httpStatus}` : receiptPersisted ? `materialization-${stage}-${safeCode}` : "media-result-unknown";
+        console.warn("storybook.media.failure", { channel, stage, code: safeCode, receiptPersisted });
         if (leaseToken) await dependencies.store.markSubmissionFailure(identity, leaseToken, { retryable: false, nextRetryAtMs: Date.now(), reason }, operation).catch(() => undefined);
-        problems[channel] = knownRejection ? "模型拒绝了媒体请求，可检查服务状态后主动重试。" : "媒体请求未完成，结果待确认，已停止自动重复扣费。";
+        problems[channel] = knownRejection ? "模型拒绝了媒体请求，可检查服务状态后主动重试。" : receiptPersisted ? "媒体已生成，保存暂未完成，可重试保存而不再次生成。" : "媒体请求未完成，结果待确认，已停止自动重复扣费。";
       }
     }
   }

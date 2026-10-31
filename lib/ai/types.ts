@@ -860,6 +860,8 @@ export interface ParentStoryBookMediaStatusRequest {
   storyId: string;
   prioritySceneIndices?: number[];
   retryFailed?: boolean;
+  /** 只恢复已经存在的私有媒体或上游回执；此模式绝不调用收费生成器。 */
+  reconcileOnly?: boolean;
   story: ParentStoryBookResponse;
 }
 
@@ -971,6 +973,13 @@ export interface WeeklyReportSnapshot {
   periodLabel: string;
   role: WeeklyReportRole | string;
   ageBandContext?: ResolvedAgeBandContext;
+  period?: { startDate: string; endDate: string; timeZone: "Asia/Taipei" };
+  dataVersion?: string;
+  recentFeedback?: Array<{
+    feedbackId: string; childId: string; businessDate: string; submittedAt: string; updatedAt: string;
+    recordVersion: string | number | null; status: string; executionStatus: string; childReaction: string;
+    improvementStatus: string; notes: string; barriers: string[]; contentVersion: string;
+  }>;
   overview: {
     visibleChildren: number;
     attendanceRate: number;

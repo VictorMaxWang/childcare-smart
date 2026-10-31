@@ -29,6 +29,34 @@ const audioIdentity: StorybookMediaTaskIdentity = {
     "8cc321860cde4c4f4f5e8b84af487350bd5e9dfac6e321d96a5a4fbc9c9e9502",
 };
 
+test("synchronous MaaS image completion requires its submission lease rather than an asynchronous task id", async () => {
+  const store = new InMemoryStorybookMediaTaskStore(), identity: StorybookMediaTaskIdentity = { ...imageIdentity, provider: "maas-z-image", providerModel: "z-image-turbo" };
+  const claim = await store.claim(identity); assert.ok(claim.leaseToken);
+  assert.equal(await store.markReady(identity, { leaseToken: "wrong-lease", mediaKey: "a".repeat(40) }), false);
+  assert.equal(await store.markReady(identity, { leaseToken: claim.leaseToken, mediaKey: "a".repeat(40) }), true);
+  assert.equal((await store.claim(identity)).action, "ready");
+});
+
+test("private provider receipts have a separate lease and never reopen a receipt-less unknown generation", async () => {
+  const store = new InMemoryStorybookMediaTaskStore(), identity: StorybookMediaTaskIdentity = { ...imageIdentity, provider: "maas-z-image", providerModel: "z-image-turbo" }, nowMs = Date.now();
+  const receipt = { version: 1 as const, model: "z-image-turbo", requestId: "synthetic-image-1", contentType: "image/png", kind: "url" as const, data: "https://synthetic.oss-cn-beijing.aliyuncs.com/a.png?Signature=private", receivedAtMs: nowMs };
+  const claim = await store.claim(identity, { nowMs }); assert.ok(claim.leaseToken);
+  assert.equal(await store.saveProviderReceipt(identity, "wrong-lease", receipt), false);
+  assert.equal(await store.saveProviderReceipt(identity, claim.leaseToken, receipt), true);
+  assert.equal((await store.claimProviderReceipt(identity, { nowMs })).action, "wait");
+  assert.ok(!JSON.stringify(await store.claim(identity, { nowMs })).includes("Signature="));
+  await store.markSubmissionFailure(identity, claim.leaseToken, { retryable: false, nextRetryAtMs: nowMs, reason: "materialization-download-timeout" });
+  const claims = await Promise.all([store.claimProviderReceipt(identity, { nowMs }), store.claimProviderReceipt(identity, { nowMs })]);
+  assert.equal(claims.filter(item => item.action === "resume").length, 1);
+  const resumed = claims.find(item => item.action === "resume"); assert.ok(resumed?.action === "resume"); assert.deepEqual(resumed.receipt, receipt);
+  assert.equal((await store.claim(identity, { nowMs })).attemptCount, 1);
+  assert.equal((await store.claimProviderReceipt({ ...identity, childId: "foreign-child" }, { nowMs })).action, "none");
+  const unknown = { ...identity, sceneIndex: 2 }, reserved = await store.claim(unknown, { nowMs }); assert.ok(reserved.leaseToken);
+  await store.markSubmissionFailure(unknown, reserved.leaseToken, { retryable: false, nextRetryAtMs: nowMs, reason: "media-result-unknown" });
+  assert.equal((await store.claimProviderReceipt(unknown, { nowMs: nowMs + 120000 })).action, "none");
+  assert.equal((await store.claim(unknown, { nowMs: nowMs + 120000 })).action, "blocked");
+});
+
 async function submitImage(
   store: InMemoryStorybookMediaTaskStore,
   nowMs: number,
