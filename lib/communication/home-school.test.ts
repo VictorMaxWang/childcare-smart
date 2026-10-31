@@ -13,6 +13,14 @@ const children = [
   { id: "c-3", name: "小周", className: "晨曦班" },
 ] as Child[];
 
+test("positive feedback observations are not described as execution barriers", () => {
+  const content = buildStructuredFeedbackMessageContent({ childName: "合成儿童", executionStatus: "completed", childReaction: "accepted", improvementStatus: "clear_improvement", barriers: ["情绪稳定", "需要提醒", "孩子抗拒"], notes: "本次家庭观察" });
+  assert.doesNotMatch(content, /主要阻碍：[^。]*情绪稳定/u);
+  assert.match(content, /观察到：情绪稳定/u);
+  assert.match(content, /支持需求：需要提醒/u);
+  assert.match(content, /主要阻碍：孩子抗拒/u);
+});
+
 function message(input: Partial<DemoMessage> & Pick<DemoMessage, "messageId" | "conversationId" | "childId" | "classId" | "senderRole" | "createdAt" | "content">): DemoMessage {
   return {
     senderId: input.senderRole === "teacher" ? "u-teacher" : "u-parent",

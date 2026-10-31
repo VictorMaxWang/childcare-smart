@@ -74,6 +74,11 @@ import { toast } from "sonner";
 
 type AttendanceRecord = AppStateSnapshot["attendance"][number] & { archivedAt?: string; updatedAt?: string };
 
+function attendanceStatusLabel(record?: Pick<AttendanceRecord, "isPresent">) {
+  // 没有登记不是缺勤；只有明确的 false 记录才展示请假/缺勤语义。
+  return record?.isPresent === true ? "今日出勤" : record?.isPresent === false ? "今日缺勤" : "尚未登记出勤";
+}
+
 type ChildFormState = {
   name: string;
   nickname: string;
@@ -249,7 +254,7 @@ export default function ChildrenPage() {
         child.allergies.join(" "),
         getAgeBandFromBirthDate(child.birthDate),
         child.archivedAt ? "已归档" : "在册",
-        attendanceRecord?.isPresent ? "出勤" : "缺勤",
+        attendanceStatusLabel(attendanceRecord),
       ]
         .filter(Boolean)
         .join(" ")
@@ -866,8 +871,10 @@ export default function ChildrenPage() {
                   </p>
                   {selectedDetailAttendance?.isPresent ? (
                     <p className="mt-3 leading-6">今日出勤，入园 {selectedDetailAttendance.checkInAt ?? "--"}，离园 {selectedDetailAttendance.checkOutAt ?? "--"}。</p>
-                  ) : (
+                  ) : selectedDetailAttendance?.isPresent === false ? (
                     <p className="mt-3 leading-6">今日缺勤，原因：{selectedDetailAttendance?.absenceReason || "未登记"}。</p>
+                  ) : (
+                    <p className="mt-3 leading-6">尚未登记出勤。</p>
                   )}
                 </section>
               </DrawerBody>
@@ -969,10 +976,10 @@ function ChildRow({
       </td>
       <td className="px-5 py-4">
         <StatusTag variant={isPresent ? "success" : "neutral"} showDot>
-          {isPresent ? "今日出勤" : "今日缺勤"}
+          {attendanceStatusLabel(attendance)}
         </StatusTag>
         <p className="mt-2 text-xs text-slate-500">
-          {isPresent ? `入园 ${attendance?.checkInAt ?? "--"} · 离园 ${attendance?.checkOutAt ?? "--"}` : `原因：${attendance?.absenceReason || "未登记"}`}
+          {isPresent ? `入园 ${attendance?.checkInAt ?? "--"} · 离园 ${attendance?.checkOutAt ?? "--"}` : attendance?.isPresent === false ? `原因：${attendance.absenceReason || "未登记"}` : "等待今日到离园登记"}
         </p>
       </td>
       <td className="px-5 py-4">
@@ -1058,7 +1065,7 @@ function ChildArchiveCard({
           </div>
           <div className="flex flex-col items-end gap-2">
             <Badge variant={child.archivedAt ? "warning" : isPresent ? "success" : "secondary"}>
-              {child.archivedAt ? "已归档" : isPresent ? "今日出勤" : "今日缺勤"}
+              {child.archivedAt ? "已归档" : attendanceStatusLabel(attendance)}
             </Badge>
           </div>
         </div>

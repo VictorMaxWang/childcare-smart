@@ -271,6 +271,26 @@ export async function attestAiJsonResponse(
   );
 }
 
+/**
+ * 仅供服务端验证从已授权数据库读出的绘本原文。签发账号从原回执读取后仍完整
+ * 验证 HMAC、正文摘要、机构与儿童，不能用此入口验证客户端声明的 creator。
+ * 浏览器提交与新结果继续使用 verifyAiResultAttestation 的严格当前账号边界。
+ */
+export function verifyPersistedStorybookResultAttestation(
+  value: unknown,
+  context: Pick<AiProvenanceContext, "institutionId" | "scopeId">
+) {
+  if (!isRecord(value)) return false;
+  const envelope = parseAttestation(readString(value[AI_PROVENANCE_ATTESTATION_FIELD]));
+  if (!envelope) return false;
+  return verifyAiResultAttestation(value, {
+    userId: envelope.payload.userId,
+    institutionId: context.institutionId,
+    scopeId: context.scopeId,
+    capability: "parent-storybook",
+  });
+}
+
 function unverifiedProvenance(capability: string) {
   return {
     verified: false,

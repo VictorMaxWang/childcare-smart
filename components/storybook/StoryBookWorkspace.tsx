@@ -641,15 +641,8 @@ export default function StoryBookWorkspace({
             controller.abort();
           };
         }
-        if (workspaceRole === "parent") {
-          void upsertApiStorybook({
-            childId: selectedFeed.child.id,
-            storybookId: restoredStory.storyId,
-            response: restoredStory as unknown as Record<string, unknown>,
-            sourceRecordIds: latestSavedStorybook.sourceRecordIds,
-            generatedAt: restoredStory.generatedAt,
-          }).catch(() => undefined);
-        }
+        // 打开已保存绘本是只读操作。尤其教师生成、家长阅读时，原回执绑定生成者，
+        // 不能把阅读恢复结果当作当前家长的新 AI 结果再提交，更不能吞掉保存失败。
         startTransition(() => {
           setStory(restoredStory);
           setStatus(restoredStory.mode);

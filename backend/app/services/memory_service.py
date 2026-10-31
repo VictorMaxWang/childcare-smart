@@ -8,6 +8,7 @@ from typing import Any
 from app.db.repositories import RepositoryBundle, RepositoryError
 from app.memory.session_memory import SessionMemory
 from app.memory.vector_store import SimpleVectorStore
+from app.services.memory_summary import business_summary_text, historical_advice, snapshot_history_summary, trace_history_summary
 from app.schemas.memory import (
     AgentStateSnapshotRecord,
     AgentTraceLogRecord,
@@ -364,17 +365,17 @@ def _snapshot_summary(record: AgentStateSnapshotRecord) -> str | None:
     if isinstance(bridge_writeback, dict):
         memory_candidate = bridge_writeback.get("memoryCandidate") or bridge_writeback.get("memory_candidate")
         if isinstance(memory_candidate, dict):
-            summary = _coerce_string(memory_candidate.get("summary"))
+            summary = business_summary_text(memory_candidate.get("summary"))
             if summary:
-                return summary
+                return historical_advice(summary, record.snapshot_type, record.created_at)
 
         follow_up_seed = _extract_bridge_follow_up_seed(bridge_writeback)
         if isinstance(follow_up_seed, dict):
-            suggestion_title = _coerce_string(
+            suggestion_title = business_summary_text(
                 follow_up_seed.get("suggestionTitle") or follow_up_seed.get("suggestion_title")
             )
             if suggestion_title:
-                return suggestion_title
+                return historical_advice(suggestion_title, record.snapshot_type, record.created_at)
 
     feedback_signals = [
         signal
@@ -387,51 +388,17 @@ def _snapshot_summary(record: AgentStateSnapshotRecord) -> str | None:
         if signal
     ]
     if feedback_signals:
-        return feedback_signals[0]
-
-    result = record.snapshot_json.get("result") if isinstance(record.snapshot_json, dict) else None
-    if isinstance(result, dict):
-        summary = (
-            _coerce_string(result.get("summary"))
-            or _coerce_string(result.get("assistantAnswer"))
-            or _coerce_string(result.get("title"))
-        )
-        if summary:
-            return summary
-
-        coordinator = result.get("coordinatorSummary")
-        if isinstance(coordinator, dict):
-            final_conclusion = _coerce_string(coordinator.get("finalConclusion"))
-            if final_conclusion:
-                return final_conclusion
-
-    return _coerce_string(record.input_summary) or _safe_json_text(record.snapshot_json)
+        return historical_advice(feedback_signals[0], "guardian-feedback", record.created_at)
+    return snapshot_history_summary(record.model_dump(mode="json"))
 
 
 def _consultation_takeaways(consultations: list[AgentStateSnapshotRecord], limit: int = 5) -> list[str]:
     takeaways: list[str] = []
 
     for record in consultations:
-        result = record.snapshot_json.get("result") if isinstance(record.snapshot_json, dict) else None
-        if not isinstance(result, dict):
-            continue
-
-        summary = _coerce_string(result.get("summary"))
+        summary = _snapshot_summary(record)
         if summary:
-            takeaways.append(f"上次会诊结论：{summary}")
-
-        coordinator = result.get("coordinatorSummary")
-        if isinstance(coordinator, dict):
-            problem_definition = _coerce_string(coordinator.get("problemDefinition"))
-            if problem_definition:
-                takeaways.append(f"核心问题：{problem_definition}")
-
-        key_findings = result.get("keyFindings")
-        if isinstance(key_findings, list):
-            for item in key_findings[:2]:
-                finding = _coerce_string(item)
-                if finding:
-                    takeaways.append(f"关键发现：{finding}")
+            takeaways.append(summary)
 
     return _take_unique(takeaways, limit=limit)
 
@@ -501,22 +468,21 @@ def _snapshot_signals(records: list[AgentStateSnapshotRecord], limit: int = 6) -
         summary = _snapshot_summary(record)
         if not summary:
             continue
-        prefix = "Recent consultation" if record.snapshot_type == "consultation-result" else "Recent context"
-        signals.append(f"{prefix}: {summary}")
+        signals.append(summary)
         snapshot_json = record.snapshot_json if isinstance(record.snapshot_json, dict) else None
         for candidate in _extract_feedback_candidates(snapshot_json)[:2]:
             feedback_signal = _format_feedback_signal(candidate)
-            if feedback_signal:
-                signals.append(feedback_signal)
+            if cleaned := business_summary_text(feedback_signal):
+                signals.append(cleaned)
     return _take_unique(signals, limit=limit)
 
 def _trace_signals(records: list[AgentTraceLogRecord], limit: int = 6) -> list[str]:
     signals: list[str] = []
     for record in records:
-        summary = _coerce_string(record.output_summary) or _coerce_string(record.input_summary)
+        summary = trace_history_summary(record.model_dump(mode="json"))
         if not summary:
             continue
-        signals.append(f"{record.node_name}：{summary}")
+        signals.append(summary)
     return _take_unique(signals, limit=limit)
 
 
@@ -813,12 +779,12 @@ class MemoryService:
                     continue
                 metadata_child_id = _coerce_string(metadata.get("child_id"))
                 metadata_session_id = _coerce_string(metadata.get("session_id"))
-                if metadata_child_id and metadata_child_id != child_id:
+                if metadata_child_id != child_id:
                     continue
                 if session_id and metadata_session_id and metadata_session_id != session_id:
                     continue
 
-                summary = _coerce_string(item.get("text"))
+                summary = historical_advice(item.get("text"), "memory-search", metadata.get("created_at"))
                 if not summary:
                     continue
                 hits.append(
@@ -828,7 +794,7 @@ class MemoryService:
                         score=float(item.get("score") or 0.0),
                         summary=summary[:140],
                         excerpt=summary[:240],
-                        metadata={k: v for k, v in metadata.items() if v is not None},
+                        metadata={**{k: v for k, v in metadata.items() if v is not None}, "requiresHumanReview": True},
                     )
                 )
 
@@ -867,14 +833,14 @@ class MemoryService:
                     source_type="snapshot",
                     source_id=snapshot.id,
                     score=_score_query_match(normalized_query, summary),
-                    summary=f"{snapshot.snapshot_type}：{summary[:60]}",
-                    excerpt=summary[:240],
-                    metadata={"snapshot_type": snapshot.snapshot_type, "created_at": snapshot.created_at.isoformat()},
+                    summary=summary[:180],
+                    excerpt=summary[:360],
+                    metadata={"snapshot_type": snapshot.snapshot_type, "created_at": snapshot.created_at.isoformat(), "requiresHumanReview": True},
                 )
             )
 
         for trace in traces:
-            summary = _coerce_string(trace.output_summary) or _coerce_string(trace.input_summary)
+            summary = trace_history_summary(trace.model_dump(mode="json"))
             if not summary:
                 continue
             hits.append(
@@ -882,9 +848,9 @@ class MemoryService:
                     source_type="trace",
                     source_id=trace.id,
                     score=_score_query_match(normalized_query, summary),
-                    summary=f"{trace.node_name}：{summary[:60]}",
-                    excerpt=summary[:240],
-                    metadata={"status": trace.status, "created_at": trace.created_at.isoformat()},
+                    summary=summary[:180],
+                    excerpt=summary[:360],
+                    metadata={"status": trace.status, "created_at": trace.created_at.isoformat(), "requiresHumanReview": True},
                 )
             )
 

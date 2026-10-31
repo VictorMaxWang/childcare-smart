@@ -14,6 +14,7 @@ from app.services.high_risk_consultation_contract import (
     build_high_risk_done_event,
     normalize_high_risk_consultation_result,
 )
+from app.services.memory_summary import business_summary_text, snapshot_history_summary, trace_history_summary
 from app.tools.summary_tools import first_non_empty, safe_dict, safe_list, unique_texts
 
 
@@ -56,41 +57,22 @@ def _profile_lines(profile_json: dict[str, Any]) -> list[str]:
     lines: list[str] = []
     for key, value in profile_json.items():
         if isinstance(value, list):
-            joined = "、".join(_coerce_text(item) for item in value if _coerce_text(item))
+            joined = "、".join(text for item in value if (text := business_summary_text(item)))
             if joined:
                 lines.append(f"{key}：{joined}")
             continue
-        text = _coerce_text(value)
+        text = business_summary_text(value)
         if text:
             lines.append(f"{key}：{text}")
     return unique_texts(lines, limit=6)
 
 
 def _snapshot_summary(record: dict[str, Any]) -> str:
-    snapshot_json = safe_dict(record.get("snapshot_json"))
-    result = safe_dict(snapshot_json.get("result"))
-    summary = first_non_empty(
-        [
-            _coerce_text(result.get("summary")),
-            _coerce_text(safe_dict(result.get("coordinatorSummary")).get("finalConclusion")),
-            _coerce_text(record.get("input_summary")),
-        ],
-        "",
-    )
-    snapshot_type = _coerce_text(record.get("snapshot_type")) or "snapshot"
-    return f"{snapshot_type}：{summary}" if summary else ""
+    return snapshot_history_summary(record) or ""
 
 
 def _trace_summary(record: dict[str, Any]) -> str:
-    node_name = _coerce_text(record.get("node_name")) or "trace"
-    summary = first_non_empty(
-        [
-            _coerce_text(record.get("output_summary")),
-            _coerce_text(record.get("input_summary")),
-        ],
-        "",
-    )
-    return f"{node_name}：{summary}" if summary else ""
+    return trace_history_summary(record) or ""
 
 
 def _memory_sections(payload: dict[str, Any], scaffold: dict[str, Any]) -> dict[str, Any]:
@@ -104,15 +86,15 @@ def _memory_sections(payload: dict[str, Any], scaffold: dict[str, Any]) -> dict[
 
     long_term_items = unique_texts(
         [
-            *[_coerce_text(item) for item in safe_list(prompt_context.get("long_term_traits"))],
+            *[business_summary_text(item) or "" for item in safe_list(prompt_context.get("long_term_traits"))],
             *_profile_lines(profile),
         ],
         limit=6,
     )
     recent_items = unique_texts(
         [
-            *[_coerce_text(item) for item in safe_list(prompt_context.get("recent_continuity_signals"))],
-            *[_coerce_text(item) for item in safe_list(prompt_context.get("last_consultation_takeaways"))],
+            *[business_summary_text(item) or "" for item in safe_list(prompt_context.get("recent_continuity_signals"))],
+            *[business_summary_text(item) or "" for item in safe_list(prompt_context.get("last_consultation_takeaways"))],
             *[_snapshot_summary(item) for item in recent_consultations[:2]],
             *[_snapshot_summary(item) for item in recent_snapshots[:3]],
             *[_trace_summary(item) for item in relevant_traces[:3]],
@@ -121,9 +103,9 @@ def _memory_sections(payload: dict[str, Any], scaffold: dict[str, Any]) -> dict[
     )
     open_loop_items = unique_texts(
         [
-            *[_coerce_text(item) for item in safe_list(prompt_context.get("open_loops"))],
+            *[business_summary_text(item) or "" for item in safe_list(prompt_context.get("open_loops"))],
             *teacher_signals,
-            *[_coerce_text(item) for item in safe_list(scaffold.get("continuityNotes"))],
+            *[business_summary_text(item) or "" for item in safe_list(scaffold.get("continuityNotes"))],
         ],
         limit=6,
     )
@@ -157,6 +139,7 @@ def _build_narrative_prompt(payload: dict[str, Any], scaffold: dict[str, Any], s
             "2. 再点出最近连续风险或快照变化。",
             "3. 最后给出今天最重要的一条会诊建议。",
             "4. 不要输出标题、列表或技术术语，不超过120字。",
+            "历史建议仅是带来源时间的既往输出，需人工确认，不能当作本次儿童事实；当前事实以教师与家长实际记录为准。",
             "可信表达边界：这不是医疗诊断；不要把风险贴到儿童身份上；不要承诺改善结果；不要输出治疗、用药或诊断建议；必要时说明需要老师、园长或专业人员人工复核。",
             f"儿童：{sections['childName']}",
             f"班级：{_coerce_text(auto_context.get('className')) or '当前班级'}",

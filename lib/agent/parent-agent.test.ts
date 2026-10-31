@@ -99,6 +99,16 @@ test("parent-agent carries ageBandContext into snapshot and main suggestion outp
   assert.notEqual(toddler.teacherTomorrowObservation, olderToddler.teacherTomorrowObservation);
 });
 
+test("growth without meals never creates low-hydration facts or comparative hydration prompts", () => {
+  const context = createParentContext(birthDateMonthsAgo(26));
+  assert.doesNotMatch(context.focusReasons.join(""), /补水偏少|补水需关注/);
+  assert.doesNotMatch(context.observationDefaults.join(""), /今晚补水是否比前几天更主动/);
+  assert.ok(context.focusReasons.some(item => /缺少饮食记录/.test(item)));
+  const withMeals = buildParentAgentChildContext({ child: context.child, smartInsights: [], healthCheckRecords: [], growthRecords: [], guardianFeedbacks: [], taskCheckInRecords: [], weeklyTrend: { ...context.weeklyTrend, hydrationAvg: 80 }, mealRecords: [{ childId: context.child.id, date: context.today, waterMl: 80, foods: [] }] as never });
+  assert.match(withMeals.focusReasons.join(""), /补水偏少/);
+  assert.match(withMeals.observationDefaults.join(""), /今晚补水是否比前几天更主动/);
+});
+
 test("real AI family actions and evidence stay primary for infants and toddlers instead of an age rule", () => {
   const modelSuggestion: AiSuggestionResponse = { ...suggestion, source: "ai", model: "synthetic-maas-model",
     summary: "合成记录显示昨日进食后仍愿意再次尝试，今天反馈已完成一次短练习。",

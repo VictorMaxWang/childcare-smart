@@ -31,6 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { formatLegacyFeedbackObservationMessage } from "@/lib/feedback/observation-semantics";
 
 type UtilityPanel = "search" | "notifications" | "messages" | null;
 
@@ -88,6 +89,7 @@ export function GlobalUtilityCenter({ navItems }: { navItems: PrimaryNavItem[] }
     () =>
       messages
         .filter((message) => visibleChildIds.has(message.childId))
+        .map(message => ({ ...message, content: formatLegacyFeedbackObservationMessage(message.content) }))
         .sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
     [messages, visibleChildIds]
   );

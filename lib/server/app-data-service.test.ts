@@ -8,6 +8,9 @@ import { ApiRouteError } from "@/lib/server/api-errors";
 import { normalizeExtendedSnapshot } from "@/lib/server/app-data-model";
 import { AppDataService } from "@/lib/server/app-data-service";
 import type { AppDataRepository } from "@/lib/server/app-data-repository";
+import { attestAiResult, sanitizeStorybookInputForPersistence } from "@/lib/ai/provenance-attestation";
+import { resolveAuthorizedStoredStorybookContinuation } from "@/lib/server/storybook-provenance-state";
+import { normalizeParentStructuredFeedback } from "@/lib/feedback/normalize";
 
 class MemoryRepository implements AppDataRepository {
   private snapshot: unknown;
@@ -362,6 +365,44 @@ test("feedback status and weekly report writes use the atomic repository contrac
   assert.equal(repo.mutateCount, 3);
 });
 
+test("new parent feedback stores observations separately from genuine barriers and keeps server authorship", async () => {
+  const repo = new MemoryRepository();
+  const parent = { ...demoUser("u-parent"), accountKind: "normal" as const };
+  const detail = await new AppDataService(parent, repo).createFeedback({
+    feedbackId: "feedback-observations-new", childId: "c-1", executionStatus: "completed", childReaction: "accepted", improvementStatus: "clear_improvement",
+    barriers: ["情绪稳定", "需要提醒", "今晚没时间"], notes: "原始真实备注", attachments: {}, createdBy: "forged-other-parent",
+  });
+  assert.deepEqual(detail.feedback.barriers, ["今晚没时间"]);
+  assert.match(detail.feedback.notes ?? "", /原始真实备注\n观察到：情绪稳定\n支持需求：需要提醒/u);
+  assert.equal(detail.feedback.createdBy, parent.id);
+  assert.equal(detail.feedback.feedbackId, "feedback-observations-new");
+  assert.equal(detail.feedback.executionStatus, "completed");
+  assert.deepEqual(detail.feedback.attachments, {});
+});
+
+test("legacy feedback and generated message reads fix observation labels without rewriting stored data", async () => {
+  const parent = { ...demoUser("u-parent"), accountKind: "normal" as const };
+  const seed = createDemoSeedSnapshot("2026-05-02T00:00:00.000Z");
+  const content = "合成儿童今晚反馈：已完成执行。孩子反应：孩子愿意配合。改善情况：已经有明确改善。主要阻碍：情绪稳定。补充说明：原始备注";
+  const old = normalizeParentStructuredFeedback({ feedbackId: "feedback-observations-old", childId: "c-1", executionStatus: "completed", childReaction: "accepted", improvementStatus: "clear_improvement", barriers: ["情绪稳定"], notes: "原始备注", content, submittedAt: "2026-05-02T00:00:00.000Z", createdBy: parent.id });
+  assert.ok(old);
+  seed.feedback = [old];
+  const repo = new MemoryRepository(seed);
+  await new AppDataService(parent, repo).sendMessage({ childId: "c-1", content });
+  const before = JSON.stringify(await repo.load(parent));
+  const staff = new AppDataService(demoUser("u-teacher2"), repo);
+  const detail = await staff.getFeedback(old.feedbackId);
+  const messages = await staff.listMessages({ childId: "c-1" });
+  assert.deepEqual(detail.feedback.barriers, []);
+  assert.match(detail.feedback.notes ?? "", /观察到：情绪稳定/u);
+  assert.doesNotMatch(detail.feedback.content, /主要阻碍/u);
+  const message = messages.find(item => item.content.includes("原始备注"));
+  assert.ok(message);
+  assert.doesNotMatch(message.content, /主要阻碍/u);
+  assert.match(message.content, /观察到：情绪稳定/u);
+  assert.equal(JSON.stringify(await repo.load(parent)), before, "只读兼容修正不修改原反馈、消息、时间戳或附件");
+});
+
 test("storybook upsert cannot rebind an existing id to another family child", async () => {
   const repo = new MemoryRepository();
   const baseParent = demoUser("u-parent");
@@ -403,6 +444,24 @@ test("storybook upsert cannot rebind an existing id to another family child", as
   assert.deepEqual(persisted.pages, [{ title: "第二个家庭的绘本" }]);
 });
 
+test("an unverified reader save cannot erase the attested teacher book's paid media", async () => {
+  const repo = new MemoryRepository();
+  const teacher = demoUser("u-teacher2");
+  const parent = demoUser("u-parent");
+  const context = { userId: teacher.id, institutionId: teacher.institutionId, scopeId: "c-1", capability: "parent-storybook" };
+  const signed = attestAiResult({ storyId: "attested-paid-book", childId: "c-1", title: "真实绘本", source: "ai", fallback: false,
+    providerMeta: { provider: "maas", realProvider: true },
+    scenes: [{ sceneIndex: 1, imageStatus: "ready", audioStatus: "ready", imageUrl: "/private/image-1", audioUrl: "/private/audio-1" }],
+  }, context);
+  const staff = new AppDataService(teacher, repo);
+  const reader = new AppDataService(parent, repo);
+  await staff.upsertStorybook({ storybookId: signed.storyId, childId: "c-1", response: signed });
+  const readerInput = sanitizeStorybookInputForPersistence({ storybookId: signed.storyId, childId: "c-1", response: signed }, { ...context, userId: parent.id });
+  await assert.rejects(() => reader.upsertStorybook(readerInput), assertApiError("conflict"));
+  const preserved = await staff.getStorybook(signed.storyId);
+  assert.deepEqual(preserved.pages, [{ kind: "parent-storybook-response", response: signed }]);
+});
+
 test("storybook source records cannot reference another family child", async () => {
   const repo = new MemoryRepository();
   const teacher = new AppDataService(demoUser("u-teacher2"), repo);
@@ -429,6 +488,49 @@ test("storybook source records cannot reference another family child", async () 
       }),
     assertApiError("forbidden_scope")
   );
+});
+
+test("normal teacher save then parent export/share/reopen keeps the canonical signed media intact", async () => {
+  const repo = new MemoryRepository();
+  const teacher = { ...demoUser("u-teacher2"), accountKind: "normal" as const };
+  const parent = { ...demoUser("u-parent"), accountKind: "normal" as const };
+  const signed = attestAiResult({ storyId: "paid-export-share-book", childId: "c-1", title: "真实绘本", summary: "来自合成记录", source: "ai", fallback: false,
+    providerMeta: { provider: "maas", realProvider: true },
+    scenes: [{ sceneIndex: 1, sceneText: "一起捧小杯。", imageStatus: "ready", audioStatus: "ready", imageUrl: "/private/image-1", audioUrl: "/private/audio-1" }],
+  }, { userId: teacher.id, institutionId: teacher.institutionId, scopeId: "c-1", capability: "parent-storybook" });
+  await new AppDataService(teacher, repo).upsertStorybook({ storybookId: signed.storyId, childId: "c-1", response: signed });
+  const reader = new AppDataService(parent, repo);
+  const before = await reader.getStorybook(signed.storyId);
+  const exported = await reader.exportStorybookData(signed.storyId, "markdown");
+  assert.match(exported.content, /一起捧小杯/u);
+  await reader.shareStorybook(signed.storyId, { summary: signed.summary });
+  const after = await reader.getStorybook(signed.storyId);
+  assert.deepEqual(after.pages, before.pages);
+  assert.deepEqual(after.pages, [{ kind: "parent-storybook-response", response: signed }]);
+  assert.ok(after.share?.sharedAt);
+});
+
+test("authorized parent can persist newly server-attested media after resuming the teacher's saved text", async () => {
+  const repo = new MemoryRepository();
+  const teacher = { ...demoUser("u-teacher2"), accountKind: "normal" as const };
+  const parent = { ...demoUser("u-parent"), accountKind: "normal" as const };
+  const context = { userId: teacher.id, institutionId: teacher.institutionId, scopeId: "c-1", capability: "parent-storybook" };
+  const text = attestAiResult({ storyId: "cross-role-media-book", childId: "c-1", title: "真实绘本", source: "ai", fallback: false,
+    providerMeta: { provider: "maas", realProvider: true },
+    scenes: [{ sceneIndex: 1, sceneText: "一起捧小杯。", imageStatus: "pending", audioStatus: "pending", imageUrl: null, audioUrl: null }],
+  }, context);
+  const staff = new AppDataService(teacher, repo);
+  await staff.upsertStorybook({ storybookId: text.storyId, childId: "c-1", response: text });
+  const continued = resolveAuthorizedStoredStorybookContinuation({ user: parent, snapshot: await repo.load(parent), storyId: text.storyId, childId: "c-1" });
+  assert.ok(continued);
+  // 替身只模拟服务端完成后签发的原结果；没有浏览器自报来源，也没有外部模型调用。
+  const completed = attestAiResult({ ...continued, scenes: [{ ...continued.scenes[0], imageStatus: "ready", audioStatus: "ready", imageUrl: "/private/image-new", audioUrl: "/private/audio-new" }] }, { ...context, userId: parent.id });
+  const input = sanitizeStorybookInputForPersistence({ storybookId: text.storyId, childId: "c-1", response: completed }, { ...context, userId: parent.id });
+  await new AppDataService(parent, repo).upsertStorybook(input);
+  const stored = await staff.getStorybook(text.storyId);
+  assert.deepEqual(stored.pages, [{ kind: "parent-storybook-response", response: completed }]);
+  await assert.rejects(() => staff.upsertStorybook({ storybookId: text.storyId, childId: "c-1", response: text }), assertApiError("conflict"));
+  assert.deepEqual((await staff.getStorybook(text.storyId)).pages, stored.pages, "过期文字保存不能清除已补齐的付费媒体");
 });
 
 test("storybook list prioritizes the latest save over a stale provider generation time", async () => {

@@ -3,6 +3,20 @@ import test from "node:test";
 import type { DemoStorybook } from "@/lib/persistence/snapshot";
 import { restoreParentStorybookResponse } from "./useParentD01Data";
 import { shouldPollParentStoryBookMedia } from "@/lib/parent/storybook-cache";
+import { attestAiResult, verifyAiResultAttestation } from "@/lib/ai/provenance-attestation";
+
+test("restoring an attested book leaves its complete signed JSON unchanged", () => {
+  const context = { userId: "teacher-a", institutionId: "institution-a", scopeId: "child-a", capability: "parent-storybook" };
+  const signed = attestAiResult({
+    storyId: "signed-book", childId: "child-a", title: "真实绘本", source: "ai", fallback: false,
+    providerMeta: { provider: "maas", realProvider: true, imageProvider: "maas-z-image", audioProvider: "maas-tts" },
+    scenes: [{ sceneIndex: 1, sceneTitle: "真实一页", sceneText: "一起捧小杯。", audioScript: "一起捧小杯。", imageStatus: "ready", audioStatus: "ready", imageUrl: "/api/private-image", audioUrl: "/api/private-audio" }],
+  }, context);
+  const saved = { storybookId: signed.storyId, childId: signed.childId, generatedAt: "2026-10-31T00:00:00.000Z", sourceRecordIds: [], pages: [{ response: signed }] } as unknown as DemoStorybook;
+  const restored = restoreParentStorybookResponse(saved, "合成儿童");
+  assert.equal(verifyAiResultAttestation(restored, context), true, "展示恢复不能给签名正文补默认字段");
+  assert.deepEqual(restored, signed);
+});
 
 test("restoring a saved MaaS book preserves provider truth and unfinished media tasks", () => {
   const diagnostics = {

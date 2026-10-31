@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.tools.summary_tools import safe_dict, safe_list, unique_texts
+from app.services.memory_summary import business_summary_text
 
 
 def _as_text(value: Any) -> str:
@@ -578,6 +579,14 @@ def _normalize_evidence_items(value: Any) -> list[dict[str, Any]]:
     for raw_item in safe_list(value):
         record = safe_dict(raw_item)
         source_type = _coalesce_text(record.get("sourceType"), fallback="derived_explainability")
+        summary = _coalesce_text(record.get("summary"), record.get("excerpt"))
+        excerpt = _coalesce_text(record.get("excerpt")) or None
+        if source_type == "consultation_history":
+            # 只清理读取投影，旧持久化证据原样保留；技术回执不能变成已确认儿童事实。
+            summary = business_summary_text(record.get("summary")) or business_summary_text(record.get("excerpt"))
+            excerpt = business_summary_text(record.get("excerpt"))
+            if not summary:
+                continue
         supports = []
         for raw_support in safe_list(record.get("supports")):
             support = safe_dict(raw_support)
@@ -600,11 +609,11 @@ def _normalize_evidence_items(value: Any) -> list[dict[str, Any]]:
             index=0,
             source_label=_coalesce_text(record.get("sourceLabel"), fallback="证据"),
             source_id=_coalesce_text(record.get("sourceId")) or None,
-            summary=_coalesce_text(record.get("summary"), record.get("excerpt")),
-            excerpt=_coalesce_text(record.get("excerpt")) or None,
+            summary=summary,
+            excerpt=excerpt,
             confidence=_coalesce_text(record.get("confidence"), fallback="low"),
             requires_human_review=(
-                bool(record.get("requiresHumanReview"))
+                True if source_type == "consultation_history" else bool(record.get("requiresHumanReview"))
                 if "requiresHumanReview" in record
                 else True
             ),
@@ -737,7 +746,7 @@ def _build_consultation_evidence_items(
             summary=detail,
             excerpt=detail,
             confidence="medium",
-            requires_human_review=False,
+            requires_human_review=True,
             supports=_unique_support_refs(
                 [
                     _build_finding_support("key", 0, key_findings[0] if key_findings else detail),
@@ -825,7 +834,7 @@ def _build_consultation_evidence_items(
             else ""
         ),
         confidence="medium",
-        requires_human_review=False,
+        requires_human_review=True,
         supports=_unique_support_refs(
             [
                 _first_finding_support(key_findings),
@@ -1001,7 +1010,7 @@ def normalize_high_risk_consultation_result(
     tonight_at_home_actions = _as_string_list(result.get("tonightAtHomeActions"))
     follow_up_48h = _as_string_list(result.get("followUp48h"))
     next_checkpoints = _as_string_list(result.get("nextCheckpoints"))
-    continuity_notes = _as_string_list(result.get("continuityNotes"))
+    continuity_notes = unique_texts([text for item in safe_list(result.get("continuityNotes")) if (text := business_summary_text(item))], limit=24)
 
     provider_trace = _normalize_provider_trace(
         result.get("providerTrace"),

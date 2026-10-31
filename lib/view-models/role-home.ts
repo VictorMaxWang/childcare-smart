@@ -23,6 +23,7 @@ import { getAgeBandFromBirthDate } from "@/lib/store";
 import { getLocalToday, isDateWithinLastDays } from "@/lib/date";
 import { isFeedbackOnDate } from "@/lib/feedback/date";
 import { getHydrationDisplayState } from "@/lib/hydration-display";
+import { describeAgeBandActionGuidance, resolveAgeBandContext } from "@/lib/age-band/policy";
 
 export type ParentHomeViewModel = {
   child: Child;
@@ -100,14 +101,18 @@ export function buildParentHomeViewModel(feed?: ParentFeed | null): ParentHomeVi
   if (!feed) return null;
 
   const ageBand = getAgeBandFromBirthDate(feed.child.birthDate);
-  const task = getWeeklyTaskForChild(feed.child.id, ageBand);
+  const guidance = describeAgeBandActionGuidance(resolveAgeBandContext({ birthDate: feed.child.birthDate, asOfDate: getLocalToday() }));
+  // 与家长AI页使用同一婴幼儿月龄规则；成长记录出现不应把任务退回随机学前周任务。
+  const task = guidance ? { title: `${guidance.label}月龄照护`, description: `${guidance.defaultInterventionFocus[1]}；${guidance.defaultInterventionFocus[2]}。`, durationText: "短时陪伴，以孩子反应为准", tag: "月龄照护提示（规则）" } : getWeeklyTaskForChild(feed.child.id, ageBand);
+  const hasMeals = (feed.weeklyMealCount ?? feed.todayMeals.length) > 0;
   const hydrationDisplay = getHydrationDisplayState(feed.weeklyTrend.hydrationAvg);
   const aiReminder =
     feed.suggestions.find((item) => item.level === "warning") ??
-    feed.suggestions[0] ?? {
+    feed.suggestions.find((item) => item.childId === feed.child.id) ??
+    (hasMeals ? feed.suggestions[0] : undefined) ?? {
       id: "parent-fallback-insight",
-      title: "今日状态整体稳定",
-      description: "继续保持规律饮水、睡前安抚和今晚反馈即可。",
+      title: hasMeals ? "日常照护提示" : "缺少饮食记录",
+      description: hasMeals ? "请结合现有记录继续观察孩子的实际反应。" : "近 7 天暂无饮食记录，暂不评估摄入或补水情况。",
       level: "info",
       tags: ["日常提醒"],
     };
@@ -135,7 +140,7 @@ export function buildParentHomeViewModel(feed?: ParentFeed | null): ParentHomeVi
     todaySummary: [
       { label: "今日饮食记录", value: `${feed.todayMeals.length} 条`, tone: "info" },
       { label: "今日成长观察", value: `${feed.todayGrowth.length} 条`, tone: "success" },
-      { label: "近 7 天补水状态", value: hydrationDisplay.statusLabel, tone: hydrationDisplay.tone },
+      { label: "近 7 天补水状态", value: hasMeals ? hydrationDisplay.statusLabel : "待补饮食记录", tone: hasMeals ? hydrationDisplay.tone : "info" },
       { label: "当前关注项", value: `${attentionCount} 项`, tone: attentionCount > 0 ? "warning" : "success" },
     ],
     aiReminder,
@@ -147,10 +152,10 @@ export function buildParentHomeViewModel(feed?: ParentFeed | null): ParentHomeVi
     },
     pendingFeedback,
     weeklyTrend: [
-      { label: "膳食均衡率", value: `${feed.weeklyTrend.balancedRate}%` },
-      { label: "蔬菜摄入天数", value: `${feed.weeklyTrend.vegetableDays} 天` },
-      { label: "蛋白摄入天数", value: `${feed.weeklyTrend.proteinDays} 天` },
-      { label: "补水主动性", value: hydrationDisplay.initiativeLabel },
+      { label: "膳食均衡率", value: hasMeals ? `${feed.weeklyTrend.balancedRate}%` : "待补饮食记录" },
+      { label: "蔬菜摄入天数", value: hasMeals ? `${feed.weeklyTrend.vegetableDays} 天` : "待补饮食记录" },
+      { label: "蛋白摄入天数", value: hasMeals ? `${feed.weeklyTrend.proteinDays} 天` : "待补饮食记录" },
+      { label: "补水主动性", value: hasMeals ? hydrationDisplay.initiativeLabel : "暂无记录，不评估" },
     ],
     interventionPreview: {
       title: interventionPreview.title,

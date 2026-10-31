@@ -1,4 +1,5 @@
 import type { AppStateSnapshot, DemoConversation, DemoMessage } from "@/lib/persistence/snapshot";
+import { projectFeedbackObservationSemantics } from "@/lib/feedback/observation-semantics";
 import type {
   ParentFeedbackChildReaction,
   ParentFeedbackExecutionStatus,
@@ -208,17 +209,18 @@ export function buildStructuredFeedbackMessageContent(input: {
   notes?: string;
   barriers?: string[];
 }) {
+  const semantic = projectFeedbackObservationSemantics(input);
   const parts = [
     `${input.childName}今晚反馈：${EXECUTION_LABELS[input.executionStatus]}。`,
     `孩子反应：${REACTION_LABELS[input.childReaction]}。`,
     `改善情况：${IMPROVEMENT_LABELS[input.improvementStatus]}。`,
   ];
 
-  if (input.barriers && input.barriers.length > 0) {
-    parts.push(`主要阻碍：${input.barriers.slice(0, 2).join("、")}。`);
+  if (semantic.barriers.length > 0) {
+    parts.push(`主要阻碍：${semantic.barriers.slice(0, 2).join("、")}。`);
   }
 
-  const notes = input.notes?.trim();
+  const notes = semantic.notes.trim();
   if (notes) {
     parts.push(`补充说明：${notes}`);
   }

@@ -1,4 +1,7 @@
 import type { ParentAgentChildContext, ParentAgentResult } from "@/lib/agent/parent-agent";
+import { sanitizeParentFacingText } from "@/lib/agent/parent-copy";
+import { buildRecentLocalDateRange, normalizeBusinessDate } from "@/lib/date";
+import { feedbackBusinessDate } from "@/lib/feedback/date";
 import { buildConsultationEvidencePanelModel } from "../consultation/evidence-display";
 import type {
   ConsultationEvidenceItem,
@@ -77,6 +80,13 @@ function formatPercent(value: number) {
   return `${Math.round(value * 100)}%`;
 }
 
+function parentEvidenceText(value: string | null | undefined) {
+  const text = sanitizeParentFacingText(value);
+  // 只清理派生展示，不能改动原始签名回执。旧记忆可能含行内JSON或工作流参数，不能作为儿童观察展示。
+  if (/\{\s*\\?["'][^{}\n]*?\\?["']\s*:/u.test(text) || /\b(?:role|workflow|objectScope|targetChildId|scopeId)\s*[:=]/iu.test(text)) return "";
+  return text;
+}
+
 function isFallbackLikeSource(source?: string | null) {
   return source === "fallback" || source === "rule";
 }
@@ -124,11 +134,13 @@ function resolveSourceMode(hints: SourceHint[]) {
 
 function buildPageLevelCoverage(context: ParentAgentChildContext) {
   const observedDays = new Set<string>();
-
-  context.weeklyHealthChecks.forEach((item) => observedDays.add(item.date));
-  context.weeklyMeals.forEach((item) => observedDays.add(item.date));
-  context.weeklyGrowthRecords.forEach((item) => observedDays.add(item.createdAt.slice(0, 10)));
-  context.weeklyFeedbacks.forEach((item) => observedDays.add(item.date));
+  const validDays = new Set(buildRecentLocalDateRange(7, normalizeBusinessDate(context.today)));
+  const observeDay = (day: string) => { if (day && validDays.has(day)) observedDays.add(day); };
+  // ISO时间戳先归入UTC+8业务日；同日多类型/多次记录只计一天，空值、未来和窗外记录不增加覆盖率。
+  context.weeklyHealthChecks.forEach((item) => observeDay(normalizeBusinessDate(item.date)));
+  context.weeklyMeals.forEach((item) => observeDay(normalizeBusinessDate(item.date)));
+  context.weeklyGrowthRecords.forEach((item) => observeDay(normalizeBusinessDate(item.createdAt)));
+  context.weeklyFeedbacks.forEach((item) => observeDay(feedbackBusinessDate(item)));
 
   const observed = observedDays.size;
   const total = 7;
@@ -211,12 +223,12 @@ function buildSourceBadges(params: {
   }
 
   if (
-    (params.consultation?.continuityNotes?.length ?? 0) > 0 ||
-    (params.weeklyReport?.continuityNotes?.length ?? 0) > 0
+    params.consultation?.continuityNotes?.some((item) => Boolean(parentEvidenceText(item))) ||
+    params.weeklyReport?.continuityNotes?.some((item) => Boolean(parentEvidenceText(item)))
   ) {
     badges.push({
       id: "continuity",
-      label: "延续上周观察",
+      label: "历史建议参考",
       variant: "secondary",
     });
   }
@@ -334,21 +346,27 @@ function buildReasonBullet(params: {
   focusReason?: string | null;
   topAction?: string | null;
 }) {
-  if (params.whyNow?.trim()) {
-    return `不是凭空生成。${params.whyNow.trim()}`;
+  const whyNow = parentEvidenceText(params.whyNow);
+  const focusReason = parentEvidenceText(params.focusReason);
+  const topAction = parentEvidenceText(params.topAction);
+  if (whyNow) {
+    return `不是凭空生成。${whyNow}`;
   }
 
-  if (params.focusReason?.trim() && params.topAction?.trim()) {
-    return `因为最近几天在“${params.focusReason.trim()}”上反复出现信号，所以今晚先做“${params.topAction.trim()}”。`;
+  if (focusReason && topAction) {
+    return `因为最近几天在“${focusReason}”上反复出现信号，所以今晚先做“${topAction}”。`;
   }
 
   return "不是凭空生成。系统会先看最近几天的记录，再给出今晚最值得先做的一步。";
 }
 
 function formatEvidenceLead(item: ConsultationEvidenceItem) {
-  const leadLabel = item.sourceLabel?.trim() || "最近观察";
-  const detail = item.summary?.trim() || item.excerpt?.trim();
+  const leadLabel = parentEvidenceText(item.sourceLabel) || "最近观察";
+  const detail = parentEvidenceText(item.summary) || parentEvidenceText(item.excerpt);
   if (!detail) return null;
+  if (item.sourceType === "consultation_history" || item.sourceType === "memory_snapshot") {
+    return `过往建议参考（不代表新增观察）：${detail}`;
+  }
   return `${leadLabel}：${detail}`;
 }
 
@@ -368,7 +386,8 @@ function buildEvidenceBullets(params: {
   const evidenceLeads =
     consultationEvidenceModel.mode === "structured"
       ? consultationEvidenceModel.leadItems.map((item) => formatEvidenceLead(item.item))
-      : consultationEvidenceModel.fallbackItems.map((item) => item.detail);
+      : consultationEvidenceModel.fallbackItems.map((item) => parentEvidenceText(item.detail));
+  const priorAdvice = params.consultation?.continuityNotes?.map(parentEvidenceText).find(Boolean);
 
   return uniqueTexts(
     [
@@ -377,8 +396,8 @@ function buildEvidenceBullets(params: {
         focusReason: params.focusReason,
         topAction: params.topAction,
       }),
-      params.consultation?.continuityNotes?.[0]
-        ? `这次判断也延续了上一次跟进：${params.consultation.continuityNotes[0]}`
+      priorAdvice
+        ? `过往建议参考（不代表新增观察）：${priorAdvice}`
         : null,
       ...evidenceLeads,
       params.latestFeedback ? "最近一次家长反馈也被纳入这次判断。" : null,

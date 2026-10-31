@@ -38,6 +38,7 @@ import {
   ATTACHMENT_MAX_UPLOAD_BYTES,
 } from "@/lib/attachments/constraints";
 import { normalizeParentStructuredFeedback } from "@/lib/feedback/normalize";
+import { formatLegacyFeedbackObservationMessage, projectFeedbackObservationSemantics } from "@/lib/feedback/observation-semantics";
 import type { AppStateSnapshot } from "@/lib/persistence/snapshot";
 import type { AppDataRepository } from "@/lib/server/app-data-repository";
 import { appendAuditLog, createApiId } from "@/lib/server/app-data-model";
@@ -77,6 +78,7 @@ import {
   buildReminderFromTask,
 } from "@/lib/tasks/task-model";
 import { compareStorybooksByLatestSave } from "@/lib/storybooks/storybook-order";
+import { assertSafePersistedStorybookUpdate } from "@/lib/server/storybook-provenance-state";
 
 type Archivable<T> = T & {
   archivedAt?: string;
@@ -934,7 +936,8 @@ export class AppDataService {
             conversationById.get(message.conversationId)
           )
       )
-      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+      .map(message => ({ ...message, content: formatLegacyFeedbackObservationMessage(message.content) }));
   }
 
   async sendMessage(input: AnyRecord) {
@@ -1124,6 +1127,7 @@ export class AppDataService {
     const childMessages = snapshot.messages
       .filter((message) => message.childId === child.id)
       .filter((message) => canAccessChild(this.session, findChild(snapshot, message.childId)))
+      .map(message => ({ ...message, content: formatLegacyFeedbackObservationMessage(message.content) }))
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
     const messageIds = new Set(childMessages.map((message) => message.messageId));
     const attachments = snapshot.attachments
@@ -1169,7 +1173,7 @@ export class AppDataService {
 
     return {
       feedback: {
-        ...feedback,
+        ...projectFeedbackObservationSemantics(feedback),
         status: normalizeFeedbackStatus(feedback.status),
       } as ApiFeedbackDetail["feedback"],
       child,
@@ -1194,12 +1198,13 @@ export class AppDataService {
         feedbackTimestampOf(right as SnapshotFeedback).localeCompare(feedbackTimestampOf(left as SnapshotFeedback))
       )
       .map((feedback) => ({
-        ...feedback,
+        ...projectFeedbackObservationSemantics(feedback),
         status: normalizeFeedbackStatus((feedback as SnapshotFeedback).status),
       }));
   }
 
   async createFeedback(input: AnyRecord) {
+    input = projectFeedbackObservationSemantics(input);
     const childId = readString(input.childId);
     if (!childId) throw new ApiRouteError("invalid_request", "Feedback must include childId.");
     const feedbackId = readString(input.feedbackId, readString(input.id)) || createApiId("feedback");
@@ -1796,6 +1801,12 @@ export class AppDataService {
         );
       }
       requireStorybookSourceScope(snapshot, childId, sourceRecordIds);
+      assertSafePersistedStorybookUpdate(existing, pages.length > 0 ? pages : responsePages, {
+        userId: this.session.id,
+        institutionId: this.session.institutionId,
+        capability: "parent-storybook",
+        scopeId: childId,
+      });
       const now = nowIso();
       const storybook = {
         storybookId,

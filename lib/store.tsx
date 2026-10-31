@@ -13,6 +13,7 @@ import type { ConsultationResult, MobileDraft, MobileDraftSyncStatus, ReminderIt
 import { normalizeGuardianFeedbackCollection } from "@/lib/feedback/normalize";
 import { upsertGuardianFeedbackWriteback } from "@/lib/feedback/writeback";
 import { feedbackBusinessDate, getFeedbackBusinessToday, isFeedbackOnDate } from "@/lib/feedback/date";
+import { buildDietObservationInsights } from "@/lib/meals/diet-observation";
 import type {
   GuardianFeedback as SharedGuardianFeedback,
   GuardianFeedbackInput,
@@ -279,6 +280,8 @@ export interface ParentFeed {
   todayGrowth: GrowthRecord[];
   weeklyGrowth: GrowthRecord[];
   weeklyTrend: WeeklyDietTrend;
+  /** 明确区分没有观测和已记录零值；旧调用缺省时由展示层保守处理。 */
+  weeklyMealCount?: number;
   suggestions: SmartInsight[];
   feedbacks: GuardianFeedback[];
   recentFeedbacks: GuardianFeedback[];
@@ -6334,6 +6337,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       .slice(0, 5);
 
     const lowHydrationChildren = scopeChildren
+      .filter((child) => (weeklyMealRecordsMap.get(child.id)?.length ?? 0) > 0)
       .map((child) => ({
         childId: child.id,
         childName: child.name,
@@ -6343,6 +6347,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       .slice(0, 5);
 
     const lowVegTrendChildren = scopeChildren
+      .filter((child) => (weeklyMealRecordsMap.get(child.id)?.length ?? 0) > 0)
       .map((child) => ({
         childId: child.id,
         childName: child.name,
@@ -6352,7 +6357,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       .slice(0, 5);
 
     return { highAttentionChildren, lowHydrationChildren, lowVegTrendChildren };
-  }, [getWeeklyDietTrend, visibleChildren, visibleWeeklyTrendMap, weeklyAttentionGrowthCountMap]);
+  }, [getWeeklyDietTrend, visibleChildren, visibleWeeklyTrendMap, weeklyAttentionGrowthCountMap, weeklyMealRecordsMap]);
 
   const smartInsights = useMemo(() => {
     const insights: SmartInsight[] = [];
@@ -6364,44 +6369,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
       const ageBand = getAgeBandFromBirthDate(child.birthDate);
       const childGrowth = weeklyGrowthRecordsMap.get(child.id) ?? [];
       const childMeals = weeklyMealRecordsMap.get(child.id) ?? [];
-      const byDay = new Map<string, MealRecord[]>();
-
-      childMeals.forEach((record) => {
-        const key = `${record.childId}-${record.date}`;
-        byDay.set(key, [...(byDay.get(key) ?? []), record]);
-      });
-
-      let vegetableDays = 0;
-      let monotonyDays = 0;
-      byDay.forEach((records) => {
-        const categories = new Set(records.flatMap((record) => record.foods.map((food) => food.category)));
-        if (categories.has("蔬果")) vegetableDays += 1;
-
-        const names = new Set(records.flatMap((record) => record.foods.map((food) => food.name)));
-        if (names.size <= 3) monotonyDays += 1;
-      });
-
-      if (monotonyDays >= 3) {
-        insights.push({
-          id: `ins-monotony-${child.id}`,
-          childId: child.id,
-          level: "warning",
-          title: `${child.name} 最近饮食偏单一`,
-          description: "连续多天食物种类较少，建议在加餐加入不同颜色蔬果和优质蛋白。",
-          tags: ["饮食", "单一"],
-        });
-      }
-
-      if (vegetableDays <= 2) {
-        insights.push({
-          id: `ins-veg-${child.id}`,
-          childId: child.id,
-          level: "warning",
-          title: `${child.name} 蔬果摄入偏低`,
-          description: "建议在午餐和加餐中增加深色蔬菜与水果切块。",
-          tags: ["饮食", "蔬果不足"],
-        });
-      }
+      insights.push(...buildDietObservationInsights(child, childMeals));
 
       const allergyRiskMeals = childMeals.filter((record) => containsAllergyWord(record.foods, child.allergies));
       if (allergyRiskMeals.length > 0) {
@@ -6482,6 +6450,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         todayGrowth,
         weeklyGrowth,
         weeklyTrend: visibleWeeklyTrendMap.get(child.id) ?? getWeeklyDietTrend(child.id),
+        weeklyMealCount: weeklyMealRecordsMap.get(child.id)?.length ?? 0,
         suggestions,
         feedbacks,
         recentFeedbacks,
@@ -6490,7 +6459,7 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
         mediaGallery: buildParentMediaGallery(child.id, weeklyGrowth, todayMeals),
       };
     });
-  }, [getWeeklyDietTrend, smartInsights, todayFeedbackMap, todayGrowthRecordsMap, todayMealRecordsMap, visibleChildren, visibleWeeklyTrendMap, weeklyFeedbackMap, weeklyGrowthRecordsMap]);
+  }, [getWeeklyDietTrend, smartInsights, todayFeedbackMap, todayGrowthRecordsMap, todayMealRecordsMap, visibleChildren, visibleWeeklyTrendMap, weeklyFeedbackMap, weeklyGrowthRecordsMap, weeklyMealRecordsMap]);
 
   const getParentFeed = useCallback(() => parentFeedData, [parentFeedData]);
 

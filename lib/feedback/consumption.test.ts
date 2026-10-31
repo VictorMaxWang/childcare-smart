@@ -23,6 +23,14 @@ const baseFeedback = {
   createdByRole: "parent" as never,
 };
 
+test("legacy positive observation tags do not become feedback barriers or negative open loops", () => {
+  const consumption = buildStructuredFeedbackConsumption({ ...baseFeedback, feedbackId: "feedback-positive", id: "feedback-positive", date: "2026-10-31", status: "completed", content: "真实家庭观察", submittedAt: "2026-10-31T00:00:00.000Z", barriers: ["情绪稳定", "需要提醒"] });
+  assert.doesNotMatch(consumption.summary ?? "", /主要阻碍/u);
+  assert.match(consumption.summary ?? "", /观察到：情绪稳定/u);
+  assert.match(consumption.summary ?? "", /支持需求：需要提醒/u);
+  assert.ok(consumption.openLoops.every(item => !item.includes("首要阻碍")));
+});
+
 test("selectStructuredFeedback prefers relatedTaskId before consultation and raw card fallback", () => {
   const selected = selectStructuredFeedback(
     [

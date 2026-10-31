@@ -1,5 +1,6 @@
 import { toFollowUpFeedbackLite } from "@/lib/feedback/normalize";
 import type { ParentStructuredFeedbackLite } from "@/lib/feedback/types";
+import { projectFeedbackObservationSemantics } from "@/lib/feedback/observation-semantics";
 
 export interface StructuredFeedbackConsumptionScope {
   childId?: string;
@@ -215,6 +216,8 @@ export function buildStructuredFeedbackConsumption(
       openLoops: [],
     };
   }
+
+  feedback = projectFeedbackObservationSemantics(feedback);
 
   const bindingSummary = buildBindingSummary(feedback);
   const notesSummary = feedback.notes || feedback.freeNote || feedback.content;

@@ -1,5 +1,7 @@
 "use client";
 
+import { classifyFeedbackObservationTags, PARENT_FEEDBACK_OBSERVATION_OPTIONS, projectFeedbackObservationSemantics } from "@/lib/feedback/observation-semantics";
+
 import { useState } from "react";
 import type { ConsultationResult } from "@/lib/ai/types";
 import type { InterventionCard } from "@/lib/agent/intervention-card";
@@ -182,7 +184,8 @@ export default function ParentStructuredFeedbackComposer({
     useState<ParentFeedbackImprovementStatus | null>(() => initialSelections?.improvementStatus ?? null);
   const [executorRole, setExecutorRole] =
     useState<ParentFeedbackExecutorRole>(() => initialSelections?.executorRole ?? "parent");
-  const [barriers, setBarriers] = useState<string[]>(() => initialSelections?.barriers ?? []);
+  const [barriers, setBarriers] = useState<string[]>(() => classifyFeedbackObservationTags(initialSelections?.barriers).barriers);
+  const [observationTags, setObservationTags] = useState<string[]>(() => (initialSelections?.barriers ?? []).filter(tag => PARENT_FEEDBACK_OBSERVATION_OPTIONS.some(option => option === tag)));
   const [notes, setNotes] = useState(() => notePrefill?.value ?? "");
   const [showDetails, setShowDetails] = useState(() =>
     careMode
@@ -261,6 +264,7 @@ export default function ParentStructuredFeedbackComposer({
 
     setValidationMessage(null);
     setSubmitting(true);
+    const semantic = projectFeedbackObservationSemantics({ barriers, observations: observationTags, notes: notes.trim() });
     const submitted = await onSubmit({
       childId,
       executionStatus,
@@ -269,8 +273,8 @@ export default function ParentStructuredFeedbackComposer({
       executorRole,
       childReaction,
       improvementStatus,
-      barriers,
-      notes: notes.trim(),
+      barriers: semantic.barriers,
+      notes: semantic.notes,
       relatedTaskId: activeTask?.taskId,
       relatedConsultationId:
         interventionCard.consultationId ?? consultation?.consultationId,
@@ -290,6 +294,7 @@ export default function ParentStructuredFeedbackComposer({
     setImprovementStatus(null);
     setExecutorRole("parent");
     setBarriers([]);
+    setObservationTags([]);
     setNotes("");
     setAttachmentDrafts([]);
     setShowDetails(false);
@@ -527,14 +532,14 @@ export default function ParentStructuredFeedbackComposer({
         <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-[0_18px_56px_rgb(15_23_42_/_0.08)] sm:p-6">
           <h3 className="text-xl font-black tracking-normal text-slate-950">观察到的情况 <span className="text-base font-normal text-slate-400">（可多选）</span></h3>
           <div className="mt-5 flex flex-wrap gap-3">
-            {["主动参与", "注意力较好", "需要提醒", "情绪稳定", "有求助行为", "按步骤完成", "其他"].map((option) => (
+            {PARENT_FEEDBACK_OBSERVATION_OPTIONS.map((option) => (
               <button
                 key={option}
                 type="button"
-                onClick={() => setBarriers((current) => toggleBarrier(current, option))}
+                onClick={() => setObservationTags((current) => toggleBarrier(current, option))}
                 className={cn(
                   "rounded-[16px] border px-5 py-3 text-base font-semibold transition",
-                  barriers.includes(option)
+                  observationTags.includes(option)
                     ? "border-violet-500 bg-violet-50 text-violet-600"
                     : "border-slate-200 bg-white text-slate-500"
                 )}

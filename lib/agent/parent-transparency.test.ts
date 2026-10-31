@@ -240,7 +240,7 @@ test("buildParentHomeTransparencyModel marks live suggestion and weekly report a
   assert.ok(model.sourceBadges.some((item) => item.label === "孩子记录"));
   assert.ok(model.sourceBadges.some((item) => item.label === "家长反馈"));
   assert.ok(model.sourceBadges.some((item) => item.label === "老师观察"));
-  assert.ok(model.sourceBadges.some((item) => item.label === "延续上周观察"));
+  assert.ok(model.sourceBadges.some((item) => item.label === "历史建议参考"));
   assert.ok(model.coverageText?.includes("覆盖率约"));
   assert.ok(model.boundaryNotes[0]?.includes("不是医疗诊断"));
 });
@@ -333,4 +333,48 @@ test("buildParentAgentTransparencyModel shows escalated closure status ahead of 
 
   assert.equal(model.closureStatus, "已升级为机构关注，后续会按会诊节奏继续跟进。");
   assert.ok(model.sourceBadges.some((item) => item.label === "老师观察"));
+});
+
+test("same business day across ISO record timestamps counts as one observed day", () => {
+  const context = buildContext({ today: "2026-10-31", weeklyHealthChecks: [{ date: "2026-10-31T03:00:00.000Z" }] as never,
+    weeklyMeals: [{ date: "2026-10-31T04:00:00.000Z" }] as never,
+    weeklyGrowthRecords: [{ createdAt: "2026-10-31T05:00:00.000Z" }] as never,
+    weeklyFeedbacks: [{ date: "2026-10-31T06:00:00.000Z" }] as never });
+  const before = JSON.stringify(context);
+  const model = buildParentAgentTransparencyModel({ context, currentResult: buildResult() });
+  assert.equal(model.coverageText, "最近 1/7 天有可用记录，覆盖率约 14%。");
+  assert.ok(model.sourceBadges.some(item => item.label === "覆盖 1/7 天"));
+  assert.match(model.reliabilityText, /继续观察确认/);
+  assert.equal(JSON.stringify(context), before);
+});
+
+test("coverage uses UTC+8 days, feedback submittedAt and only the valid seven-day window", () => {
+  const context = buildContext({ today: "2026-10-31", weeklyHealthChecks: [
+    { date: "2026-10-30T16:30:00.000Z" }, { date: "2026-10-24" }, { date: "" }, { date: "invalid" },
+  ] as never, weeklyMeals: [{ date: "2026-10-30" }] as never,
+  weeklyGrowthRecords: [{ createdAt: "2026-10-31T16:01:00.000Z" }] as never,
+  weeklyFeedbacks: [{ date: "", submittedAt: "2026-10-30T18:00:00.000Z" }] as never });
+  const model = buildParentAgentTransparencyModel({ context, currentResult: buildResult() });
+  assert.equal(model.coverageText, "最近 2/7 天有可用记录，覆盖率约 29%。");
+});
+
+test("transparency omits internal JSON and role parameters while labelling clean history as past advice", () => {
+  const raw = '结合近期连续上下文：Recent context: parent-suggestions：{"riskLevel":"low","actionPlan":{"familyActions":["旧动作"]}}';
+  const consultation = buildConsultation({ continuityNotes: [raw, "上次建议先观察睡前反应，尚待反馈确认。"], evidenceItems: [
+    { id: "history", sourceType: "consultation_history", sourceLabel: "连续性说明", summary: "上次建议先观察睡前反应。", confidence: "medium", requiresHumanReview: false, evidenceCategory: "daily_care", supports: [] },
+    { id: "internal", sourceType: "teacher_note", sourceLabel: "老师观察", summary: '处理记录 role=teacher workflow=communication，{"summary":"内部参数"}', confidence: "medium", requiresHumanReview: false, evidenceCategory: "daily_care", supports: [] },
+  ] });
+  const before = JSON.stringify(consultation);
+  const model = buildParentAgentTransparencyModel({ context: buildContext(), currentResult: buildResult({ consultation }) });
+  const copy = model.evidenceBullets.join("\n");
+  assert.doesNotMatch(copy, /Recent context|riskLevel|actionPlan|role\s*=|workflow\s*=|\{"summary"/);
+  assert.match(copy, /过往建议参考/);
+  assert.match(copy, /不代表新增观察/);
+  assert.ok(model.sourceBadges.some(item => item.label === "历史建议参考"));
+  assert.equal(JSON.stringify(consultation), before);
+  for (const internal of [raw, '保存摘要：{"summary":"内部正文","actions":["技术字段"]}', "任务参数 role=parent workflow=communication"]) {
+    const fallback = buildParentAgentTransparencyModel({ context: buildContext(), currentResult: buildResult({ whyNow: internal,
+      consultation: buildConsultation({ explainability: [{ label: "内部", detail: internal }] }) }) });
+    assert.doesNotMatch(fallback.evidenceBullets.join("\n"), /Recent context|riskLevel|actionPlan|\{"summary"|role\s*=|workflow\s*=/);
+  }
 });

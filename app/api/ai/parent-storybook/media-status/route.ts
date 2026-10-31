@@ -54,6 +54,7 @@ import {
 import { NextResponse } from "next/server";
 import { isMaasSelected } from "@/lib/providers/maas/maas-provider";
 import { completeMaasStoryMedia } from "@/lib/server/parent-storybook-maas-media";
+import { resolveAuthorizedStoredStorybookContinuation } from "@/lib/server/storybook-provenance-state";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -1786,10 +1787,20 @@ export async function POST(request: Request) {
     capability: "parent-storybook",
     scopeId: payload.childId,
   };
-  const trustedContinuation = verifyAiResultAttestation(
+  let trustedContinuation = verifyAiResultAttestation(
     payload.story,
     provenanceContext
   );
+  if (!trustedContinuation) {
+    const storedContinuation = resolveAuthorizedStoredStorybookContinuation({
+      user: sessionUser, snapshot: sessionScope.snapshot,
+      storyId: payload.storyId, childId: payload.childId,
+    });
+    if (storedContinuation) {
+      payload = { ...payload, story: storedContinuation };
+      trustedContinuation = true;
+    }
+  }
   payload = {
     ...payload,
     story: sanitizeStorybookResultForContinuation(

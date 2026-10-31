@@ -113,6 +113,12 @@ export function restoreParentStorybookResponse(
     .find(isParentStoryBookResponse);
 
   if (embeddedResponse) {
+    // 签名约束完整 JSON；展示恢复不能补默认字段、裁剪正文或改写来源。
+    // 旧无回执格式仍沿用下面的兼容归一化，派生显示不回写服务端原书。
+    const attestation = (embeddedResponse as ParentStoryBookResponse & { provenanceAttestation?: unknown }).provenanceAttestation;
+    if (typeof attestation === "string" && attestation) {
+      return embeddedResponse;
+    }
     return normalizeEmbeddedStorybookResponse(embeddedResponse, storybook, childName);
   }
 

@@ -4,6 +4,7 @@ import type { ParentStoryBookHighlightCandidate, ParentStoryBookRequest } from "
 import { getFeedbackBusinessToday, normalizeFeedbackBusinessDate } from "@/lib/feedback/date";
 import { buildChildSuggestionSnapshotFromScope } from "@/lib/server/ai-scoped-payloads";
 import { ApiRouteError } from "@/lib/server/api-errors";
+import { projectFeedbackObservationSemantics } from "@/lib/feedback/observation-semantics";
 import type { SessionScope } from "@/lib/server/session-scope";
 
 function text(value: unknown, limit = 1000) {
@@ -38,7 +39,7 @@ export function buildParentStoryBookPayloadFromScope(
   const health = recent(scoped.health, childId, today, record => record.date);
   const meals = recent(scoped.meals, childId, today, record => record.date);
   const growth = recent(scoped.growth, childId, today, record => record.createdAt);
-  const feedback = recent(scoped.feedback, childId, today, record => record.date || record.submittedAt || "");
+  const feedback = recent(scoped.feedback, childId, today, record => record.date || record.submittedAt || "").map(projectFeedbackObservationSemantics);
   const narrowed = { ...scope, scopedSnapshot: { ...scoped, health, meals, growth, feedback } };
   const snapshot = buildChildSuggestionSnapshotFromScope(narrowed, childId, today);
   if (!snapshot || !scope.authorizedChildIds.has(childId)) throw new ApiRouteError("forbidden_scope", "当前账号无权为该儿童生成绘本。");

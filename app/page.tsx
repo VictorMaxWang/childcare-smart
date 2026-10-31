@@ -435,7 +435,7 @@ export default function RootOverviewPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
           <StatCard title="可见幼儿" value={`${visibleChildren.length}`} desc={`${currentUser.role}权限范围`} />
           <StatCard title="今日出勤" value={`${presentCount}`} desc={visibleChildren.length ? `出勤率 ${Math.round((presentCount / visibleChildren.length) * 100)}%` : "暂无数据"} />
-          <StatCard title="今日缺勤" value={`${absentCount}`} desc="含请假和未到园记录" />
+          <StatCard title="今日缺勤" value={`${absentCount}`} desc="仅含已登记请假和未到园记录" />
           <StatCard title="健康异常" value={`${todayHealthAbnormalCount}`} desc="今日晨检异常人数" />
           <StatCard title="今日饮食记录" value={`${todayMeals.length}`} desc="含早餐/午餐/晚餐/加餐" />
           <StatCard title="规则建议" value={`${insights.length}`} desc="按年龄段、过敏、连续异常生成" />
@@ -670,7 +670,7 @@ export default function RootOverviewPage() {
                 <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-500">
                   <span>幼儿 {row.total}</span>
                   <span>出勤 {row.present}</span>
-                  <span>缺勤 {Math.max(row.total - row.present, 0)}</span>
+                  <span>未登记在园 {Math.max(row.total - row.present, 0)}</span>
                 </div>
               </div>
             ))}

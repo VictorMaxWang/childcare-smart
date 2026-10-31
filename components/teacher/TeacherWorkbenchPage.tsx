@@ -640,7 +640,7 @@ function MobileWorkbench({
           </div>
           <div>
             <h1 className="text-3xl font-bold leading-tight text-[#101a35]">{currentUserName}</h1>
-            <p className="mt-2 text-base font-semibold text-[#6d7895]">早上好，专注每个孩子的健康成长 ☀️</p>
+            <p className="mt-2 text-base font-semibold text-[#6d7895]">关注每个孩子的健康与成长</p>
           </div>
         </div>
         <div className="flex gap-3">
@@ -670,7 +670,7 @@ function MobileWorkbench({
         <PixelSectionTitle title="今日概览" meta={`数据日 ${teacherReferenceLabel}`} />
         <div className="mt-6 grid grid-cols-4 gap-3 text-center">
           <MobileMetric icon={<CheckCircle2 className="h-6 w-6" />} value={visualAttendance} label="今日出勤" sub={attendanceRate} tone="green" />
-          <MobileMetric icon={<UsersRound className="h-6 w-6" />} value={absentCount} label="今日缺勤" sub={visualClassSize > 0 ? `${Math.round((absentCount / visualClassSize) * 100)}%` : "0%"} tone="orange" />
+          <MobileMetric icon={<UsersRound className="h-6 w-6" />} value={absentCount} label="未登记在园" sub={visualClassSize > 0 ? `${Math.round((absentCount / visualClassSize) * 100)}%` : "0%"} tone="orange" />
           <MobileMetric icon={<HeartPulse className="h-6 w-6" />} value={abnormalCount} label="健康异常" sub="需关注" tone="red" />
           <MobileMetric icon={<ClipboardCheck className="h-6 w-6" />} value={pendingRecords} label="待完成任务" sub="查看" tone="violet" />
         </div>

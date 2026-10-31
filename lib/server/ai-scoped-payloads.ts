@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { getAgeBandLabel, resolveAgeBandContext } from "@/lib/age-band/policy";
 import { normalizeBusinessDate } from "@/lib/date";
 import { feedbackBusinessDate } from "@/lib/feedback/date";
+import { projectFeedbackObservationSemantics } from "@/lib/feedback/observation-semantics";
 
 import type {
   AiFollowUpPayload,
@@ -156,7 +157,7 @@ export function buildChildSuggestionSnapshotFromScope(
   const health = byChildId(scope.scopedSnapshot.health, childId);
   const meals = byChildId(scope.scopedSnapshot.meals, childId);
   const growth = byChildId(scope.scopedSnapshot.growth, childId);
-  const feedback = byChildId(scope.scopedSnapshot.feedback, childId);
+  const feedback = byChildId(scope.scopedSnapshot.feedback, childId).map(projectFeedbackObservationSemantics);
   const hydrationValues = meals.map((item) => asNumber((item as AnyRecord).waterMl)).filter((value) => value > 0);
   const mealCount = Math.max(meals.length, 1);
   const balancedMeals = meals.filter((item) => {
@@ -256,7 +257,7 @@ export function buildParentFollowUpPayloadFromScope(
 ): AiFollowUpPayload {
   const childId = childSnapshot.child.id;
   const feedback = latestByDate(
-    byChildId(scope.scopedSnapshot.feedback, childId),
+    byChildId(scope.scopedSnapshot.feedback, childId).map(projectFeedbackObservationSemantics),
     (item) => asString((item as AnyRecord).submittedAt) || asString((item as AnyRecord).date) || asString((item as AnyRecord).createdAt)
   )[0];
   const tasks = byChildId(scope.scopedSnapshot.tasks, childId);
@@ -293,7 +294,7 @@ export function buildParentMessageRequestFromScope(
     tonightHomeActions: source.tonightHomeActions,
     currentInterventionCard: source.currentInterventionCard,
     latestGuardianFeedback: latestByDate(
-      byChildId(scope.scopedSnapshot.feedback, childId),
+      byChildId(scope.scopedSnapshot.feedback, childId).map(projectFeedbackObservationSemantics),
       (item) => asString((item as AnyRecord).submittedAt) || asString((item as AnyRecord).date) || asString((item as AnyRecord).createdAt)
     )[0] as unknown as Record<string, unknown> | undefined,
     snapshot: buildChildSuggestionSnapshotFromScope(scope, childId) as unknown as Record<string, unknown>,
@@ -340,7 +341,7 @@ export function buildTeacherAgentPayloadFromScope(
     healthCheckRecords: scope.scopedSnapshot.health as TeacherAgentRequestPayload["healthCheckRecords"],
     mealRecords: scope.scopedSnapshot.meals as TeacherAgentRequestPayload["mealRecords"],
     growthRecords: scope.scopedSnapshot.growth as TeacherAgentRequestPayload["growthRecords"],
-    guardianFeedbacks: scope.scopedSnapshot.feedback,
+    guardianFeedbacks: scope.scopedSnapshot.feedback.map(projectFeedbackObservationSemantics),
   };
 }
 
@@ -396,7 +397,7 @@ export function buildAdminAgentPayloadFromScope(
     attendanceRecords: scope.scopedSnapshot.attendance,
     healthCheckRecords: scope.scopedSnapshot.health,
     growthRecords: scope.scopedSnapshot.growth,
-    guardianFeedbacks: scope.scopedSnapshot.feedback as AdminAgentRequestPayload["guardianFeedbacks"],
+    guardianFeedbacks: scope.scopedSnapshot.feedback.map(projectFeedbackObservationSemantics) as AdminAgentRequestPayload["guardianFeedbacks"],
     mealRecords: scope.scopedSnapshot.meals as AdminAgentRequestPayload["mealRecords"],
     adminBoardData: {
       highAttentionChildren: visibleChildren
@@ -444,7 +445,7 @@ export function buildWeeklyReportPayloadFromScope(
   const meals = filterWeeklyRecordsByChildren(scope.scopedSnapshot.meals, childIds).filter(item => inPeriod(normalizeBusinessDate(item.date)));
   const health = filterWeeklyRecordsByChildren(scope.scopedSnapshot.health, childIds).filter(item => inPeriod(normalizeBusinessDate(item.date)));
   const growth = filterWeeklyRecordsByChildren(scope.scopedSnapshot.growth, childIds).filter(item => inPeriod(normalizeBusinessDate(item.createdAt)));
-  const feedback = filterWeeklyRecordsByChildren(scope.scopedSnapshot.feedback, childIds).filter(item => inPeriod(feedbackBusinessDate(item)));
+  const feedback = filterWeeklyRecordsByChildren(scope.scopedSnapshot.feedback, childIds).filter(item => inPeriod(feedbackBusinessDate(item))).map(projectFeedbackObservationSemantics);
   const stableValue = (value: unknown): unknown => Array.isArray(value) ? value.map(stableValue)
     : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, stableValue(item)])) : value;
   const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(stableValue(value))).digest("hex");

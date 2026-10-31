@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 
 import app.providers.mock as mock_provider_module
 from fastapi.testclient import TestClient
@@ -192,6 +193,10 @@ def test_high_risk_consultation_direct_json_matches_stream_done_result(tmp_path,
     direct_sqlite_path = tmp_path / "consultation-parity-direct.db"
     configure_memory_backend(monkeypatch, backend="sqlite", sqlite_path=str(direct_sqlite_path))
     seed_child_memory()
+    # 两种传输必须比较同一份带来源日期的历史记录，不能让独立夹具创建毫秒影响语义相等。
+    with sqlite3.connect(direct_sqlite_path) as connection:
+        connection.execute("UPDATE agent_state_snapshots SET created_at = ?", (fixed_now,))
+        connection.execute("UPDATE agent_trace_log SET created_at = ?", (fixed_now,))
 
     direct_response = client.post(
         "/api/v1/agents/consultations/high-risk",
@@ -203,6 +208,9 @@ def test_high_risk_consultation_direct_json_matches_stream_done_result(tmp_path,
     stream_sqlite_path = tmp_path / "consultation-parity-stream.db"
     configure_memory_backend(monkeypatch, backend="sqlite", sqlite_path=str(stream_sqlite_path))
     seed_child_memory()
+    with sqlite3.connect(stream_sqlite_path) as connection:
+        connection.execute("UPDATE agent_state_snapshots SET created_at = ?", (fixed_now,))
+        connection.execute("UPDATE agent_trace_log SET created_at = ?", (fixed_now,))
 
     stream_response = client.post(
         "/api/v1/agents/consultations/high-risk/stream",

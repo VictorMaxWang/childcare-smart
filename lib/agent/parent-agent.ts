@@ -214,6 +214,7 @@ function sortByDateDesc<T extends { date?: string; createdAt?: string }>(items: 
 function buildFocusReasons(params: {
   smartInsights: SmartInsight[];
   weeklyTrend: WeeklyDietTrend;
+  weeklyMeals: MealRecord[];
   pendingReviews: GrowthRecord[];
   weeklyHealthChecks: HealthCheckRecord[];
   latestFeedback?: GuardianFeedback;
@@ -222,7 +223,7 @@ function buildFocusReasons(params: {
   const hydrationDisplay = getHydrationDisplayState(params.weeklyTrend.hydrationAvg);
   const reasons = uniqueItems([
     ...warningInsights.map((item) => item.title),
-    params.weeklyTrend.hydrationAvg < 140 ? hydrationDisplay.trendSummary : undefined,
+    !params.weeklyMeals.length ? "近 7 天缺少饮食记录，暂不评估补水或摄入情况" : params.weeklyTrend.hydrationAvg < 140 ? hydrationDisplay.trendSummary : undefined,
     params.pendingReviews.length > 0 ? `有 ${params.pendingReviews.length} 条待复查观察记录` : undefined,
     params.weeklyHealthChecks.some((item) => item.isAbnormal) ? "近 7 天出现过晨检异常，需要继续跟进" : undefined,
     params.latestFeedback
@@ -235,6 +236,7 @@ function buildFocusReasons(params: {
 
 function buildObservationDefaults(context: {
   weeklyTrend: WeeklyDietTrend;
+  weeklyMeals: MealRecord[];
   attentionGrowthRecords: GrowthRecord[];
   weeklyHealthChecks: HealthCheckRecord[];
   latestFeedback?: GuardianFeedback;
@@ -244,7 +246,7 @@ function buildObservationDefaults(context: {
   return uniqueItems([
     ageBandGuidance ? `今晚先看：${ageBandGuidance.teacherObservationFocus[0]}` : undefined,
     ageBandGuidance?.teacherObservationFocus[1] ? `今晚再看：${ageBandGuidance.teacherObservationFocus[1]}` : undefined,
-    context.weeklyTrend.hydrationAvg < 140 ? "今晚补水是否比前几天更主动" : undefined,
+    context.weeklyMeals.length > 0 && context.weeklyTrend.hydrationAvg < 140 ? "今晚补水是否比前几天更主动" : undefined,
     context.attentionGrowthRecords.some((item) => item.category === "情绪表现") ? "晚间情绪是否比接园前更稳定" : undefined,
     context.attentionGrowthRecords.some((item) => item.category === "睡眠情况") ? "入睡速度和晨起状态是否改善" : undefined,
     context.weeklyHealthChecks.some((item) => item.isAbnormal) ? "今晚是否还有异常体温或明显不适" : undefined,
@@ -330,7 +332,7 @@ function buildWhyNow(context: ParentAgentChildContext, suggestion: AiSuggestionR
 function buildRecommendedQuestions(context: ParentAgentChildContext, responseQuestions?: string[]) {
   const dynamic = uniqueItems([
     ...PARENT_AGENT_QUICK_QUESTIONS,
-    context.weeklyTrend.hydrationAvg < 140 ? "如果今晚补水还是不够主动，下一步怎么做？" : undefined,
+    context.weeklyMeals.length > 0 && context.weeklyTrend.hydrationAvg < 140 ? "如果今晚补水还是不够主动，下一步怎么做？" : undefined,
     context.pendingReviews.length > 0 ? "48 小时后我要重点回看哪一个变化？" : undefined,
     ...(responseQuestions ?? []),
   ]);
@@ -424,6 +426,7 @@ export function buildParentAgentChildContext(params: {
   const focusReasons = buildFocusReasons({
     smartInsights: params.smartInsights,
     weeklyTrend: params.weeklyTrend,
+    weeklyMeals,
     pendingReviews,
     weeklyHealthChecks,
     latestFeedback,
@@ -451,6 +454,7 @@ export function buildParentAgentChildContext(params: {
     focusReasons,
     observationDefaults: buildObservationDefaults({
       weeklyTrend: params.weeklyTrend,
+      weeklyMeals,
       attentionGrowthRecords,
       weeklyHealthChecks,
       latestFeedback,

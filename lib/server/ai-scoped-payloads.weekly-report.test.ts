@@ -61,6 +61,17 @@ function multiChildScope(): SessionScope {
   } as unknown as SessionScope;
 }
 
+test("trusted weekly input does not label legacy positive observations as barriers", () => {
+  const scope = multiChildScope();
+  scope.scopedSnapshot.feedback = [{ childId: "child-a", feedbackId: "positive-feedback", date: "2026-10-31", barriers: ["情绪稳定", "需要提醒"], notes: "正式合成备注" }] as unknown as typeof scope.scopedSnapshot.feedback;
+  const before = JSON.stringify(scope);
+  const result = buildWeeklyReportPayloadFromScope(weeklySource("child", "child-a"), scope, "2026-10-31");
+  assert.deepEqual(result.snapshot.recentFeedback?.[0].barriers, []);
+  assert.match(result.snapshot.recentFeedback?.[0].notes ?? "", /观察到：情绪稳定/u);
+  assert.match(result.snapshot.recentFeedback?.[0].notes ?? "", /支持需求：需要提醒/u);
+  assert.equal(JSON.stringify(scope), before);
+});
+
 test("child-scoped weekly reports exclude records from other authorized children", () => {
   const result = buildWeeklyReportPayloadFromScope(
     weeklySource("child", "child-a"),
