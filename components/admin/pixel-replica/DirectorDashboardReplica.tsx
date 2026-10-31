@@ -91,6 +91,8 @@ export default function DirectorDashboardReplica({
   todayText,
   weeklyReport,
   weeklyReportLoading,
+  weeklyReportGenerating = false,
+  weeklyReportRetryUnknown = false,
   weeklyReportError,
   weeklyReportPeriodLabel,
   adminSummary,
@@ -103,6 +105,7 @@ export default function DirectorDashboardReplica({
   onMarkCommunicationHandled,
   onOpenFeedbackDetail,
   onRefresh,
+  onGenerateWeeklyReport,
 }: {
   home: AdminHomeViewModel;
   institutionName: string;
@@ -110,6 +113,8 @@ export default function DirectorDashboardReplica({
   todayText: string;
   weeklyReport: WeeklyReportResponse | null;
   weeklyReportLoading: boolean;
+  weeklyReportGenerating?: boolean;
+  weeklyReportRetryUnknown?: boolean;
   weeklyReportError: string | null;
   weeklyReportPeriodLabel: string;
   adminSummary: ApiAdminSummary | null;
@@ -122,6 +127,7 @@ export default function DirectorDashboardReplica({
   onMarkCommunicationHandled: (conversationId: string) => void;
   onOpenFeedbackDetail: () => void;
   onRefresh: () => void;
+  onGenerateWeeklyReport?: () => void;
 }) {
   const scope = home.adminContext.institutionScope;
   const riskChildrenCount = scope.riskChildrenCount;
@@ -275,6 +281,9 @@ export default function DirectorDashboardReplica({
             <Share2 className="h-4 w-4" />
             分享周报
           </ReplicaButtonLink>
+          {onGenerateWeeklyReport ? <ReplicaButton data-testid="admin-generate-weekly-report" onClick={onGenerateWeeklyReport} disabled={weeklyReportLoading}>
+            {weeklyReportGenerating ? "正在生成周报…" : weeklyReportRetryUnknown ? "确认后重新生成周报" : weeklyReport ? "更新周报" : "生成周报"}
+          </ReplicaButton> : null}
           <ReplicaButton onClick={onRefresh} disabled={weeklyReportLoading}>
             <RefreshCw className={`h-4 w-4 ${weeklyReportLoading ? "animate-spin" : ""}`} />
             刷新数据
@@ -617,8 +626,9 @@ export default function DirectorDashboardReplica({
               <div className="relative z-10 max-w-[520px]">
                 <h2 className="text-xl font-bold">本周机构核心摘要</h2>
                 <p className="mt-4 text-sm leading-7 text-white/90">
-                  {weeklyReportLoading ? "正在生成本周运营摘要..." : weeklySummary}
+                  {weeklyReportGenerating ? "正在生成本周运营摘要…" : weeklyReportLoading ? "正在读取已保存的本周摘要…" : weeklySummary}
                 </p>
+                {!weeklyReport && !weeklyReportLoading ? <p className="mt-2 text-xs text-white/80">当前记录版本尚未生成 AI 周报，可点击生成周报；下方统计来自现有记录。</p> : null}
                 {weeklyReportError ? <p className="mt-2 text-xs text-white/80">{weeklyReportError}</p> : null}
                 <p data-testid="admin-api-summary" className="mt-2 text-xs font-semibold text-white/80">
                   {apiMetricSource}

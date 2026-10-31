@@ -375,8 +375,9 @@ export default function AdminAgentPage() {
     lastAutoRunModeRef.current = pageMode;
     setResult(null);
     setRequestError(null);
-    void runWorkflow(modeConfig.workflow, { label: modeConfig.label });
-  }, [modeConfig.label, modeConfig.workflow, pageMode, runWorkflow, visibleChildren.length]);
+    // 切换看板只清理旧模式结果，生成由明确按钮触发，刷新链接不会产生新的模型费用。
+    setWorkflowNotice("点击生成按钮后开始机构分析；已有周报可从保存记录中打开。");
+  }, [pageMode, visibleChildren.length]);
 
   useEffect(() => {
     if (!notificationReady || notificationEvents.length === 0) return;

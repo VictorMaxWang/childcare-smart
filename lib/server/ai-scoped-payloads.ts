@@ -1,4 +1,5 @@
 import "server-only";
+import { getAgeBandLabel, resolveAgeBandContext } from "@/lib/age-band/policy";
 
 import type {
   AiFollowUpPayload,
@@ -140,10 +141,14 @@ function latestByDate<T>(items: T[], readDate: (item: T) => string) {
 
 export function buildChildSuggestionSnapshotFromScope(
   scope: SessionScope,
-  childId: string
+  childId: string,
+  asOfDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()),
 ): ChildSuggestionSnapshot | null {
   const child = scope.visibleChildren.find((item) => item.id === childId);
   if (!child) return null;
+
+  // 重建可信快照时也必须重算月龄；普通建档只保存出生日期，没有客户端派生的 ageBand 字段。
+  const ageBandContext = resolveAgeBandContext({ birthDate: child.birthDate, ageBand: asString((child as unknown as AnyRecord).ageBand), asOfDate });
 
   const health = byChildId(scope.scopedSnapshot.health, childId);
   const meals = byChildId(scope.scopedSnapshot.meals, childId);
@@ -160,7 +165,8 @@ export function buildChildSuggestionSnapshotFromScope(
     child: {
       id: child.id,
       name: child.name,
-      ageBand: asString((child as unknown as AnyRecord).ageBand),
+      ageBand: getAgeBandLabel(ageBandContext) ?? undefined,
+      ageBandContext,
       className: asString(child.className),
       allergies: asStringArray((child as unknown as AnyRecord).allergies),
       specialNotes: asString((child as unknown as AnyRecord).specialNotes),

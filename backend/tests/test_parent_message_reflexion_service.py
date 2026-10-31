@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import pytest
 from pydantic import SecretStr
@@ -220,6 +221,83 @@ def test_call_live_evaluator_uses_schema_validation_and_explicit_boolean_parsing
     assert result.decision == "block"
     assert result.problems == ["语气略硬"]
     assert result.revision_suggestions == ["再柔和一点"]
+
+
+@pytest.mark.parametrize(
+    ("decision", "can_send", "retryable", "score"),
+    [("approve", True, False, 8.9), ("revise", False, True, 6.5), ("block", False, False, 2.0)],
+)
+def test_live_evaluator_requests_json_and_names_each_legal_decision(monkeypatch, decision, can_send, retryable, score):
+    service = ParentMessageReflexionService(settings=build_live_settings())
+    context = build_live_context(service)
+    draft = service._build_local_draft(context, None, 1).model_dump(mode="json")
+    calls = []
+
+    async def summarize(_provider, **kwargs):
+        calls.append(kwargs)
+        return ProviderTextResult(text=json.dumps({"score": score, "problems": [], "revision_suggestions": [],
+            "can_send": can_send, "retryable": retryable, "decision": decision}),
+            source="ai", provider="maas-llm", model="ZHIPU/GLM-5.3-Flash", fallback=False)
+
+    monkeypatch.setattr(parent_message_module, "resolve_text_provider", lambda _settings: object())
+    monkeypatch.setattr(parent_message_module, "summarize_async", summarize)
+    result = asyncio.run(service._call_live_evaluator(draft, context, 1))
+    assert not result.fallback and result.decision == decision
+    assert result.can_send is can_send and result.retryable is retryable
+    assert len(calls) == 1 and calls[0]["json_output"] is True
+    for legal in ("approve", "revise", "block"):
+        assert f'"{legal}"' in calls[0]["prompt"]
+    assert '不得返回 "send"' in calls[0]["prompt"]
+
+
+def test_live_evaluator_rejects_send_without_retrying_or_approving(monkeypatch):
+    service = ParentMessageReflexionService(settings=build_live_settings())
+    context = build_live_context(service)
+    draft = service._build_local_draft(context, None, 1).model_dump(mode="json")
+    calls = []
+
+    async def summarize(_provider, **kwargs):
+        calls.append(kwargs)
+        return ProviderTextResult(text=json.dumps({"score": 9, "problems": [], "revision_suggestions": [],
+            "can_send": True, "retryable": False, "decision": "send"}),
+            source="ai", provider="maas-llm", model="ZHIPU/GLM-5.3-Flash", fallback=False)
+
+    monkeypatch.setattr(parent_message_module, "resolve_text_provider", lambda _settings: object())
+    monkeypatch.setattr(parent_message_module, "summarize_async", summarize)
+    result = asyncio.run(service._evaluate_candidate(draft, context, 1))
+    assert len(calls) == 1
+    assert result.fallback and not result.can_send and not result.retryable
+    assert result.decision == "block" and result.stop_reason == "evaluator_fallback"
+    assert result.debug_meta["fallback_reason"] == "json-schema-mismatch"
+
+
+@pytest.mark.parametrize("decision", ["revise", "block"])
+def test_evaluator_cannot_approve_conflicting_high_score_and_can_send(monkeypatch, decision):
+    service = ParentMessageReflexionService(settings=build_live_settings())
+    context = build_live_context(service)
+    draft = service._build_local_draft(context, None, 1).model_dump(mode="json")
+    result = ProviderTextResult(text=json.dumps({"score": 9.5, "problems": [], "revision_suggestions": [],
+        "can_send": True, "retryable": True, "decision": decision}), source="ai", provider="maas-llm", fallback=False)
+    monkeypatch.setattr(parent_message_module, "resolve_text_provider", lambda _settings: FakeTextProvider(result))
+    evaluated = asyncio.run(service._evaluate_candidate(draft, context, 1))
+    assert not evaluated.fallback and not evaluated.can_send and evaluated.decision == decision
+    assert evaluated.retryable is (decision == "revise")
+
+
+def test_live_generator_also_requests_explicit_json_mode(monkeypatch):
+    service = ParentMessageReflexionService(settings=build_live_settings())
+    context = build_live_context(service)
+    draft = service._build_local_draft(context, None, 1).model_dump(mode="json")
+    calls = []
+
+    async def summarize(_provider, **kwargs):
+        calls.append(kwargs)
+        return ProviderTextResult(text=json.dumps(draft), source="ai", provider="maas-llm", fallback=False)
+
+    monkeypatch.setattr(parent_message_module, "resolve_text_provider", lambda _settings: object())
+    monkeypatch.setattr(parent_message_module, "summarize_async", summarize)
+    result = asyncio.run(service._generate_candidate(context, None, 1))
+    assert not result.fallback and len(calls) == 1 and calls[0]["json_output"] is True
 
 
 def test_parent_message_reflexion_surfaces_generator_fallback_reason_in_final_problems(monkeypatch):

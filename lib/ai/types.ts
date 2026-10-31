@@ -479,7 +479,20 @@ export interface AiActionPlan {
   reviewActions: string[];
 }
 
-export interface AiSuggestionResponse {
+/** 服务端调用结果的原始来源字段；映射业务视图时不得仅凭 source 或配置推断真实调用。 */
+export interface AiResultProviderMetadata {
+  provider?: string;
+  providerStatus?: Record<string, unknown>;
+  mode?: AiCapabilityMode;
+  live?: boolean;
+  realProvider?: boolean;
+  fallback?: boolean;
+  fallbackReason?: string | null;
+  providerTrace?: AiProviderTrace;
+  requestId?: string | null;
+}
+
+export interface AiSuggestionResponse extends AiResultProviderMetadata {
   riskLevel: AiRiskLevel;
   summary: string;
   highlights: string[];
@@ -493,9 +506,6 @@ export interface AiSuggestionResponse {
   disclaimer: string;
   source: "ai" | "fallback" | "mock";
   model?: string;
-  provider?: string;
-  providerStatus?: Record<string, unknown>;
-  fallbackReason?: string | null;
 }
 
 export interface AiFollowUpPayload {
@@ -539,7 +549,7 @@ export interface AiFollowUpMessage {
   content: string;
 }
 
-export interface AiFollowUpResponse {
+export interface AiFollowUpResponse extends AiResultProviderMetadata {
   answer: string;
   keyPoints: string[];
   nextSteps: string[];
@@ -560,9 +570,6 @@ export interface AiFollowUpResponse {
   disclaimer: string;
   source: "ai" | "fallback" | "mock";
   model?: string;
-  provider?: string;
-  providerStatus?: Record<string, unknown>;
-  fallbackReason?: string | null;
 }
 
 export type ParentMessageStopReason =
@@ -732,6 +739,7 @@ export interface ParentStoryBookDiagnostics {
     statusCode?: number | null;
     failureKind?: string | null;
     model?: string | null;
+    requestId?: string | null;
     elapsedMs?: number | null;
   };
   image: ParentStoryBookDiagnosticsChannel;
@@ -1032,7 +1040,7 @@ export interface WeeklyReportPayload {
   snapshot: WeeklyReportSnapshot;
 }
 
-export interface WeeklyReportResponse {
+export interface WeeklyReportResponse extends AiResultProviderMetadata {
   schemaVersion: WeeklyReportSchemaVersion;
   role: WeeklyReportRole;
   summary: string;
@@ -1047,9 +1055,6 @@ export interface WeeklyReportResponse {
   disclaimer: string;
   source: "ai" | "fallback" | "mock";
   model?: string;
-  provider?: string;
-  providerStatus?: Record<string, unknown>;
-  fallbackReason?: string | null;
 }
 
 export type HealthFileBridgeSourceRole = "parent" | "teacher";

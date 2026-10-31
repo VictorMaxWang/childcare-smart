@@ -226,3 +226,39 @@ test("teacher voice understand accepts Ogg Opus and passes canonical MIME to ASR
     userId: "teacher-normal-1",
   });
 });
+
+test("teacher voice understanding propagates actual ASR model and live evidence through the multipart route", async () => {
+  const form = new FormData(); form.set("audio", new File([OGG_SIGNATURE], "synthetic.ogg", { type: "audio/ogg" }));
+  form.set("childId", "synthetic-child");
+  let providerCalls = 0;
+  const base = providerThatRejectsBrowserAudio();
+  const response = await handleTeacherVoiceUnderstandRequest(new Request("http://localhost:3000/api/ai/teacher-voice-understand", { method: "POST", body: form }), {
+    async authorize() { return null; }, resolveProvider() { return { ...base, async transcribe(input) {
+      providerCalls++; assert.ok(input.audioBytes?.length); assert.equal(input.transcript, undefined); assert.equal(input.fallbackText, undefined);
+      const status = { ...base.getStatus(), providerName: "maas-asr", state: "live" as const, live: true, isRealProvider: true, model: "qwen-audio-3.0-asr-flash" };
+      return { provider: "maas-asr", mode: "live" as const, source: "provider" as const, model: "qwen-audio-3.0-asr-flash", output: {
+        transcript: "合成儿童午餐尝试使用勺子。", source: "provider", confidence: null, fallback: false, providerName: "maas-asr", state: "live" as const,
+        live: true, mock: false, isRealProvider: true, warnings: [], providerStatus: status,
+      } };
+    } }; },
+  });
+  const body = await response.json(); assert.equal(response.status, 200); assert.equal(providerCalls, 1);
+  assert.equal(body.model.asr, "qwen-audio-3.0-asr-flash"); assert.equal(body.providerTrace.model, body.model.asr);
+  assert.equal(body.providerTrace.realProvider, true); assert.equal(body.providerTrace.mode, "live"); assert.equal(body.fallback, false);
+  assert.equal(body.source.router, "rule"); assert.equal(body.source.chaining, "rule");
+});
+
+test("teacher voice JSON transcript keeps its fallback model and cannot inherit a configured provider's real status", async () => {
+  const base = providerThatRejectsBrowserAudio();
+  const response = await handleTeacherVoiceUnderstandRequest(new Request("http://localhost:3000/api/ai/teacher-voice-understand", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ childId: "synthetic-child", transcript: "合成儿童午睡平稳。" }),
+  }), { async authorize() { return null; }, resolveProvider() { return { ...base, async transcribe(input) {
+    return { provider: "local-text-asr-fallback", mode: "fallback" as const, source: "provided_transcript" as const, model: "local-text-fallback", output: {
+      transcript: input.transcript!, source: "provided_transcript", confidence: null, fallback: true, providerName: "local-text-asr-fallback", state: "fallback" as const,
+      live: false, mock: false, isRealProvider: false, warnings: [], providerStatus: { ...base.getStatus(), state: "fallback" as const, live: false, fallback: true, isRealProvider: false },
+    } };
+  } }; } });
+  const body = await response.json(); assert.equal(response.status, 200); assert.equal(body.model.asr, "local-text-fallback");
+  assert.equal(body.providerTrace.model, "local-text-fallback"); assert.equal(body.providerTrace.realProvider, false);
+  assert.equal(body.providerTrace.mode, "fallback"); assert.equal(body.fallback, true); assert.equal(body.fallbackReason, "provided-transcript");
+});

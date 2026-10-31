@@ -3,7 +3,8 @@ import test from "node:test";
 import sharp from "sharp";
 import type { ParentStoryBookResponse } from "@/lib/ai/types";
 import { MaasProviderError } from "@/lib/providers/maas/maas-provider";
-import { buildMaasStoryImagePrompt, completeMaasStoryMedia, downloadMaasStoryMedia } from "./parent-storybook-maas-media";
+import { buildMaasStoryImagePrompt, completeMaasStoryMedia, downloadMaasStoryMedia, prepareMaasStoryForMedia } from "./parent-storybook-maas-media";
+import { shouldCacheParentStoryBookResponse } from "./parent-storybook-cache";
 import { buildParentStoryBookPersistentMediaKey, type ParentStoryBookMediaAsset } from "./parent-storybook-media-store";
 import { InMemoryStorybookMediaTaskStore } from "./storybook-media-task-store";
 
@@ -22,6 +23,40 @@ function story(count = 1): ParentStoryBookResponse {
     generatedAt: "2026-10-31T00:00:00.000Z", providerMeta: { provider: "maas", mode: "live", textProvider: "maas", textDelivery: "real", imageProvider: "maas-z-image", audioProvider: "maas-tts", realProvider: true, highlightCount: 0, sceneCount: count },
     scenes: Array.from({ length: count }, (_, sceneIndex) => ({ sceneIndex: sceneIndex + 1, sceneTitle: `第${sceneIndex + 1}幕`, sceneText: `小熊在第${sceneIndex + 1}幕观察花朵。`, imagePrompt: `同一只穿蓝色衣服的小熊，第${sceneIndex + 1}幕在花园。`, imageStatus: "empty", audioStatus: "empty", audioScript: `这是第${sceneIndex + 1}幕`, voiceStyle: "gentle", highlightSource: "synthetic" })) };
 }
+
+test("real MaaS text with disabled backend mock media becomes a cached pending book without fabricated assets", () => {
+  const input = story(4);
+  input.fallback = true;
+  Object.assign(input.providerMeta, { provider: "maas-llm", textProvider: "maas-llm", mode: "mixed", imageProvider: "storybook-dynamic-fallback", audioProvider: "storybook-mock-preview", imageDelivery: "dynamic-fallback", audioDelivery: "preview-only" });
+  Object.assign(input.scenes[0], { imageUrl: "data:image/svg+xml,<svg/>", imageStatus: "fallback", imageSourceKind: "svg-fallback", audioUrl: "/storybook/demo.wav", audioStatus: "mock" });
+  const prepared = prepareMaasStoryForMedia(input);
+  assert.equal(input.fallback, true, "legacy raw evidence must not be mutated");
+  assert.equal(prepared.source, "ai"); assert.equal(prepared.fallback, false);
+  assert.equal(prepared.providerMeta.provider, "maas"); assert.equal(prepared.providerMeta.textDelivery, "real");
+  assert.equal(prepared.providerTrace?.realProvider, true); assert.equal(prepared.providerTrace?.fallback, false);
+  for (const channel of ["image", "audio"] as const) {
+    assert.equal(prepared.providerMeta.diagnostics?.[channel].pendingSceneCount, 4);
+    assert.equal(prepared.providerMeta.diagnostics?.[channel].readySceneCount, 0);
+    assert.equal(prepared.providerMeta.diagnostics?.[channel].jobStatus, "idle");
+  }
+  assert.ok(prepared.scenes.every(scene => scene.imageStatus === "empty" && scene.audioStatus === "empty" && !scene.imageUrl && !scene.audioUrl));
+  assert.equal(shouldCacheParentStoryBookResponse(prepared), true, "paid text must survive before the first image exists");
+});
+
+test("MaaS preparation preserves historical ready private media and never upgrades rule or failed text", () => {
+  const historical = story();
+  Object.assign(historical.scenes[0], { imageStatus: "ready", imageSourceKind: "real", imageUrl: `/api/ai/parent-storybook/media/${"a".repeat(40)}`, imageProvider: "vivo-story-image" });
+  const prepared = prepareMaasStoryForMedia(historical);
+  assert.equal(prepared.scenes[0].imageUrl, historical.scenes[0].imageUrl);
+  assert.equal(prepared.scenes[0].imageProvider, "vivo-story-image");
+  assert.equal(prepared.providerMeta.imageProvider, "vivo-story-image");
+  const fallback = story(); fallback.providerMeta.textDelivery = "fallback"; fallback.fallback = true;
+  assert.equal(prepareMaasStoryForMedia(fallback), fallback);
+  const failed = story(); failed.providerMeta.fallbackReason = "provider-invalid-json";
+  assert.equal(prepareMaasStoryForMedia(failed), failed);
+  const legacy = story(); legacy.providerMeta.textProvider = "vivo-llm";
+  assert.equal(prepareMaasStoryForMedia(legacy), legacy);
+});
 
 async function harness(count = 1) {
   const png = await sharp({ create: { width: 8, height: 12, channels: 3, background: "#ffeecc" } }).png().toBuffer();

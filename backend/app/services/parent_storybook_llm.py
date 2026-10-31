@@ -13,7 +13,8 @@ from app.providers.base import (
     ProviderResponseError,
 )
 from app.providers.resolver import resolve_text_provider
-from app.providers.maas import maas_selected, maas_configured
+from app.providers.maas import MaasTextProvider, maas_selected, maas_configured
+from app.services.age_band_policy import get_age_band_label, resolve_age_band_context
 
 
 class ParentStoryBookTextProviderError(RuntimeError):
@@ -211,6 +212,24 @@ def _fallback_generation(
     )
 
 
+def _storybook_age_constraint(child: dict[str, Any]) -> str:
+    trusted_context = child.get("ageBandContext") if isinstance(child.get("ageBandContext"), dict) else {}
+    resolved = resolve_age_band_context({**trusted_context, "ageBand": child.get("ageBand") or trusted_context.get("rawAgeBand")})
+    months = resolved.get("ageMonths")
+    band = resolved.get("normalizedAgeBand")
+    label = get_age_band_label(resolved)
+    identity = f"已核验月龄为{months}个月" if months is not None else f"已核验年龄段为{label}" if label else "月龄尚未核实"
+    if band == "0-12m":
+        rule = "由照护者陪伴共读，使用短句、重复声音与安全的观看触摸；不得要求独立行走、完整讲话、独自进食或整理玩具等超龄动作。"
+    elif band == "12-24m":
+        rule = "由照护者陪伴，用简单模仿与成人协助的一到两步小动作；不要求复杂规则、完整叙事或长时间等待。"
+    elif band == "24-36m":
+        rule = "使用简单轮流与模仿的一到两步动作；不要求识字、书写或学龄儿童能力。"
+    else:
+        rule = "按实际已知能力安排照护者陪伴共读；年龄信息不足时不得假定会独立行走、完整讲话，不编造年龄或发展能力。"
+    return f"适龄约束：{identity}。{rule}"
+
+
 def _build_storybook_prompt(
     *,
     payload: dict[str, Any],
@@ -260,7 +279,8 @@ def _build_storybook_prompt(
         [
             "你是幼儿园成长绘本生成器。请基于输入为家长生成真实、原创、可朗读的儿童成长绘本。",
             "硬性要求：只输出 JSON；不要 Markdown；不要解释；不要返回固定演示绘本；不要出现林小雨或《林小雨的一小步勇敢》。",
-            f"必须输出 exactly {expected_scene_count} 个 scenes，sceneText 要适合 3-6 岁孩子听，每页 45-90 个中文字符。",
+            f"必须输出 exactly {expected_scene_count} 个 scenes，每页 25-70 个中文字符，按实际月龄使用简短、具体的语言。",
+            _storybook_age_constraint(payload.get("snapshot", {}).get("child", {})),
             "故事必须综合孩子、主题、页数、风格、教师记录、成长亮点、家长反馈、干预卡和会诊信息；输入变化时故事内容也要变化。",
             "imagePrompt 用中文描述画面，不要要求画真实孩子正脸，不要包含画面文字。",
             f"JSON schema: {_compact_json(schema)}",
@@ -335,7 +355,11 @@ def generate_parent_storybook_text(
     )
 
     try:
-        provider_result = provider.summarize(prompt=prompt, fallback=fallback_json)
+        # 同步绘本文字与异步业务使用相同 JSON 协议，旧供应商不增加其不支持的参数。
+        if isinstance(provider, MaasTextProvider):
+            provider_result = provider.summarize(prompt=prompt, fallback=fallback_json, json_output=True)
+        else:
+            provider_result = provider.summarize(prompt=prompt, fallback=fallback_json)
     except ProviderConfigurationError as error:
         raise ParentStoryBookTextProviderError(
             "storybook text provider is missing required configuration",

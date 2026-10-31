@@ -18,6 +18,46 @@ import {
   POST,
 } from "./route.ts";
 
+test("MaaS real text is delivered as pending private media and cached without a second paid text request", async () => {
+  const previousFetch = globalThis.fetch;
+  try {
+    await withEnv({ BRAIN_API_BASE_URL: "http://brain.example.com", AI_PROVIDER: "maas", AI_API_KEY: "synthetic-only-key", AI_BASE_URL: "https://maas.example.test/compatible-mode/v1", PARENT_STORYBOOK_REQUIRE_REAL_TEXT: "1" }, async () => {
+      parentStoryBookCacheInternals.storyResponseCache.clear();
+      const raw = buildRemoteStory(); raw.source = "ai"; raw.fallback = true;
+      Object.assign(raw.providerMeta, { provider: "maas-llm", textProvider: "maas-llm", mode: "mixed", imageDelivery: "dynamic-fallback", audioDelivery: "preview-only" });
+      raw.providerMeta.diagnostics!.text = { requestedProvider: "maas", resolvedProvider: "maas", attemptedProviders: ["maas"], attemptCount: 1, fallbackReason: null, model: "qwen3.8-flash" };
+      raw.scenes = Array.from({ length: 4 }, (_, index) => ({ ...raw.scenes[0], sceneIndex: index + 1, imageStatus: "fallback", imageSourceKind: "svg-fallback", imageUrl: "data:image/svg+xml,<svg/>", audioStatus: "mock" }));
+      let calls = 0;
+      globalThis.fetch = (async (url, options) => {
+        calls++;
+        assert(String(url).startsWith("http://brain.example.com/"), "Next must not regenerate already real MaaS text");
+        const forwarded = JSON.parse(typeof options?.body === "string" ? options.body : new TextDecoder().decode(options?.body as Uint8Array));
+        assert.notEqual(forwarded.snapshot.child.ageBandContext?.birthDate, "2026-10-30", "trusted scope must replace the forged infant age");
+        return Response.json(raw);
+      }) as typeof fetch;
+      const payload = { ...buildPayload(), pageCount: 4 as const };
+      payload.snapshot.child.ageBandContext = { policyVersion: "forged", source: "birthDate", birthDate: "2026-10-30", normalizedAgeBand: "0-12m", ageMonths: 0 };
+      for (let index = 0; index < 2; index++) {
+        const response = await POST(buildStorybookRouteRequest(payload));
+        assert.equal(response.status, 200);
+        const body = await response.json() as ParentStoryBookResponse;
+        assert.equal(body.source, "ai"); assert.equal(body.fallback, false);
+        assert.equal(body.providerMeta.provider, "maas"); assert.equal(body.providerMeta.textProvider, "maas");
+        assert.equal(body.providerMeta.diagnostics?.text?.model, "qwen3.8-flash");
+        assert.equal(body.providerTrace?.fallback, false); assert.equal(body.providerTrace?.realProvider, true);
+        assert.ok(body.scenes.every(scene => scene.imageStatus === "empty" && scene.audioStatus === "empty" && !scene.imageUrl && !scene.audioUrl));
+        assert.equal(body.providerMeta.diagnostics?.image.pendingSceneCount, 4);
+        assert.equal(body.providerMeta.diagnostics?.audio.readySceneCount, 0);
+      }
+      assert.equal(calls, 1);
+    });
+  } finally {
+    globalThis.fetch = previousFetch;
+    parentStoryBookCacheInternals.storyResponseCache.clear();
+    parentStoryBookCacheInternals.mediaAssetCache.clear();
+  }
+});
+
 test("MaaS storybook never resubmits locally after an ambiguous Brain generation failure", async () => {
   const previousFetch = globalThis.fetch;
   try {

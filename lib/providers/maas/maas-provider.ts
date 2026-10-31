@@ -3,9 +3,22 @@ import type { VivoCapability, VivoProviderStatus } from "@/lib/providers/vivo/ty
 
 export type MaasMessage = { role: "system" | "user" | "assistant"; content: string | Array<Record<string, unknown>> };
 export type MaasFailureKind = "missing-env" | "authentication" | "rate-limited" | "request-cancelled" | "request-timeout" | "provider-response";
+const SAFE_UPSTREAM_FAILURES = {
+  "1000": "authentication", "1001": "authentication", "1003": "authentication", "1004": "authentication", "1005": "authentication", "1220": "authentication", InvalidApiKey: "authentication",
+  "1113": "rate-limited", "1302": "rate-limited", "1305": "rate-limited", "1308": "rate-limited",
+  "1200": "provider-response", "1210": "provider-response", "1211": "provider-response", "1212": "provider-response", "1213": "provider-response", "1214": "provider-response", "1215": "provider-response", "1221": "provider-response", "1222": "provider-response", "1230": "provider-response", "1234": "provider-response", "1261": "provider-response", "1301": "provider-response",
+} as const satisfies Record<string, MaasFailureKind>;
+export type MaasSafeUpstreamCode = keyof typeof SAFE_UPSTREAM_FAILURES;
+function safeUpstreamCode(value: unknown): MaasSafeUpstreamCode | undefined {
+  const code = typeof value === "string" ? value : typeof value === "number" && Number.isInteger(value) ? String(value) : "";
+  return Object.hasOwn(SAFE_UPSTREAM_FAILURES, code) ? code as MaasSafeUpstreamCode : undefined;
+}
 export class MaasProviderError extends Error {
-  constructor(message: string, public failureKind: MaasFailureKind, public httpStatus?: number) {
+  public readonly upstreamCode?: MaasSafeUpstreamCode;
+  constructor(message: string, public failureKind: MaasFailureKind, public httpStatus?: number, upstreamCode?: MaasSafeUpstreamCode) {
     super(message); this.name = "MaasProviderError";
+    // 即使调用方来自未类型检查的JS，也不能把任意上游code变成可记录诊断字段。
+    this.upstreamCode = safeUpstreamCode(upstreamCode);
   }
 }
 export interface MaasRequestOptions {
@@ -61,6 +74,19 @@ function readText(value: unknown): string {
 type JsonObject = Record<string, unknown>;
 function object(value: unknown): JsonObject { return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {}; }
 function resultRequestId(response: Response, data: JsonObject) { return response.headers.get("x-request-id") || (typeof data.request_id === "string" ? data.request_id : typeof data.id === "string" ? data.id : null); }
+function upstreamFailureCode(data: JsonObject) {
+  const error = object(data.error);
+  const codes = [error.code, data.code, error.type].map(safeUpstreamCode).filter((code): code is MaasSafeUpstreamCode => code !== undefined);
+  // 网关可能用HTTP400包装智谱1004鉴权失败；仅信固定结构中的白名单code，不匹配message。
+  return codes.find(code => SAFE_UPSTREAM_FAILURES[code] === "authentication") ?? codes[0];
+}
+function upstreamFailure(status: number, data: JsonObject, message: string) {
+  const code = upstreamFailureCode(data);
+  const failureKind: MaasFailureKind = status === 401 || status === 403 ? "authentication"
+    : code && SAFE_UPSTREAM_FAILURES[code] === "authentication" ? "authentication"
+    : status === 429 ? "rate-limited" : code ? SAFE_UPSTREAM_FAILURES[code] : "provider-response";
+  return new MaasProviderError(message, failureKind, status, code);
+}
 
 const USAGE_NUMBER_FIELDS = new Set(["prompt_tokens", "completion_tokens", "total_tokens", "input_tokens", "output_tokens", "cached_tokens", "reasoning_tokens", "audio_tokens", "image_tokens", "text_tokens", "accepted_prediction_tokens", "rejected_prediction_tokens", "image_count", "duration", "characters", "input_characters", "output_characters", "billable_characters"]);
 const USAGE_DETAIL_FIELDS = new Set(["prompt_tokens_details", "completion_tokens_details", "input_tokens_details", "output_tokens_details"]);
@@ -72,16 +98,18 @@ function safeUsage(value: unknown): JsonObject {
   }
   return result;
 }
-function auditUsage(response: Response, data: JsonObject, body: JsonObject, elapsedMs: number) {
+function auditUsage(response: Response, data: JsonObject, body: JsonObject, elapsedMs: number, failed = false) {
   if (process.env.AI_USAGE_AUDIT !== "1") return;
   const config = resolveMaasConfig();
   const model = typeof body.model === "string" ? body.model : null;
   const text = object(body.input).text ?? body.input;
-  const usage = safeUsage(data.usage);
+  const usage = { ...safeUsage(object(data.error).usage), ...safeUsage(data.usage) };
+  const upstreamCode = failed ? upstreamFailureCode(data) : undefined;
   // 白名单只保留计费数值；上游 usage 即使夹带原文或额外身份字段也不会进入日志。
-  console.info("ai.usage", JSON.stringify({ provider: "maas", model, requestId: resultRequestId(response, data), httpStatus: response.status, usage,
+  // 错误回执的requestId也可能夹带上游正文；失败诊断仅保留状态码与固定code。
+  console.info("ai.usage", JSON.stringify({ provider: "maas", model, requestId: failed ? null : resultRequestId(response, data), httpStatus: response.status, ...(upstreamCode ? { upstreamCode } : {}), usage,
     ttsCharacters: model === config.ttsModel && typeof text === "string" ? Array.from(text).length : 0,
-    imageCount: model === config.imageModel ? (typeof usage.image_count === "number" ? usage.image_count : 1) : 0, elapsedMs }));
+    imageCount: model === config.imageModel ? (typeof usage.image_count === "number" ? usage.image_count : failed ? 0 : 1) : 0, elapsedMs }));
 }
 
 type QueueWaiter = { resolve: (release: () => void) => void; reject: (error: Error) => void; cleanup: () => void };
@@ -138,13 +166,18 @@ async function request(endpoint: string, body: JsonObject, options: MaasRequestO
     options.onRequestStart?.();
     const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, body: JSON.stringify(body), signal, cache: "no-store", redirect: "error" });
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (!response.ok) throw new MaasProviderError("MaaS provider returned a non-success status", response.status === 401 || response.status === 403 ? "authentication" : response.status === 429 ? "rate-limited" : "provider-response", response.status);
-    if (response.headers.get("content-type")?.startsWith("audio/")) { auditUsage(response, {}, body, Date.now() - startedAt); return { response, data: {} as JsonObject, bytes }; }
+    if (response.ok && response.headers.get("content-type")?.startsWith("audio/")) { auditUsage(response, {}, body, Date.now() - startedAt); return { response, data: {} as JsonObject, bytes }; }
     let data: JsonObject;
-    try { data = object(JSON.parse(new TextDecoder().decode(bytes))); } catch { auditUsage(response, {}, body, Date.now() - startedAt); throw new MaasProviderError("MaaS returned invalid JSON", "provider-response", response.status); }
+    try { data = object(JSON.parse(new TextDecoder().decode(bytes))); } catch {
+      auditUsage(response, {}, body, Date.now() - startedAt, true);
+      if (!response.ok) throw upstreamFailure(response.status, {}, "MaaS provider returned a non-success status");
+      throw new MaasProviderError("MaaS returned invalid JSON", "provider-response", response.status);
+    }
+    const businessError = Boolean(data.code && data.code !== "Success" && data.code !== 200) || Boolean(upstreamFailureCode(data));
     // 必须先记账再校验业务结构：返回的已计费内容即使不完整也不能从费用报告中消失。
-    auditUsage(response, data, body, Date.now() - startedAt);
-    if (data.code && data.code !== "Success" && data.code !== 200) throw new MaasProviderError("MaaS returned an unsuccessful result", "provider-response", response.status);
+    auditUsage(response, data, body, Date.now() - startedAt, !response.ok || businessError);
+    if (!response.ok) throw upstreamFailure(response.status, data, "MaaS provider returned a non-success status");
+    if (businessError) throw upstreamFailure(response.status, data, "MaaS returned an unsuccessful result");
     return { response, data, bytes };
   } catch (error) {
     if (error instanceof MaasProviderError) throw error;
@@ -158,6 +191,9 @@ async function requestMaasChatImpl(input: MaasRequestOptions & { messages: MaasM
     model, messages: input.messages, stream: false, max_tokens: input.maxTokens ?? 3000,
     // GLM 5.3 不能关闭思考；仅传其支持的轻量推理档，不把 reasoning_content 当成最终答案。
     ...(model.toLowerCase().includes("glm-5.3") ? { reasoning_effort: "low" } : {}),
+    // 已核验的千问混合思考型号用于照护结构化任务时直接回答，降低等待和额外推理费用。
+    // 仅作用于明确支持此参数的型号，不能沿用到始终思考的 GLM。
+    ...(model.toLowerCase() === "qwen3.8-flash" ? { enable_thinking: false } : {}),
     ...(input.json ? { response_format: { type: "json_object" } } : {}),
   }, input);
   const choice = object(Array.isArray(data.choices) ? data.choices[0] : null);

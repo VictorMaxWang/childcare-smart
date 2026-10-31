@@ -14,6 +14,7 @@ import { validateMatrixManifest } from "./parent-courses-real-matrix.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_ARTIFACT = "artifacts/implementation-20261031";
 const MODELS = { text: "ZHIPU/GLM-5.3-Flash", image: "z-image-turbo", audio: "qwen3-tts-flash" };
+const VERIFIED_TEXT_MODELS = Object.freeze(["ZHIPU/GLM-5.3-Flash", "qwen3.8-flash"]);
 const MEDIA_PATH = /^\/api\/ai\/parent-storybook\/media\/[a-f0-9]{40}$/u;
 const MAX_RESERVED_CNY = 5;
 const MAX_MEDIA_ROUNDS = 8;
@@ -49,12 +50,19 @@ function safeOrigin(value) {
   return target.origin;
 }
 
+/** 允许切换已经核验的文本模型；不允许用任意价格文件扩大模型或媒体的验收范围。 */
+export function validateModelIdentities(models) {
+  assert.ok(VERIFIED_TEXT_MODELS.includes(models?.text), "文本模型必须是已核验的 GLM-5.3-Flash 或 qwen3.8-flash。");
+  assert.deepEqual(models, { ...MODELS, text: models.text }, "图片与音频模型必须与已核验身份完全一致。");
+  return models;
+}
+
 /** 这里约束的是逐请求的费用预留上界，不能把模型目录可见或估算冒充实际账单。 */
 export function validatePricing(pricing, capCny = MAX_RESERVED_CNY, now = Date.now()) {
   assert.ok(Number.isFinite(capCny) && capCny > 0 && capCny <= MAX_RESERVED_CNY, "本脚本总预留不得超过 5 元。");
   assert.equal(pricing?.currency, "CNY");
   assert.equal(pricing.provider, "maas");
-  assert.deepEqual(pricing.models, MODELS);
+  validateModelIdentities(pricing.models);
   const verified = Date.parse(pricing.verifiedAt);
   assert.ok(Number.isFinite(verified) && now - verified <= 30 * 24 * 60 * 60 * 1000 && verified <= now + 300_000, "计费证据需在最近 30 天核验。");
   assert.ok(typeof pricing.evidence === "string" && pricing.evidence.trim(), "必须提供实际计费核验的来源或证据路径。");
@@ -79,10 +87,16 @@ export function assertNoMediaFailure(story) {
       `${channel} 出现失败或结果未知；已停止，不重试收费请求。`);
   }
 }
-function assertText(story, childId) {
+export function assertStoryText(story, childId, expectedTextModel) {
+  assert.ok(VERIFIED_TEXT_MODELS.includes(expectedTextModel), "验收预期模型必须来自已核验价格配置。");
   assert.equal(story?.childId, childId); assert.equal(story.fallback, false); assert.equal(story.source, "ai");
   assert.equal(story.providerMeta?.provider, "maas"); assert.equal(story.providerMeta?.textProvider, "maas");
   assert.equal(story.providerMeta?.textDelivery, "real"); assert.equal(story.providerMeta?.realProvider, true);
+  // diagnostics.text.model 是当前真实适配器写回的上游模型；其他兼容位置出现时也不能自相矛盾。
+  assert.equal(story.providerMeta?.diagnostics?.text?.model, expectedTextModel, "真实文字模型与计费核验文件不一致。");
+  for (const container of [story, story.providerMeta]) for (const key of ["model", "textModel"]) {
+    if (Object.hasOwn(container, key)) assert.equal(container[key], expectedTextModel, `绘本 ${key} 与计费核验文件不一致。`);
+  }
   assert.ok(typeof story.storyId === "string" && story.storyId); assert.ok(typeof story.title === "string" && story.title.trim());
   assert.equal(story.scenes?.length, 4, "必须正好四页，不接受少页或演示占位。");
   assert.deepEqual(new Set(story.scenes.map(scene => scene.sceneIndex)), new Set([1, 2, 3, 4]));
@@ -95,6 +109,50 @@ function embeddedStory(saved) {
   const story = saved?.pages?.map(page => page.response).find(response => response && Array.isArray(response.scenes));
   assert.ok(story, "已保存绘本必须包含完整响应，不能只凭标题判定刷新恢复成功。");
   return story;
+}
+
+/**
+ * 业务正文已收到与网络结果未知是两种恢复边界。先原子保存原body，验证失败也不丢失，
+ * 恢复只重验原body；只有通过原有严格断言后才替换可继续使用的story。
+ */
+export async function executePaidStoryRequest({ state, stage, amount, action, validate, persist, onRequestStarted = () => {} }) {
+  assert.ok(!state.calls.some(call => ["pending", "unknown"].includes(call.status)), "已有请求结果未知，不重发收费请求。");
+  const received = state.calls.filter(call => call.status === "received-needs-validation");
+  assert.ok(received.length <= 1, "多个未验证响应需要人工核验，不继续收费请求。");
+  if (received.length) assert.equal(received[0].stage, stage, "先验证已收到的原阶段正文，不能跳过后开始新阶段。");
+  let call = received[0];
+  if (!call) {
+    call = { requestId: randomUUID(), stage, status: "pending", startedAt: nowIso(), maximumWithinBookReservationCny: amount };
+    state.calls.push(call); state.stage = `${stage}:pending`; await persist();
+    onRequestStarted();
+    try {
+      const body = await action();
+      call.finishedAt = nowIso(); call.elapsedMs = Date.parse(call.finishedAt) - Date.parse(call.startedAt);
+      call.responseBody = body; call.status = "received-needs-validation"; state.stage = `${stage}:received-needs-validation`;
+      // 正文与“已收到、待验证”状态一起落盘，不能把严格验证移回action内部。
+      await persist();
+    } catch (error) {
+      if (call.status === "pending") {
+        call.status = "unknown"; call.finishedAt = nowIso(); state.stage = "stopped:unknown";
+        state.stopReason = `${stage} 未完成或结果未知，禁止自动重试。`; await persist();
+      }
+      throw error;
+    }
+  } else {
+    assert.ok(Object.hasOwn(call, "responseBody"), "待验证请求缺少原body，不允许重新生成。");
+    call.lastRevalidatedAt = nowIso();
+  }
+  try {
+    await validate(call.responseBody);
+  } catch (error) {
+    call.validationStatus = "failed"; call.validationFailedAt = nowIso();
+    state.stage = "stopped:received-needs-validation";
+    state.stopReason = `${stage} 正文已保留但未通过严格验证；仅重验原正文，不重发收费请求。`;
+    await persist(); throw error;
+  }
+  call.status = "completed"; call.validationStatus = "passed"; call.validatedAt = nowIso();
+  state.story = call.responseBody; state.stage = `${stage}:completed`; await persist();
+  return call.responseBody;
 }
 
 export async function inspectMediaBytes(kind, bytes) {
@@ -123,7 +181,7 @@ export async function inspectMediaBytes(kind, bytes) {
 
 function httpClient(baseUrl) {
   let cookie = "";
-  return async function request(endpoint, { body, expected = [200], binary = false, timeoutMs = 25_000, headers = {} } = {}) {
+  return async function request(endpoint, { body, expected = [200], binary = false, timeoutMs = 25_000, headers = {}, unvalidatedPayload = false } = {}) {
     assert.ok(endpoint.startsWith("/") && !endpoint.startsWith("//"), "只允许同源业务路由。");
     const response = await fetch(`${baseUrl}${endpoint}`, { method: body === undefined ? "GET" : "POST", redirect: "manual", signal: AbortSignal.timeout(timeoutMs),
       headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), ...(cookie ? { cookie } : {}), ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -131,8 +189,9 @@ function httpClient(baseUrl) {
     if (cookies.length) cookie = cookies.map(value => value.split(";", 1)[0]).join("; ");
     assert.ok(expected.includes(response.status), `${endpoint.split("?")[0]} HTTP ${response.status}，已停止，不自动重试。`);
     if (binary) return { response, bytes: Buffer.from(await response.arrayBuffer()) };
-    const payload = await response.json().catch(() => null);
-    if (response.ok) assert.ok(payload && typeof payload === "object", "业务接口未返回 JSON。");
+    const text = await response.text(); let payload;
+    try { payload = JSON.parse(text); } catch { payload = unvalidatedPayload ? text : null; }
+    if (response.ok && !unvalidatedPayload) assert.ok(payload && typeof payload === "object", "业务接口未返回 JSON。");
     return { response, payload };
   };
 }
@@ -184,8 +243,10 @@ async function run(options) {
   const persist = () => atomicJson(options.progress, state);
   const check = (name, details) => { report.checks.push({ name, status: "passed", ...(details ? { details } : {}) }); };
   try {
+    const pricing = options.pricing ? await jsonFile(options.pricing) : state.budget?.pricing;
+    const expectedModels = validateModelIdentities(pricing?.models);
+    if (state.budget) assert.deepEqual(state.budget.pricing.models, expectedModels, "已有任务的模型身份不能静默变化；改用独立任务或核验原发布配置。");
     if (!options.verifyOnly) {
-      const pricing = options.pricing ? await jsonFile(options.pricing) : state.budget?.pricing;
       validatePricing(pricing, options.capCny);
       const bookMaximum = validatePricing(pricing, options.capCny);
       // 先为整册一文四图四音预留。HTTP 轮询有可能只补一类媒体，不能把未开始的
@@ -205,41 +266,39 @@ async function run(options) {
     const parentA2 = await login(baseUrl, manifest.accounts.parentA2), parentB1 = await login(baseUrl, manifest.accounts.parentB1), anonymous = httpClient(baseUrl);
     check("normal accounts and independent parent sessions authenticated");
 
-    async function paid(stage, amount, action) {
+    async function paid(stage, amount, action, validate) {
       assert.ok(!options.verifyOnly && options.ai, "只读模式禁止 AI 路由。");
       assert.ok(state.budget.reservedCny <= state.budget.capCny && state.budget.reservedCny <= MAX_RESERVED_CNY && amount <= state.budget.reservedCny, "费用预留已达上限，未发出请求。");
-      const call = { requestId: randomUUID(), stage, status: "pending", startedAt: nowIso(), maximumWithinBookReservationCny: amount };
-      state.calls.push(call); state.stage = `${stage}:pending`; await persist();
-      report.paidAiRequestsThisRun += 1;
-      try {
-        const value = await action(); call.finishedAt = nowIso(); call.elapsedMs = Date.parse(call.finishedAt) - Date.parse(call.startedAt); call.status = "completed";
-        // AI 结果在调用返回的同一原子写入里保存，断点恢复不能重发已完成的付费请求。
-        state.story = value; state.stage = `${stage}:completed`; await persist(); return value;
-      } catch (error) {
-        call.status = "unknown"; call.finishedAt = nowIso(); state.stage = "stopped:unknown"; state.stopReason = `${stage} 未完成或结果未知，禁止自动重试。`; await persist(); throw error;
-      }
+      const revalidating = state.calls.some(call => call.status === "received-needs-validation");
+      const value = await executePaidStoryRequest({ state, stage, amount, action, validate, persist, onRequestStarted: () => { report.paidAiRequestsThisRun += 1; } });
+      if (revalidating) report.savedResponsesRevalidatedThisRun = (report.savedResponsesRevalidatedThisRun || 0) + 1;
+      return value;
     }
     async function saveStory() {
       state.saved = false; await persist();
       const saved = await envelope(creator, "/api/storybooks", { body: { storybookId: state.story.storyId, childId: child.id, generatedAt: state.story.generatedAt, sourceRecordIds: state.sourceRecordIds, response: state.story }, expected: [201] });
-      assert.equal(saved.storybookId, state.story.storyId); assertText(embeddedStory(saved), child.id);
+      assert.equal(saved.storybookId, state.story.storyId); assertStoryText(embeddedStory(saved), child.id, expectedModels.text);
       state.saved = true; state.savedAt = nowIso(); await persist();
     }
     const bookEndpoint = () => `/api/storybooks/${encodeURIComponent(state.story.storyId)}`;
     if (options.verifyOnly) {
       assert.ok(state.story?.storyId, "任务尚无可读取的绘本 ID，不能猜测或重新生成。");
-      const saved = await envelope(parent, bookEndpoint()); state.story = embeddedStory(saved); assertText(state.story, child.id);
+      const saved = await envelope(parent, bookEndpoint()); state.story = embeddedStory(saved); assertStoryText(state.story, child.id, expectedModels.text);
       assert.deepEqual(mediaReadiness(state.story), { image: 4, audio: 4 }, "重启后保存结果仍未完整，不调用 AI 补齐。");
       check("saved complete book reopened without any AI request");
     } else {
       if (!state.story) {
-        const { payload: stateBody } = await creator("/api/state"); assert.equal(stateBody.ok, true);
-        const input = buildStoryRequest(stateBody.snapshot, child.id, options.actor); state.sourceRecordIds = input.sourceRecordIds; state.textStartedAt = nowIso(); await persist();
+        let input;
+        if (!state.calls.some(call => call.stage === "text" && call.status === "received-needs-validation")) {
+          const { payload: stateBody } = await creator("/api/state"); assert.equal(stateBody.ok, true);
+          input = buildStoryRequest(stateBody.snapshot, child.id, options.actor); state.sourceRecordIds = input.sourceRecordIds; state.textStartedAt = nowIso(); await persist();
+        }
         await paid("text", state.budget.pricing.maxCny.text, async () => {
-          const { payload } = await creator("/api/ai/parent-storybook", { body: input.payload, timeoutMs: 90_000 }); assertText(payload, child.id); return payload;
-        });
+          assert.ok(input, "恢复已有正文时不应发出新的文字请求。");
+          const { payload } = await creator("/api/ai/parent-storybook", { body: input.payload, timeoutMs: 90_000, unvalidatedPayload: true }); return payload;
+        }, payload => assertStoryText(payload, child.id, expectedModels.text));
         state.timings.textResponseMs = state.calls.at(-1).elapsedMs;
-      } else assertText(state.story, child.id);
+      } else assertStoryText(state.story, child.id, expectedModels.text);
       const initialReady = mediaReadiness(state.story), initialObservedMs = Date.now() - Date.parse(state.textStartedAt || state.createdAt);
       state.timings.initialReadyMedia ??= initialReady;
       if (initialReady.image > 0) state.timings.firstImageReadyMs ??= initialObservedMs;
@@ -251,14 +310,20 @@ async function run(options) {
       let readiness = mediaReadiness(state.story);
       while (readiness.image < 4 || readiness.audio < 4) {
         assertNoMediaFailure(state.story);
-        assert.ok(state.calls.filter(call => call.stage === "media").length < MAX_MEDIA_ROUNDS, "已达八轮单调补齐上限；未完成的页停止处理，不自动增加调用。");
+        assert.ok(state.calls.filter(call => call.stage === "media").length < MAX_MEDIA_ROUNDS || state.calls.some(call => call.stage === "media" && call.status === "received-needs-validation"), "已达八轮单调补齐上限；未完成的页停止处理，不自动增加调用。");
         const current = [...state.story.scenes].sort((a, b) => a.sceneIndex - b.sceneIndex).find(scene => scene.imageStatus !== "ready" || scene.audioStatus !== "ready");
         assert.ok(current, "媒体状态不一致，未重新生成任何页面。");
         const before = readiness;
         const cost = roundMoney((before.image < 4 ? state.budget.pricing.maxCny.imagePerPage : 0) + (before.audio < 4 ? state.budget.pricing.maxCny.audioPerPage : 0));
         await paid("media", cost, async () => {
-          const { payload } = await creator("/api/ai/parent-storybook/media-status", { body: { childId: child.id, storyId: state.story.storyId, prioritySceneIndices: [current.sceneIndex, ...state.story.scenes.map(scene => scene.sceneIndex).filter(index => index !== current.sceneIndex)], retryFailed: false, story: state.story }, timeoutMs: 65_000 });
-          assertText(payload, child.id); return payload;
+          const { payload } = await creator("/api/ai/parent-storybook/media-status", { body: { childId: child.id, storyId: state.story.storyId, prioritySceneIndices: [current.sceneIndex, ...state.story.scenes.map(scene => scene.sceneIndex).filter(index => index !== current.sceneIndex)], retryFailed: false, story: state.story }, timeoutMs: 65_000, unvalidatedPayload: true });
+          return payload;
+        }, payload => {
+          assertStoryText(payload, child.id, expectedModels.text); assertNoMediaFailure(payload);
+          const after = mediaReadiness(payload);
+          assert.ok(after.image >= before.image && after.audio >= before.audio, "已完成媒体倒退，禁止再次调用以免重新收费。");
+          assert.ok(after.image - before.image <= 1 && after.audio - before.audio <= 1, "单轮超出一图一音频契约；停止后续收费请求。");
+          assert.ok(after.image > before.image || after.audio > before.audio, "本轮未返回可验证媒体进展，已停止而非自动重复调用。");
         });
         readiness = mediaReadiness(state.story);
         const observedMs = Date.now() - Date.parse(state.textStartedAt || state.createdAt);
@@ -285,7 +350,7 @@ async function run(options) {
     }
 
     const reopened = await envelope(otherParentSession, bookEndpoint()); const reopenedStory = embeddedStory(reopened);
-    assertText(reopenedStory, child.id); assert.equal(reopenedStory.storyId, state.story.storyId); assert.deepEqual(mediaReadiness(reopenedStory), { image: 4, audio: 4 });
+    assertStoryText(reopenedStory, child.id, expectedModels.text); assert.equal(reopenedStory.storyId, state.story.storyId); assert.deepEqual(mediaReadiness(reopenedStory), { image: 4, audio: 4 });
     check("another authorized parent session can reopen the complete stored story");
     const listed = await envelope(parent, `/api/storybooks?childId=${encodeURIComponent(child.id)}`); assert.ok(listed.some(book => book.storybookId === state.story.storyId));
     for (const [name, client] of [["parentA2", parentA2], ["parentB1", parentB1], ["anonymous", anonymous]]) {
@@ -330,11 +395,12 @@ async function run(options) {
   } catch (error) {
     // 不记录原始请求/响应、口令或 Cookie；未完成调用保留在私有进度文件中供人工核验。
     report.status = "stopped"; report.error = error instanceof Error ? error.message : "验收未完成";
+    report.stopBoundary = state.stage;
     report.checks.push({ name: "matrix stopped without retry", status: "failed", error: report.error });
     state.lastFailure = { at: nowIso(), reason: report.error }; await persist(); process.exitCode = 1;
   } finally {
     report.finishedAt = nowIso(); report.timings = state.timings; report.budget = state.budget ? { capCny: state.budget.capCny, reservedCny: state.budget.reservedCny, actualBilledCny: null, evidence: state.budget.pricing.evidence, maximumForOneTextFourImagesFourAudioCny: state.budget.maximumForOneTextFourImagesFourAudioCny } : null;
-    report.requestDurations = state.calls.map(({ stage, status, elapsedMs, maximumWithinBookReservationCny }) => ({ stage, status, elapsedMs: elapsedMs ?? null, maximumWithinBookReservationCny }));
+    report.requestDurations = state.calls.map(({ stage, status, elapsedMs, maximumWithinBookReservationCny, validationStatus }) => ({ stage, status, elapsedMs: elapsedMs ?? null, maximumWithinBookReservationCny, ...(validationStatus ? { validationStatus } : {}) }));
     report.notes.push("每次 HTTP 请求的 maximumWithinBookReservationCny 是整册预留内的潜在生成上限，不能相加当作实际账单。paidAiRequestsThisRun 统计可能收费的业务 HTTP 请求，不是供应商实际计费次数。");
     report.timingsMeaning = "客户端观察的文本响应、首图/首音频可读、四图/四音频全部可读耗时；不是供应商内部推理耗时。跨次恢复时包含间隔时间。";
     await atomicJson(options.report, report);
@@ -351,8 +417,9 @@ async function main() {
     pricing: arg("--pricing-file", "") ? artifactPath(arg("--pricing-file", "")) : null };
   if (!execute) {
     console.log(JSON.stringify({ mode: "plan-only", maxReservedCny: MAX_RESERVED_CNY, actor: options.actor, childIndex: options.childIndex,
-      actions: ["读取已有 8 角色普通账号 manifest 与合成儿童真实记录", "生成 1 册 4 页文字并先保存", "整册预留一文四图四音的费用上界，最多 8 轮单调补齐，每轮至多一图一音频，retryFailed=false，当前页优先", "检查 4 个 WebP 与 4 个 WAV 的真实字节及私有 Blob", "独立家长会话重开；同机构其他家长/跨机构家长/匿名均拒绝", "验证保存、五种导出格式和分享文本", "任意超时、失败或结果未知立即停止，不自动重试"],
+      actions: ["读取已有 8 角色普通账号 manifest 与合成儿童真实记录", "生成 1 册 4 页文字并先保存", "整册预留一文四图四音的费用上界，最多 8 轮单调补齐，每轮至多一图一音频，retryFailed=false，当前页优先", "检查 4 个 WebP 与 4 个 WAV 的真实字节及私有 Blob", "独立家长会话重开；同机构其他家长/跨机构家长/匿名均拒绝", "验证保存、五种导出格式和分享文本", "2xx正文先原子保留为received-needs-validation；验证失败仅重验原body，任意未知立即停止，不自动重试收费请求"],
       execute: "--execute --ai --pricing-file=artifacts/.../verified-pricing.json", verifyAfterRestart: "--execute --verify-only（不调用任何 AI 路由）",
+      allowedVerifiedTextModels: VERIFIED_TEXT_MODELS, expectedTextModel: "读取 verified-pricing.json 的 models.text；真实响应必须逐字一致",
       pricingSchema: { currency: "CNY", provider: "maas", models: MODELS, verifiedAt: "实际核验时间 ISO", evidence: "实际价格/配额证据路径或网址", verifiedForFourPagesAndServerTokenLimits: true, maxCny: { text: "正数：单次文本最大费用", imagePerPage: "正数：单页图片最大费用", audioPerPage: "正数：单页音频最大费用" } },
       requestsMade: 0, manifest: options.manifest, progress: options.progress, report: options.report }, null, 2)); return;
   }

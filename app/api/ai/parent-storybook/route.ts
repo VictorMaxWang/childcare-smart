@@ -38,6 +38,8 @@ import {
   requireScopedChild,
 } from "@/lib/server/session-scope";
 import { logSecurityEvent } from "@/lib/server/security-log";
+import { buildChildSuggestionSnapshotFromScope } from "@/lib/server/ai-scoped-payloads";
+import { prepareMaasStoryForMedia } from "@/lib/server/parent-storybook-maas-media";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -184,6 +186,7 @@ function attachTransportMetadata(
     transport: normalizeStoryBookTransport(meta.transport),
     fallbackReason: story.providerMeta.fallbackReason ?? meta.fallbackReason,
     diagnostics: {
+      ...story.providerMeta.diagnostics,
       brain: {
         reachable: storyBrainDiagnostics?.reachable ?? meta.transport === "remote-brain-proxy",
         fallbackReason: storyBrainDiagnostics?.fallbackReason ?? meta.fallbackReason,
@@ -645,6 +648,11 @@ export async function POST(request: Request) {
     ...payload,
     childId: requestedChildId,
   };
+  if (isMaasSelected() && !isDemoSeedRequest(payload)) {
+    // 月龄必须来自服务端已授权档案；客户端不能把8月龄儿童改成3岁以改变照护边界。
+    const trustedSnapshot = buildChildSuggestionSnapshotFromScope(sessionScope, requestedChildId);
+    if (trustedSnapshot) payload = { ...payload, snapshot: { ...payload.snapshot, child: trustedSnapshot.child } };
+  }
   const provenanceContext: AiProvenanceContext = {
     userId: sessionUser.id,
     institutionId: sessionUser.institutionId,
@@ -680,7 +688,7 @@ export async function POST(request: Request) {
 
   if (cachedResponse) {
     const cachedStory = attachTransportMetadata(
-      prepareParentStoryBookResponseForDelivery(cachedResponse.story, {
+      prepareParentStoryBookResponseForDelivery(isMaasSelected() ? prepareMaasStoryForMedia(cachedResponse.story) : cachedResponse.story, {
         cacheState: "hit",
         ttlSeconds: cachedResponse.story.cacheMeta?.ttlSeconds,
         institutionId: sessionScope.institutionId,
@@ -763,7 +771,7 @@ export async function POST(request: Request) {
     }
 
     let preparedStory: ParentStoryBookResponse = attachTransportMetadata(
-      prepareParentStoryBookResponseForDelivery(remoteStory, {
+      prepareParentStoryBookResponseForDelivery(isMaasSelected() ? prepareMaasStoryForMedia(remoteStory) : remoteStory, {
         cacheState: shouldCacheParentStoryBookResponse(remoteStory) ? "miss" : "bypass",
         institutionId: sessionScope.institutionId,
       }),

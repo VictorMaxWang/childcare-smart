@@ -1,4 +1,5 @@
 import "server-only";
+import { getAgeBandLabel, resolveAgeBandContext } from "@/lib/age-band/policy";
 import { isMaasSelected, MaasProviderError, requestMaasChat } from "@/lib/providers/maas/maas-provider";
 
 import type {
@@ -273,6 +274,17 @@ function validateStoryTextPayload(
   };
 }
 
+export function buildParentStoryBookAgeConstraint(child: ParentStoryBookRequest["snapshot"]["child"]) {
+  const age = child.ageBandContext ?? resolveAgeBandContext({ ageBand: child.ageBand });
+  const label = getAgeBandLabel(age);
+  const identity = age.ageMonths != null ? `已核验月龄为${age.ageMonths}个月` : label ? `已核验年龄段为${label}` : "月龄尚未核实";
+  const rule = age.normalizedAgeBand === "0-12m" ? "由照护者陪伴共读，使用短句、重复声音与安全的观看触摸；不得要求独立行走、完整讲话、独自进食或整理玩具等超龄动作。"
+    : age.normalizedAgeBand === "12-24m" ? "由照护者陪伴，用简单模仿与成人协助的一到两步小动作；不要求复杂规则、完整叙事或长时间等待。"
+      : age.normalizedAgeBand === "24-36m" ? "使用简单轮流与模仿的一到两步动作；不要求识字、书写或学龄儿童能力。"
+        : "按实际已知能力安排照护者陪伴共读；年龄信息不足时不得假定会独立行走、完整讲话，不编造年龄或发展能力。";
+  return `适龄约束：${identity}。${rule}`;
+}
+
 function buildStoryTextPrompt(input: {
   payload: ParentStoryBookRequest;
   story: ParentStoryBookResponse;
@@ -326,7 +338,8 @@ function buildStoryTextPrompt(input: {
     "Generate an original childcare picture book in Simplified Chinese.",
     "Return strict JSON only. Do not return Markdown, comments, or code fences.",
     `The JSON must contain exactly ${expectedSceneCount} scenes.`,
-    "Keep the output compact. Each sceneText should be 35-70 Simplified Chinese characters, warm, concrete, age-appropriate for a 3-6 year old, and different when theme, style, child, or page count changes.",
+    "Keep the output compact. Each sceneText should be 25-70 Simplified Chinese characters, warm, concrete, and different when theme, style, child, or page count changes.",
+    buildParentStoryBookAgeConstraint(payload.snapshot.child),
     "Do not use the fixed Lin Xiaoyu demo story or its title.",
     "Use the child context, selected theme, page count, style, teacher observations, growth highlights, parent feedback, intervention card, and consultation summary when present.",
     `JSON schema: ${compactJson(schema)}`,

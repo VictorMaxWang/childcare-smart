@@ -116,6 +116,9 @@ export interface TeacherVoiceUnderstandFallbackInput {
   traceId?: string;
   inputMode: "json" | "multipart";
   asrProvider: string;
+  /** 本次转写实际返回的模型；配置名称和供应商名称不能代替实际模型证据。 */
+  asrModel?: string | null;
+  asrIsRealProvider?: boolean;
   asrMode: string;
   asrSource: string;
   asrConfidence: number | null;
@@ -454,15 +457,19 @@ export function buildTeacherVoiceUnderstandFallback(
         ? "text-fallback"
         : "provider-unavailable"
     : null;
+  const asrModel = input.asrModel?.trim() || null;
+  // 新适配器返回live，旧适配器可能返回real；用户提供文本、mock和降级都不能升级为真实ASR。
+  const realAsr = ["live", "real"].includes(input.asrMode) && !input.asrFallback &&
+    input.asrIsRealProvider !== false && !["provided_transcript", "text_fallback", "provider_unavailable", "mock"].includes(input.asrSource);
   const providerTrace = buildAiProviderTrace({
     provider: input.asrProvider,
     source: input.asrSource,
-    mode: input.asrMode,
+    mode: input.asrFallback ? "fallback" : input.asrMode,
     fallback: input.asrFallback,
     fallbackReason,
-    realProvider: input.asrMode === "real" && !input.asrFallback,
+    realProvider: realAsr,
     capability: "asr",
-    model: input.asrProvider,
+    model: asrModel,
     extra: {
       workflow: "teacher-voice-understand",
       inputMode: input.inputMode,
@@ -509,7 +516,7 @@ export function buildTeacherVoiceUnderstandFallback(
       chaining: "rule",
     },
     model: {
-      asr: input.asrProvider === "mock-asr" ? null : input.asrProvider,
+      asr: asrModel,
       router: "rule-router-v1",
       chaining: "rule-chain-v1",
     },
@@ -531,6 +538,8 @@ export function buildTeacherVoiceUnderstandFallback(
       duration_ms: input.durationMs ?? null,
       asr: {
         provider: input.asrProvider,
+        model: asrModel,
+        realProvider: realAsr,
         mode: input.asrMode,
         confidence: input.asrConfidence,
         raw: input.asrRaw ?? {},

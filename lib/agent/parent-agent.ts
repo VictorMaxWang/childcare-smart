@@ -133,6 +133,61 @@ function getParentAgeBandGuidance(context: ParentAgentChildContext) {
   return describeAgeBandActionGuidance(context.ageBandContext);
 }
 
+function buildAgeBandRuleTask(childId: string, ageBandContext: ResolvedAgeBandContext): ParentAgentTask | null {
+  const guidance = describeAgeBandActionGuidance(ageBandContext);
+  if (!guidance) return null;
+
+  // 婴幼儿任务来自同一月龄照护规则，不能沿用带有指认、复述等学前要求的随机周任务。
+  return {
+    id: `age-care-${childId}-${ageBandContext.normalizedAgeBand}`,
+    title: `${guidance.label}月龄照护`,
+    description: `${guidance.defaultInterventionFocus[1]}；${guidance.defaultInterventionFocus[2]}。`,
+    durationText: "短时陪伴，以孩子反应为准",
+    tag: "月龄照护提示（规则）",
+  };
+}
+
+/** 统一主动作与来源：真实 AI 内容优先；没有 AI 结果时仅说明月龄规则，不声称已分析儿童经历。 */
+export function buildParentAgentActionDisplay(params: {
+  context: ParentAgentChildContext;
+  result?: ParentAgentResult | null;
+  interventionCard?: InterventionCard | null;
+}) {
+  const { context, result } = params;
+  const card = result?.interventionCard ?? params.interventionCard;
+  const aiAction = result?.source === "ai"
+    ? sanitizeParentFacingText(result.tonightTopAction) || sanitizeParentFacingText(card?.tonightHomeAction)
+    : !result && (card?.source === "ai" || card?.source === "vivo")
+      ? sanitizeParentFacingText(card.tonightHomeAction)
+      : "";
+  if (aiAction) {
+    return {
+      source: "ai" as const,
+      sourceLabel: "AI 个性化方案",
+      tonightTopAction: aiAction,
+      whyNow: sanitizeParentFacingText(result?.whyNow) || sanitizeParentFacingText(card?.triggerReason) ||
+        sanitizeParentFacingText(card?.summary) || "这是此前保存的 AI 方案；请结合新记录确认是否仍适用。",
+      observationPoints: result?.tonightObservationPoints ?? card?.observationPoints ?? [],
+      teacherObservation: sanitizeParentFacingText(result?.teacherTomorrowObservation) ||
+        sanitizeParentFacingText(card?.tomorrowObservationPoint) || "可将今晚的执行情况反馈给教师，供后续观察参考。",
+    };
+  }
+
+  const guidance = getParentAgeBandGuidance(context);
+  return {
+    source: "fallback" as const,
+    sourceLabel: guidance ? "月龄照护提示（规则）" : "日常照护提示（规则）",
+    tonightTopAction: context.task.description,
+    whyNow: guidance
+      ? `此提示仅依据${guidance.label}照护规则，重点是${guidance.careFocusText}。尚未生成基于近期记录的 AI 个性化方案。${guidance.cautionText}`
+      : "这是日常陪伴规则提示，尚未生成基于近期记录的 AI 个性化方案。请先核对儿童出生日期和近期记录。",
+    observationPoints: context.observationDefaults,
+    teacherObservation: guidance
+      ? `可将“${guidance.teacherObservationFocus[0]}”的实际情况反馈给教师，供后续观察参考。`
+      : "可将今晚的执行情况反馈给教师，供后续观察参考。",
+  };
+}
+
 function uniqueItems(items: Array<string | undefined>, limit = 4) {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -234,6 +289,11 @@ function buildFeedbackPrompt() {
 }
 
 function buildTonightTopAction(context: ParentAgentChildContext, suggestion: AiSuggestionResponse) {
+  // 年龄规则只补模型缺失的内容，不能覆盖模型基于真实记录生成的具体家庭动作。
+  if (suggestion.source === "ai") {
+    const explicitAction = uniqueItems([...(suggestion.actionPlan?.familyActions ?? []), ...suggestion.actions], 1)[0];
+    if (explicitAction) return explicitAction;
+  }
   const ageBandGuidance = getParentAgeBandGuidance(context);
   if (ageBandGuidance) {
     return `${ageBandGuidance.label}阶段今晚先${ageBandGuidance.defaultInterventionFocus[1] ?? `围绕${ageBandGuidance.careFocusText}安排一条小动作`}。`;
@@ -243,6 +303,10 @@ function buildTonightTopAction(context: ParentAgentChildContext, suggestion: AiS
 }
 
 function buildWhyNow(context: ParentAgentChildContext, suggestion: AiSuggestionResponse, topAction: string) {
+  if (suggestion.source === "ai") {
+    const modelReasons = uniqueItems([suggestion.summary, ...suggestion.concerns], 3);
+    if (modelReasons.length) return modelReasons.join("；");
+  }
   const ageBandGuidance = getParentAgeBandGuidance(context);
   if (context.latestFeedback?.improved === false) {
     return ageBandGuidance
@@ -343,7 +407,8 @@ export function buildParentAgentChildContext(params: {
   );
   const attentionGrowthRecords = weeklyGrowthRecords.filter((item) => item.needsAttention);
   const pendingReviews = weeklyGrowthRecords.filter((item) => item.reviewStatus === "待复查");
-  const task = getWeeklyTaskForChild(childId, getLegacyAgeBandFromBirthDate(params.child.birthDate) as never);
+  const task = buildAgeBandRuleTask(childId, ageBandContext) ??
+    getWeeklyTaskForChild(childId, getLegacyAgeBandFromBirthDate(params.child.birthDate) as never);
   const latestFeedback = weeklyFeedbacks[0];
   const childTaskCheckIns = params.taskCheckInRecords.filter((item) => item.childId === childId);
   const taskTimeline = params.currentInterventionCard
@@ -493,6 +558,10 @@ export function buildParentChildSuggestionSnapshot(context: ParentAgentChildCont
 }
 
 function buildTriggerReason(context: ParentAgentChildContext, suggestion: AiSuggestionResponse) {
+  if (suggestion.source === "ai") {
+    const modelReason = uniqueItems([...suggestion.concerns, suggestion.summary], 1)[0];
+    if (modelReason) return modelReason;
+  }
   return context.focusReasons[0] ?? suggestion.concerns[0] ?? "近 7 天数据提示当前需要家园协同跟进。";
 }
 
@@ -538,16 +607,22 @@ export function buildParentAgentSuggestionResult(params: {
   const generatedAt = params.generatedAt ?? new Date().toISOString();
   const triggerReason = buildTriggerReason(params.context, params.suggestion);
   const ageBandGuidance = getParentAgeBandGuidance(params.context);
+  const hasAiAction = params.suggestion.source === "ai" &&
+    uniqueItems([...(params.suggestion.actionPlan?.familyActions ?? []), ...params.suggestion.actions], 1).length > 0;
+  // 文本调用成功但未提供可执行动作时，主卡仍按兜底显示，避免把年龄规则挂上 AI 标签。
+  const actionSource = params.suggestion.source === "ai" && !hasAiAction ? "fallback" : params.suggestion.source;
   const tonightTopAction = buildTonightTopAction(params.context, params.suggestion);
   const interventionCard = buildInterventionCardFromSuggestion({
     targetChildId: params.context.child.id,
     childName: params.context.child.name,
     triggerReason,
-    suggestion: params.suggestion,
-    ageBandContext: params.context.ageBandContext,
+    suggestion: { ...params.suggestion, source: actionSource },
+    ageBandContext: hasAiAction ? undefined : params.context.ageBandContext,
     tonightHomeAction: tonightTopAction,
     homeSteps: params.suggestion.actionPlan?.familyActions.slice(0, 4),
-    observationPoints: params.context.observationDefaults,
+    observationPoints: hasAiAction
+      ? uniqueItems([...(params.suggestion.actionPlan?.reviewActions ?? []), ...params.suggestion.concerns, ...params.suggestion.highlights], 4)
+      : params.context.observationDefaults,
     tomorrowObservationPoint: buildTomorrowObservation(params.context, params.suggestion),
     reviewIn48h: buildReviewIn48h(params.context, params.suggestion),
     generatedAt,
@@ -595,7 +670,7 @@ export function buildParentAgentSuggestionResult(params: {
       teacherObservation: displayCard.tomorrowObservationPoint,
       parentActionTone: ageBandGuidance?.parentActionTone,
     }),
-    source: params.suggestion.source,
+    source: actionSource,
     model: params.suggestion.model,
     generatedAt,
   } satisfies ParentAgentResult;

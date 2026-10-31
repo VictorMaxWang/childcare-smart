@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { MemoryContextEnvelope, WeeklyReportResponse } from "../ai/types.ts";
+import type { AiResultProviderMetadata, MemoryContextEnvelope, WeeklyReportResponse } from "../ai/types.ts";
 import {
   attachNotificationEventToResult,
+  buildAdminDailyPriorityResult,
+  buildAdminFollowUpResult,
   buildAdminWeeklyReportResult,
   buildAdminWeeklyReportResultWithMemory,
 } from "./admin-agent.ts";
@@ -319,6 +321,61 @@ function buildDirtyWeeklyReport(): WeeklyReportResponse {
     model: "test-model",
   };
 }
+
+function buildAllResultsWithMetadata(metadata: AiResultProviderMetadata, source: "ai" | "fallback" = "ai") {
+  const context = buildWeeklyContext();
+  const common = { source, model: source === "ai" ? "ZHIPU/GLM-5.3-Flash" : "institution-rule-fallback", ...metadata };
+  return [
+    buildAdminDailyPriorityResult({ context, suggestion: {
+      riskLevel: "low", summary: "先补齐反馈闭环", highlights: [], concerns: [], actions: ["确认复查记录"], disclaimer: "照护参考", ...common,
+    } }),
+    buildAdminFollowUpResult({ context, question: "今天先处理什么？", response: {
+      answer: "先确认复查记录", keyPoints: [], nextSteps: [], disclaimer: "照护参考", ...common,
+    } }),
+    buildAdminWeeklyReportResult({ context, report: { ...buildDirtyWeeklyReport(), ...common } }),
+  ];
+}
+
+test("admin result builders preserve actual MaaS provider metadata through business and weekly sanitizers", () => {
+  const metadata: AiResultProviderMetadata = {
+    provider: "maas", mode: "live", live: true, realProvider: true, fallback: false, fallbackReason: null,
+    requestId: "synthetic-request", providerStatus: { chat: { providerName: "maas", configured: true, live: true, state: "live" } },
+    providerTrace: { provider: "maas", mode: "live", realProvider: true, fallback: false, capability: "llm", model: "ZHIPU/GLM-5.3-Flash", requestId: "synthetic-request" },
+  };
+  for (const result of buildAllResultsWithMetadata(metadata)) {
+    assert.equal(result.source, "ai");
+    assert.equal(result.model, "ZHIPU/GLM-5.3-Flash");
+    for (const key of Object.keys(metadata) as Array<keyof AiResultProviderMetadata>) {
+      assert.deepEqual(result[key], metadata[key]);
+    }
+    assert.ok(result.summary && result.assistantAnswer && result.generatedAt);
+  }
+});
+
+test("admin result builders retain rule fallback provenance even when model service is configured", () => {
+  const metadata: AiResultProviderMetadata = {
+    provider: "local-rule-fallback", mode: "fallback", live: false, realProvider: false, fallback: true,
+    fallbackReason: "forced-local-fallback", providerStatus: { chat: { providerName: "maas", configured: true, live: false, state: "configured" } },
+    providerTrace: { provider: "local-rule-fallback", mode: "fallback", realProvider: false, fallback: true },
+  };
+  for (const result of buildAllResultsWithMetadata(metadata, "fallback")) {
+    assert.equal(result.source, "fallback");
+    for (const key of Object.keys(metadata) as Array<keyof AiResultProviderMetadata>) {
+      assert.deepEqual(result[key], metadata[key]);
+    }
+  }
+});
+
+test("admin result builders do not manufacture live claims from source ai or a model name", () => {
+  for (const result of buildAllResultsWithMetadata({})) {
+    assert.equal(result.source, "ai");
+    assert.equal(result.provider, undefined);
+    assert.equal(result.providerTrace, undefined);
+    assert.equal(result.realProvider, undefined);
+    assert.equal(result.live, undefined);
+    assert.equal(result.mode, undefined);
+  }
+});
 
 test("buildAdminWeeklyReportResult keeps clean weekly copy and rebuilds dirty summary", () => {
   const result = buildAdminWeeklyReportResult({

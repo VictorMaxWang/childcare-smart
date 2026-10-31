@@ -1,4 +1,4 @@
-import type { AiFollowUpMessage, InstitutionSuggestionSnapshot, MemoryContextMeta } from "@/lib/ai/types";
+import type { AiFollowUpMessage, AiResultProviderMetadata, InstitutionSuggestionSnapshot, MemoryContextMeta } from "@/lib/ai/types";
 import type { TaskEscalationSuggestion, TaskSourceType } from "@/lib/tasks/types";
 
 export type AdminAgentWorkflowType = "daily-priority" | "question-follow-up" | "weekly-ops-report";
@@ -350,7 +350,7 @@ export interface AdminHomeViewModel {
   adminContext: AdminAgentContext;
 }
 
-export interface AdminAgentResult {
+export interface AdminAgentResult extends AiResultProviderMetadata {
   title: string;
   summary: string;
   assistantAnswer: string;

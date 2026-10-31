@@ -25,6 +25,16 @@ def test_maas_selection_takes_precedence_over_old_vivo():
     assert all(status.configured and not status.live and status.state == "configured" for status in statuses.values())
 
 
+def test_verified_qwen_direct_answer_parameters_do_not_leak_into_glm():
+    selected = MaasTextProvider(configured())
+    messages = [{"role": "user", "content": "JSON"}]
+    qwen = selected._request_shape(messages, "qwen3.8-flash", json_output=True)[2]
+    assert qwen["enable_thinking"] is False and "reasoning_effort" not in qwen
+    for model in ("ZHIPU/GLM-5.3-Flash", "unverified-model"):
+        body = selected._request_shape(messages, model)[2]
+        assert "enable_thinking" not in body
+
+
 def test_json_output_is_explicit_and_does_not_change_plain_text_or_asr():
     selected = MaasTextProvider(configured())
     messages = [{"role": "user", "content": "synthetic"}]
@@ -54,6 +64,67 @@ def test_maas_errors_are_sanitized(monkeypatch):
         with pytest.raises(ProviderAuthenticationError if status in {401, 403} else ProviderResponseError) as error:
             MaasTextProvider(configured()).summarize("private input", "fallback")
         assert "test-only-secret" not in str(error.value) and "private input" not in str(error.value)
+
+
+@pytest.mark.parametrize(("payload", "code", "category"), [
+    ({"error": {"code": "InvalidParameter", "message": "private-child-input"}}, "InvalidParameter", "upstream-invalid-request"),
+    ({"code": "DataInspectionFailed", "message": "private-child-input"}, "DataInspectionFailed", "upstream-content-rejected"),
+    ({"error": {"code": "private-child-input", "message": "private-child-input"}}, None, "upstream-invalid-request"),
+    ({"error": "private-child-input"}, None, "upstream-invalid-request"),
+    ({"error": {"code": "invalid_parameter_error", "message": "The product is not activated, private-child-input"}}, "invalid_parameter_error", "upstream-model-not-activated"),
+])
+def test_upstream_failure_has_safe_status_and_allowlisted_diagnosis(monkeypatch, caplog, payload, code, category):
+    caplog.set_level(logging.WARNING, logger="app.providers.maas")
+    calls = []
+
+    def post(*_args, **_kwargs):
+        calls.append(1)
+        return httpx.Response(400, json=payload)
+
+    monkeypatch.setattr(httpx.Client, "post", post)
+    with pytest.raises(ProviderResponseError) as raised:
+        MaasTextProvider(configured()).summarize("private-prompt", "", json_output=True)
+    assert len(calls) == 1
+    assert raised.value.http_status == 400 and raised.value.diagnosis == category
+    assert raised.value.error_code == code
+    entries = [record.getMessage() for record in caplog.records if record.getMessage().startswith("ai.provider_error ")]
+    assert len(entries) == 1
+    assert json.loads(entries[0].removeprefix("ai.provider_error ")) == {
+        "provider": "maas", "httpStatus": 400, "category": category, "code": code,
+    }
+    assert "private-" not in entries[0] and "private-" not in str(raised.value)
+    assert "test-only-secret" not in entries[0] and "gateway.example" not in entries[0]
+
+
+def test_http400_upstream_token_rejection_is_authentication_error_not_json_failure(monkeypatch, caplog):
+    monkeypatch.setattr(httpx.Client, "post", lambda *_args, **_kwargs: httpx.Response(400, json={
+        "error": {"code": "1004", "message": "private-upstream-authentication-body"},
+    }))
+    with pytest.raises(ProviderAuthenticationError) as raised:
+        MaasTextProvider(configured()).summarize("synthetic input", "", json_output=True)
+    assert raised.value.http_status == 400 and raised.value.error_code == "1004"
+    assert raised.value.diagnosis == "upstream-authentication"
+    assert "private-upstream-authentication-body" not in caplog.text
+
+
+def test_sync_and_async_structured_requests_have_identical_model_and_shape(monkeypatch):
+    bodies = []
+
+    def post(_client, endpoint, **kwargs):
+        bodies.append((endpoint, kwargs["json"]))
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"title":"synthetic"}'}}]})
+
+    async def async_post(client, endpoint, **kwargs):
+        return post(client, endpoint, **kwargs)
+
+    monkeypatch.setattr(httpx.Client, "post", post)
+    monkeypatch.setattr(httpx.AsyncClient, "post", async_post)
+    provider = MaasTextProvider(configured())
+    provider.summarize("synthetic JSON prompt", "", json_output=True)
+    asyncio.run(provider.asummarize("synthetic JSON prompt", "", json_output=True))
+    assert len(bodies) == 2 and bodies[0] == bodies[1]
+    assert bodies[0][1]["model"] == "ZHIPU/GLM-5.3-Flash"
+    assert bodies[0][1]["response_format"] == {"type": "json_object"}
 
 
 def test_maas_rejects_reasoning_only_and_truncated_content(monkeypatch):

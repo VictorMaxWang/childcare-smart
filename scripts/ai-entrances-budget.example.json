@@ -1,0 +1,19 @@
+{
+  "budgetId": "REPLACE_WITH_REVIEWED_ENTRANCES_BATCH_ID",
+  "currency": "CNY",
+  "maxTotalCny": 3,
+  "confirmedAt": "REPLACE_WITH_ACTUAL_VERIFIED_ISO_TIMESTAMP",
+  "pricingEvidence": "REPLACE_WITH_VERIFIED_PRICING_AND_INTERNAL_CALL_BOUND_EVIDENCE",
+  "requests": {
+    "vision": { "reserveCny": 0.3, "includesAllInternalCalls": true, "maxModelCalls": 1, "maxOutputTokensTotal": 6000, "maxInputTokensTotal": 6000 },
+    "diet": { "reserveCny": 0.2, "includesAllInternalCalls": true, "maxModelCalls": 1, "maxOutputTokensTotal": 6000, "maxInputTokensTotal": 6000 },
+    "health": { "reserveCny": 0.3, "includesAllInternalCalls": true, "maxModelCalls": 1, "maxOutputTokensTotal": 6000, "maxInputTokensTotal": 6000 },
+    "teacher-voice": { "reserveCny": 0.2, "includesAllInternalCalls": true, "maxModelCalls": 1, "maxOutputTokensTotal": 6000, "maxInputTokensTotal": 6000, "maxAudioSeconds": 3 },
+    "asr": { "reserveCny": 0.2, "includesAllInternalCalls": true, "maxModelCalls": 1, "maxOutputTokensTotal": 6000, "maxInputTokensTotal": 6000, "maxAudioSeconds": 3 },
+    "follow-up": { "reserveCny": 0.2, "includesAllInternalCalls": true, "maxModelCalls": 1, "maxOutputTokensTotal": 6000, "maxInputTokensTotal": 6000 },
+    "trend": { "reserveCny": 0.2, "includesAllInternalCalls": true, "maxModelCalls": 1, "maxOutputTokensTotal": 6000, "maxInputTokensTotal": 6000 },
+    "admin-daily": { "reserveCny": 0.2, "includesAllInternalCalls": true, "maxModelCalls": 1, "maxOutputTokensTotal": 6000, "maxInputTokensTotal": 6000 },
+    "admin-follow-up": { "reserveCny": 0.2, "includesAllInternalCalls": true, "maxModelCalls": 1, "maxOutputTokensTotal": 6000, "maxInputTokensTotal": 6000 },
+    "admin-weekly": { "reserveCny": 0.3, "includesAllInternalCalls": true, "maxModelCalls": 1, "maxOutputTokensTotal": 6000, "maxInputTokensTotal": 6000 }
+  }
+}

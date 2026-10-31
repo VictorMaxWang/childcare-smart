@@ -145,7 +145,7 @@ export default function DirectorAgentReplica({
           </ReplicaButton>
           <ReplicaButton onClick={onRerun} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            重新生成
+            {result ? "更新机构分析" : "生成机构分析"}
           </ReplicaButton>
         </>
       }
@@ -272,7 +272,7 @@ export default function DirectorAgentReplica({
               actions={
                 <>
                   <ReplicaPill tone="purple">{`待派单任务（${scope?.pendingDispatchCount ?? 0}）`}</ReplicaPill>
-                  <ReplicaPill tone="slate">{result?.source === "ai" ? "vivo Chat" : result?.source ?? "待生成"}</ReplicaPill>
+                  <ReplicaPill tone="slate">{result?.source === "ai" ? result.model ?? "AI 生成" : result?.source ?? "待生成"}</ReplicaPill>
                 </>
               }
             >
@@ -354,7 +354,7 @@ export default function DirectorAgentReplica({
               <RoleAssistantWorkspace
                 roleLabel="园长端"
                 title="AI 解释与对话"
-                description="周报、风险儿童、派单建议、数据问答和运营报表都通过服务端 vivo Chat 生成。"
+                description="周报、风险儿童、派单建议、数据问答和运营报表由服务端配置的模型生成，结果显示实际模型来源。"
                 prompts={quickQuestions}
                 value={questionText}
                 onValueChange={setQuestionText}

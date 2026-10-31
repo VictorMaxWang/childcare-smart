@@ -48,6 +48,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   buildParentAgentChildContext,
+  buildParentAgentActionDisplay,
   buildParentAgentFollowUpPayload,
   buildParentAgentFollowUpResult,
   buildParentAgentSuggestionResult,
@@ -68,17 +69,19 @@ import {
 } from "@/lib/agent/parent-trend";
 import type {
   AiFollowUpResponse,
-  AiSuggestionResponse,
   ChildSuggestionSnapshot,
   ParentMessageReflexionResponse,
   ParentTrendQueryResponse,
 } from "@/lib/ai/types";
+import { CachedAiRequestController } from "@/lib/ai/cached-ai-request";
+import { fetchSuggestionResponse as readSuggestion } from "@/lib/agent/suggestion-client";
 import { getHydrationDisplayState } from "@/lib/hydration-display";
 import { useCareMode } from "@/lib/care-mode";
 import { buildParentSpeechScript } from "@/lib/voice/browser-tts";
 import { sanitizeParentFacingText } from "@/lib/agent/parent-copy";
 import { cn } from "@/lib/utils";
 import { formatParentFeedbackStatusLabel } from "@/lib/feedback/consumption";
+import { feedbackBusinessDate, isFeedbackOnDate } from "@/lib/feedback/date";
 import {
   markMessageRead as markApiMessageRead,
   createFeedback as createApiFeedback,
@@ -177,19 +180,15 @@ export default function ParentAgentPage() {
       : parentFeed[0]?.child.id ?? "";
   const [selectedChildId, setSelectedChildId] = useState(defaultChildId);
   const [question, setQuestion] = useState("");
-  const [currentResult, setCurrentResult] = useState<ParentAgentResult | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [storedResult, setStoredResult] = useState<{ key: string; result: ParentAgentResult } | null>(null);
+  const [historyState, setHistoryState] = useState<{ key: string; items: HistoryItem[] } | null>(null);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
   const [followUpLoading, setFollowUpLoading] = useState(false);
   const [trendLoading, setTrendLoading] = useState(false);
   const [trendError, setTrendError] = useState<string | null>(null);
   const [latestTrendQuery, setLatestTrendQuery] = useState<string | null>(null);
   const [latestTrendResult, setLatestTrendResult] = useState<ParentTrendQueryResponse | null>(null);
-  const [pendingFeedbackTrendRefresh, setPendingFeedbackTrendRefresh] = useState<{
-    childId: string;
-    question: string;
-    feedbackId: string;
-  } | null>(null);
+  const [trendScopeKey, setTrendScopeKey] = useState("");
   const [homeSchoolMessageDraft, setHomeSchoolMessageDraft] = useState("");
   const [homeSchoolMessageStatus, setHomeSchoolMessageStatus] = useState<string | null>(null);
   const [homeSchoolMessageSending, setHomeSchoolMessageSending] = useState(false);
@@ -209,10 +208,12 @@ export default function ParentAgentPage() {
   const [feedbackDetailId, setFeedbackDetailId] = useState<string | null>(null);
   const [feedbackDetailOpen, setFeedbackDetailOpen] = useState(false);
   const [showMoreContent, setShowMoreContent] = useState(false);
-  const [, setReflexionLoading] = useState(false);
+  const [reflexionLoading, setReflexionLoading] = useState(false);
   const [parentMessageStatus, setParentMessageStatus] = useState<string | null>(null);
   const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
   const [suggestionRefreshNonce, setSuggestionRefreshNonce] = useState(0);
+  const [suggestionRetryUnknown, setSuggestionRetryUnknown] = useState(false);
+  const suggestionRequests = useRef(new CachedAiRequestController());
   const [feedbackNotePrefill, setFeedbackNotePrefill] = useState<{
     value: string;
     token: number;
@@ -278,14 +279,6 @@ export default function ParentAgentPage() {
       })[0] ?? null
     );
   }, [communicationMessages, selectedFeed]);
-  const displayedTrendQuestion = latestTrendQuery;
-  const displayedTrendResult = latestTrendResult;
-  const displayedTrendError = trendError;
-  const displayedTrendLoading = trendLoading;
-  const hasVisibleTrendCard = Boolean(
-    displayedTrendQuestion || displayedTrendLoading || displayedTrendError || displayedTrendResult
-  );
-
   const baseContext = useMemo(() => {
     if (!selectedFeed) return null;
 
@@ -301,18 +294,36 @@ export default function ParentAgentPage() {
     });
   }, [guardianFeedbacks, growthRecords, healthCheckRecords, mealRecords, selectedFeed, taskCheckInRecords]);
 
-  const activeContext = useMemo(() => {
-    if (!baseContext) return null;
-    return {
-      ...baseContext,
-      currentInterventionCard: currentResult?.interventionCard ?? null,
-    };
-  }, [baseContext, currentResult]);
-
   const snapshot = useMemo(
     () => (baseContext ? buildParentChildSuggestionSnapshot(baseContext) : null),
     [baseContext]
   );
+  const suggestionKey = useMemo(() => snapshot ? JSON.stringify({
+    owner: { userId: currentUser.id, institutionId: currentUser.institutionId }, snapshot,
+  }) : "", [currentUser.id, currentUser.institutionId, snapshot]);
+  const suggestionContextRef = useRef(baseContext);
+  const suggestionKeyRef = useRef(suggestionKey);
+  suggestionContextRef.current = baseContext;
+  suggestionKeyRef.current = suggestionKey;
+  // 在effect清空前就按当前账号/儿童/数据版本屏蔽旧结果，避免切换时闪现上一名儿童的信息。
+  const currentResult = storedResult?.key === suggestionKey ? storedResult.result : null;
+  const history = historyState?.key === suggestionKey ? historyState.items : [];
+  const setHistory = useCallback((update: HistoryItem[] | ((previous: HistoryItem[]) => HistoryItem[])) => {
+    setHistoryState((previous) => ({ key: suggestionKey,
+      items: typeof update === "function" ? update(previous?.key === suggestionKey ? previous.items : []) : update }));
+  }, [suggestionKey]);
+  const displayedTrendQuestion = trendScopeKey === suggestionKey ? latestTrendQuery : null;
+  const displayedTrendResult = trendScopeKey === suggestionKey ? latestTrendResult : null;
+  const displayedTrendError = trendScopeKey === suggestionKey ? trendError : null;
+  const displayedTrendLoading = trendScopeKey === suggestionKey && trendLoading;
+  const hasVisibleTrendCard = Boolean(displayedTrendQuestion || displayedTrendLoading || displayedTrendError || displayedTrendResult);
+  const setCurrentResult = useCallback((result: ParentAgentResult | null) => {
+    setStoredResult(result ? { key: suggestionKey, result } : null);
+  }, [suggestionKey]);
+  const activeContext = useMemo(() => {
+    if (!baseContext) return null;
+    return { ...baseContext, currentInterventionCard: currentResult?.interventionCard ?? null };
+  }, [baseContext, currentResult]);
   const parentDrafts = useMemo(
     () =>
       mobileDrafts.filter(
@@ -387,23 +398,21 @@ export default function ParentAgentPage() {
     selectedFeed,
     taskCheckInRecords,
   ]);
-  const displayTonightTopAction = displayInterventionCard?.tonightHomeAction ?? currentResult?.tonightTopAction ?? baseContext?.task.description ?? "";
-  const displayWhyNow =
-    sanitizeParentFacingText(currentResult?.whyNow) ||
-    sanitizeParentFacingText(displayConsultation?.summary) ||
-    "系统综合近 7 天业务数据、教师观察和家长反馈，为今晚优先选出一条最值得执行的家庭动作。";
-  const displayObservationPoints =
-    displayInterventionCard?.observationPoints ?? currentResult?.tonightObservationPoints ?? [];
-  const displayTeacherObservation =
-    displayInterventionCard?.tomorrowObservationPoint ??
-    currentResult?.teacherTomorrowObservation ??
-    "明早继续反馈今晚执行结果，方便教师继续观察。";
+  const actionDisplay = baseContext ? buildParentAgentActionDisplay({
+    context: baseContext,
+    result: currentResult,
+    interventionCard: displayInterventionCard,
+  }) : null;
+  const displayTonightTopAction = actionDisplay?.tonightTopAction ?? "";
+  const displayWhyNow = actionDisplay?.whyNow ?? "请先选择儿童，再查看适龄照护提示或生成个性化方案。";
+  const displayObservationPoints = actionDisplay?.observationPoints ?? [];
+  const displayTeacherObservation = actionDisplay?.teacherObservation ?? "可将今晚的实际情况反馈给教师。";
   const careFocusSpeechText = buildParentSpeechScript({
     title: `${selectedFeed?.child.name ?? "孩子"} 今晚先做什么`,
     sections: [
       { label: "今晚就做", text: displayTonightTopAction },
       { label: "为什么现在做", text: displayWhyNow },
-      { label: "明天老师继续看", text: displayTeacherObservation },
+      { label: "后续观察参考", text: displayTeacherObservation },
     ],
     outro: "浏览器播报，仅用于当前设备预览，不是后端真实语音。",
   });
@@ -529,13 +538,15 @@ export default function ParentAgentPage() {
     reflexionRequestRef.current += 1;
     reflexionAbortRef.current?.abort();
     reflexionAbortRef.current = null;
-    setHistory([]);
+    setHistoryState(null);
     setQuestion("");
     setTrendLoading(false);
     setTrendError(null);
     setLatestTrendQuery(null);
     setLatestTrendResult(null);
     setReflexionLoading(false);
+    setSuggestionLoading(false);
+    setFollowUpLoading(false);
     setParentMessageStatus(null);
     setFeedbackStatus(null);
     setHomeSchoolMessageDraft("");
@@ -730,11 +741,12 @@ export default function ParentAgentPage() {
     baseResult: ParentAgentResult;
     historyId?: string;
   }) => {
+    if (reflexionAbortRef.current) return;
     const requestId = ++reflexionRequestRef.current;
+    const requestKey = suggestionKeyRef.current;
     const childId = params.context.child.id;
     const controller = new AbortController();
 
-    reflexionAbortRef.current?.abort();
     reflexionAbortRef.current = controller;
 
     setReflexionLoading(true);
@@ -760,6 +772,7 @@ export default function ParentAgentPage() {
       const data = (await response.json()) as ParentMessageReflexionResponse;
       if (
         reflexionRequestRef.current !== requestId ||
+        suggestionKeyRef.current !== requestKey ||
         selectedChildIdRef.current !== childId
       ) {
         return;
@@ -790,6 +803,7 @@ export default function ParentAgentPage() {
       if (
         controller.signal.aborted ||
         reflexionRequestRef.current !== requestId ||
+        suggestionKeyRef.current !== requestKey ||
         selectedChildIdRef.current !== childId
       ) {
         return;
@@ -805,6 +819,7 @@ export default function ParentAgentPage() {
     } finally {
       if (
         reflexionRequestRef.current === requestId &&
+        suggestionKeyRef.current === requestKey &&
         selectedChildIdRef.current === childId
       ) {
         setReflexionLoading(false);
@@ -813,10 +828,33 @@ export default function ParentAgentPage() {
         reflexionAbortRef.current = null;
       }
     }
-  }, [normalizeParentMessageFailureMessage, readParentMessageRouteError]);
+  }, [normalizeParentMessageFailureMessage, readParentMessageRouteError, setCurrentResult, setHistory]);
+
+  async function generateSuggestion() {
+    if (!baseContext || !snapshot || !suggestionKey || suggestionRequests.current.isGenerating(suggestionKey)) return;
+    if (suggestionRetryUnknown && !window.confirm("上次生成结果无法确认，再次生成可能重复计费。确认重新生成吗？")) return;
+    const key = suggestionKey;
+    const context = baseContext;
+    setSuggestionLoading(true);
+    setParentMessageStatus(null);
+    try {
+      const outcome = await suggestionRequests.current.generate(key, (options) => readSuggestion(snapshot, options), suggestionRetryUnknown);
+      if (outcome.status !== "ready") return;
+      setStoredResult(outcome.value ? { key, result: buildParentAgentSuggestionResult({ context, suggestion: outcome.value }) } : null);
+      setSuggestionRetryUnknown(false);
+    } catch (error) {
+      if (suggestionKeyRef.current !== key) return;
+      setSuggestionRetryUnknown((error as { code?: string })?.code === "generation_result_unknown");
+      setParentMessageStatus(`AI 建议暂时不可用：${error instanceof Error ? error.message : "请稍后重试。"}`);
+    } finally {
+      if (suggestionKeyRef.current === key) setSuggestionLoading(false);
+    }
+  }
 
   const submitTrendQuery = useCallback(async (nextQuestion: string) => {
     if (!selectedFeed) return;
+    const requestKey = suggestionKeyRef.current;
+    setTrendScopeKey(requestKey);
 
     setTrendLoading(true);
     setTrendError(null);
@@ -851,15 +889,17 @@ export default function ParentAgentPage() {
       }
 
       const data = (await response.json()) as ParentTrendQueryResponse;
+      if (suggestionKeyRef.current !== requestKey) return;
       setLatestTrendResult(data);
       setQuestion("");
     } catch (error) {
+      if (suggestionKeyRef.current !== requestKey) return;
       const message = normalizeTrendFailureMessage(
         error instanceof Error ? error.message : "趋势查询暂时不可用，请稍后再试。"
       );
       setTrendError(message);
     } finally {
-      setTrendLoading(false);
+      if (suggestionKeyRef.current === requestKey) setTrendLoading(false);
     }
   }, [
     attendanceRecords,
@@ -878,20 +918,11 @@ export default function ParentAgentPage() {
     taskCheckInRecords,
   ]);
 
-  useEffect(() => {
-    if (!pendingFeedbackTrendRefresh || selectedFeed?.child.id !== pendingFeedbackTrendRefresh.childId) {
-      return;
-    }
-
-    const refresh = pendingFeedbackTrendRefresh;
-    setPendingFeedbackTrendRefresh(null);
-    void submitTrendQuery(refresh.question);
-  }, [pendingFeedbackTrendRefresh, selectedFeed?.child.id, submitTrendQuery]);
-
   async function submitFollowUp(prefilledQuestion?: string) {
     if (!activeContext || !currentResult) return;
     const nextQuestion = (prefilledQuestion ?? question).trim();
     if (!nextQuestion) return;
+    const requestKey = suggestionKey;
 
     if (isLikelyTrendQuestion(nextQuestion)) {
       await submitTrendQuery(nextQuestion);
@@ -922,6 +953,7 @@ export default function ParentAgentPage() {
       }
 
       const data = (await response.json()) as AiFollowUpResponse;
+      if (suggestionKeyRef.current !== requestKey) return;
       const nextResult = buildParentAgentFollowUpResult({
         context: activeContext,
         baseResult: currentResult,
@@ -938,20 +970,15 @@ export default function ParentAgentPage() {
         ...prev,
         { id: historyId, question: nextQuestion, result: nextResult },
       ]);
-      void enrichParentMessageResult({
-        context: activeContext,
-        snapshotPayload: payload.snapshot as ChildSuggestionSnapshot,
-        baseResult: nextResult,
-        historyId,
-      });
       setQuestion("");
     } catch (error) {
+      if (suggestionKeyRef.current !== requestKey) return;
       setParentMessageStatus(
         `AI 追问暂时不可用：${error instanceof Error ? error.message : "provider_unavailable"}`
       );
       setQuestion("");
     } finally {
-      setFollowUpLoading(false);
+      if (suggestionKeyRef.current === requestKey) setFollowUpLoading(false);
     }
   }
 
@@ -967,56 +994,36 @@ export default function ParentAgentPage() {
 
     autoTrendHandledRef.current = autoTrendKey;
     setQuestion(unifiedTrendQuestion);
-    void submitTrendQuery(unifiedTrendQuestion);
-  }, [routeIntent, selectedFeed, submitTrendQuery, unifiedTrendQuestion]);
+    // 带意图的链接只预填问题；重载该链接不应再次产生模型费用。
+  }, [routeIntent, selectedFeed, unifiedTrendQuestion]);
 
   useEffect(() => {
-    if (!baseContext || !snapshot) return;
-
+    const currentContext = suggestionContextRef.current;
+    const key = suggestionKey;
+    if (!currentContext || !key || suggestionRequests.current.isGenerating(key)) return;
+    const context = currentContext;
     let cancelled = false;
-    const controller = new AbortController();
-    const context = baseContext;
-    const snapshotPayload = snapshot;
+    const requests = suggestionRequests.current;
+    const snapshotPayload = (JSON.parse(key) as { snapshot: ChildSuggestionSnapshot }).snapshot;
 
     async function fetchSuggestion() {
-      setSuggestionLoading(true);
-
+      setStoredResult(null);
+      setSuggestionLoading(false);
+      setReflexionLoading(false);
+      setFollowUpLoading(false);
+      setTrendLoading(false);
+      setSuggestionRetryUnknown(false);
+      setParentMessageStatus(null);
       try {
-        const response = await fetch("/api/ai/suggestions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot: snapshotPayload }),
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as { error?: string; message?: string } | null;
-          throw new Error(body?.message ?? body?.error ?? "fetch suggestion failed");
-        }
-
-        const data = (await response.json()) as AiSuggestionResponse;
-        if (!cancelled) {
-          const baseResult = buildParentAgentSuggestionResult({
-            context,
-            suggestion: data,
-          });
-          setCurrentResult(baseResult);
-          void enrichParentMessageResult({
-            context,
-            snapshotPayload,
-            baseResult,
-          });
+        // 页面进入、记录变化和反馈刷新始终只读服务端缓存，不升级为收费生成。
+        const outcome = await requests.readCached(key, (options) => readSuggestion(snapshotPayload, options));
+        if (!cancelled && outcome.status === "ready") {
+          setStoredResult(outcome.value ? { key, result: buildParentAgentSuggestionResult({ context, suggestion: outcome.value }) } : null);
         }
       } catch (error) {
         if (!cancelled) {
-          setCurrentResult(null);
-          setParentMessageStatus(
-            `AI 建议暂时不可用：${error instanceof Error ? error.message : "provider_unavailable"}`
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setSuggestionLoading(false);
+          setSuggestionRetryUnknown((error as { code?: string })?.code === "generation_result_unknown");
+          setParentMessageStatus(error instanceof Error ? error.message : "已保存建议暂时无法读取。");
         }
       }
     }
@@ -1025,9 +1032,9 @@ export default function ParentAgentPage() {
 
     return () => {
       cancelled = true;
-      controller.abort();
+      requests.cancelCacheRead(key);
     };
-  }, [baseContext, enrichParentMessageResult, snapshot, suggestionRefreshNonce]);
+  }, [suggestionKey, suggestionRefreshNonce]);
 
   async function persistFamilyTaskReminderStatus(
     reminderId: string,
@@ -1165,24 +1172,11 @@ export default function ParentAgentPage() {
     setFeedbackNotePrefill(null);
     setSuggestionRefreshNonce((current) => current + 1);
 
-    if (latestTrendQuery) {
-      setPendingFeedbackTrendRefresh({
-        childId: input.childId,
-        question: latestTrendQuery,
-        feedbackId: savedFeedbackId,
-      });
-      setFeedbackStatus(
-        `今晚反馈已提交，并已写入家园沟通与当前机构数据；正在基于最新反馈刷新趋势解释。${
-          reminderAcknowledgementWarning ? ` ${reminderAcknowledgementWarning}` : ""
-        }${refreshWarning ? ` ${refreshWarning}` : ""}`
-      );
-    } else {
-      setFeedbackStatus(
-        `今晚反馈已提交，并已写入家园沟通与当前机构数据；下一次趋势解释会使用这条反馈。${
-          reminderAcknowledgementWarning ? ` ${reminderAcknowledgementWarning}` : ""
-        }${refreshWarning ? ` ${refreshWarning}` : ""}`
-      );
-    }
+    setFeedbackStatus(
+      `今晚反馈已提交，并已写入家园沟通与当前机构数据；点击更新建议或重新提交趋势问题后，将使用这条反馈。${
+        reminderAcknowledgementWarning ? ` ${reminderAcknowledgementWarning}` : ""
+      }${refreshWarning ? ` ${refreshWarning}` : ""}`
+    );
     return true;
   }
 
@@ -1373,13 +1367,13 @@ export default function ParentAgentPage() {
   const agentHasPendingFeedback = !selectedFeed.hasFeedbackToday;
   const agentHasHealthWarning = baseContext.weeklyHealthChecks.some((item) => item.isAbnormal);
   const agentStatusLabel = suggestionLoading
-    ? "正在整理建议"
-    : agentHasPendingFeedback
+    ? "正在生成建议"
+    : !currentResult ? "尚未生成建议" : agentHasPendingFeedback
       ? "待反馈"
       : "闭环已同步";
   const agentStatusVariant = suggestionLoading
     ? "info"
-    : agentHasPendingFeedback
+    : !currentResult ? "secondary" : agentHasPendingFeedback
       ? "warning"
       : "success";
   const agentHeroPills = [
@@ -1402,7 +1396,7 @@ export default function ParentAgentPage() {
     {
       id: "action",
       title: "今晚先做",
-      meta: displayInterventionCard?.title ?? baseContext.task.title,
+      meta: actionDisplay?.source === "ai" ? displayInterventionCard?.title ?? "已保存的 AI 方案" : baseContext.task.title,
       description: displayTonightTopAction || "当前建议正在整理中。",
       tone: "indigo",
       icon: <Sparkles className="h-4 w-4" />,
@@ -1421,8 +1415,8 @@ export default function ParentAgentPage() {
     },
     {
       id: "teacher",
-      title: "明天老师继续看",
-      meta: displayConsultation ? "已关联会诊/复查上下文" : "教师端继续观察",
+      title: "后续观察参考",
+      meta: displayConsultation ? "已关联会诊/复查上下文" : "可向教师反馈实际情况",
       description: displayTeacherObservation,
       tone: "sky",
       icon: <Clock3 className="h-4 w-4" />,
@@ -1461,7 +1455,7 @@ export default function ParentAgentPage() {
       ...baseContext.weeklyHealthChecks.map((record) => parentAgentDateKey(record.date)),
       ...baseContext.weeklyMeals.map((record) => parentAgentDateKey(record.date)),
       ...baseContext.weeklyGrowthRecords.map((record) => parentAgentDateKey(record.createdAt)),
-      ...baseContext.weeklyFeedbacks.map((record) => parentAgentDateKey(record.date)),
+      ...baseContext.weeklyFeedbacks.map(feedbackBusinessDate),
     ]
       .filter(Boolean)
       .sort()
@@ -1475,7 +1469,7 @@ export default function ParentAgentPage() {
       health: parentAgentAverage(dayHealth.map((record) => record.temperature)),
       diet: parentAgentAverage(dayMeals.map((record) => record.nutritionScore)),
       growth: baseContext.weeklyGrowthRecords.filter((record) => parentAgentDateKey(record.createdAt) === date).length,
-      feedback: baseContext.weeklyFeedbacks.filter((record) => parentAgentDateKey(record.date) === date).length,
+      feedback: baseContext.weeklyFeedbacks.filter((record) => isFeedbackOnDate(record, date)).length,
       reminders: reminders.filter(
         (record) =>
           (record.childId === selectedFeed.child.id || record.targetId === selectedFeed.child.id) &&
@@ -1505,7 +1499,7 @@ export default function ParentAgentPage() {
         </div>
         <div className="relative max-w-2xl">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="info" className="rounded-full px-3 py-1">AI 助手 · 共育建议</Badge>
+            <Badge variant="info" className="rounded-full px-3 py-1">{actionDisplay?.sourceLabel ?? "家园共育"}</Badge>
             <Badge variant={agentHasPendingFeedback ? "warning" : "success"} className="rounded-full px-3 py-1">
               {agentStatusLabel}
             </Badge>
@@ -1514,13 +1508,21 @@ export default function ParentAgentPage() {
             晚上好，{currentUser.name}
           </h2>
           <p className="mt-3 max-w-xl text-base leading-7 text-slate-600">
-            基于 {selectedFeed.child.name} 近期表现和老师观察，为您整理今晚可执行的共育建议。
+            {actionDisplay?.source === "ai"
+              ? `这里展示 ${selectedFeed.child.name} 已保存的 AI 个性化方案，请结合最新记录与反馈更新。`
+              : `先查看 ${selectedFeed.child.name} 的适龄照护规则；主动生成方案后，可查看基于近期记录与反馈的 AI 建议。`}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <CareModeToggle careMode={careMode} onChange={setCareMode} variant="compact" />
-            <Button asChild variant="outline" className="min-h-11 rounded-2xl bg-white/80">
-              <Link href={`/parent/agent?child=${selectedFeed.child.id}`}>刷新建议</Link>
+            <Button type="button" variant="outline" className="min-h-11 rounded-2xl bg-white/80" onClick={() => setSuggestionRefreshNonce((value) => value + 1)}>
+              刷新已保存建议
             </Button>
+            <Button type="button" data-testid="parent-agent-generate-suggestion" className="min-h-11 rounded-2xl" disabled={suggestionLoading || reflexionLoading} onClick={() => void generateSuggestion()}>
+              {suggestionLoading ? "正在生成建议…" : suggestionRetryUnknown ? "确认后重新生成建议" : currentResult ? "更新个性化方案" : "生成个性化方案"}
+            </Button>
+            {currentResult ? <Button type="button" variant="outline" className="min-h-11 rounded-2xl bg-white/80" disabled={reflexionLoading || suggestionLoading} onClick={() => void enrichParentMessageResult({ context: baseContext, snapshotPayload: snapshot, baseResult: currentResult })}>
+              {reflexionLoading ? "正在润色建议…" : "AI 润色沟通建议"}
+            </Button> : null}
           </div>
         </div>
       </div>
@@ -1533,7 +1535,7 @@ export default function ParentAgentPage() {
                 <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-100 text-lg font-black text-indigo-600">1</span>
                 <div>
                   <h3 className="text-xl font-bold text-slate-950">今晚推荐这样做</h3>
-                  <p className="mt-1 text-sm text-slate-500">只保留最容易完成的家庭动作。</p>
+                  <p className="mt-1 text-sm text-slate-500">{actionDisplay?.sourceLabel} · 按孩子的实际反应调整。</p>
                 </div>
               </div>
               <Link href="#feedback" className="hidden rounded-full bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-600 sm:block">
@@ -1543,8 +1545,8 @@ export default function ParentAgentPage() {
             <div className="mt-4 divide-y divide-slate-100 rounded-2xl border border-slate-100 bg-white">
               {[
                 { icon: MoonStar, title: displayTonightTopAction, helper: displayWhyNow },
-                { icon: Sparkles, title: "亲子共读 10-15 分钟", helper: "睡前不看屏幕，用孩子熟悉的故事复述今天的开心事。" },
-                { icon: CheckCircle2, title: "给孩子积极反馈", helper: "及时肯定努力，帮助孩子形成稳定体验。" },
+                { icon: Sparkles, title: "记录孩子的实际反应", helper: displayObservationPoints[0] ?? "记录孩子是否愿意参与、何时需要暂停，不强求完成。" },
+                { icon: CheckCircle2, title: "完成后反馈给教师", helper: "如实填写是否执行、孩子反应和遇到的困难，供后续观察参考。" },
               ].map((item, index) => {
                 const Icon = item.icon;
                 return (
@@ -1710,7 +1712,7 @@ export default function ParentAgentPage() {
                   currentResult ? (
                     <ReactMarkdown>{sanitizeParentFacingText(currentResult.assistantAnswer)}</ReactMarkdown>
                   ) : (
-                    <p>AI 建议生成后会显示在这里；provider missing-env 时不展示本地伪成功。</p>
+                    <p>当前记录版本尚未生成建议。点击“生成个性化方案”后，可在这里查看。</p>
                   )
                 }
                 actionCards={
@@ -1819,10 +1821,12 @@ export default function ParentAgentPage() {
                     description="关怀模式下只保留结果标题、摘要、今晚动作和明天观察点。"
                     badgeLabel="今晚建议"
                   >
-                    {suggestionLoading || !currentResult ? (
+                    {suggestionLoading ? (
                       <div className="rounded-3xl border border-slate-100 bg-white p-5 text-base text-slate-500">
-                        正在整理今晚最重要的一件事……
+                        正在生成今晚建议……
                       </div>
+                    ) : !currentResult ? (
+                      <p className="rounded-3xl border border-slate-100 bg-white p-5 text-base text-slate-500">{parentMessageStatus ?? "当前记录版本尚未生成建议，可点击生成个性化方案后查看。"}</p>
                     ) : (
                       <div className="space-y-4">
                         {parentMessageStatus ? (
@@ -2262,7 +2266,7 @@ export default function ParentAgentPage() {
                 currentResult ? (
                   <ReactMarkdown>{sanitizeParentFacingText(currentResult.assistantAnswer)}</ReactMarkdown>
                 ) : (
-                  <p>AI 建议生成后会显示在这里；provider missing-env 时不展示本地伪成功。</p>
+                  <p>当前记录版本尚未生成建议。点击“生成个性化方案”后，可在这里查看。</p>
                 )
               }
               actionCards={
@@ -2428,10 +2432,12 @@ export default function ParentAgentPage() {
                 </>
               }
             >
-              {suggestionLoading || !currentResult ? (
+              {suggestionLoading ? (
                 <div className="rounded-3xl border border-slate-100 bg-white p-5 text-sm text-slate-500">
                   正在基于最近 7 天数据生成家长端建议…
                 </div>
+              ) : !currentResult ? (
+                <p className="rounded-3xl border border-slate-100 bg-white p-5 text-sm text-slate-500">{parentMessageStatus ?? "当前记录版本尚未生成建议，可点击生成个性化方案后查看。"}</p>
               ) : (
                 <div className="space-y-4">
                   <div className="rounded-3xl border border-indigo-100 bg-indigo-50/70 p-5">

@@ -6,6 +6,7 @@ import {
 import type {
   AiFollowUpPayload,
   AiFollowUpResponse,
+  AiResultProviderMetadata,
   AiSuggestionResponse,
   InstitutionSuggestionSnapshot,
   MemoryContextEnvelope,
@@ -44,6 +45,21 @@ export const ADMIN_AGENT_QUICK_QUESTIONS = [
   "本周最应该整改什么？",
   "如果今天只能推动一件事，应该是什么？",
 ] as const;
+
+function preserveProviderMetadata(result: AiResultProviderMetadata): AiResultProviderMetadata {
+  // 园长视图只投影已有证据；规则结果缺少 live/trace 时保留缺省，不能补造模型调用。
+  return {
+    provider: result.provider,
+    providerStatus: result.providerStatus,
+    mode: result.mode,
+    live: result.live,
+    realProvider: result.realProvider,
+    fallback: result.fallback,
+    fallbackReason: result.fallbackReason,
+    providerTrace: result.providerTrace,
+    requestId: result.requestId,
+  };
+}
 
 type AdminQuestionFocus =
   | "priority"
@@ -827,6 +843,7 @@ export function buildAdminDailyPriorityResult(params: {
     notificationEvents: params.context.notificationEvents.slice(0, 6),
     source: params.suggestion.source,
     model: params.suggestion.model,
+    ...preserveProviderMetadata(params.suggestion),
     generatedAt: new Date().toISOString(),
   };
 }
@@ -859,6 +876,7 @@ export function buildAdminFollowUpResult(params: {
     notificationEvents: params.context.notificationEvents.slice(0, 6),
     source: params.response.source,
     model: params.response.model,
+    ...preserveProviderMetadata(params.response),
     generatedAt: new Date().toISOString(),
   };
 }
@@ -902,6 +920,7 @@ export function buildAdminWeeklyReportResult(params: {
     continuityNotes: report.continuityNotes,
     source: report.source,
     model: report.model,
+    ...preserveProviderMetadata(report),
     generatedAt: new Date().toISOString(),
   });
 }

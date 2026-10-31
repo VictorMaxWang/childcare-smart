@@ -224,6 +224,7 @@ def test_parent_storybook_service_first_byte_payload_trims_rich_fixture_fields()
         "name",
         "className",
         "ageBand",
+        "ageBandContext",
         "specialNotes",
     }
     assert len(first_byte_payload["snapshot"]["recentDetails"]["notes"]) <= 4

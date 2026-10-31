@@ -284,6 +284,7 @@ class ParentMessageReflexionService:
             provider_result = await summarize_async(provider,
                 prompt=self._build_generator_prompt(context, revision_instructions),
                 fallback=json.dumps(local_draft.model_dump(mode="json", by_alias=True), ensure_ascii=False),
+                json_output=True,
             )
         except ProviderAuthenticationError:
             raise
@@ -317,12 +318,13 @@ class ParentMessageReflexionService:
         try:
             validated = ParentMessageProviderDraftOutput.model_validate(parsed)
         except ValidationError as error:  # pragma: no cover - defensive schema fallback
-            logger.warning("parent message generator JSON schema mismatch: %s", error)
+            detail = self._safe_schema_failure_detail(error)
+            logger.warning("parent message generator JSON schema mismatch: %s", detail)
             return self._build_generator_fallback(
                 local_draft=local_draft,
                 provider_result=provider_result,
                 fallback_reason="json-schema-mismatch",
-                detail=str(error),
+                detail=detail,
             )
 
         return GeneratorStepResult(
@@ -400,6 +402,7 @@ class ParentMessageReflexionService:
             provider_result = await summarize_async(provider,
                 prompt=self._build_evaluator_prompt(context, draft, iteration),
                 fallback="",
+                json_output=True,
             )
         except ProviderAuthenticationError:
             raise
@@ -430,19 +433,21 @@ class ParentMessageReflexionService:
         try:
             validated = ParentMessageProviderEvaluatorOutput.model_validate(parsed)
         except ValidationError as error:  # pragma: no cover - defensive schema fallback
-            logger.warning("parent message evaluator JSON schema mismatch: %s", error)
+            detail = self._safe_schema_failure_detail(error)
+            logger.warning("parent message evaluator JSON schema mismatch: %s", detail)
             return self._build_evaluator_fallback(
                 provider_result=provider_result,
                 fallback_reason="json-schema-mismatch",
-                detail=str(error),
+                detail=detail,
             )
 
         score = self._normalize_score(validated.score)
         problems = [self._coerce_text(item) for item in validated.problems]
         suggestions = [self._coerce_text(item) for item in validated.revision_suggestions]
-        can_send = bool(validated.can_send) and score >= 8
-        retryable_bool = bool(validated.retryable)
-        decision = self._coerce_text(validated.decision) or ("approve" if can_send else "revise")
+        decision = validated.decision
+        # 审核结论与布尔字段冲突时取更保守结果，不能把模型的 block/revise 合并成 approve。
+        can_send = bool(validated.can_send) and score >= 8 and decision == "approve"
+        retryable_bool = bool(validated.retryable) and decision != "block"
 
         return EvaluationStepResult(
             score=score,
@@ -450,7 +455,7 @@ class ParentMessageReflexionService:
             revision_suggestions=unique_texts([item for item in suggestions if item], limit=6),
             can_send=can_send,
             retryable=retryable_bool,
-            decision=decision if decision in {"approve", "revise", "block"} else "revise",
+            decision=decision,
             fallback=False,
             provider=provider_result.provider or "vivo-llm",
             model=provider_result.model,
@@ -461,6 +466,15 @@ class ParentMessageReflexionService:
                 fallback_reason="structured-json-ok",
             ),
         )
+
+    @staticmethod
+    def _safe_schema_failure_detail(error: ValidationError) -> str:
+        """只保留字段与错误类型；Pydantic 默认错误文本会回显儿童原文。"""
+        known_fields = {"title", "summary", "tonight_actions", "tonightActions", "wording_for_parent", "wordingForParent",
+            "why_this_matters", "whyThisMatters", "estimated_time", "estimatedTime", "follow_up_window", "followUpWindow",
+            "score", "problems", "revision_suggestions", "revisionSuggestions", "can_send", "canSend", "retryable", "decision"}
+        return json.dumps([{"fields": [str(part) if part in known_fields else "unexpected-field" for part in item["loc"]], "category": item["type"]}
+            for item in error.errors(include_input=False, include_context=False, include_url=False)], ensure_ascii=False)
 
     def _local_rule_evaluate(self, draft: dict[str, Any], context: ParentMessageContext) -> EvaluationStepResult:
         title = self._coerce_text(draft.get("title"))
@@ -634,7 +648,12 @@ class ParentMessageReflexionService:
                 "你必须从以下维度审查：是否引发焦虑、是否过度责备、是否足够委婉、是否有明确可执行动作、是否容易被家长快速理解、是否符合托育场景。",
                 "JSON 字段必须只有：score, problems, revision_suggestions, can_send, retryable, decision。",
                 "score 为 0-10 的数值；只有 score >= 8 且 can_send=true 才算通过。",
-                '合法 JSON 形状示例：{"score":8.5,"problems":["..."],"revision_suggestions":["..."],"can_send":true,"retryable":true,"decision":"revise"}',
+                # can_send 是布尔字段，decision 是审核结论；不要让模型把“发送动作”当作审核枚举。
+                'decision 必须且只能取一个英文枚举："approve"、"revise"、"block"；不得返回 "send" 或其他值。',
+                'approve 表示审核通过，要求 score >= 8、can_send=true；revise 表示需修改，can_send=false、retryable=true；block 表示不可发送，can_send=false、retryable=false。',
+                '合法通过示例：{"score":8.5,"problems":[],"revision_suggestions":[],"can_send":true,"retryable":false,"decision":"approve"}',
+                '合法修改示例：{"score":6.5,"problems":["动作不够明确"],"revision_suggestions":["补充今晚可执行的一步"],"can_send":false,"retryable":true,"decision":"revise"}',
+                '合法阻断示例：{"score":2,"problems":["包含不安全建议"],"revision_suggestions":[],"can_send":false,"retryable":false,"decision":"block"}',
                 f"孩子：{context.child_name}",
                 f"本轮迭代：{iteration}",
                 "待评估草稿：",

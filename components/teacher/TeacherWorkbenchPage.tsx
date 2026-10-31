@@ -205,7 +205,7 @@ export default function TeacherWorkbenchPage() {
   const desktopTasks: WorkbenchTask[] = [
     {
       title: "晨检登记",
-      detail: pendingMorningChecks > 0 ? `${pendingMorningChecks}名在园儿童待完成晨检` : "今日晨检已完成",
+      detail: pendingMorningChecks > 0 ? `${pendingMorningChecks}名在园儿童待完成晨检` : visualAttendance === 0 ? "暂无在园签到，签到后核对晨检" : "在园儿童晨检已完成",
       status: pendingMorningChecks > 0 ? "待处理" : "已完成",
       tone: pendingMorningChecks > 0 ? "red" : "green",
       href: "/health",

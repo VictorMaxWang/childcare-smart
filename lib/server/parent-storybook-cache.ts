@@ -199,6 +199,10 @@ export function buildParentStoryBookRequestCacheKey(payload: unknown) {
 }
 
 export function shouldCacheParentStoryBookResponse(story: ParentStoryBookResponse) {
+  // 真实文字先缓存，媒体继续渐进生成；不能因尚无首图而丢失已收费的文字结果。
+  if (story.source === "ai" && story.providerMeta.textDelivery === "real" && story.providerMeta.realProvider &&
+      ["maas", "maas-llm"].includes(story.providerMeta.textProvider ?? story.providerMeta.provider) &&
+      !story.fallbackReason && !story.providerMeta.fallbackReason) return true;
   return countRealScenes(story) > 0 && !hasActiveMediaWarming(story);
 }
 
@@ -512,7 +516,8 @@ export function prepareParentStoryBookResponseForDelivery(
     imageDelivery:
       nextStory.providerMeta.imageDelivery ??
       resolveProviderImageDelivery(nextStory),
-    audioDelivery: resolveProviderAudioDelivery(nextStory),
+    audioDelivery: nextStory.providerMeta.textDelivery === "real" && ["maas", "maas-llm"].includes(nextStory.providerMeta.textProvider ?? nextStory.providerMeta.provider)
+      ? nextStory.providerMeta.audioDelivery ?? "mixed" : resolveProviderAudioDelivery(nextStory),
   };
 
   nextStory.cacheMeta = {

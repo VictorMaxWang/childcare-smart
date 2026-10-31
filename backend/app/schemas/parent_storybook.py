@@ -102,6 +102,7 @@ class ParentStoryBookDiagnosticsText(ParentStoryBookModel):
     status_code: int | None = None
     failure_kind: str | None = None
     model: str | None = None
+    request_id: str | None = None
     elapsed_ms: int | None = None
 
 

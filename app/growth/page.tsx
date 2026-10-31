@@ -535,10 +535,10 @@ export default function GrowthPage() {
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge variant="info">{category}</Badge>
                             {payload.needsAttention ? <Badge variant="warning">需关注</Badge> : <Badge variant="success">已记录</Badge>}
-                            <Badge variant="secondary">{record.createdAt}</Badge>
+                            <Badge variant="secondary">{formatRecordTime(record.createdAt)}</Badge>
                           </div>
                           <p className="mt-3 text-sm leading-6 text-slate-700">{description}</p>
-                          <p className="mt-2 text-xs text-slate-500">记录人：{record.createdBy || "未注明"} · 更新：{record.updatedAt || record.createdAt}</p>
+                          <p className="mt-2 text-xs text-slate-500">记录人：{record.createdBy || "未注明"} · 更新：{formatRecordTime(record.updatedAt || record.createdAt)}</p>
                           <GrowthRecordMediaStrip
                             sources={getGrowthMediaSources(payload)}
                             alt={`${parentChild.name} ${category} 成长影像`}
@@ -576,7 +576,7 @@ export default function GrowthPage() {
                   <>
                     <div className="rounded-2xl bg-slate-50 p-4">
                       <p className="text-xs text-slate-500">记录时间</p>
-                      <p className="mt-1 font-semibold text-slate-900">{parentDetailRecord.createdAt}</p>
+                      <p className="mt-1 font-semibold text-slate-900">{formatRecordTime(parentDetailRecord.createdAt)}</p>
                       <p className="mt-2 text-xs text-slate-500">记录人</p>
                       <p className="mt-1 text-slate-700">{parentDetailRecord.createdBy}</p>
                     </div>
@@ -1245,7 +1245,7 @@ export default function GrowthPage() {
                       <div className="min-w-45 rounded-2xl bg-slate-50 p-3 text-xs text-slate-500">
                         <div className="flex items-center gap-2">
                           <Clock3 className="h-3.5 w-3.5" />
-                          <time dateTime={record.createdAt}>{record.createdAt}</time>
+                          <time dateTime={record.createdAt}>{formatRecordTime(record.createdAt)}</time>
                         </div>
                         <p className="mt-2">记录人：{record.recorder}</p>
                         <p className="mt-1">角色：{record.recorderRole}</p>
@@ -1282,7 +1282,7 @@ export default function GrowthPage() {
                         <p className="mt-1 text-xs leading-5 text-slate-500">{record.description}</p>
                       </div>
                       <div className="text-xs text-slate-400">
-                        <p><time dateTime={record.createdAt}>{record.createdAt}</time></p>
+                        <p><time dateTime={record.createdAt}>{formatRecordTime(record.createdAt)}</time></p>
                         <p className="mt-1">{record.recorderRole} · {record.recorder}</p>
                       </div>
                     </div>
@@ -1430,6 +1430,17 @@ function formatShortDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("zh-CN", {
     month: "2-digit",
     day: "2-digit",
+  });
+}
+
+function formatRecordTime(value: string) {
+  // 日期字段保留原业务日期；有时区的写入时间转换为照护业务时区，避免把 UTC 原文直接交给家长。
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return value || "未注明";
+  return timestamp.toLocaleString("zh-CN", {
+    timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
   });
 }
 

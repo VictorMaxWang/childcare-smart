@@ -13,6 +13,7 @@ from typing import Any, Literal
 from urllib.parse import urlparse
 
 from app.core.config import get_settings
+from app.providers.maas import maas_selected
 from app.providers.story_audio_provider import (
     MockStoryAudioProvider,
     build_story_caption_timing,
@@ -252,6 +253,7 @@ def _resolve_storybook_first_byte_snapshot(snapshot: dict[str, Any]) -> dict[str
             "name": _normalize_text(child.get("name")) if isinstance(child, dict) else "",
             "className": _normalize_text(child.get("className")) if isinstance(child, dict) else "",
             "ageBand": _normalize_text(child.get("ageBand")) if isinstance(child, dict) else "",
+            "ageBandContext": child.get("ageBandContext") if isinstance(child, dict) and isinstance(child.get("ageBandContext"), dict) else None,
             "specialNotes": _normalize_text(child.get("specialNotes")) if isinstance(child, dict) else "",
         },
         "summary": {
@@ -2881,6 +2883,32 @@ async def run_parent_storybook(payload: dict[str, Any]) -> dict[str, Any]:
     story_id = f"storybook-{_stable_hash(story_seed)}"
     generated_at = _stable_timestamp(story_seed)
     scene_build_ms = _elapsed_ms(scene_build_started_at)
+
+    if maas_selected(settings) and text_generation.real_provider and text_generation.provider in {"maas", "maas-llm"}:
+        # MaaS媒体由Next的持久化租约统一调度；Brain只交付真实文字，不制造SVG/预览音频充当成品。
+        def pending_media(channel: str) -> dict[str, Any]:
+            return {"requestedProvider": "maas", "resolvedProvider": "maas-z-image" if channel == "image" else "maas-tts",
+                "liveEnabled": True, "missingConfig": [], "jobStatus": "idle", "pendingSceneCount": len(scenes_blueprint),
+                "readySceneCount": 0, "errorSceneCount": 0, "lastErrorStage": None, "lastErrorReason": None, "retryAfterMs": 3000}
+
+        return {"storyId": story_id, "childId": child_id, "mode": ingredients["story_mode"],
+            "title": text_generation.title, "summary": text_generation.summary, "moral": text_generation.moral,
+            "parentNote": text_generation.parent_note, "source": "ai", "fallback": False, "fallbackReason": None,
+            "generatedAt": generated_at, "stylePreset": style_preset,
+            "providerMeta": {"provider": "maas", "mode": "live", "transport": "fastapi-brain", "textProvider": "maas",
+                "textDelivery": "real", "imageProvider": "maas-z-image", "audioProvider": "maas-tts",
+                "imageDelivery": "mixed", "audioDelivery": "mixed", "stylePreset": style_preset,
+                "requestSource": request_source, "fallbackReason": None, "realProvider": True,
+                "highlightCount": len(highlights), "sceneCount": len(scenes_blueprint), "cacheHitCount": 0,
+                "cacheWindowSeconds": PROVIDER_CACHE_WINDOW_SECONDS,
+                "diagnostics": {"brain": {"reachable": True, "fallbackReason": None,
+                    "upstreamHost": urlparse(settings.ai_base_url).hostname, "statusCode": 200, "retryStrategy": "none", "elapsedMs": text_generation.elapsed_ms},
+                    "text": {"requestedProvider": "maas", "resolvedProvider": "maas", "attemptedProviders": ["maas"],
+                        "attemptCount": 1, "fallbackReason": None, "model": text_generation.model, "requestId": text_generation.request_id, "statusCode": 200, "elapsedMs": text_generation.elapsed_ms},
+                    "image": pending_media("image"), "audio": pending_media("audio")}},
+            "scenes": [{**scene, "imageUrl": None, "assetRef": None, "imageStatus": "empty", "imageSourceKind": None,
+                "audioUrl": None, "audioRef": None, "audioStatus": "empty", "imageCacheHit": False, "audioCacheHit": False}
+                for scene in scenes_blueprint]}
 
     fallback_image_provider = MockStoryImageProvider()
     fallback_audio_provider = MockStoryAudioProvider()

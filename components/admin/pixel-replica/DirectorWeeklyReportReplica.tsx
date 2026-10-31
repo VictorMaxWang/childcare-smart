@@ -252,7 +252,7 @@ export default function DirectorWeeklyReportReplica({
           </ReplicaButton>
           <ReplicaButton onClick={onRerun} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            重新生成周报
+            {result ? "更新运营周报" : "生成运营周报"}
           </ReplicaButton>
         </>
       }

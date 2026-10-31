@@ -22,6 +22,7 @@ import { useAdminConsultationWorkspace } from "@/lib/agent/use-admin-consultatio
 import { fetchWeeklyReport } from "@/lib/agent/weekly-report-client";
 import { resolveWeeklyReportScope } from "@/lib/agent/weekly-report-scope";
 import type { WeeklyReportResponse } from "@/lib/ai/types";
+import { CachedAiRequestController } from "@/lib/ai/cached-ai-request";
 import { getAdminSummary } from "@/lib/api/analytics";
 import {
   listFeedback as listApiFeedback,
@@ -100,10 +101,13 @@ export default function AdminHomePage() {
     reloadAppSnapshotFromApi,
   } = useApp();
   const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
-  const [weeklyReport, setWeeklyReport] = useState<WeeklyReportResponse | null>(null);
+  const [storedWeeklyReport, setWeeklyReport] = useState<{ key: string; report: WeeklyReportResponse } | null>(null);
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
   const [weeklyReportError, setWeeklyReportError] = useState<string | null>(null);
   const [weeklyReportRefreshNonce, setWeeklyReportRefreshNonce] = useState(0);
+  const weeklyReportRequests = useRef(new CachedAiRequestController());
+  const [weeklyReportGenerating, setWeeklyReportGenerating] = useState(false);
+  const [weeklyReportRetryUnknown, setWeeklyReportRetryUnknown] = useState(false);
   const [adminSummary, setAdminSummary] = useState<ApiAdminSummary | null>(null);
   const [adminSummaryLoading, setAdminSummaryLoading] = useState(false);
   const [adminSummaryError, setAdminSummaryError] = useState<string | null>(null);
@@ -304,6 +308,20 @@ export default function AdminHomePage() {
       }),
     [conversations, messages, visibleChildren]
   );
+  const weeklyReportPayload = useMemo(
+    () => ({
+      role: "admin" as const,
+      ...(resolveWeeklyReportScope({ role: "admin", institutionId: currentUser.institutionId }) ?? {}),
+      snapshot: buildAdminWeeklyReportSnapshot(adminHomePayload, home.adminContext),
+    }),
+    [adminHomePayload, currentUser.institutionId, home.adminContext]
+  );
+  const weeklyReportKey = useMemo(() => JSON.stringify({
+    owner: { userId: currentUser.id, institutionId: currentUser.institutionId }, payload: weeklyReportPayload,
+  }), [currentUser.id, currentUser.institutionId, weeklyReportPayload]);
+  const weeklyReportKeyRef = useRef(weeklyReportKey);
+  weeklyReportKeyRef.current = weeklyReportKey;
+  const weeklyReport = storedWeeklyReport?.key === weeklyReportKey ? storedWeeklyReport.report : null;
   const governanceDemo = useMemo(
     () =>
       buildAdminGovernanceDemoViewModel({
@@ -333,54 +351,47 @@ export default function AdminHomePage() {
       weeklyReport,
     ]
   );
-  const weeklyReportPayload = useMemo(
-    () => ({
-      role: "admin" as const,
-      ...(resolveWeeklyReportScope({
-        role: "admin",
-        institutionId: currentUser.institutionId,
-      }) ?? {}),
-      snapshot: buildAdminWeeklyReportSnapshot(adminHomePayload, home.adminContext),
-    }),
-    [adminHomePayload, currentUser.institutionId, home.adminContext]
-  );
-  const weeklyReportKey = useMemo(() => JSON.stringify(weeklyReportPayload), [weeklyReportPayload]);
-
   useEffect(() => {
     if (visibleChildren.length === 0) return;
-
-    const cached = weeklyReportRefreshNonce === 0 ? weeklyReportCacheRef.current.get(weeklyReportKey) : undefined;
+    const key = weeklyReportKey;
+    const requests = weeklyReportRequests.current;
+    requests.activate(key);
+    if (requests.isGenerating(key)) return;
+    const payload = (JSON.parse(key) as { payload: typeof weeklyReportPayload }).payload;
+    const cached = weeklyReportCacheRef.current.get(key);
     if (cached) {
-      setWeeklyReport(cached);
+      setWeeklyReport({ key, report: cached });
       setWeeklyReportError(null);
       setWeeklyReportLoading(false);
+      setWeeklyReportGenerating(false);
       return;
     }
 
     let cancelled = false;
-    const controller = new AbortController();
 
     async function loadWeeklyReportPreview() {
+      setWeeklyReport(null);
       setWeeklyReportLoading(true);
+      setWeeklyReportGenerating(false);
       setWeeklyReportError(null);
+      setWeeklyReportRetryUnknown(false);
 
       try {
-        const data = await fetchWeeklyReport(weeklyReportPayload, {
-          signal: controller.signal,
-        });
-
-        if (!cancelled) {
-          weeklyReportCacheRef.current.set(weeklyReportKey, data);
-          setWeeklyReport(data);
+        // 数据刷新和反馈更新只读缓存；生成单独由按钮处理器发起。
+        const outcome = await requests.readCached(key, (options) => fetchWeeklyReport(payload, options));
+        if (!cancelled && outcome.status === "ready") {
+          weeklyReportCacheRef.current.set(key, outcome.value);
+          setWeeklyReport({ key, report: outcome.value });
         }
       } catch (requestError) {
-        if (!cancelled && !controller.signal.aborted) {
+        if (!cancelled) {
+          setWeeklyReportRetryUnknown((requestError as { code?: string })?.code === "generation_result_unknown");
           setWeeklyReportError(
             requestError instanceof Error ? requestError.message : "园长周报预览暂时不可用"
           );
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && !requests.isGenerating(key)) {
           setWeeklyReportLoading(false);
         }
       }
@@ -390,9 +401,34 @@ export default function AdminHomePage() {
 
     return () => {
       cancelled = true;
-      controller.abort();
+      requests.cancelCacheRead(key);
     };
-  }, [visibleChildren.length, weeklyReportKey, weeklyReportPayload, weeklyReportRefreshNonce]);
+  }, [visibleChildren.length, weeklyReportKey, weeklyReportRefreshNonce]);
+
+  async function generateWeeklyReport() {
+    const key = weeklyReportKey;
+    if (weeklyReportRequests.current.isGenerating(key)) return;
+    if (weeklyReportRetryUnknown && !window.confirm("上次生成结果无法确认，再次生成可能重复计费。确认重新生成吗？")) return;
+    setWeeklyReportLoading(true);
+    setWeeklyReportGenerating(true);
+    setWeeklyReportError(null);
+    try {
+      const outcome = await weeklyReportRequests.current.generate(key, (options) => fetchWeeklyReport(weeklyReportPayload, options), weeklyReportRetryUnknown);
+      if (outcome.status !== "ready") return;
+      weeklyReportCacheRef.current.set(key, outcome.value);
+      setWeeklyReport({ key, report: outcome.value });
+      setWeeklyReportRetryUnknown(false);
+    } catch (error) {
+      if (weeklyReportKeyRef.current !== key) return;
+      setWeeklyReportRetryUnknown((error as { code?: string })?.code === "generation_result_unknown");
+      setWeeklyReportError(error instanceof Error ? error.message : "周报生成失败，请稍后重试。");
+    } finally {
+      if (weeklyReportKeyRef.current === key) {
+        setWeeklyReportLoading(false);
+        setWeeklyReportGenerating(false);
+      }
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -457,10 +493,12 @@ export default function AdminHomePage() {
     setFeedbackDetailOpen(true);
   }
 
-  function handleRefreshDashboard() {
+  async function handleRefreshDashboard() {
+    const result = await reloadAppSnapshotFromApi();
     weeklyReportCacheRef.current.delete(weeklyReportKey);
     setWeeklyReportRefreshNonce((value) => value + 1);
-    toast.info("正在刷新园长看板数据");
+    if (result.status === "failed") toast.error("看板数据刷新失败，请稍后重试。");
+    else toast.info("看板数据已刷新，周报只读取已有结果。");
   }
 
   async function handleMarkCommunicationHandled(conversationId: string) {
@@ -500,6 +538,8 @@ export default function AdminHomePage() {
         todayText={TODAY_TEXT}
         weeklyReport={weeklyReport}
         weeklyReportLoading={weeklyReportLoading}
+        weeklyReportGenerating={weeklyReportGenerating}
+        weeklyReportRetryUnknown={weeklyReportRetryUnknown}
         weeklyReportError={weeklyReportError}
         weeklyReportPeriodLabel={weeklyReportPayload.snapshot.periodLabel}
         adminSummary={adminSummary}
@@ -512,13 +552,14 @@ export default function AdminHomePage() {
         onMarkCommunicationHandled={handleMarkCommunicationHandled}
         onOpenFeedbackDetail={handleOpenFeedbackDetail}
         onRefresh={handleRefreshDashboard}
+        onGenerateWeeklyReport={() => void generateWeeklyReport()}
       />
       <FeedbackDetailDialog
         feedbackId={feedbackDetailId}
         open={feedbackDetailOpen}
         canUpdateStatus
         onOpenChange={setFeedbackDetailOpen}
-        onUpdated={() => setWeeklyReportRefreshNonce((value) => value + 1)}
+        onUpdated={() => { weeklyReportCacheRef.current.delete(weeklyReportKey); setWeeklyReportRefreshNonce((value) => value + 1); }}
       />
       <section id="admin-risk-priority-detail" className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
         <div className="rounded-lg border border-amber-100 bg-white p-4 shadow-sm">

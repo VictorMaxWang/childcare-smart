@@ -54,4 +54,6 @@ node scripts/core-journey-real-matrix.mjs --execute --stage=ai --ai --ai-budget-
 
 首轮发现测试脚本误把反馈创建的 `ApiFeedbackDetail` 当作裸反馈，已按原有 `data.feedback` 与 `data.child` 契约修正，随后复测通过，未降低权限或持久化断言。根代理随后在本地实际生成一次建议，返回 `source:ai`、`maas-llm` 与GLM模型身份，约10.1秒；缓存读取确实hit，但旧脚本用JSON序列化字节比较被MySQL键重排误判，现已修正为语义哈希，未追溯改写原日志或自动重发收费请求。上述原始报告保留在artifacts，后续AI覆盖以实际执行报告为准。
 
-此脚本尚未向生产站点提交请求；不能将本地通过当作正式网站全量验收通过。真实Chrome交互、390px/768px布局、容器重启和实际模型账单由根代理另行验收。
+根代理随后授权在旧生产 `https://www.smartchildcare.cn` 的既有合成空间执行零AI四阶段。使用新独立 `prod-core-before.private.json` 后，20项全部通过、0失败、0阻塞、0收费请求；签名合法的过期Cookie在session与记录读取均返回401。未使用浏览器或SSH，也未删除数据。
+
+旧生产填充后基线固定使用同一 `parentA1 / children[0]`：5并发×6批×3个GET，共90次计时读取，另3次预热。`/api/state` p95为780.64ms，`/api/children` p95为314.31ms，成长记录读取p95为398.59ms，90次均为200。报告为 `artifacts/implementation-20261031/performance-before-filled.json`，同目录 `performance-before-filled-context.json` 记录具体合成儿童及记录ID，以便部署后复用同一数据集；测after前不得另起空夹具或重跑写入。该基线属于旧生产，不能当作候选发布性能或正式网站全量验收通过。真实Chrome交互、390px/768px布局、容器重启和实际模型账单由根代理另行验收。

@@ -7,6 +7,7 @@ import type { ParentStoryBookMediaStatusRequest, ParentStoryBookResponse, Parent
 import { MaasProviderError, requestMaasImage, requestMaasTts, resolveMaasConfig } from "@/lib/providers/maas/maas-provider";
 import { buildParentStoryBookPersistentMediaKey, persistParentStoryBookMedia, readParentStoryBookMedia } from "@/lib/server/parent-storybook-media-store";
 import { getStorybookMediaTaskStore, type StorybookMediaTaskIdentity } from "@/lib/server/storybook-media-task-store";
+import { buildAiProviderTraceFromProviderMeta } from "@/lib/ai/provider-trace";
 
 type Channel = "image" | "audio";
 const mediaPath = (key: string) => `/api/ai/parent-storybook/media/${key}`;
@@ -88,6 +89,48 @@ type Dependencies = {
   download: typeof downloadMaasStoryMedia;
 };
 
+/** 将已经真实生成的MaaS文字交接给媒体队列；pending不等于文字失败，更不等于媒体已生成。 */
+export function prepareMaasStoryForMedia(input: ParentStoryBookResponse): ParentStoryBookResponse {
+  const meta = input.providerMeta;
+  const provider = meta.textProvider ?? meta.provider;
+  const textFailure = meta.diagnostics?.text?.fallbackReason;
+  const mediaOnlyReasons = new Set(["partial-media-fallback", "mock-storybook-pipeline"]);
+  if (meta.textDelivery !== "real" || !meta.realProvider || !["maas", "maas-llm"].includes(provider) || textFailure ||
+      (input.fallbackReason && !mediaOnlyReasons.has(input.fallbackReason)) || (meta.fallbackReason && !mediaOnlyReasons.has(meta.fallbackReason))) return input;
+  const story = structuredClone(input);
+  const privateMedia = (value: string | null | undefined) => /^\/api\/ai\/parent-storybook\/media\/[a-f0-9]{40}$/u.test(value ?? "");
+  for (const scene of story.scenes) {
+    const imageReady = scene.imageStatus === "ready" && (!scene.imageSourceKind || scene.imageSourceKind === "real") && privateMedia(scene.imageUrl) && !/mock|fallback|preview/iu.test(scene.imageProvider ?? "");
+    const audioReady = scene.audioStatus === "ready" && privateMedia(scene.audioUrl) && !/mock|preview|browser/iu.test(scene.audioProvider ?? "");
+    if (!imageReady) Object.assign(scene, { imageUrl: null, assetRef: null, imageStatus: "empty", imageSourceKind: undefined,
+      imageProvider: "maas-z-image", imageCacheHit: false, imageStorageObject: undefined });
+    if (!audioReady) Object.assign(scene, { audioUrl: null, audioRef: null, audioStatus: "empty", audioProvider: "maas-tts",
+      audioCacheHit: false, audioStorageObject: undefined });
+  }
+  const channel = (name: Channel) => {
+    const original = meta.diagnostics?.[name];
+    const previous = original && /^maas/iu.test(original.resolvedProvider) ? original : undefined;
+    const ready = story.scenes.filter(scene => (name === "image" ? scene.imageStatus : scene.audioStatus) === "ready").length;
+    return { ...previous, requestedProvider: "maas", resolvedProvider: name === "image" ? "maas-z-image" : "maas-tts",
+      liveEnabled: true, missingConfig: [], readySceneCount: ready, pendingSceneCount: story.scenes.length - ready,
+      jobStatus: ready === story.scenes.length ? "ready" as const : previous?.jobStatus === "error" ? "error" as const : "idle" as const,
+      lastErrorReason: previous?.lastErrorReason ?? null, retryAfterMs: previous?.jobStatus === "error" ? null : 3000 };
+  };
+  const image = channel("image"), audio = channel("audio");
+  story.source = "ai";
+  story.fallback = false;
+  story.fallbackReason = null;
+  story.provider = "maas";
+  story.providerMeta = { ...meta, provider: "maas", textProvider: "maas", mode: "live", realProvider: true, fallbackReason: null,
+    imageProvider: [...new Set(story.scenes.map(scene => scene.imageProvider || "maas-z-image"))].join("+"),
+    audioProvider: [...new Set(story.scenes.map(scene => scene.audioProvider || "maas-tts"))].join("+"), imageDelivery: image.jobStatus === "ready" ? "real" : "mixed",
+    audioDelivery: audio.jobStatus === "ready" ? "real" : "mixed",
+    diagnostics: { ...meta.diagnostics, brain: meta.diagnostics?.brain ?? { reachable: true, fallbackReason: null, upstreamHost: null }, image, audio } };
+  story.providerTrace = buildAiProviderTraceFromProviderMeta({ providerMeta: story.providerMeta, source: story.source,
+    fallback: false, fallbackReason: null, capability: "llm" });
+  return story;
+}
+
 /**
  * 普通账号只交付持久化后的私有媒体。数据库租约负责幂等，稳定 key 找回已保存但未记账的结果。
  * 每次轮询最多补一张图片和一页语音，当前页优先；结果未知的请求不会被刷新或重启自动重发。
@@ -105,7 +148,7 @@ export async function completeMaasStoryMedia(input: {
     ...overrides,
   };
   const config = resolveMaasConfig();
-  const story = structuredClone(input.payload.story);
+  const story = prepareMaasStoryForMedia(structuredClone(input.payload.story));
   if (story.childId !== input.payload.childId || story.storyId !== input.payload.storyId ||
       new Set(story.scenes.map(scene => scene.sceneIndex)).size !== story.scenes.length) {
     throw new ApiRouteError("invalid_request", "绘本与儿童范围或页码不一致。");
@@ -141,7 +184,10 @@ export async function completeMaasStoryMedia(input: {
       const existingKey = existingUrl?.match(/^\/api\/ai\/parent-storybook\/media\/([a-f0-9]{40})$/u)?.[1];
       if (existingKey && existingStatus === "ready") {
         const existing = await dependencies.read({ institutionId: input.institutionId, mediaKey: existingKey, authorizedChildIds: new Set([input.payload.childId]), ...operation });
-        if (existing && existing.ownerChildId === input.payload.childId && existing.ownerStorybookId === story.storyId && existing.storageMode !== "cached_media") continue;
+        if (existing && existing.ownerChildId === input.payload.childId && existing.ownerStorybookId === story.storyId && existing.storageMode !== "cached_media") {
+          if (channel === "image" && !scene.imageSourceKind) scene.imageSourceKind = "real";
+          continue;
+        }
       }
       if (channel === "image") Object.assign(scene, { imageUrl: null, assetRef: null, imageStatus: "empty", imageProvider: provider });
       else Object.assign(scene, { audioUrl: null, audioRef: null, audioStatus: "empty", audioProvider: provider });

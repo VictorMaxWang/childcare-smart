@@ -97,9 +97,8 @@ async function extractPdfText(bytes: Uint8Array) {
     data: new Uint8Array(bytes),
     useSystemFonts: true,
   });
-  const document = await loadingTask.promise;
-
   try {
+    const document = await loadingTask.promise;
     if (document.numPages > MAX_PDF_PAGES) {
       throw new ApiRouteError(
         "invalid_request",
@@ -120,7 +119,9 @@ async function extractPdfText(bytes: Uint8Array) {
     }
     return pageTexts.join("\n\n").slice(0, HEALTH_FILE_MAX_TEXT_LENGTH);
   } finally {
-    await document.destroy();
+    // PDF.js 6 将完整释放入口收敛到 loadingTask；5.x 也支持此接口。
+    // 在加载失败时也释放 worker/transport，避免重复上传累积资源。
+    await loadingTask.destroy();
   }
 }
 

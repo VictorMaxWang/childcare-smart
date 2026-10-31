@@ -66,6 +66,7 @@ import { fetchWeeklyReport } from "@/lib/agent/weekly-report-client";
 import { resolveWeeklyReportScope } from "@/lib/agent/weekly-report-scope";
 import { buildFallbackSuggestion } from "@/lib/ai/fallback";
 import type { AiSuggestionResponse, WeeklyReportResponse } from "@/lib/ai/types";
+import { feedbackBusinessDate, isFeedbackOnDate } from "@/lib/feedback/date";
 import { useCareMode } from "@/lib/care-mode";
 import { formatClockTime, getLocalToday } from "@/lib/date";
 import { formatMealFoodSummary } from "@/lib/meals/display";
@@ -311,13 +312,14 @@ export default function ParentHomePage() {
         const data = (await response.json()) as AiSuggestionResponse;
         if (!cancelled) {
           setPreviewStateKey(suggestionKey);
-          setPreviewResult(buildParentAgentSuggestionResult({ context, suggestion: data }));
+          const mapped = buildParentAgentSuggestionResult({ context, suggestion: data });
+          setPreviewResult(mapped);
           const trace = data as AiSuggestionResponse & {
             fallback?: boolean;
             source?: string;
           };
           setPreviewProvenance(
-            trace.fallback || trace.source === "fallback" ? "local-rule" : "ai"
+            trace.fallback || mapped.source !== "ai" ? "local-rule" : "ai"
           );
         }
       } catch (error) {
@@ -469,6 +471,7 @@ export default function ParentHomePage() {
     previewResult?.tonightTopAction ??
     viewModel.tonightTask.description;
   const displayWhyRecommended =
+    (previewProvenance === "ai" ? sanitizeParentFacingText(previewResult?.whyNow) : "") ||
     sanitizeParentFacingText(latestConsultation?.summary) ||
     sanitizeParentFacingText(previewResult?.whyNow) ||
     "系统综合最近 7 天观察、园内风险和家庭反馈，优先给出今晚最值得执行的一件事。";
@@ -748,7 +751,7 @@ export default function ParentHomePage() {
       ...healthCheckRecords.filter((record) => record.childId === feed.child.id).map((record) => parentDateKey(record.date)),
       ...mealRecords.filter((record) => record.childId === feed.child.id).map((record) => parentDateKey(record.date)),
       ...growthRecords.filter((record) => record.childId === feed.child.id).map((record) => parentDateKey(record.createdAt)),
-      ...guardianFeedbacks.filter((record) => record.childId === feed.child.id).map((record) => parentDateKey(record.date)),
+      ...guardianFeedbacks.filter((record) => record.childId === feed.child.id).map(feedbackBusinessDate),
     ]
       .filter(Boolean)
       .sort()
@@ -762,7 +765,7 @@ export default function ParentHomePage() {
       health: average(dayHealth.map((record) => record.temperature)),
       diet: average(dayMeals.map((record) => record.nutritionScore)),
       growth: growthRecords.filter((record) => record.childId === feed.child.id && parentDateKey(record.createdAt) === date).length,
-      feedback: guardianFeedbacks.filter((record) => record.childId === feed.child.id && parentDateKey(record.date) === date).length,
+      feedback: guardianFeedbacks.filter((record) => record.childId === feed.child.id && isFeedbackOnDate(record, date)).length,
       reminders: reminders.filter(
         (record) =>
           (record.childId === feed.child.id || record.targetId === feed.child.id) &&
@@ -1039,7 +1042,7 @@ export default function ParentHomePage() {
     const growthCount = growthRecords.filter(
       (record) => record.childId === feed.child.id && record.createdAt.slice(0, 10) === date
     ).length;
-    const feedbackCount = guardianFeedbacks.filter((record) => record.childId === feed.child.id && record.date === date).length;
+    const feedbackCount = guardianFeedbacks.filter((record) => record.childId === feed.child.id && isFeedbackOnDate(record, date)).length;
     const reminderCount = childScopedReminders.filter((record) => record.scheduledAt.slice(0, 10) === date).length;
 
     return {

@@ -21,6 +21,7 @@ import type {
 } from "@/lib/store";
 import { getAgeBandFromBirthDate } from "@/lib/store";
 import { getLocalToday, isDateWithinLastDays } from "@/lib/date";
+import { isFeedbackOnDate } from "@/lib/feedback/date";
 import { getHydrationDisplayState } from "@/lib/hydration-display";
 
 export type ParentHomeViewModel = {
@@ -236,7 +237,7 @@ export function buildTeacherHomeViewModel(params: {
       const abnormalRecord = todayAbnormalChildren.find((item) => item.child.id === child.id);
       const pendingReview = pendingReviews.find((item) => item.child.id === child.id);
       const hasFeedbackToday = params.guardianFeedbacks.some(
-        (item) => item.childId === child.id && item.date === today
+        (item) => item.childId === child.id && isFeedbackOnDate(item)
       );
 
       if (abnormalRecord) {
@@ -342,7 +343,7 @@ export function buildAdminHomeViewModel(params: {
     params.guardianFeedbacks
       .filter(
         (record) =>
-          record.date === today && childMap.has(record.childId) && parentLinkedChildIds.has(record.childId)
+          isFeedbackOnDate(record) && childMap.has(record.childId) && parentLinkedChildIds.has(record.childId)
       )
       .map((record) => record.childId)
   );

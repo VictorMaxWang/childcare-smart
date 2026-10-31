@@ -61,6 +61,7 @@ import {
   type TeacherAgentWorkflowType,
 } from "@/lib/agent/teacher-agent";
 import { fetchWeeklyReport } from "@/lib/agent/weekly-report-client";
+import { CachedAiRequestController } from "@/lib/ai/cached-ai-request";
 import { resolveWeeklyReportScope } from "@/lib/agent/weekly-report-scope";
 import type { MobileDraft, ReminderItem, WeeklyReportResponse } from "@/lib/ai/types";
 import { buildTeacherVoiceUnderstandFallback } from "@/lib/ai/teacher-voice-understand";
@@ -274,13 +275,13 @@ export default function TeacherAgentPage() {
   const isLoading = pendingWorkflow !== null;
   const showAiDiagnosticStatus =
     process.env.NODE_ENV === "development" || currentUser.accountKind === "demo";
-  const preloadHandledRef = useRef<string | null>(null);
   const queryChildHandledRef = useRef<string | null>(null);
   const queryDraftHandledRef = useRef<string | null>(null);
   const sourceDraftChildHandledRef = useRef<string | null>(null);
   const manualSelectedChildRef = useRef(false);
   const childSelectionOpenRef = useRef(false);
   const weeklyReportCacheRef = useRef<Map<string, WeeklyReportResponse>>(new Map());
+  const weeklyReportRequests = useRef(new CachedAiRequestController());
   const [selectedSourceDraftId, setSelectedSourceDraftId] = useState<string | null>(
     null
   );
@@ -384,7 +385,7 @@ export default function TeacherAgentPage() {
     () => (scope === "class" ? latestClassResult : latestChildResult),
     [latestChildResult, latestClassResult, scope]
   );
-  const [weeklyReport, setWeeklyReport] = useState<WeeklyReportResponse | null>(null);
+  const [weeklyReportState, setWeeklyReportState] = useState<{ key: string; report: WeeklyReportResponse } | null>(null);
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
   const [weeklyReportError, setWeeklyReportError] = useState<string | null>(null);
   const weeklyReportPayload = useMemo(
@@ -400,9 +401,10 @@ export default function TeacherAgentPage() {
     [classContext, currentUser.className, defaultChildId]
   );
   const weeklyReportKey = useMemo(
-    () => JSON.stringify(weeklyReportPayload),
-    [weeklyReportPayload]
+    () => JSON.stringify({ owner: `${currentUser.institutionId}:${currentUser.id}:${currentUser.authzVersion ?? 0}`, payload: weeklyReportPayload }),
+    [currentUser.institutionId, currentUser.id, currentUser.authzVersion, weeklyReportPayload]
   );
+  const weeklyReport = weeklyReportState?.key === weeklyReportKey ? weeklyReportState.report : null;
   const teacherRoleDrafts = useMemo(
     () => mobileDrafts.filter((draft) => draft.targetRole === "teacher"),
     [mobileDrafts]
@@ -1095,19 +1097,11 @@ export default function TeacherAgentPage() {
   }, [assistantQuestion, childIdFromAssistantPrompt, isLoading, runWorkflow, workflowFromAssistantPrompt]);
 
   useEffect(() => {
-    if (!isWorkflow(effectivePreloadAction) || visibleChildren.length === 0) return;
-    if (preloadHandledRef.current === effectivePreloadAction) return;
-
-    preloadHandledRef.current = effectivePreloadAction;
-    void runWorkflow(effectivePreloadAction);
-  }, [effectivePreloadAction, runWorkflow, visibleChildren.length]);
-
-  useEffect(() => {
     if (visibleChildren.length === 0) return;
 
     const cached = weeklyReportCacheRef.current.get(weeklyReportKey);
     if (cached) {
-      setWeeklyReport(cached);
+      setWeeklyReportState({ key: weeklyReportKey, report: cached });
       setWeeklyReportError(null);
       setWeeklyReportLoading(false);
       return;
@@ -1121,13 +1115,14 @@ export default function TeacherAgentPage() {
       setWeeklyReportError(null);
 
       try {
-        const data = await fetchWeeklyReport(weeklyReportPayload, {
-          signal: controller.signal,
-        });
+        // 进入、刷新及记录变化只读缓存；带 action 的链接也不应因重载重复收费。
+        const outcome = await weeklyReportRequests.current.readCached(weeklyReportKey,
+          options => fetchWeeklyReport(weeklyReportPayload, options));
 
-        if (!cancelled) {
+        if (!cancelled && outcome.status === "ready") {
+          const data = outcome.value;
           weeklyReportCacheRef.current.set(weeklyReportKey, data);
-          setWeeklyReport(data);
+          setWeeklyReportState({ key: weeklyReportKey, report: data });
         }
       } catch (requestError) {
         if (!cancelled && !controller.signal.aborted) {
@@ -1149,6 +1144,22 @@ export default function TeacherAgentPage() {
       controller.abort();
     };
   }, [visibleChildren.length, weeklyReportKey, weeklyReportPayload]);
+
+  async function generateWeeklyReportPreview() {
+    if (weeklyReportRequests.current.isGenerating(weeklyReportKey)) return;
+    setWeeklyReportLoading(true);
+    setWeeklyReportError(null);
+    try {
+      const outcome = await weeklyReportRequests.current.generate(weeklyReportKey,
+        options => fetchWeeklyReport(weeklyReportPayload, options));
+      if (outcome.status === "ready") {
+        weeklyReportCacheRef.current.set(weeklyReportKey, outcome.value);
+        setWeeklyReportState({ key: weeklyReportKey, report: outcome.value });
+      }
+    } catch (error) {
+      setWeeklyReportError(error instanceof Error ? error.message : "教师周报生成失败。");
+    } finally { setWeeklyReportLoading(false); }
+  }
 
   const refreshE04CommunicationData = useCallback(async () => {
     try {
@@ -1456,6 +1467,12 @@ export default function TeacherAgentPage() {
       headerVariant="hidden"
       className="max-w-[86rem]"
     >
+      {isWorkflow(effectivePreloadAction) ? (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+          <p className="text-sm text-slate-600">已选中工作流，点击后生成；刷新页面不会重复调用。</p>
+          <Button disabled={isLoading} onClick={() => void runWorkflow(effectivePreloadAction)}>{ACTION_LABELS[effectivePreloadAction]}</Button>
+        </div>
+      ) : null}
       <RoleSplitLayout
         stacked
         main={
@@ -2575,6 +2592,9 @@ export default function TeacherAgentPage() {
               </div>
             </AgentWorkspaceCard>
 
+            <Button data-testid="teacher-generate-weekly-report" disabled={weeklyReportLoading} onClick={() => void generateWeeklyReportPreview()}>
+              {weeklyReportLoading ? "正在处理周报…" : weeklyReport ? "更新教师周报" : "生成教师周报"}
+            </Button>
             <WeeklyReportPreviewCard
               title="本周班级周报预览"
               description="先看本周异常、补录项和下周重点观察，再决定是否继续进入教师周报工作流。"

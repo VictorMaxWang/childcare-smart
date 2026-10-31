@@ -12,6 +12,7 @@ import {
 import type { ConsultationResult, MobileDraft, MobileDraftSyncStatus, ReminderItem } from "@/lib/ai/types";
 import { normalizeGuardianFeedbackCollection } from "@/lib/feedback/normalize";
 import { upsertGuardianFeedbackWriteback } from "@/lib/feedback/writeback";
+import { feedbackBusinessDate, getFeedbackBusinessToday, isFeedbackOnDate } from "@/lib/feedback/date";
 import type {
   GuardianFeedback as SharedGuardianFeedback,
   GuardianFeedbackInput,
@@ -2215,7 +2216,7 @@ function getLatestSnapshotDate(snapshot: AppStateSnapshot): string | null {
     ...snapshot.meals.map((record) => normalizeLocalDate(record.date)),
     ...snapshot.health.map((record) => normalizeLocalDate(record.date)),
     ...snapshot.growth.map((record) => normalizeLocalDate(record.createdAt)),
-    ...snapshot.feedback.map((record) => normalizeLocalDate(record.date)),
+    ...snapshot.feedback.map(feedbackBusinessDate),
     ...snapshot.taskCheckIns.map((record) => normalizeLocalDate(record.date)),
   ].filter((value): value is string => Boolean(value));
 
@@ -5397,18 +5398,19 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     () => groupRecordsByChildId(growthRecords.filter((record) => isInLastDays(record.createdAt, 7))),
     [growthRecords]
   );
+  const feedbackToday = getFeedbackBusinessToday();
   const todayFeedbackMap = useMemo(
-    () => groupRecordsByChildId(guardianFeedbacks.filter((feedback) => normalizeLocalDate(feedback.date) === TODAY)),
-    [guardianFeedbacks]
+    () => groupRecordsByChildId(guardianFeedbacks.filter((feedback) => isFeedbackOnDate(feedback, feedbackToday))),
+    [guardianFeedbacks, feedbackToday]
   );
   const weeklyFeedbackMap = useMemo(
     () =>
       groupRecordsByChildId(
         guardianFeedbacks
-          .filter((feedback) => isInLastDays(feedback.date, 7))
+          .filter((feedback) => isDateWithinLastDays(feedbackBusinessDate(feedback), 7, feedbackToday))
           .sort((left, right) => right.date.localeCompare(left.date))
       ),
-    [guardianFeedbacks]
+    [guardianFeedbacks, feedbackToday]
   );
   const todayHealthCheckMap = useMemo(
     () => new Map(healthCheckRecords.filter((record) => record.date === TODAY).map((record) => [record.childId, record] as const)),

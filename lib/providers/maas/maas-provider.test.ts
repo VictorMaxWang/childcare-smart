@@ -18,6 +18,21 @@ test("MaaS chat uses final content without Qwen thinking-disable fields", async 
   assert.equal(result.text, '{"ok":true}'); assert.equal(body.enable_thinking, undefined); assert.equal(body.reasoning_effort, "low"); assert.equal(result.requestId, "req-1");
 }));
 
+test("verified Qwen Flash uses direct answers while other models keep their own protocol", async () => configured(async () => {
+  for (const model of ["qwen3.8-flash", "ZHIPU/GLM-5.3-Flash", "unverified-model"]) {
+    let body: Record<string, unknown> = {};
+    globalThis.fetch = (async (_url, init) => {
+      body = JSON.parse(String(init?.body));
+      return Response.json({ model, choices: [{ finish_reason: "stop", message: { content: '{"ok":true}', reasoning_content: "not user content" } }] });
+    }) as typeof fetch;
+    const result = await requestMaasChat({ model, messages: [{ role: "user", content: "JSON" }], json: true });
+    assert.equal(result.model, model);
+    assert.equal(result.text, '{"ok":true}');
+    assert.equal(body.enable_thinking, model === "qwen3.8-flash" ? false : undefined);
+    assert.equal(body.reasoning_effort, model.includes("GLM") ? "low" : undefined);
+  }
+}));
+
 test("opt-in usage audit keeps billed invalid responses and excludes private fields", async () => configured(async () => {
   const originalInfo = console.info; const lines: string[] = [];
   console.info = (...values: unknown[]) => { lines.push(values.join(" ")); };
@@ -57,6 +72,87 @@ test("MaaS errors do not disclose the key or upstream input", async () => config
       assert(error instanceof MaasProviderError); assert(!error.message.includes("test-only-key")); assert(!error.message.includes("private child")); assert.equal(error.httpStatus, status); return true;
     });
   }
+}));
+
+test("MaaS gateway HTTP 400 preserves a whitelisted Zhipu authentication code without exposing its message", async () => configured(async () => {
+  for (const code of ["1004", 1004, "1000", "1001", "1003", "1005", "1220", "InvalidApiKey"]) {
+    let calls = 0;
+    globalThis.fetch = (async () => { calls++; return Response.json({ error: { code, message: "AuthenticationToken private-child test-only-key https://private.example/secret" } }, { status: 400 }); }) as typeof fetch;
+    await assert.rejects(requestMaasChat({ messages: [{ role: "user", content: "private-child" }] }), (error: unknown) => {
+      assert(error instanceof MaasProviderError); assert.equal(error.failureKind, "authentication"); assert.equal(error.httpStatus, 400); assert.equal(error.upstreamCode, String(code));
+      assert.doesNotMatch(`${error.message} ${JSON.stringify(error)}`, /AuthenticationToken|private-child|test-only-key|https:|secret/); return true;
+    });
+    assert.equal(calls, 1, "classification must never retry the paid request");
+  }
+}));
+
+test("MaaS parameter and rate codes remain distinct from authentication even under gateway status 400", async () => configured(async () => {
+  for (const [code, expected] of [["1210", "provider-response"], ["1211", "provider-response"], ["1261", "provider-response"], ["1301", "provider-response"], ["1113", "rate-limited"], ["1302", "rate-limited"], ["1305", "rate-limited"]]) {
+    globalThis.fetch = (async () => Response.json({ code, message: "private upstream message" }, { status: 400 })) as typeof fetch;
+    await assert.rejects(requestMaasChat({ messages: [] }), (error: unknown) => {
+      assert(error instanceof MaasProviderError); assert.equal(error.httpStatus, 400); assert.equal(error.failureKind, expected); assert.equal(error.upstreamCode, code); return true;
+    });
+  }
+}));
+
+test("MaaS ignores arbitrary code values and never infers authentication from free text", async () => configured(async () => {
+  for (const code of ["private-child-key", "https://private.example/key", "1004 ", "__proto__", 1004.5, { code: "1004" }, ["1004"]]) {
+    globalThis.fetch = (async () => Response.json({ error: { code, message: "AuthenticationToken failed, mentioned code 1004" }, input: "private-child" }, { status: 400 })) as typeof fetch;
+    await assert.rejects(requestMaasChat({ messages: [] }), (error: unknown) => {
+      assert(error instanceof MaasProviderError); assert.equal(error.failureKind, "provider-response"); assert.equal(error.upstreamCode, undefined); assert.equal(error.httpStatus, 400);
+      assert.doesNotMatch(JSON.stringify(error), /private-child|private\.example|AuthenticationToken/); return true;
+    });
+  }
+  // 运行时JS也不能绕过类型检查把未审核的code保留在异常对象中。
+  const direct = new MaasProviderError("safe message", "provider-response", 400, "private-child-key" as "1004");
+  assert.equal(direct.upstreamCode, undefined);
+}));
+
+test("MaaS keeps authoritative HTTP authentication and rate status with malformed error bodies", async () => configured(async () => {
+  for (const [status, kind] of [[401, "authentication"], [403, "authentication"], [429, "rate-limited"], [500, "provider-response"]] as const) {
+    globalThis.fetch = (async () => new Response("private non-JSON failure body", { status })) as typeof fetch;
+    await assert.rejects(requestMaasChat({ messages: [] }), (error: unknown) => {
+      assert(error instanceof MaasProviderError); assert.equal(error.failureKind, kind); assert.equal(error.httpStatus, status); assert.equal(error.upstreamCode, undefined); assert.doesNotMatch(error.message, /private/); return true;
+    });
+  }
+}));
+
+test("MaaS also classifies structured failed business results under HTTP 200", async () => configured(async () => {
+  globalThis.fetch = (async () => Response.json({ error: { code: "1004", message: "private authentication token" } })) as typeof fetch;
+  await assert.rejects(requestMaasChat({ messages: [] }), (error: unknown) => error instanceof MaasProviderError && error.httpStatus === 200 && error.failureKind === "authentication" && error.upstreamCode === "1004");
+  globalThis.fetch = (async () => Response.json({ code: "1210", message: "private parameter name" })) as typeof fetch;
+  await assert.rejects(requestMaasChat({ messages: [] }), (error: unknown) => error instanceof MaasProviderError && error.httpStatus === 200 && error.failureKind === "provider-response" && error.upstreamCode === "1210");
+}));
+
+test("failed MaaS responses still audit billed numeric usage and only a safe diagnostic code", async () => configured(async () => {
+  const previousInfo = console.info, lines: string[] = [];
+  console.info = (...values: unknown[]) => { lines.push(values.join(" ")); };
+  try {
+    process.env.AI_USAGE_AUDIT = "1";
+    globalThis.fetch = (async () => Response.json({ id: "private-child test-only-key https://private.example", error: { code: "1004", message: "private-child test-only-key", usage: { prompt_tokens: 10, completion_tokens: 20, completion_tokens_details: { reasoning_tokens: 3, text: "private-child" } } }, usage: { input_tokens: 15, output_tokens: 25, total_tokens: 40, text: "private prompt", duration: -1, untrustedCode: "private-child" }, input: "private prompt" }, { status: 400, headers: { "x-request-id": "test-only-key https://private.example" } })) as typeof fetch;
+    await assert.rejects(requestMaasChat({ messages: [{ role: "user", content: "private prompt" }] }), MaasProviderError);
+    assert.equal(lines.length, 1);
+    const record = JSON.parse(lines[0].slice("ai.usage ".length));
+    assert.equal(record.httpStatus, 400); assert.equal(record.upstreamCode, "1004"); assert.equal(record.requestId, null);
+    assert.deepEqual(record.usage, { prompt_tokens: 10, completion_tokens: 20, completion_tokens_details: { reasoning_tokens: 3 }, input_tokens: 15, output_tokens: 25, total_tokens: 40 });
+    assert.doesNotMatch(lines[0], /private|test-only-key|https:|gateway\.example/);
+    process.env.AI_USAGE_AUDIT = "0";
+    await assert.rejects(requestMaasChat({ messages: [] }), MaasProviderError); assert.equal(lines.length, 1);
+  } finally { console.info = previousInfo; }
+}));
+
+test("failed image audit does not invent a generated image when usage is absent", async () => configured(async () => {
+  const previousInfo = console.info, records: Array<Record<string, unknown>> = [];
+  console.info = (_event: unknown, data: unknown) => { records.push(JSON.parse(String(data))); };
+  try {
+    process.env.AI_USAGE_AUDIT = "1";
+    globalThis.fetch = (async () => Response.json({ code: "1210", usage: { image_count: 0 }, message: "private image prompt" }, { status: 400 })) as typeof fetch;
+    await assert.rejects(requestMaasImage({ prompt: "private image prompt" }), MaasProviderError);
+    assert.equal(records[0].imageCount, 0); assert.deepEqual(records[0].usage, { image_count: 0 });
+    globalThis.fetch = (async () => new Response("private invalid body", { status: 500 })) as typeof fetch;
+    await assert.rejects(requestMaasImage({ prompt: "private image prompt" }), MaasProviderError);
+    assert.equal(records[1].imageCount, 0); assert.deepEqual(records[1].usage, {}); assert.doesNotMatch(JSON.stringify(records), /private/);
+  } finally { console.info = previousInfo; }
 }));
 test("MaaS rejects empty, truncated and malformed final answers", async () => configured(async () => {
   for (const result of [{ choices: [{ message: { reasoning_content: "only thought" } }] }, { choices: [{ finish_reason: "length", message: { content: "partial" } }] }]) {

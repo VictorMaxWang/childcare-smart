@@ -22,6 +22,46 @@ from app.providers.base import (
 logger = logging.getLogger(__name__)
 _USAGE_NUMBER_FIELDS = {"prompt_tokens", "completion_tokens", "total_tokens", "input_tokens", "output_tokens", "cached_tokens", "reasoning_tokens", "audio_tokens", "image_tokens", "text_tokens", "accepted_prediction_tokens", "rejected_prediction_tokens", "image_count", "duration", "characters", "input_characters", "output_characters", "billable_characters"}
 _USAGE_DETAIL_FIELDS = {"prompt_tokens_details", "completion_tokens_details", "input_tokens_details", "output_tokens_details"}
+# 只接受已知协议错误码；不把任意上游字段（可能回显输入）拼入异常或日志。
+_SAFE_ERROR_CODES = frozenset({"InvalidParameter", "InvalidParameter.UnsupportedModel", "InvalidApiKey",
+    "InvalidApiKey.NotFound", "Unauthorized", "AccessDenied", "Forbidden", "ModelNotFound", "ModelNotActivated",
+    "SubscriptionRequired", "Arrearage", "QuotaExceeded", "Throttling", "Throttling.RateQuota",
+    "RateLimitExceeded", "DataInspectionFailed", "InputDataInspectionFailed", "OutputDataInspectionFailed",
+    "SensitiveContent", "UnsupportedOperation", "InternalError", "ServiceUnavailable",
+    "invalid_request_error", "invalid_parameter", "invalid_parameter_error", "invalid_api_key", "insufficient_quota", "rate_limit_exceeded", "content_filter", "1004"})
+
+
+def _raise_upstream_failure(response: httpx.Response) -> None:
+    """保留状态与固定分类以支持排障，禁止记录上游 message、原文、URL 或请求内容。"""
+    try:
+        raw = response.json()
+    except ValueError:
+        raw = None
+    data = raw if isinstance(raw, dict) else {}
+    upstream_error = data.get("error")
+    candidate_code = upstream_error.get("code") if isinstance(upstream_error, dict) else data.get("code")
+    code = candidate_code if isinstance(candidate_code, str) and candidate_code in _SAFE_ERROR_CODES else None
+    # 网关把未开通产品与上游Token错误也包装成HTTP400，不能误报成业务JSON参数错误。
+    # message仅在内存中匹配固定协议含义，原文及其他未知内容绝不写入日志/异常。
+    message = upstream_error.get("message") if isinstance(upstream_error, dict) else data.get("message")
+    product_not_activated = code == "invalid_parameter_error" and isinstance(message, str) and "The product is not activated" in message
+    status = response.status_code
+    category = (
+        "upstream-model-not-activated" if product_not_activated
+        else "upstream-content-rejected" if code in {"DataInspectionFailed", "InputDataInspectionFailed", "OutputDataInspectionFailed", "SensitiveContent", "content_filter"}
+        else "upstream-authentication" if status in {401, 403} or code == "1004"
+        else "upstream-rate-limited" if status == 429
+        else "upstream-invalid-request" if 400 <= status < 500
+        else "upstream-service-failure"
+    )
+    logger.warning("ai.provider_error %s", json.dumps({"provider": "maas", "httpStatus": status,
+        "category": category, "code": code}, ensure_ascii=False))
+    error_type = ProviderAuthenticationError if category == "upstream-authentication" else ProviderResponseError
+    error = error_type(f"MaaS provider returned HTTP {status} ({category})" + (f" code={code}" if code else ""))
+    error.http_status = status
+    error.diagnosis = category
+    error.error_code = code
+    raise error
 
 
 class SharedTextRequestLimiter:
@@ -152,6 +192,9 @@ class MaasTextProvider:
         body: dict[str, Any] = {"model": selected_model, "messages": messages, "stream": False, "max_tokens": 6000}
         if "glm-5.3" in selected_model.lower():
             body["reasoning_effort"] = "low"
+        elif selected_model.lower() == "qwen3.8-flash":
+            # 已核验的千问混合思考型号允许直接回答；不能把此参数发送给 GLM。
+            body["enable_thinking"] = False
         if json_output:
             body["response_format"] = {"type": "json_object"}
         return (
@@ -162,10 +205,8 @@ class MaasTextProvider:
 
     @staticmethod
     def _result(response: httpx.Response, model: str, *, audit_enabled: bool = False) -> ProviderTextResult:
-        if response.status_code in {401, 403}:
-            raise ProviderAuthenticationError("MaaS provider authentication failed")
         if not response.is_success:
-            raise ProviderResponseError(f"MaaS provider returned HTTP {response.status_code}")
+            _raise_upstream_failure(response)
         category = "invalid-provider-structure"
         fields = ["choices[0].message.content"]
         try:
@@ -257,10 +298,8 @@ class MaasAsrProvider(MaasTextProvider):
         except httpx.HTTPError as error:
             raise ProviderResponseError("MaaS ASR request failed") from error
         if native:
-            if response.status_code in {401, 403}:
-                raise ProviderAuthenticationError("MaaS ASR authentication failed")
             if not response.is_success:
-                raise ProviderResponseError(f"MaaS ASR returned HTTP {response.status_code}")
+                _raise_upstream_failure(response)
             try:
                 raw = _read_audited_json(response, self.settings.ai_asr_model, self.settings.ai_usage_audit)
                 output = raw["output"]
