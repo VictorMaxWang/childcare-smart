@@ -5,6 +5,7 @@ import {
   canRoleAccessPath,
   getRequiredRoleForPath,
   isAccountRole,
+  isPublicPagePath,
   resolveUnauthorizedRedirectPath,
   sanitizeNextPath,
 } from "@/lib/auth/route-access";
@@ -146,12 +147,7 @@ export async function proxy(request: NextRequest) {
     pathname === "/api/health" ||
     API_ROUTE_HANDLED_AUTH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) ||
     pathname === "/favicon.ico" ||
-    pathname === "/login" ||
-    pathname === "/auth/login" ||
-    pathname === "/register" ||
-    pathname === "/auth/register" ||
-    pathname === "/terms" ||
-    pathname === "/privacy"
+    isPublicPagePath(pathname)
   ) {
     return NextResponse.next();
   }

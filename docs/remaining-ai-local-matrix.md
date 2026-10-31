@@ -32,6 +32,8 @@ JSON会诊默认Brain转发上限8000ms，部署配置可用 `HIGH_RISK_CONSULTA
 
 非流式会诊独立验证JSON真实模型、园内/家庭/48小时动作，随后普通API保存、家长另一会话读取、普通feed可见，并验证父母/异班/跨机构拒绝；SSE曾通过不能代替该入口。
 
+2026-10-31在候选 `5bb5e4e890654f74e291e089b53fab665197000e` 上两项真实业务均通过，执行前后`/api/health`确认SHA一致。`teacher-understand`实际模型为 `qwen-audio-3.0-asr-flash`，12字转写、1条规则draft、正常记录保存和家长另一会话读回及越权拒绝通过，整阶段3269ms；JSON会诊实际模型为 `qwen3.8-flash`，真实正文、MySQL保存、家长读回、feed关联及越权拒绝通过，整阶段2619ms。独立报告 `local-remaining-paid-qwen-report.json` 为2通过、0失败、0阻塞，实际开始2个业务请求、累计预留0.7元；`local-remaining-paid-qwen-context.json` 补充发布SHA关联，不改写原报告。没有未知结果或自动重发，实际费用仍待主任务统一核账。
+
 每个收费意图先私有落盘再请求；收到正文先保存为received-needs-validation，再严格断言。已保存正文只重验，不重发；网络未知保持started-result-unknown并停止。每轮报告使用新文件名，现有报告不覆盖。完整正文和确认token只在忽略的私有journal，公开报告仅保留必要模型/状态/计数及合成摘要哈希。
 
 ```powershell

@@ -40,6 +40,7 @@ import { getRoleHomePath, type AccountRole } from "@/lib/auth/accounts";
 import {
   ACCESS_DENIED_QUERY_PARAM,
   canRoleAccessPath,
+  isPublicPagePath,
   resolveUnauthorizedRedirectPath,
   sanitizeNextPath,
 } from "@/lib/auth/route-access";
@@ -162,11 +163,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const accessDeniedNoticeKeyRef = useRef<string | null>(null);
   const currentLocation = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
 
-  const hideShell =
-    pathname === "/login" ||
-    pathname.startsWith("/auth/login") ||
-    pathname === "/register" ||
-    pathname.startsWith("/auth/register");
+  // 条款和隐私正文必须与代理白名单一致，匿名阅读不能再次被客户端送回登录。
+  const hideShell = isPublicPagePath(pathname);
 
   useEffect(() => {
     if (hideShell || authLoading || authError) {

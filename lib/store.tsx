@@ -1,6 +1,8 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { isPublicPagePath } from "@/lib/auth/route-access";
 import { normalizeAppStateSnapshot, type AppStateSnapshot } from "@/lib/persistence/snapshot";
 import { fetchSessionState } from "@/lib/persistence/state-client";
 import {
@@ -4763,6 +4765,7 @@ const ALL_INITIAL_FEEDBACKS = [...INITIAL_FEEDBACKS, ...EXTRA_FEEDBACKS];
 const ALL_INITIAL_TASK_CHECKINS = [...INITIAL_TASK_CHECKINS, ...EXTRA_TASK_CHECKINS];
 
 export function AppProvider({ children: childNodes }: { children: ReactNode }) {
+  const isPublicPage = isPublicPagePath(usePathname() ?? "");
   const demoAccounts = INITIAL_USERS;
   const [currentUser, setCurrentUser] = useState<User>(UNAUTHENTICATED_USER);
   const [authLoading, setAuthLoading] = useState(true);
@@ -6660,7 +6663,8 @@ export function AppProvider({ children: childNodes }: { children: ReactNode }) {
     <AppContext.Provider
       value={contextValue}
     >
-      {authLoading || dataLoading ? (
+      {/* 公共条款不依赖登录/业务数据加载；私有页面仍保留原加载屏与 AppShell 权限校验。 */}
+      {!isPublicPage && (authLoading || dataLoading) ? (
         <div className="flex min-h-[calc(100vh-64px)] items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />

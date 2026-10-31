@@ -7,6 +7,7 @@ const ROLE_TEACHER = "教师" as AccountRole;
 const ROLE_ADMIN = "机构管理员" as AccountRole;
 
 const LOGIN_PATHS = new Set(["/login", "/auth/login"]);
+const PUBLIC_PAGE_PATHS = new Set(["/login", "/auth/login", "/register", "/auth/register", "/privacy", "/terms"]);
 const SHARED_PROTECTED_PATHS = new Set(["/children", "/health", "/growth", "/diet"]);
 
 const KNOWN_ROLE_PREFIXES = ["/admin", "/teacher", "/parent"] as const;
@@ -20,6 +21,11 @@ function stripPath(value: string) {
   const withoutHash = value.split("#")[0] ?? value;
   const withoutQuery = withoutHash.split("?")[0] ?? withoutHash;
   return withoutQuery || "/";
+}
+
+/** 公共正文与登录入口由代理和客户端共用精确路径；不能用前缀放行其下业务页面。 */
+export function isPublicPagePath(pathname: string) {
+  return PUBLIC_PAGE_PATHS.has(stripPath(pathname));
 }
 
 export function isAccountRole(value: unknown): value is AccountRole {
