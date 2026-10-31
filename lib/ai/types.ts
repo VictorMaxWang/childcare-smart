@@ -1058,7 +1058,8 @@ export type HealthFileBridgeSource =
   | "next-local-extractor"
   | "local-text-fallback"
   | "vivo-ocr-provider"
-  | "dashscope-ocr-provider";
+  | "dashscope-ocr-provider"
+  | "maas-ocr-provider";
 export type ProviderCapabilityState = "configured" | "live" | "fallback" | "mock";
 export type HealthFileBridgeRiskLevel = "low" | "medium" | "high";
 export type HealthFileBridgeFileType =

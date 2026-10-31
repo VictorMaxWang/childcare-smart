@@ -22,7 +22,7 @@ import {
 } from "@/lib/providers/dashscope/dashscope-story-image-provider";
 import { getVivoEnv, requestVivoTts } from "@/lib/providers/vivo";
 import { aiRouteLimitedResponse, authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
-import { ApiRouteError } from "@/lib/server/api-errors";
+import { ApiRouteError, handleApiError } from "@/lib/server/api-errors";
 import {
   createBrainTransportHeaders,
   forwardBrainRequest,
@@ -52,6 +52,8 @@ import {
   type StorybookMediaTaskStore,
 } from "@/lib/server/storybook-media-task-store";
 import { NextResponse } from "next/server";
+import { isMaasSelected } from "@/lib/providers/maas/maas-provider";
+import { completeMaasStoryMedia } from "@/lib/server/parent-storybook-maas-media";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -1830,6 +1832,14 @@ export async function POST(request: Request) {
     story: stripRemoteStoryImageTasks(payload.story),
   };
 
+  if (isMaasSelected()) {
+    try {
+      const prepared = await completeMaasStoryMedia({ payload, institutionId: sessionUser.institutionId, userId: sessionUser.id, signal: request.signal, deadlineAtMs: responseDeadlineAtMs });
+      return NextResponse.json(attestAiResult(prepared, provenanceContext), { headers: { "cache-control": "no-store" } });
+    } catch (error) {
+      return handleApiError(error);
+    }
+  }
   const selectedImageProvider = resolveStoryImageProvider();
   const persistMedia =
     sessionUser.accountKind === "normal" ||

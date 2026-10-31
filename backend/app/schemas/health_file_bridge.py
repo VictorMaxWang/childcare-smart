@@ -18,6 +18,7 @@ HealthFileBridgeSource = Literal[
     "local-text-fallback",
     "vivo-ocr-provider",
     "dashscope-ocr-provider",
+    "maas-ocr-provider",
 ]
 HealthFileBridgeProviderState = Literal["configured", "live", "fallback", "mock"]
 HealthFileBridgeRiskLevel = Literal["low", "medium", "high"]

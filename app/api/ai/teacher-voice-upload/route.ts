@@ -140,7 +140,7 @@ export async function POST(request: Request) {
           ok: false,
           code: "provider_unavailable",
           error:
-            "ASR provider is unavailable; use browser speech recognition or text fallback.",
+            "语音转写暂时失败，请稍后重试或明确改用手动文字录入。",
           source: asrResult.source,
           provider: asrResult.provider,
           mode: providerTrace.mode,
@@ -169,7 +169,7 @@ export async function POST(request: Request) {
       fallbackReason,
       realProvider: asrResult.mode === "live" && !asrResult.output.fallback,
       capability: "asr",
-      model: asrResult.provider,
+      model: asrResult.model,
       providerStatus: asrResult.output.providerStatus,
       extra: {
         workflow: "teacher-voice-upload",

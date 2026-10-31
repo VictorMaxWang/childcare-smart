@@ -12,6 +12,7 @@ import type {
 } from "@/lib/ai/types";
 import { buildActionizedWeeklyReportResponse } from "@/lib/ai/weekly-report";
 import { logSecurityEvent } from "@/lib/server/security-log";
+import { isMaasSelected, requestMaasAsr, requestMaasChat, resolveMaasConfig } from "@/lib/providers/maas/maas-provider";
 
 const DEFAULT_DASHSCOPE_ENDPOINT =
   "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
@@ -38,6 +39,7 @@ function resolveRequestTimeoutMs(value: string | undefined) {
 }
 
 export function resolveBailianRuntimeConfig(): BailianRuntimeConfig {
+  if (isMaasSelected()) { const config = resolveMaasConfig(); return { endpoint: `${config.baseUrl}/chat/completions`, model: config.textModel, timeoutMs: config.timeoutMs }; }
   return {
     endpoint: process.env.BAILIAN_ENDPOINT?.trim() || DEFAULT_DASHSCOPE_ENDPOINT,
     // 百炼变量是当前正式配置；AI_MODEL 仅保留给旧部署兼容。默认使用已实测可用的官方替代型号。
@@ -50,14 +52,17 @@ export function resolveBailianRuntimeConfig(): BailianRuntimeConfig {
 }
 
 export function resolveBailianVisionModel() {
+  if (isMaasSelected()) return resolveMaasConfig().textModel;
   return process.env.AI_VISION_MODEL?.trim() || resolveBailianRuntimeConfig().model;
 }
 
 export function resolveBailianOcrModel() {
+  if (isMaasSelected()) return resolveMaasConfig().textModel;
   return process.env.AI_OCR_MODEL?.trim() || DEFAULT_BAILIAN_OCR_MODEL;
 }
 
 export function resolveBailianAsrModel() {
+  if (isMaasSelected()) return resolveMaasConfig().asrModel;
   return process.env.AI_ASR_MODEL?.trim() || DEFAULT_BAILIAN_ASR_MODEL;
 }
 
@@ -427,6 +432,10 @@ function buildInstitutionFollowUpPrompt(
 }
 
 async function requestDashscopeJson(prompt: string) {
+  if (isMaasSelected()) {
+    try { return safeJsonParse((await requestMaasChat({ messages: [{ role: "system", content: "你是托育建议助手，仅输出JSON，不编造事实或进行医疗诊断。" }, { role: "user", content: prompt }], json: true })).text); }
+    catch { return null; }
+  }
   const apiKey = process.env.DASHSCOPE_API_KEY || "";
   const { endpoint, model, timeoutMs } = resolveBailianRuntimeConfig();
 
@@ -501,6 +510,10 @@ async function requestDashscopeJsonWithMessages({
   model: string;
   messages: Array<{ role: "system" | "user" | "assistant"; content: DashscopeContent }>;
 }) {
+  if (isMaasSelected()) {
+    try { return safeJsonParse((await requestMaasChat({ model, messages, json: true })).text); }
+    catch { return null; }
+  }
   const apiKey = process.env.DASHSCOPE_API_KEY || "";
   const { endpoint, timeoutMs } = resolveBailianRuntimeConfig();
 
@@ -655,6 +668,13 @@ export async function requestDashscopeHealthOcr(
   imageDataUrl: string
 ): Promise<HealthOcrResult | null> {
   const maxExtractedTextLength = 20_000;
+  if (isMaasSelected()) {
+    try {
+      const result = await requestMaasChat({ messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: imageDataUrl } }, { type: "text", text: "请按阅读顺序转录图中全部可辨认文字，不要总结或诊断，不清晰字符用?表示。" }] }], maxTokens: 7000 });
+      if (result.text.length > maxExtractedTextLength) return null;
+      return { extractedText: result.text, confidence: null, warnings: [], model: result.model, rawResponse: { requestId: result.requestId, characterCount: result.text.length, provider: "maas" } };
+    } catch { return null; }
+  }
   const apiKey = process.env.DASHSCOPE_API_KEY || "";
   const { endpoint, timeoutMs } = resolveBailianRuntimeConfig();
   const model = resolveBailianOcrModel();
@@ -775,6 +795,12 @@ export async function requestDashscopeAsr(input: {
   deadlineAtMs?: number;
   signal?: AbortSignal;
 }): Promise<BailianAsrResult | null> {
+  if (isMaasSelected()) {
+    try {
+      const result = await requestMaasAsr(input);
+      return { transcript: result.transcript, confidence: null, model: result.model, rawResponse: { requestId: result.requestId, provider: "maas", characterCount: result.transcript.length } };
+    } catch { return null; }
+  }
   const apiKey = process.env.DASHSCOPE_API_KEY || "";
   const { endpoint, timeoutMs } = resolveBailianRuntimeConfig();
   const model = resolveBailianAsrModel();
@@ -874,7 +900,7 @@ export async function requestDashscopeAsr(input: {
 export async function requestDashscopeDietEvaluation(
   input: DietEvaluationInput
 ): Promise<DietEvaluationResult | null> {
-  const model = process.env.AI_DIET_MODEL?.trim() || resolveBailianRuntimeConfig().model;
+  const model = isMaasSelected() ? resolveMaasConfig().textModel : process.env.AI_DIET_MODEL?.trim() || resolveBailianRuntimeConfig().model;
   const prompt = [
     "你是托育机构营养分析助手。",
     "请结合孩子年龄与饮食记录给出评分和建议，输出严格JSON。",

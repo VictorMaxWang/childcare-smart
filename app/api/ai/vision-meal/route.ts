@@ -14,6 +14,7 @@ import {
 } from "@/lib/server/brain-client";
 import { authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import { logSecurityEvent } from "@/lib/server/security-log";
+import { isMaasSelected } from "@/lib/providers/maas/maas-provider";
 import {
   inspectBase64Media,
   readRequestWithBodyLimit,
@@ -136,7 +137,7 @@ function buildAttestedVisionResult(
       : source === "ai" && !fallback;
   const provider =
     readString(input.provider) ||
-    (live ? "dashscope" : "local-rules");
+    (live ? (isMaasSelected() ? "maas" : "dashscope") : "local-rules");
   const model =
     readString(input.model) ||
     (live ? resolveBailianVisionModel() : "vision-rule-fallback");
@@ -259,7 +260,10 @@ export async function handleVisionMealRequest(
   };
 
   // 任何外部 Brain/DashScope 调用前先完成本地格式和体积校验，避免发送不合规原图。
-  const brainForward = await dependencies.forwardBrain(boundedRequest, VISION_MEAL_TARGET);
+  // 此能力在 Next 直接调用选定网关；旧 Brain 餐图入口仅有规则结果，不能转发后再调用一次供应商。
+  const brainForward = isMaasSelected()
+    ? { response: null, fallbackReason: "maas-next-capability" }
+    : await dependencies.forwardBrain(boundedRequest, VISION_MEAL_TARGET);
   const remoteResponseAccepted =
     brainForward.response?.ok &&
     (await dependencies.acceptRemoteResponse(
@@ -308,7 +312,7 @@ export async function handleVisionMealRequest(
   const aiFoods = await dependencies.requestVision(payload.imageDataUrl);
   if (!aiFoods || aiFoods.length === 0) {
     logSecurityEvent("warn", "ai.vision_meal.fallback", {
-      provider: "dashscope",
+      provider: isMaasSelected() ? "maas" : "dashscope",
       model: configuredModel,
     });
     const fallbackReason = rejectedRemoteResult
@@ -338,7 +342,7 @@ export async function handleVisionMealRequest(
       ...(payload.childId ? { childId: payload.childId } : {}),
       foods: aiFoods,
       source: "ai",
-      provider: "dashscope",
+      provider: isMaasSelected() ? "maas" : "dashscope",
       model: configuredModel,
       live: true,
       fallback: false,

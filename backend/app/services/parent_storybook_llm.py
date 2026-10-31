@@ -13,6 +13,7 @@ from app.providers.base import (
     ProviderResponseError,
 )
 from app.providers.resolver import resolve_text_provider
+from app.providers.maas import maas_selected, maas_configured
 
 
 class ParentStoryBookTextProviderError(RuntimeError):
@@ -67,6 +68,8 @@ def _secret_text(value: Any) -> str:
 
 
 def _has_real_vivo_text_config(settings: Settings) -> bool:
+    if maas_selected(settings):
+        return maas_configured(settings)
     app_id = _normalize_text(getattr(settings, "vivo_app_id", ""))
     app_key = _secret_text(getattr(settings, "vivo_app_key", None))
     brain_provider = _normalize_text(getattr(settings, "brain_provider", "mock")).lower()

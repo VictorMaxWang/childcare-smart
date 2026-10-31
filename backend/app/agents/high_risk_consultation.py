@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
 from app.core.config import Settings, get_settings
 from app.providers.base import ProviderTextResult
 from app.providers.mock import build_mock_high_risk_bundle
-from app.providers.resolver import can_use_vivo_text_provider, resolve_text_provider
+from app.providers.resolver import can_use_real_text_provider, resolve_text_provider
+from app.providers.maas import maas_selected, real_text_result
 from app.services.high_risk_consultation_contract import (
     build_high_risk_done_event,
     normalize_high_risk_consultation_result,
@@ -176,7 +178,7 @@ def _build_narrative_prompt(payload: dict[str, Any], scaffold: dict[str, Any], s
 
 def _build_provider_trace(scaffold: dict[str, Any], provider_result: ProviderTextResult, settings: Settings) -> dict[str, Any]:
     existing = safe_dict(scaffold.get("providerTrace"))
-    llm_mode = "live" if provider_result.source == "vivo" and not provider_result.fallback else "mock"
+    llm_mode = "live" if real_text_result(provider_result) else "mock"
     model = provider_result.model or _coerce_text(safe_dict(provider_result.meta).get("attempted_model")) or settings.vivo_llm_model
     script_only_tts = {
         "providerName": "text-only-tts-fallback",
@@ -210,9 +212,9 @@ def _build_provider_trace(scaffold: dict[str, Any], provider_result: ProviderTex
         "transportSource": "fastapi-brain",
         "consultationSource": consultation_source,
         "fallbackReason": fallback_reason,
-        "brainProvider": settings.brain_provider.strip().lower(),
+        "brainProvider": "maas" if maas_selected(settings) else settings.brain_provider.strip().lower(),
         "fallback": provider_result.fallback,
-        "realProvider": provider_result.source == "vivo" and not provider_result.fallback,
+        "realProvider": real_text_result(provider_result),
         "meta": provider_result.meta or {},
         "modes": {
             **safe_dict(existing.get("modes")),
@@ -338,7 +340,7 @@ def _summary_card_payload(stage: str, title: str, *, content: str, items: list[s
 
 
 def _brain_provider(settings: Settings) -> str:
-    return settings.brain_provider.strip().lower() or "unknown"
+    return "maas" if maas_selected(settings) else settings.brain_provider.strip().lower() or "unknown"
 
 
 def _normalize_consultation_result(
@@ -362,7 +364,7 @@ def _normalize_consultation_result(
 async def run_high_risk_consultation(payload: dict[str, Any]) -> dict[str, Any]:
     settings = get_settings()
     scaffold = build_mock_high_risk_bundle({**payload, "workflow": "high-risk-consultation"})
-    result, provider_result, _ = _generate_narrative(payload, scaffold, settings)
+    result, provider_result, _ = await asyncio.to_thread(_generate_narrative, payload, scaffold, settings)
     return _normalize_consultation_result(
         payload=payload,
         result=result,
@@ -376,18 +378,19 @@ async def stream_high_risk_consultation(payload: dict[str, Any], trace_id: str) 
     scaffold = build_mock_high_risk_bundle({**payload, "workflow": "high-risk-consultation"})
     memory_meta = safe_dict(scaffold.get("memoryMeta"))
     sections = _memory_sections(payload, scaffold)
-    prefers_vivo = can_use_vivo_text_provider(settings)
+    prefers_vivo = can_use_real_text_provider(settings)
     provider_preview = {
-        "provider": "vivo-llm" if prefers_vivo else "mock-brain",
-        "source": "vivo" if prefers_vivo else "mock",
-        "model": settings.vivo_llm_model,
+        "provider": "maas-llm" if maas_selected(settings) else "vivo-llm" if prefers_vivo else "mock-brain",
+        "source": "configured" if prefers_vivo else "mock",
+        "model": settings.ai_text_model if maas_selected(settings) else settings.vivo_llm_model,
         "transport": "fastapi-brain",
         "transportSource": "fastapi-brain",
         "consultationSource": _coerce_text(scaffold.get("source")),
         "fallbackReason": "",
-        "brainProvider": settings.brain_provider.strip().lower(),
+        "brainProvider": "maas" if maas_selected(settings) else settings.brain_provider.strip().lower(),
         "fallback": not prefers_vivo,
-        "realProvider": prefers_vivo,
+        # 配置存在还不代表本次模型调用成功，最终事件再报告真实来源。
+        "realProvider": False,
     }
 
     yield (
@@ -467,7 +470,7 @@ async def stream_high_risk_consultation(payload: dict[str, Any], trace_id: str) 
             "memory": memory_meta,
         },
     )
-    result, provider_result, sections = _generate_narrative(payload, scaffold, settings)
+    result, provider_result, sections = await asyncio.to_thread(_generate_narrative, payload, scaffold, settings)
     result = _normalize_consultation_result(
         payload=payload,
         result=result,

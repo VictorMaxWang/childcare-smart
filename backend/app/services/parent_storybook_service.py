@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from threading import Event, Lock
 from time import monotonic, time
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from app.core.config import get_settings
 from app.providers.story_audio_provider import (
@@ -2852,7 +2853,8 @@ async def run_parent_storybook(payload: dict[str, Any]) -> dict[str, Any]:
         "scenes": scenes_blueprint,
     }
     settings = get_settings()
-    text_generation = generate_parent_storybook_text(
+    # 同步旧供应商与 JSON 校验不占用主事件循环，避免绘本阻塞健康检查和其他用户。
+    text_generation = await asyncio.to_thread(generate_parent_storybook_text,
         settings=settings,
         payload=first_byte_payload,
         ingredients=ingredients,
@@ -3105,7 +3107,7 @@ async def run_parent_storybook(payload: dict[str, Any]) -> dict[str, Any]:
         **diagnostics.get("brain", {}),
         "reachable": bool(text_generation.real_provider),
         "fallbackReason": fallback_reason if text_generation.fallback_reason else None,
-        "upstreamHost": "api-ai.vivo.com.cn" if text_generation.real_provider else None,
+        "upstreamHost": (urlparse(settings.ai_base_url).hostname if getattr(settings, "ai_provider", "") in {"maas", "openai-compatible"} else "api-ai.vivo.com.cn") if text_generation.real_provider else None,
         "statusCode": None,
         "retryStrategy": "none",
         "elapsedMs": text_generation.elapsed_ms,

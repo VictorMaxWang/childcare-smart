@@ -20,6 +20,7 @@ import { toFollowUpFeedbackLite } from "@/lib/feedback/normalize";
 import { buildActionizedWeeklyReportResponse, resolveWeeklyReportRole } from "@/lib/ai/weekly-report";
 import { getVivoProviderStatus, requestVivoChat, VivoProviderError } from "@/lib/providers/vivo";
 import type { VivoProviderStatus } from "@/lib/providers/vivo";
+import { isMaasConfigured, isMaasSelected, requestMaasChat, resolveMaasConfig } from "@/lib/providers/maas/maas-provider";
 import type {
   AiActionPlan,
   AiFollowUpPayload,
@@ -83,7 +84,7 @@ export function getAiRuntimeOptions(
   const allowConfiguredMock = context?.accountKind === "demo";
 
   return {
-    configuredModel: process.env.VIVO_LLM_MODEL || "Volc-DeepSeek-V3.2",
+    configuredModel: isMaasSelected() ? resolveMaasConfig().textModel : process.env.VIVO_LLM_MODEL || "Volc-DeepSeek-V3.2",
     // 全局 mock 开关只服务演示账号，真实账号必须继续尝试真实 provider。
     forceMock: allowConfiguredMock && process.env.NEXT_PUBLIC_FORCE_MOCK_MODE === "true",
     forceFallback:
@@ -247,6 +248,21 @@ async function requestStructuredVivoJson(params: {
   options: AiRuntimeOptions;
   taskType: string;
 }) {
+  if (isMaasSelected()) {
+    const providerStatus: ChatProviderStatus = {
+      providerName: "maas", capability: "chat", state: "configured", configured: isMaasConfigured(),
+      live: false, fallback: false, mock: false, supported: true, isRealProvider: true,
+      status: isMaasConfigured() ? "ready" : "missing-env", warnings: [], requiredEnv: ["AI_API_KEY", "AI_BASE_URL", "AI_TEXT_MODEL"],
+    };
+    try {
+      const result = await requestMaasChat({ messages: [{ role: "system", content: "Return strict JSON only with Chinese values. Do not invent facts or provide medical diagnoses." }, { role: "user", content: params.prompt }], json: true, maxTokens: 4000 });
+      const parsed = safeJsonParse(result.text);
+      if (!parsed) throw new Error("MaaS returned invalid structured content");
+      return { parsed, model: result.model, providerStatus: { ...providerStatus, state: "live" as const, live: true } };
+    } catch {
+      throw new AiProviderUnavailableError("AI 服务暂时无法完成此请求，请稍后重试。", { ...providerStatus, status: "provider-unavailable" });
+    }
+  }
   const status = getVivoProviderStatus("chat");
   if (!status.configured || !status.supported) {
     throw new AiProviderUnavailableError(
@@ -304,7 +320,7 @@ async function requestStructuredVivoJson(params: {
 
 function providerMeta(providerStatus: ChatProviderStatus) {
   return {
-    provider: "vivo",
+    provider: providerStatus.providerName === "maas" ? "maas" : "vivo",
     providerStatus: { chat: providerStatus },
   };
 }
@@ -316,7 +332,7 @@ function fallbackReasonMeta(options: AiRuntimeOptions, providerStatus: ChatProvi
 }
 
 function isBailianConfigured() {
-  return Boolean(process.env.DASHSCOPE_API_KEY?.trim());
+  return !isMaasSelected() && Boolean(process.env.DASHSCOPE_API_KEY?.trim());
 }
 
 function bailianProviderMeta() {

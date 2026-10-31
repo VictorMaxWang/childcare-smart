@@ -7,6 +7,7 @@ import {
   requestVivoOcr,
   type VivoProviderStatus,
 } from "@/lib/providers/vivo";
+import { getMaasProviderStatus, isMaasSelected } from "@/lib/providers/maas/maas-provider";
 
 export interface OcrProviderInput {
   attachmentName?: string;
@@ -64,6 +65,7 @@ function hasDashscopeKey() {
 }
 
 export function getDashscopeOcrProviderStatus(): OcrProviderStatus {
+  if (isMaasSelected()) return { ...getMaasProviderStatus("ocr"), model: resolveBailianOcrModel() };
   const configured = hasDashscopeKey();
   return {
     providerName: "dashscope",
@@ -89,6 +91,7 @@ export function getDashscopeOcrProviderStatus(): OcrProviderStatus {
 }
 
 export function getEffectiveOcrProviderStatus(): OcrProviderStatus {
+  if (isMaasSelected()) return getDashscopeOcrProviderStatus();
   const vivo = getVivoProviderStatus("ocr");
   if (vivo.status === "ready") return vivo;
 
@@ -172,7 +175,7 @@ class DashscopeOcrProvider implements OcrProvider {
         this.getStatus(),
         existingText
           ? "材料无需调用图片 OCR，使用文件内已提取文字继续解析。"
-          : "百炼视觉 OCR 仅支持 JPEG、PNG、WebP 图片。"
+          : "视觉 OCR 仅支持 JPEG、PNG、WebP 图片。"
       );
       return {
         provider: output.providerName,
@@ -192,11 +195,11 @@ class DashscopeOcrProvider implements OcrProvider {
         {
           ...this.getStatus(),
           status: "provider-unavailable",
-          reason: "DashScope OCR request failed or returned no readable text.",
+          reason: "Selected OCR request failed or returned no readable text.",
         },
         existingText
-          ? "百炼 OCR 未返回有效文字，已改用文件内可提取文字。"
-          : "百炼 OCR 未返回可辨认文字。"
+          ? "所选 OCR 未返回有效文字，已改用文件内可提取文字。"
+          : "所选 OCR 未返回可辨认文字。"
       );
       return {
         provider: output.providerName,
@@ -220,14 +223,14 @@ class DashscopeOcrProvider implements OcrProvider {
       model: result.model,
     };
     return {
-      provider: "dashscope",
+      provider: this.getStatus().providerName,
       mode: "live" as const,
       source: "provider" as const,
       output: {
         text: result.extractedText,
         extractedText: result.extractedText,
         confidence: result.confidence,
-        providerName: "dashscope",
+        providerName: this.getStatus().providerName,
         model: result.model,
         state: "live" as const,
         live: true,
@@ -320,6 +323,7 @@ class VivoDashscopeFailoverOcrProvider implements OcrProvider {
 }
 
 export function resolveOcrProvider(): OcrProvider {
+  if (isMaasSelected()) return new DashscopeOcrProvider();
   // 保留原有 Vivo 优先级；缺少 Vivo 配置时复用已部署的百炼视觉能力，避免图片入口退化为空壳。
   const vivoStatus = getVivoProviderStatus("ocr");
   const dashscopeStatus = getDashscopeOcrProviderStatus();

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { resolveBailianRuntimeConfig } from "@/lib/ai/dashscope";
+import { isMaasConfigured, isMaasSelected, requestMaasChat, MaasProviderError } from "@/lib/providers/maas/maas-provider";
 
 export type DashscopeChatMessage = {
   role: "system" | "user" | "assistant";
@@ -61,7 +62,7 @@ type DashscopeChatResponse = {
 };
 
 export function isDashscopeChatConfigured() {
-  return Boolean(process.env.DASHSCOPE_API_KEY?.trim());
+  return isMaasSelected() ? isMaasConfigured() : Boolean(process.env.DASHSCOPE_API_KEY?.trim());
 }
 
 function failureKindFromStatus(status: number): DashscopeChatFailureKind {
@@ -103,6 +104,10 @@ function readRequestId(
 export async function requestDashscopeChat(
   input: DashscopeChatInput
 ): Promise<DashscopeChatResult> {
+  if (isMaasSelected()) {
+    try { return await requestMaasChat({ ...input, json: true }); }
+    catch (error) { throw new DashscopeChatProviderError("MaaS chat provider request failed", { failureKind: error instanceof MaasProviderError ? error.failureKind : "provider-response", httpStatus: error instanceof MaasProviderError ? error.httpStatus : undefined }); }
+  }
   const apiKey = process.env.DASHSCOPE_API_KEY?.trim();
   if (!apiKey) {
     throw new DashscopeChatProviderError(

@@ -1,4 +1,5 @@
 import { isPrivateBlobConfigured } from "@/lib/server/private-blob";
+import { getUnifiedAiProviderStatus } from "@/lib/server/ai-provider-status";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +46,8 @@ export function GET() {
       },
       serviceStatus: {
         aiUnavailable: process.env.AI_SERVICE_UNAVAILABLE === "1",
+        // 公共横幅只读取脱敏能力状态；登录页无需访问受保护的 provider-status 接口。
+        aiCapabilities: getUnifiedAiProviderStatus().capabilities,
       },
       capabilities: {
         database: configured(process.env.DATABASE_URL),

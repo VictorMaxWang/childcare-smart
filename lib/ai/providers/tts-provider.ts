@@ -5,6 +5,7 @@ import {
   requestVivoTts,
   type VivoProviderStatus,
 } from "@/lib/providers/vivo";
+import { getMaasProviderStatus, isMaasSelected, requestMaasTts } from "@/lib/providers/maas/maas-provider";
 
 export interface TtsProviderInput {
   text: string;
@@ -139,8 +140,20 @@ class VivoTtsProvider implements TtsProvider {
 }
 
 export function resolveTtsProvider(): TtsProvider {
+  if (isMaasSelected()) return new MaasTtsProvider();
   const status = getVivoProviderStatus("tts");
   return status.status === "ready"
     ? new VivoTtsProvider()
     : new TextOnlyTtsFallbackProvider(buildTextOnlyStatus(status.reason ?? "Vivo TTS is not configured.", status));
+}
+
+class MaasTtsProvider implements TtsProvider {
+  getStatus() { return getMaasProviderStatus("tts"); }
+  async synthesize(input: TtsProviderInput): Promise<TtsProviderResult<TtsProviderOutput>> {
+    const result = await requestMaasTts({ text: input.text });
+    const audioUrl = result.audioBytes ? `data:${result.mimeType};base64,${Buffer.from(result.audioBytes).toString("base64")}` : result.audioUrl || undefined;
+    return { provider: "maas", mode: "live", state: "live", live: true, fallback: false, mock: false,
+      output: { audioUrl, audioContentType: result.mimeType, script: input.text, requestId: result.requestId || undefined,
+        providerStatus: { ...this.getStatus(), state: "live", live: true }, state: "live", live: true, fallback: false, mock: false, warnings: [] } };
+  }
 }

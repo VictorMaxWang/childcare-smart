@@ -4,6 +4,7 @@ from app.core.config import Settings
 from app.db.repositories import build_repository_bundle
 from app.providers.resolver import can_use_vivo_text_provider, has_vivo_text_provider_config, normalize_provider_env
 from app.schemas.common import HealthResponse, ProviderCapability, ProviderCapabilityStatus
+from app.providers.maas import maas_selected, maas_configured
 
 
 _LLM_REQUIRED_ENV = ("VIVO_APP_ID", "VIVO_APP_KEY", "VIVO_BASE_URL", "VIVO_LLM_MODEL")
@@ -109,6 +110,16 @@ def _missing_status(
 
 
 def resolve_provider_status(settings: Settings) -> dict[ProviderCapability, ProviderCapabilityStatus]:
+    if maas_selected(settings):
+        required = ("AI_PROVIDER", "AI_BASE_URL", "AI_API_KEY")
+        configured = maas_configured(settings)
+        return {
+            capability: _configured_status(provider_name=f"maas-{capability}", capability=capability, required_env=required,
+                reason="MaaS configuration is present; live is asserted only by successful request results.")
+            if configured else _missing_status(provider_name=f"maas-{capability}", capability=capability, state="fallback", required_env=required,
+                missing_env=["AI_API_KEY"], reason="MaaS is selected but its required configuration is missing.")
+            for capability in ("llm", "ocr", "asr", "tts")
+        }
     brain_provider = settings.brain_provider.strip().lower()
     llm_missing = _missing_env(settings, _LLM_REQUIRED_ENV)
     asr_missing = _missing_env(settings, _ASR_REQUIRED_ENV)
@@ -199,12 +210,14 @@ def resolve_provider_modes(settings: Settings) -> dict[str, str]:
 
 
 def resolve_llm_provider_selected(settings: Settings) -> str:
+    if maas_selected(settings):
+        return "maas-llm" if maas_configured(settings) else "maas-unconfigured"
     return "vivo-llm" if can_use_vivo_text_provider(settings) else "mock-brain"
 
 
 def build_health_response(settings: Settings) -> HealthResponse:
     repositories = build_repository_bundle()
-    brain_provider = settings.brain_provider.strip().lower()
+    brain_provider = "maas" if maas_selected(settings) else settings.brain_provider.strip().lower()
     vivo_credentials_configured = has_vivo_text_provider_config(settings)
     provider_status = resolve_provider_status(settings)
     return HealthResponse(

@@ -187,6 +187,13 @@ export async function POST(request: Request) {
     return brainForward.response;
   }
 
+  if (["maas", "openai-compatible"].includes(process.env.AI_PROVIDER ?? "") &&
+      Boolean(process.env.BRAIN_API_BASE_URL || process.env.BACKEND_BASE_URL)) {
+    return brainForward.response?.ok
+      ? NextResponse.json({ ok: false, code: "provider_unavailable", error: "远端 AI 未返回可验证的真实结果。" }, { status: 503 })
+      : brainForward.response ?? NextResponse.json({ ok: false, code: "generation_result_unknown", error: "远端生成结果尚未确认，未自动重复请求。" }, { status: 503 });
+  }
+
   const taskContext = buildTaskContext(trustedPayloadBase);
   const feedbackConsumption =
     !trustedChildSnapshot

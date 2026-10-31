@@ -292,6 +292,7 @@ export interface ApiChildInput {
 export type ApiChildPatch = Partial<ApiChildInput>;
 
 export interface ApiParentChildOnboardingInput {
+  requestId?: string;
   name?: string;
   nickname?: string;
   birthDate?: string;

@@ -5,12 +5,35 @@ import type { TeacherAgentRequestPayload, TeacherAgentWorkflowType } from "@/lib
 import { getLocalToday } from "@/lib/date";
 import { POST } from "./route.ts";
 
+test("teacher weekly summary retains verified MaaS provenance after the old Brain declines", async () => {
+  const previousFetch = globalThis.fetch;
+  let providerCalls = 0;
+  globalThis.fetch = (async (url) => {
+    if (String(url).includes("brain.example.com")) return Response.json({ error: "unavailable old workflow" }, { status: 404 });
+    assert(String(url).startsWith("https://maas.example.test/")); providerCalls++;
+    return Response.json({ model: "ZHIPU/GLM-5.3-Flash", choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ summary: "合成记录还需连续补充。", highlights: ["已有一条合成观察"], risks: ["缺少连续睡眠记录"], nextWeekActions: ["下周一回传一次睡眠观察"], trendPrediction: "stable", disclaimer: "合成测试内容" }) } }] });
+  }) as typeof fetch;
+  try {
+    await withEnv({ BRAIN_API_BASE_URL: "http://brain.example.com", AI_PROVIDER: "maas", AI_API_KEY: "synthetic-only-key", AI_BASE_URL: "https://maas.example.test/compatible-mode/v1", NEXT_PUBLIC_FORCE_MOCK_MODE: "false" }, async () => {
+      const response = await POST(new Request("http://localhost:3000/api/ai/teacher-agent", { method: "POST", headers: { "content-type": "application/json", "x-demo-account-id": "u-teacher" }, body: JSON.stringify({ workflow: "weekly-summary", scope: "class" }) }));
+      const body = await response.json();
+      assert.equal(response.status, 200); assert.equal(providerCalls, 1);
+      assert.equal(body.provider, "maas"); assert.equal(body.source, "ai"); assert.equal(body.fallback, false);
+      assert.equal(body.providerTrace.mode, "live"); assert.equal(body.providerTrace.realProvider, true);
+    });
+  } finally { globalThis.fetch = previousFetch; }
+});
+
 function withEnv(
-  overrides: Partial<Record<"BRAIN_API_BASE_URL", string | undefined>>,
+  overrides: Partial<Record<"BRAIN_API_BASE_URL" | "AI_PROVIDER" | "AI_API_KEY" | "AI_BASE_URL" | "NEXT_PUBLIC_FORCE_MOCK_MODE", string | undefined>>,
   fn: () => void | Promise<void>
 ) {
   const previous = {
     BRAIN_API_BASE_URL: process.env.BRAIN_API_BASE_URL,
+    AI_PROVIDER: process.env.AI_PROVIDER,
+    AI_API_KEY: process.env.AI_API_KEY,
+    AI_BASE_URL: process.env.AI_BASE_URL,
+    NEXT_PUBLIC_FORCE_MOCK_MODE: process.env.NEXT_PUBLIC_FORCE_MOCK_MODE,
   };
 
   for (const [key, value] of Object.entries(overrides)) {

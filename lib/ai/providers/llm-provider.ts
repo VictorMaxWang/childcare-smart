@@ -3,6 +3,7 @@ import {
   requestVivoChat,
   type VivoProviderStatus,
 } from "@/lib/providers/vivo";
+import { getMaasProviderStatus, isMaasSelected, requestMaasChat } from "@/lib/providers/maas/maas-provider";
 
 export interface HighRiskConsultationLlmInput {
   childName: string;
@@ -218,6 +219,20 @@ class VivoLlmProvider implements LlmProvider {
 }
 
 export function resolveLlmProvider(): LlmProvider {
+  if (isMaasSelected()) return new MaasLlmProvider();
   const status = getVivoProviderStatus("chat");
   return status.status === "ready" ? new VivoLlmProvider() : new LocalRulesLlmProvider();
+}
+
+class MaasLlmProvider implements LlmProvider {
+  getStatus() { return getMaasProviderStatus("chat"); }
+  async generateHighRiskConsultationNarrative(input: HighRiskConsultationLlmInput): Promise<LlmProviderResult<HighRiskConsultationLlmOutput>> {
+    const result = await requestMaasChat({ json: true, maxTokens: 3000, messages: [
+      { role: "system", content: "你是托育会诊文案助手。仅依据输入记录，输出JSON字段summary、parentMessageDraft、directorReason。不编造事实，不作医疗诊断。" },
+      { role: "user", content: JSON.stringify(input) },
+    ] });
+    const output = parseNarrativeJson(result.text);
+    if (!output) throw new Error("AI 会诊返回格式无效，请重试。");
+    return { provider: "maas", mode: "live", state: "live", live: true, fallback: false, mock: false, model: result.model, warnings: [], providerStatus: { ...this.getStatus(), state: "live", live: true }, output };
+  }
 }

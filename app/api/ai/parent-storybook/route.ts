@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isMaasSelected } from "@/lib/providers/maas/maas-provider";
 import type {
   ParentStoryBookRequest,
   ParentStoryBookResponse,
@@ -821,6 +822,10 @@ export async function POST(request: Request) {
   }
 
   const fallbackReason = brainForward.fallbackReason ?? "brain-proxy-unavailable";
+  if (isMaasSelected() && brainForward.upstreamHost) {
+    // Brain 可能已经向同一网关发出了请求。超时或断线后由 Next 再生成会重复扣费。
+    return buildProviderUnavailableResponse({ brainForward, fallbackReason, statusCode: 503 });
+  }
   if (requireRealStoryText) {
     const localStory = buildLocalStoryBookFallback({
       payload,

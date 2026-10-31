@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.schemas.common import ApiError
+from app.providers.base import ProviderError
 
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,11 @@ def install_error_handlers(app: FastAPI) -> None:
 
         try:
             response = await call_next(request)
+        except ProviderError:
+            # 供应商配置、鉴权和内容错误属于可识别的能力失败，不应伪装成应用自身 500。
+            return JSONResponse(status_code=503, content={"ok": False, "code": "provider_unavailable",
+                "error": "AI 服务本次调用未完成，请稍后重试。", "source": "unavailable", "fallback": False,
+                "realProvider": False, "requestId": request_id}, headers={"X-Request-Id": request_id})
         except Exception:
             logger.exception(
                 "backend.request_failed request_id=%s method=%s path=%s client=%s",

@@ -104,19 +104,25 @@ async function readErrorMessage(response: Response, fallbackMessage: string) {
 
 export async function fetchWeeklyReport(
   payload: WeeklyReportPayload,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; cacheOnly?: boolean; confirmRetryUnknown?: boolean }
 ) {
   const response = await fetch("/api/ai/weekly-report", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(options?.cacheOnly ? { "x-ai-cache-only": "1" } : {}),
+      ...(options?.confirmRetryUnknown ? { "x-ai-confirm-retry": "1" } : {}),
     },
     body: JSON.stringify(payload),
     signal: options?.signal,
   });
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response, "周报预览暂时不可用"));
+    const details = await response.clone().json().catch(() => null) as { code?: string } | null;
+    throw Object.assign(new Error(await readErrorMessage(response, "周报预览暂时不可用")), { code: details?.code });
+  }
+  if (options?.cacheOnly && response.headers.get("x-ai-cache") === "miss") {
+    throw new Error("当前记录版本尚未生成周报，可点击生成后查看。");
   }
 
   const data = (await response.json()) as unknown;

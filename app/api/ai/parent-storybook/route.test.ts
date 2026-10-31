@@ -18,10 +18,40 @@ import {
   POST,
 } from "./route.ts";
 
+test("MaaS storybook never resubmits locally after an ambiguous Brain generation failure", async () => {
+  const previousFetch = globalThis.fetch;
+  try {
+    await withEnv({ BRAIN_API_BASE_URL: "http://brain.example.com", AI_PROVIDER: "maas", AI_API_KEY: "synthetic-only-key", AI_BASE_URL: "https://maas.example.test/compatible-mode/v1", PARENT_STORYBOOK_REQUIRE_REAL_TEXT: "1" }, async () => {
+      for (const failure of ["structured-after-charge", "disconnected-after-dispatch"]) {
+        const calls: string[] = [];
+        parentStoryBookCacheInternals.storyResponseCache.clear();
+        parentStoryBookCacheInternals.mediaAssetCache.clear();
+        globalThis.fetch = (async (url) => {
+          const target = String(url); calls.push(target);
+          assert(target.startsWith("http://brain.example.com/"), "unknown charged result must not trigger a second MaaS request");
+          if (failure === "disconnected-after-dispatch") throw new TypeError("synthetic connection ended after dispatch");
+          return Response.json({ code: "provider-invalid-json-after-model-response" }, { status: 502 });
+        }) as typeof fetch;
+        const response = await POST(buildStorybookRouteRequest());
+        assert.equal(response.status, 503); assert.equal(calls.length, 1);
+        const body = await response.json();
+        assert.notEqual(body.providerMeta?.textDelivery, "real");
+      }
+    });
+  } finally {
+    globalThis.fetch = previousFetch;
+    parentStoryBookCacheInternals.storyResponseCache.clear();
+    parentStoryBookCacheInternals.mediaAssetCache.clear();
+  }
+});
+
 function withEnv(
   overrides: Partial<
     Record<
       | "BACKEND_BASE_URL"
+      | "AI_PROVIDER"
+      | "AI_API_KEY"
+      | "AI_BASE_URL"
       | "BAILIAN_ENDPOINT"
       | "BAILIAN_MODEL"
       | "BAILIAN_TIMEOUT_MS"
@@ -44,6 +74,9 @@ function withEnv(
 ) {
   const previous = {
     BACKEND_BASE_URL: process.env.BACKEND_BASE_URL,
+    AI_PROVIDER: process.env.AI_PROVIDER,
+    AI_API_KEY: process.env.AI_API_KEY,
+    AI_BASE_URL: process.env.AI_BASE_URL,
     BAILIAN_ENDPOINT: process.env.BAILIAN_ENDPOINT,
     BAILIAN_MODEL: process.env.BAILIAN_MODEL,
     BAILIAN_TIMEOUT_MS: process.env.BAILIAN_TIMEOUT_MS,

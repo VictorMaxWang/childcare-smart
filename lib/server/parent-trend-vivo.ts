@@ -3,6 +3,13 @@ import "server-only";
 import type { ParentTrendQueryResponse } from "@/lib/ai/types";
 import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import { requestVivoChat } from "@/lib/providers/vivo";
+import { getMaasProviderStatus, isMaasSelected, requestMaasChat } from "@/lib/providers/maas/maas-provider";
+
+async function requestMaasTrend(input: Parameters<typeof requestVivoChat>[0]) {
+  const result = await requestMaasChat({ messages: input.messages.flatMap(message => message.role === "function" ? [] : [{ role: message.role, content: message.content }]), json: true, maxTokens: 2000,
+    signal: input.signal, deadlineAtMs: input.deadlineAtMs });
+  return { ...result, providerName: "maas", status: { ...getMaasProviderStatus("chat"), state: "live" as const, live: true } };
+}
 
 type ParentTrendVivoDependencies = {
   requestChat: typeof requestVivoChat;
@@ -51,7 +58,7 @@ function keepDataWarnings(warnings: string[]) {
 }
 
 /**
- * 趋势数值继续由服务端确定性聚合，Vivo 只负责解释已授权结果，
+ * 趋势数值继续由服务端确定性聚合，所选文本模型只负责解释已授权结果，
  * 防止模型改写原始记录或扩大幼儿数据范围。
  */
 export async function enhanceParentTrendWithVivo(
@@ -60,7 +67,7 @@ export async function enhanceParentTrendWithVivo(
 ): Promise<ParentTrendQueryResponse | null> {
   try {
     const result = await (
-      dependencies.requestChat ?? defaultDependencies.requestChat
+      dependencies.requestChat ?? (isMaasSelected() ? requestMaasTrend : defaultDependencies.requestChat)
     )({
       messages: [
         {
@@ -105,7 +112,7 @@ export async function enhanceParentTrendWithVivo(
       },
       memoryMeta: {
         ...(base.memoryMeta ?? {}),
-        mode: "next-vivo-live",
+        mode: isMaasSelected() ? "next-maas-live" : "next-vivo-live",
         fallbackReason: null,
       },
       mode: "live",
@@ -122,7 +129,7 @@ export async function enhanceParentTrendWithVivo(
         realProvider: true,
         model: result.model,
         requestId: result.requestId,
-        transport: "next-vivo-chat",
+        transport: isMaasSelected() ? "next-maas-chat" : "next-vivo-chat",
         transportSource: "next-server",
         providerStatus: result.status,
         extra: {

@@ -11,6 +11,7 @@ import {
 } from "@/lib/ai/providers";
 import { resolveDashScopeStoryImageConfig } from "@/lib/providers/dashscope/dashscope-story-image-provider";
 import { getVivoProviderStatus, type VivoProviderStatus } from "@/lib/providers/vivo";
+import { getMaasCapabilityVerification, getMaasProviderStatus, isMaasSelected, resolveMaasConfig } from "@/lib/providers/maas/maas-provider";
 import type {
   AssistantProviderStatus,
   VoiceProviderCapabilityStatus,
@@ -188,6 +189,21 @@ function resolveEffectiveChatStatus(
 }
 
 export function getUnifiedAiProviderStatus(): AssistantProviderStatus {
+  if (isMaasSelected()) {
+    const config = resolveMaasConfig();
+    const status = (capability: ProviderStatusCapability, model: string) => ({
+      ...toUnifiedCapability(getMaasProviderStatus(capability as Parameters<typeof getMaasProviderStatus>[0]), capability),
+      model, verification: getMaasCapabilityVerification(capability),
+    });
+    const chat = status("chat", config.textModel);
+    const capabilities = {
+      llm: status("llm", config.textModel), vision: status("vision", config.textModel),
+      ocr: status("ocr", config.textModel), asr: status("asr", config.asrModel), tts: status("tts", config.ttsModel),
+      storybookImage: status("storybook-image", config.imageModel), storybookAudio: status("storybook-audio", config.ttsModel),
+    };
+    return { chat, ...capabilities, capabilities,
+      fallbackText: "各能力分别显示配置和当前实例最近调用验证状态；已配置不代表真实调用通过。" };
+  }
   const vivoChat = toUnifiedCapability(getVivoProviderStatus("chat"), "chat");
   const bailianChat = buildBailianStatus("chat");
   const chat = resolveEffectiveChatStatus(vivoChat, bailianChat);

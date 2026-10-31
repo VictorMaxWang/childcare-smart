@@ -5,6 +5,7 @@ from app.providers.base import AsrProvider, TextProvider
 from app.providers.mock import MockTextProvider
 from app.providers.vivo_asr import MockAsrProvider, VivoAsrProvider
 from app.providers.vivo_llm import VivoLlmProvider
+from app.providers.maas import MaasAsrProvider, MaasTextProvider, maas_configured, maas_selected
 
 
 _PLACEHOLDER_PROVIDER_VALUES = {
@@ -59,7 +60,13 @@ def has_vivo_text_provider_config(settings: Settings) -> bool:
     return _has_vivo_credentials(settings)
 
 
+def can_use_real_text_provider(settings: Settings) -> bool:
+    return maas_configured(settings) if maas_selected(settings) else can_use_vivo_text_provider(settings)
+
+
 def resolve_text_provider(settings: Settings, *, prefer_vivo: bool = False) -> TextProvider:
+    if maas_selected(settings):
+        return MaasTextProvider(settings)
     if can_use_vivo_text_provider(settings, prefer_vivo=prefer_vivo):
         return VivoLlmProvider(settings)
     return MockTextProvider()
@@ -74,6 +81,8 @@ def can_use_vivo_asr_provider(settings: Settings, *, prefer_vivo: bool = False) 
 
 
 def resolve_asr_provider(settings: Settings, *, prefer_vivo: bool = False) -> AsrProvider:
+    if maas_selected(settings):
+        return MaasAsrProvider(settings)
     if can_use_vivo_asr_provider(settings, prefer_vivo=prefer_vivo):
         return VivoAsrProvider(settings)
     return MockAsrProvider()

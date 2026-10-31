@@ -301,7 +301,9 @@ async function enrichPayloadWithOcr(payload: HealthFileBridgeRequest) {
     ? effectiveOcrStatus.providerName
     : "local-text-fallback";
   const source =
-    providerName === "dashscope"
+    providerName === "maas"
+      ? ("maas-ocr-provider" as const)
+      : providerName === "dashscope"
       ? ("dashscope-ocr-provider" as const)
       : providerName === "vivo"
         ? ("vivo-ocr-provider" as const)

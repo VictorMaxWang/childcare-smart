@@ -131,12 +131,12 @@ def _normalize_provider_trace(
     fallback = (
         _as_bool(record.get("fallback"))
         if "fallback" in record
-        else source != "vivo"
+        else source not in {"vivo", "maas", "ai"}
     )
     real_provider = (
         _as_bool(record.get("realProvider"))
         if "realProvider" in record
-        else source == "vivo" and not fallback
+        else source in {"vivo", "maas", "ai"} and not fallback
     )
 
     normalized = {

@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import time
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -217,7 +218,8 @@ def test_health_file_bridge_writeback_rejects_child_outside_signed_scope(tmp_pat
     assert "outside service scope" in response.json()["detail"]
 
 
-def test_health_file_bridge_writeback_endpoint_persists_snapshot(tmp_path, monkeypatch):
+@pytest.mark.parametrize("ocr_source", ["next-local-extractor", "maas-ocr-provider"])
+def test_health_file_bridge_writeback_endpoint_persists_snapshot(tmp_path, monkeypatch, ocr_source):
     sqlite_path = tmp_path / "memory-bridge-writeback.db"
     configure_memory_backend(monkeypatch, backend="sqlite", sqlite_path=str(sqlite_path))
 
@@ -269,7 +271,7 @@ def test_health_file_bridge_writeback_endpoint_persists_snapshot(tmp_path, monke
                     "traceId": "trace-bridge-1",
                     "fileKind": "health-note",
                     "fileType": "pdf",
-                    "source": "next-local-extractor",
+                    "source": ocr_source,
                     "state": "fallback",
                     "configured": False,
                     "live": False,
@@ -288,7 +290,7 @@ def test_health_file_bridge_writeback_endpoint_persists_snapshot(tmp_path, monke
     body = response.json()
     assert body["child_id"] == "child-bridge-1"
     assert body["snapshot_type"] == "health-file-bridge-writeback"
-    assert body["snapshot_json"]["bridgeWriteback"]["provenance"]["source"] == "next-local-extractor"
+    assert body["snapshot_json"]["bridgeWriteback"]["provenance"]["source"] == ocr_source
     assert (
         body["snapshot_json"]["bridgeWriteback"]["followUpSeed"]["reviewIn48h"]
         == "Review the bridge signals again within 48 hours."

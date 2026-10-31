@@ -46,6 +46,8 @@ const mode = String(process.env.REAL_SMOKE_MODE ?? "all")
   .toLowerCase();
 const runExisting = mode === "all" || mode === "existing";
 const runFresh = mode === "all" || mode === "fresh";
+// 正式验收针对本次配置的供应商；内容、私有持久化和真实调用断言仍保持严格。
+const expectedAiProvider = process.env.REAL_SMOKE_EXPECTED_AI_PROVIDER?.trim() || process.env.AI_PROVIDER?.trim() || "maas";
 const requireLiveAi = ["1", "true", "yes", "on"].includes(
   String(process.env.REAL_SMOKE_REQUIRE_LIVE_AI ?? "1")
     .trim()
@@ -640,7 +642,7 @@ async function verifyDietAndStorybookAi(
       expect(imageBytes.subarray(0, 4).toString("ascii")).toBe("RIFF");
       expect(imageBytes.subarray(8, 12).toString("ascii")).toBe("WEBP");
       const audioUrl = String(item.audioUrl ?? "");
-      expect(item.audioProvider).toBe("vivo-story-tts");
+      expect(item.audioProvider).toBe(expectedAiProvider === "maas" ? "maas-tts" : "vivo-story-tts");
       expect(audioUrl, "storybook scene must have audio media").toMatch(
         /^\/api\/ai\/parent-storybook\/media\/[a-f0-9]{40}$/u
       );
@@ -1281,7 +1283,8 @@ test("fresh real trio completes binding, media, voice, consultation, and AI", as
       expect(asr.fallback).toBe(false);
       expect(asr.source).toBe("provider");
       expect(asr.mode).toBe("live");
-      expect(["vivo", "dashscope"]).toContain(asr.provider);
+      if (expectedAiProvider === "maas") expect(asr.provider).toBe("maas");
+      else expect(["vivo", "dashscope"]).toContain(asr.provider);
       expect(asr.providerTrace?.realProvider).toBe(true);
       expect(asr.providerTrace?.fallback).toBe(false);
     }

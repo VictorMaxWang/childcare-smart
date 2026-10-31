@@ -7,6 +7,7 @@ import {
   requestVivoAsr,
   type VivoProviderStatus,
 } from "@/lib/providers/vivo";
+import { getMaasProviderStatus, isMaasSelected } from "@/lib/providers/maas/maas-provider";
 
 export interface AsrProviderInput {
   attachmentName?: string;
@@ -81,6 +82,7 @@ function buildMeta(input: AsrProviderInput, reason: string) {
 }
 
 export function getDashscopeAsrProviderStatus(): AsrProviderStatus {
+  if (isMaasSelected()) return { ...getMaasProviderStatus("asr"), model: resolveBailianAsrModel() };
   const configured = hasDashscopeKey();
   return {
     providerName: "dashscope",
@@ -106,6 +108,7 @@ export function getDashscopeAsrProviderStatus(): AsrProviderStatus {
 }
 
 export function getEffectiveAsrProviderStatus(): AsrProviderStatus {
+  if (isMaasSelected()) return getDashscopeAsrProviderStatus();
   const vivo = getVivoProviderStatus("asr");
   if (vivo.status === "ready") return vivo;
 
@@ -214,9 +217,9 @@ class DashscopeAsrProvider implements AsrProvider {
         {
           ...this.getStatus(),
           status: "provider-unavailable",
-          reason: "DashScope ASR request failed or returned an empty transcript.",
+          reason: "Selected ASR request failed or returned an empty transcript.",
         },
-        "百炼 ASR 未返回可用转写。"
+        "所选语音服务未返回可用转写。"
       );
     }
 
@@ -232,7 +235,7 @@ class DashscopeAsrProvider implements AsrProvider {
       model: result.model,
     };
     return {
-      provider: "dashscope",
+      provider: this.getStatus().providerName,
       mode: "live" as const,
       source: "provider" as const,
       model: result.model,
@@ -242,12 +245,12 @@ class DashscopeAsrProvider implements AsrProvider {
         confidence: result.confidence,
         raw: result.rawResponse,
         meta: {
-          ...buildMeta(input, "dashscope-asr"),
+          ...buildMeta(input, isMaasSelected() ? "maas-asr" : "dashscope-asr"),
           language: result.language,
           emotion: result.emotion,
         },
         fallback: false,
-        providerName: "dashscope",
+        providerName: this.getStatus().providerName,
         state: "live" as const,
         live: true,
         mock: false,
@@ -309,6 +312,7 @@ class VivoAsrProvider implements AsrProvider {
 }
 
 export function resolveAsrProvider(): AsrProvider {
+  if (isMaasSelected()) return new DashscopeAsrProvider();
   // Vivo 配置完整时保持原路径；否则复用现有百炼 Key，让普通账号的录音按钮具备真实转写能力。
   const vivoStatus = getVivoProviderStatus("asr");
   if (vivoStatus.status === "ready") return new VivoAsrProvider();

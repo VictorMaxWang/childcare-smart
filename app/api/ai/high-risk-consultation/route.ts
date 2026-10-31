@@ -255,6 +255,13 @@ export async function POST(request: Request) {
     timeoutMs: getHighRiskConsultationBrainTimeoutMs(),
     serviceScope,
   });
+  if (["maas", "openai-compatible"].includes(process.env.AI_PROVIDER ?? "") &&
+      Boolean(process.env.BRAIN_API_BASE_URL || process.env.BACKEND_BASE_URL) &&
+      (!brainForward.response?.ok || !(await shouldAcceptRemoteResponse(brainForward.response, authResult.session.user.accountKind)))) {
+    return brainForward.response && !brainForward.response.ok
+      ? brainForward.response
+      : NextResponse.json({ ok: false, code: "generation_result_unknown", error: "会诊生成结果尚未确认，未自动重复请求。" }, { status: 503 });
+  }
   if (brainForward.response) {
     const remoteResponseAccepted =
       brainForward.response.ok &&

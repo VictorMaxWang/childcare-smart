@@ -503,6 +503,8 @@ class Orchestrator:
 
     def _brain_provider(self) -> str:
         settings = get_settings()
+        if str(getattr(settings, "ai_provider", "")).lower() in {"maas", "openai-compatible"}:
+            return "maas"
         return settings.brain_provider.strip().lower() or "unknown"
 
     def _normalize_high_risk_result(

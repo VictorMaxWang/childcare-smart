@@ -3,19 +3,54 @@ import test from "node:test";
 
 import type { ParentTrendQueryPayload, ParentTrendQueryResponse } from "@/lib/ai/types";
 import { createDemoSeedSnapshot } from "@/lib/demo-data/seed";
+import { buildParentTrendFallbackResponse } from "@/lib/server/parent-trend-fallback";
 import {
   SMARTCHILDCARE_FALLBACK_REASON_HEADER,
   SMARTCHILDCARE_TRANSPORT_HEADER,
 } from "@/lib/server/brain-client";
 import { POST } from "./route.ts";
 
+test("successful deterministic Brain statistics receive one verified MaaS explanation", async () => {
+  await withEnv({ BRAIN_API_BASE_URL: "http://brain.example.com", AI_PROVIDER: "maas", AI_API_KEY: "synthetic-only-key", AI_BASE_URL: "https://maas.example.test/compatible-mode/v1" }, async () => {
+    const aggregate = { ...buildParentTrendFallbackResponse({ payload: buildPayload(), fallbackReason: "synthetic" }), source: "database", fallback: false, fallbackReason: null, providerTrace: undefined, provider: undefined, mode: undefined };
+    let modelCalls = 0;
+    await withMockedFetch((async (url) => {
+      if (String(url).includes("brain.example.com")) return Response.json(aggregate);
+      assert(String(url).startsWith("https://maas.example.test/")); modelCalls++;
+      return Response.json({ model: "ZHIPU/GLM-5.3-Flash", choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ explanation: "合成记录不足以判断持续改善，建议再保留几天一致的观察并回传反馈。", warnings: ["这是合成验收场景"] }) } }] });
+    }) as typeof fetch, async () => {
+      const response = await POST(buildRequest(buildPayload())); const body = await readTrend(response);
+      assert.equal(response.status, 200); assert.equal(modelCalls, 1);
+      assert.equal(body.provider, "maas"); assert.equal(body.providerTrace?.realProvider, true);
+      assert.deepEqual(body.series, aggregate.series); assert.equal(body.source, "database");
+    });
+  });
+});
+
+test("failed MaaS trend explanation keeps deterministic statistics explicitly non-live", async () => {
+  await withEnv({ BRAIN_API_BASE_URL: "http://brain.example.com", AI_PROVIDER: "maas", AI_API_KEY: "synthetic-only-key", AI_BASE_URL: "https://maas.example.test/compatible-mode/v1" }, async () => {
+    const aggregate = { ...buildParentTrendFallbackResponse({ payload: buildPayload(), fallbackReason: "synthetic" }), source: "database", fallback: false, fallbackReason: null, providerTrace: undefined, provider: undefined, mode: undefined };
+    let modelCalls = 0;
+    await withMockedFetch((async (url) => { if (String(url).includes("brain.example.com")) return Response.json(aggregate); modelCalls++; return new Response("synthetic unavailable", { status: 503 }); }) as typeof fetch, async () => {
+      const response = await POST(buildRequest(buildPayload())); const body = await readTrend(response);
+      assert.equal(response.status, 200); assert.equal(modelCalls, 1);
+      assert.equal(body.mode, "fallback"); assert.equal(body.provider, "server-deterministic");
+      assert.equal(body.providerTrace?.realProvider, false); assert.equal(body.fallback, true);
+      assert.deepEqual(body.series, aggregate.series);
+    });
+  });
+});
+
 function withEnv(
-  overrides: Partial<Record<"BRAIN_API_BASE_URL" | "NEXT_PUBLIC_BACKEND_BASE_URL", string | undefined>>,
+  overrides: Partial<Record<"BRAIN_API_BASE_URL" | "NEXT_PUBLIC_BACKEND_BASE_URL" | "AI_PROVIDER" | "AI_API_KEY" | "AI_BASE_URL", string | undefined>>,
   fn: () => void | Promise<void>
 ) {
   const previous = {
     BRAIN_API_BASE_URL: process.env.BRAIN_API_BASE_URL,
     NEXT_PUBLIC_BACKEND_BASE_URL: process.env.NEXT_PUBLIC_BACKEND_BASE_URL,
+    AI_PROVIDER: process.env.AI_PROVIDER,
+    AI_API_KEY: process.env.AI_API_KEY,
+    AI_BASE_URL: process.env.AI_BASE_URL,
   };
 
   for (const [key, value] of Object.entries(overrides)) {

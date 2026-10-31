@@ -21,6 +21,7 @@ import {
   isParentTrendQueryResponse,
 } from "@/lib/server/parent-trend-fallback";
 import { enhanceParentTrendWithVivo } from "@/lib/server/parent-trend-vivo";
+import { isMaasSelected } from "@/lib/providers/maas/maas-provider";
 
 function isParentTrendPayload(value: unknown): value is ParentTrendQueryPayload {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -50,13 +51,16 @@ function enrichParentTrendResponse(
   responseBody: ParentTrendQueryResponse,
   brainForward: BrainForwardResult
 ) {
-  const fallback = Boolean(responseBody.fallback);
-  const fallbackReason = responseBody.fallbackReason ?? null;
-  const provider = responseBody.provider ?? (fallback ? "remote-brain-fallback" : "remote-brain");
+  // 数据库聚合成功不代表调用过文本模型；仅明确的真实调用轨迹可宣称 live。
+  const real = responseBody.providerTrace?.realProvider === true && responseBody.providerTrace?.fallback !== true;
+  const fallback = !real || Boolean(responseBody.fallback);
+  const fallbackReason = responseBody.fallbackReason ?? (real ? null : "deterministic-trend-analysis");
+  const provider = responseBody.provider ?? (real ? "remote-brain" : "server-deterministic");
   return {
     ...responseBody,
     mode: responseBody.mode ?? (fallback ? "fallback" : "live"),
     provider,
+    fallback,
     fallbackReason,
     providerTrace:
       responseBody.providerTrace ??
@@ -67,7 +71,7 @@ function enrichParentTrendResponse(
         mode: fallback ? "fallback" : "live",
         fallback,
         fallbackReason,
-        realProvider: !fallback,
+        realProvider: real,
         transport: "remote-brain-proxy",
         transportSource: "next-server",
         extra: {
@@ -170,7 +174,12 @@ export async function POST(request: Request) {
       remotePayloadAccepted &&
       isParentTrendQueryResponse(responseBody)
     ) {
-      return NextResponse.json(enrichParentTrendResponse(responseBody, brainForward), {
+      const aggregated = enrichParentTrendResponse(responseBody, brainForward);
+      // 当前 Brain 只聚合记录；MaaS 只补充一次解读，不修改统计，也不重复已通过的模型结果。
+      const enhanced = isMaasSelected() && aggregated.providerTrace?.realProvider !== true
+        ? await enhanceParentTrendWithVivo(aggregated)
+        : null;
+      return NextResponse.json(enhanced ?? aggregated, {
         status: brainForward.response.status,
         headers: brainForward.response.headers,
       });

@@ -11,7 +11,8 @@ from app.core.config import Settings, get_settings
 from pydantic import ValidationError
 
 from app.providers.base import ProviderAuthenticationError, ProviderResponseError, ProviderTextResult
-from app.providers.resolver import can_use_vivo_text_provider, resolve_text_provider
+from app.providers.resolver import can_use_real_text_provider, resolve_text_provider
+from app.providers.maas import real_text_result, summarize_async
 from app.schemas.parent_message import (
     ParentMessageDebugIteration,
     ParentMessageDraftOutput,
@@ -259,7 +260,7 @@ class ParentMessageReflexionService:
             debug_loop=request.debug_loop,
             memory_context_used=memory_context_used,
             memory_meta=self._build_memory_meta(payload),
-            live_provider_enabled=can_use_vivo_text_provider(self.settings),
+            live_provider_enabled=can_use_real_text_provider(self.settings),
         )
 
     async def _generate_candidate(
@@ -280,7 +281,7 @@ class ParentMessageReflexionService:
 
         try:
             provider = resolve_text_provider(self.settings)
-            provider_result = provider.summarize(
+            provider_result = await summarize_async(provider,
                 prompt=self._build_generator_prompt(context, revision_instructions),
                 fallback=json.dumps(local_draft.model_dump(mode="json", by_alias=True), ensure_ascii=False),
             )
@@ -295,7 +296,7 @@ class ParentMessageReflexionService:
                 detail=str(error),
             )
 
-        if provider_result.fallback or provider_result.source != "vivo":
+        if not real_text_result(provider_result):
             return self._build_generator_fallback(
                 local_draft=local_draft,
                 provider_result=provider_result,
@@ -396,7 +397,7 @@ class ParentMessageReflexionService:
     ) -> EvaluationStepResult:
         try:
             provider = resolve_text_provider(self.settings)
-            provider_result = provider.summarize(
+            provider_result = await summarize_async(provider,
                 prompt=self._build_evaluator_prompt(context, draft, iteration),
                 fallback="",
             )
@@ -410,7 +411,7 @@ class ParentMessageReflexionService:
                 detail=str(error),
             )
 
-        if provider_result.fallback or provider_result.source != "vivo":
+        if not real_text_result(provider_result):
             return self._build_evaluator_fallback(
                 provider_result=provider_result,
                 fallback_reason=self._provider_fallback_reason(provider_result),
@@ -862,7 +863,7 @@ class ParentMessageReflexionService:
         reason = cls._coerce_text(meta.get("reason"))
         if reason:
             return reason
-        if provider_result.source != "vivo":
+        if not real_text_result(provider_result):
             return "non-vivo-source"
         return "provider-fallback"
 

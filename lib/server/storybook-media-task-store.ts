@@ -18,8 +18,8 @@ const TASK_ID_PATTERN = /^[a-zA-Z0-9_-]{8,160}$/u;
 const MEDIA_KEY_PATTERN = /^[a-f0-9]{40}$/u;
 const DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
 const CHANNEL_PROVIDER = {
-  image: "dashscope-qwen-image",
-  audio: "vivo-story-tts",
+  image: ["dashscope-qwen-image", "maas-z-image"],
+  audio: ["vivo-story-tts", "maas-tts"],
 } as const;
 const MAX_ATTEMPTS = {
   image: 2,
@@ -43,7 +43,7 @@ export interface StorybookMediaTaskIdentity {
   storybookId: string;
   sceneIndex: number;
   channel: StorybookMediaTaskChannel;
-  provider: (typeof CHANNEL_PROVIDER)[StorybookMediaTaskChannel];
+  provider: (typeof CHANNEL_PROVIDER)[StorybookMediaTaskChannel][number];
   providerModel: string;
   inputDigest: string;
 }
@@ -191,7 +191,7 @@ function normalizeIdentity(identity: StorybookMediaTaskIdentity) {
   if (!DIGEST_PATTERN.test(inputDigest)) {
     throw new Error("inputDigest must be a SHA-256 hex digest");
   }
-  if (CHANNEL_PROVIDER[identity.channel] !== identity.provider) {
+  if (!(CHANNEL_PROVIDER[identity.channel] as readonly string[]).includes(identity.provider)) {
     throw new Error("storybook media channel and provider do not match");
   }
   return {
@@ -834,7 +834,8 @@ export class InMemoryStorybookMediaTaskStore
     operation: StorybookMediaTaskOperation = {}
   ) {
     assertOperationActive(operation);
-    if (identity.channel !== "audio") return false;
+    // MaaS 同步图片也需要在持久化成功、任务提交中断后用稳定 key 恢复，禁止再次生成。
+    if (identity.channel !== "audio" && identity.provider !== "maas-z-image") return false;
     const key = taskKey(identity);
     const current = this.tasks.get(key);
     if (
@@ -1450,7 +1451,7 @@ export class DatabaseStorybookMediaTaskStore
     mediaKey: string,
     operation: StorybookMediaTaskOperation = {}
   ) {
-    if (identity.channel !== "audio") return false;
+    if (identity.channel !== "audio" && identity.provider !== "maas-z-image") return false;
     await this.ensureTable(operation);
     const [resultRaw] = await executeWithBudget(
       this.pool,

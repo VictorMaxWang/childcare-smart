@@ -1,4 +1,5 @@
 import "server-only";
+import { isMaasSelected, MaasProviderError, requestMaasChat } from "@/lib/providers/maas/maas-provider";
 
 import type {
   ParentStoryBookRequest,
@@ -589,7 +590,7 @@ export function isParentStoryBookRealText(story: ParentStoryBookResponse) {
   const textProvider = story.providerMeta.textProvider ?? story.providerMeta.provider;
   return (
     story.providerMeta.textDelivery === "real" &&
-    /(?:vivo|qwen|dashscope|llm|ai)/iu.test(textProvider ?? "") &&
+    /(?:maas|vivo|qwen|dashscope|llm|ai)/iu.test(textProvider ?? "") &&
     !story.fallbackReason &&
     !story.providerMeta.fallbackReason
   );
@@ -613,7 +614,7 @@ function buildRealStoryTextResponse(input: {
   story: ParentStoryBookResponse;
   generated: StoryTextPayload;
   expectedSceneCount: number;
-  provider: "vivo-chat" | "dashscope";
+  provider: "vivo-chat" | "dashscope" | "maas";
   model: string | null;
   attemptCount: number;
   attemptedProviders: string[];
@@ -626,7 +627,7 @@ function buildRealStoryTextResponse(input: {
     summary: input.generated.summary || input.story.summary,
     moral: input.generated.moral || input.story.moral,
     parentNote: input.generated.parentNote || input.story.parentNote,
-    source: input.provider === "vivo-chat" ? "vivo" : "dashscope",
+    source: input.provider === "maas" ? "ai" : input.provider === "vivo-chat" ? "vivo" : "dashscope",
     fallback: false,
     fallbackReason: null,
     providerMeta: {
@@ -643,7 +644,7 @@ function buildRealStoryTextResponse(input: {
         ? {
             ...diagnostics,
             text: {
-              requestedProvider: "vivo-chat+dashscope",
+              requestedProvider: input.provider === "maas" ? "maas" : "vivo-chat+dashscope",
               resolvedProvider: input.provider,
               attemptedProviders: [...input.attemptedProviders],
               attemptCount: input.attemptCount,
@@ -676,6 +677,43 @@ export async function enhanceParentStoryBookWithRealText(input: {
     story: input.story,
     expectedSceneCount,
   });
+
+  if (isMaasSelected()) {
+    // 新供应商只发送一次付费请求。传输结果未知或结构错误交给用户处理，不能跨服务再次扣费。
+    let attempted = false;
+    try {
+      const result = await requestMaasChat({
+        messages: [
+          { role: "system", content: "你是婴幼儿绘本作者。仅返回合约要求的 JSON，页数必须准确；不要编造孩子未提供的经历。" },
+          { role: "user", content: prompt },
+        ],
+        json: true,
+        maxTokens: expectedSceneCount >= 8 ? 7000 : 5000,
+        signal: input.signal,
+        deadlineAtMs: input.deadlineAtMs,
+        onRequestStart: () => { attempted = true; },
+      });
+      return buildRealStoryTextResponse({
+        story: input.story,
+        generated: validateStoryTextPayload(extractJsonObject(result.text), expectedSceneCount),
+        expectedSceneCount,
+        provider: "maas",
+        model: result.model,
+        attemptCount: 1,
+        attemptedProviders: ["maas"],
+        elapsedMs: Date.now() - startedAt,
+      });
+    } catch (error) {
+      throw new ParentStoryBookRealTextError("绘本文字生成未完成，请查看服务状态后主动重试。", {
+        fallbackReason: error instanceof ParentStoryBookRealTextError ? error.fallbackReason : "maas-story-text-failed",
+        provider: "maas",
+        attemptCount: attempted ? 1 : 0,
+        attemptedProviders: attempted ? ["maas"] : [],
+        providerHttpStatus: error instanceof MaasProviderError ? error.httpStatus : null,
+        failureKind: error instanceof MaasProviderError ? error.failureKind : "invalid-structured-output",
+      });
+    }
+  }
 
   let lastError: unknown = null;
   let attemptCount = 0;

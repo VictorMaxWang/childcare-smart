@@ -15,6 +15,7 @@ import {
 } from "@/lib/server/brain-client";
 import { authorizeAiRouteSession } from "@/lib/server/ai-route-guard";
 import { logSecurityEvent } from "@/lib/server/security-log";
+import { isMaasSelected, resolveMaasConfig } from "@/lib/providers/maas/maas-provider";
 
 interface DietEvaluationPayload {
   childId?: string;
@@ -245,7 +246,7 @@ export async function POST(request: Request) {
   });
   if (authResult instanceof Response) return authResult;
 
-  const configuredModel = process.env.AI_DIET_MODEL?.trim() || resolveBailianRuntimeConfig().model;
+  const configuredModel = isMaasSelected() ? resolveMaasConfig().textModel : process.env.AI_DIET_MODEL?.trim() || resolveBailianRuntimeConfig().model;
   let payload: DietEvaluationPayload | null = null;
 
   try {
@@ -271,7 +272,10 @@ export async function POST(request: Request) {
     scopeId: childId ?? null,
   };
 
-  const brainForward = await forwardBrainRequest(request, "/api/v1/multimodal/diet-evaluation");
+  // 选定 MaaS 时由此服务发出唯一收费请求；避免旧 Brain 规则结果触发跨服务重复生成。
+  const brainForward = isMaasSelected()
+    ? { response: null, fallbackReason: "maas-next-capability" }
+    : await forwardBrainRequest(request, "/api/v1/multimodal/diet-evaluation");
   const remoteResponseAccepted =
     brainForward.response?.ok &&
     (await shouldAcceptRemoteResponse(
@@ -325,7 +329,7 @@ export async function POST(request: Request) {
   const aiResult = await requestDashscopeDietEvaluation(payload.input);
   if (!aiResult) {
     logSecurityEvent("warn", "ai.diet_evaluation.fallback", {
-      provider: "dashscope",
+      provider: isMaasSelected() ? "maas" : "dashscope",
       model: configuredModel,
     });
     const fallbackReason = rejectedRemoteResult
@@ -359,7 +363,7 @@ export async function POST(request: Request) {
         {
           childId,
           source: "ai",
-          provider: "dashscope",
+          provider: isMaasSelected() ? "maas" : "dashscope",
           model: configuredModel,
         },
         provenanceContext

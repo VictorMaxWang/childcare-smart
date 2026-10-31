@@ -22,6 +22,7 @@ import {
 } from "@/lib/server/session-scope";
 import { requireClassAccess } from "@/lib/server/scope";
 import { logSecurityEvent } from "@/lib/server/security-log";
+import { withPersistentAiResult } from "@/lib/server/ai-result-cache";
 
 export async function POST(request: Request) {
   const authResult = await authorizeAiRouteSession(request, { allowUnscoped: true });
@@ -73,6 +74,12 @@ export async function POST(request: Request) {
     throw error;
   }
   const trustedPayload = buildWeeklyReportPayloadFromScope(payload, sessionScope);
+  return withPersistentAiResult({
+    session: authResult.session.user,
+    capability: "weekly-report",
+    scopeId: `${payload.scopeType ?? "institution"}:${payload.scopeId ?? authResult.session.user.institutionId}`,
+    input: trustedPayload,
+  }, async () => {
   const brainRequest = new Request(request.url, {
     method: "POST",
     headers: request.headers,
@@ -92,6 +99,13 @@ export async function POST(request: Request) {
     return brainForward.response;
   }
 
+  if (["maas", "openai-compatible"].includes(process.env.AI_PROVIDER ?? "") &&
+      Boolean(process.env.BRAIN_API_BASE_URL || process.env.BACKEND_BASE_URL)) {
+    return brainForward.response?.ok
+      ? NextResponse.json({ ok: false, code: "provider_unavailable", error: "远端 AI 未返回可验证的真实结果。" }, { status: 503 })
+      : brainForward.response ?? NextResponse.json({ ok: false, code: "generation_result_unknown", error: "远端生成结果尚未确认，未自动重复请求。" }, { status: 503 });
+  }
+
   try {
     const result = await executeWeeklyReport(
       trustedPayload,
@@ -106,4 +120,5 @@ export async function POST(request: Request) {
     }
     throw error;
   }
+  }, { cacheOnly: request.headers.get("x-ai-cache-only") === "1", confirmRetryUnknown: request.headers.get("x-ai-confirm-retry") === "1" });
 }

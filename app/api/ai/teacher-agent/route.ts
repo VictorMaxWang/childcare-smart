@@ -200,7 +200,8 @@ function enrichTeacherAgentResult(params: {
       mode: source === "mock" ? "mock" : fallback ? "fallback" : "live",
       fallback,
       fallbackReason,
-      realProvider: !fallback && provider === "vivo",
+      // 已成功的业务结果决定真实性；不能因供应商从 Vivo 切换为 MaaS 而降为非真实结果。
+      realProvider: !fallback && source === "ai",
       model: params.result.model,
       transport: params.result.transport ?? params.transport,
       providerStatus: params.result.providerStatus,
