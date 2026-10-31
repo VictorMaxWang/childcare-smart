@@ -11,6 +11,6 @@ export function withParentStoryBookTextResult(
 ) {
   return withPersistentAiResult({
     session: input.session, capability: "parent-storybook", scopeId: input.childId,
-    input: { version: 1, payload: input.payload, dataVersion: input.dataVersion },
+    input: { version: 2, payload: input.payload, dataVersion: input.dataVersion },
   }, generate, options);
 }

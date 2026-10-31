@@ -201,6 +201,33 @@ function buildRecommendedOwnerMap(actionItems: AdminAgentActionItem[]) {
   return Array.from(map.values()).sort((left, right) => right.count - left.count);
 }
 
+function buildInstitutionSuggestionActions(
+  context: AdminAgentContext,
+  actions: unknown[],
+  workflow: "daily-priority" | "question-follow-up" | "weekly-ops-report"
+): AdminAgentActionItem[] {
+  // 无规则风险卡的机构仍应收到模型的真实下一步；将其保留为待园长确认的机构建议，不能虚构儿童风险或指派。
+  return takeUnique(actions.map(normalizeGeneratedActionText).filter(Boolean), 4).map(action => {
+    const seed = `${context.institutionScope.institutionName}:${context.institutionScope.date}:${workflow}:${action}`;
+    // 仅用于界面去重，包含建议内容防止新建议误绑定旧派单；不是安全签名。
+    let hash = 2166136261;
+    for (const char of seed) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+    const id = `institution-suggestion-${(hash >>> 0).toString(16)}`;
+    return {
+      id: `action-${id}`, title: "机构日常照护建议", targetType: "issue", targetId: id,
+      targetName: "机构日常照护", priorityLevel: "P3", ownerRole: "admin", ownerLabel: "园长",
+      action, deadline: "待园长确认", summary: `待园长确认后安排：${action}`, status: "suggested",
+      dispatchPayload: {
+        eventType: "admin_action", priorityItemId: id, title: "机构日常照护建议", summary: action,
+        targetType: "issue", targetId: id, targetName: "机构日常照护", priorityLevel: "P3", priorityScore: 0,
+        recommendedOwnerRole: "admin", recommendedAction: action, recommendedDeadline: "待园长确认",
+        reasonText: "根据当前机构记录生成的照护建议，执行前由园长确认。", evidence: [],
+        source: { institutionName: context.institutionScope.institutionName, workflow, relatedChildIds: [], relatedClassNames: [] },
+      },
+    } satisfies AdminAgentActionItem;
+  });
+}
+
 function inferQuestionFocus(question: string): AdminQuestionFocus {
   const normalized = question.trim();
 
@@ -815,6 +842,9 @@ export function buildAdminDailyPriorityResult(params: {
   context: AdminAgentContext;
   suggestion: AiSuggestionResponse;
 }): AdminAgentResult {
+  const actionItems = params.context.actionItems.length
+    ? params.context.actionItems.slice(0, 4)
+    : buildInstitutionSuggestionActions(params.context, params.suggestion.actions, "daily-priority");
   const firstActionText =
     normalizeGeneratedActionText(params.suggestion.actions[0]) ||
     params.context.actionItems[0]?.action ||
@@ -837,8 +867,8 @@ export function buildAdminDailyPriorityResult(params: {
       [...params.suggestion.highlights, ...params.suggestion.concerns, ...params.context.highlights],
       5
     ),
-    actionItems: params.context.actionItems.slice(0, 4),
-    recommendedOwnerMap: params.context.recommendedOwnerMap,
+    actionItems,
+    recommendedOwnerMap: buildRecommendedOwnerMap(actionItems),
     quickQuestions: params.context.quickQuestions,
     notificationEvents: params.context.notificationEvents.slice(0, 6),
     source: params.suggestion.source,
@@ -855,7 +885,9 @@ export function buildAdminFollowUpResult(params: {
 }): AdminAgentResult {
   const focus = inferQuestionFocus(params.question);
   const selection = buildFocusSelection(params.context, focus);
-  const recommendedOwnerMap = buildRecommendedOwnerMap(selection.actionItems);
+  const actionItems = selection.actionItems.length ? selection.actionItems
+    : buildInstitutionSuggestionActions(params.context, params.response.nextSteps, "question-follow-up");
+  const recommendedOwnerMap = buildRecommendedOwnerMap(actionItems);
 
   return {
     title: selection.title,
@@ -870,7 +902,7 @@ export function buildAdminFollowUpResult(params: {
       [...params.response.keyPoints, ...params.response.nextSteps, ...params.context.highlights],
       5
     ),
-    actionItems: selection.actionItems,
+    actionItems,
     recommendedOwnerMap,
     quickQuestions: params.context.quickQuestions,
     notificationEvents: params.context.notificationEvents.slice(0, 6),
@@ -886,7 +918,7 @@ export function buildAdminWeeklyReportResult(params: {
   report: WeeklyReportResponse;
 }): AdminAgentResult {
   const report = sanitizeAdminWeeklyReportResponseForAdmin(params.report);
-  const actionItems = params.context.actionItems.slice(0, Math.max(3, report.nextWeekActions.length)).map(
+  const actionItems = params.context.actionItems.length ? params.context.actionItems.slice(0, Math.max(3, report.nextWeekActions.length)).map(
     (item, index) =>
       report.nextWeekActions[index]
         ? {
@@ -895,7 +927,7 @@ export function buildAdminWeeklyReportResult(params: {
             summary: `${item.ownerLabel}在${item.deadline}前推进：${report.nextWeekActions[index]}`,
           }
         : item
-  );
+  ) : buildInstitutionSuggestionActions(params.context, report.nextWeekActions, "weekly-ops-report");
 
   return sanitizeAdminWeeklyResult({
     title: "本周机构运营周报",

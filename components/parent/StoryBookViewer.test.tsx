@@ -116,6 +116,7 @@ function buildStory(
 
 test("resolveSceneCaptionTiming prefers scene captionTiming and preserves per-segment durations", () => {
   const scene = buildScene({
+    audioScript: "Page one. Bunny pauses. Bunny names the feeling.",
     captionTiming: {
       mode: "duration-derived",
       segmentTexts: ["Page one.", "Bunny pauses.", "Bunny names the feeling."],
@@ -132,6 +133,17 @@ test("resolveSceneCaptionTiming prefers scene captionTiming and preserves per-se
     "Bunny names the feeling.",
   ]);
   assert.deepEqual(timing.segmentDurationsMs, [2500, 3200, 4100]);
+});
+
+test("legacy mismatched template captions derive a preview from the actual audio script without rewriting raw history", () => {
+  const scene = buildScene({ sceneText: "清晨阳光暖，悠悠捧小杯。", audioScript: "清晨阳光暖，悠悠捧小杯。",
+    captionTiming: { mode: "tts-cues", segmentTexts: ["月光翻开第一页，种子主题qa-id。"], segmentDurationsMs: [99000] } });
+  const before = structuredClone(scene);
+  const timing = resolveSceneCaptionTiming(scene);
+  assert.equal(timing.mode, "duration-derived");
+  assert.equal(timing.segmentTexts.join(""), scene.audioScript);
+  assert.ok(timing.segmentDurationsMs!.every(value => value !== 99000));
+  assert.deepEqual(scene, before);
 });
 
 test("buildCaptionTimeline falls back to a readable caption timeline when captionTiming is missing", () => {

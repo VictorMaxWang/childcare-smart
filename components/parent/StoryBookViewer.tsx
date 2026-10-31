@@ -221,15 +221,18 @@ export function resolveSceneCaptionTiming(scene: ParentStoryBookScene): SceneCap
   const segmentsFromFallback = splitStoryBookCaptionSegments(rawText)
     .map((segment) => normalizeCaptionText(segment))
     .filter(Boolean);
-  const segments = (segmentsFromTiming?.length ? segmentsFromTiming : segmentsFromFallback)
+  // 旧书可能保留模板字幕。只在内容与真实朗读稿一致时沿用时间轴；不修改历史raw或伪称修复过旧音频。
+  const timingMatchesScript = Boolean(segmentsFromTiming?.length) &&
+    segmentsFromTiming!.join("").replace(/\s+/gu, "") === rawText.replace(/\s+/gu, "");
+  const segments = (timingMatchesScript ? segmentsFromTiming! : segmentsFromFallback)
     .filter(Boolean);
   const safeSegments = segments.length > 0 ? segments : rawText ? [rawText] : [];
-  const providedDurations = scene.captionTiming?.segmentDurationsMs ?? [];
+  const providedDurations = timingMatchesScript ? scene.captionTiming?.segmentDurationsMs ?? [] : [];
   const durationsMs = safeSegments.map((segment, index) => {
     const provided = providedDurations[index];
     if (Number.isFinite(provided) && (provided ?? 0) > 0) {
       return Math.max(
-        scene.captionTiming?.mode === "tts-cues" ? 240 : PREVIEW_MIN_SEGMENT_MS,
+        timingMatchesScript && scene.captionTiming?.mode === "tts-cues" ? 240 : PREVIEW_MIN_SEGMENT_MS,
         Math.round(provided ?? 0)
       );
     }
@@ -237,7 +240,7 @@ export function resolveSceneCaptionTiming(scene: ParentStoryBookScene): SceneCap
   });
 
   return {
-    mode: scene.captionTiming?.mode ?? "duration-derived",
+    mode: timingMatchesScript ? scene.captionTiming?.mode ?? "duration-derived" : "duration-derived",
     segmentTexts: safeSegments,
     segmentDurationsMs: durationsMs,
   };

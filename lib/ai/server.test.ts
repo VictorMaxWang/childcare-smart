@@ -164,6 +164,44 @@ test("legacy Bailian model names never configure the Vivo provider", () => {
   }
 });
 
+test("successful MaaS structured answers retain actual response model and live request evidence", async () => {
+  const keys = ["AI_PROVIDER", "AI_API_KEY", "AI_BASE_URL", "AI_TEXT_MODEL", "AI_USAGE_AUDIT"] as const;
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  const originalFetch = globalThis.fetch;
+  Object.assign(process.env, { AI_PROVIDER: "maas", AI_API_KEY: "test-only-key", AI_BASE_URL: "https://gateway.example/v1", AI_TEXT_MODEL: "requested-model", AI_USAGE_AUDIT: "0" });
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ id: "actual-request-id", model: "actual-response-model", choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ riskLevel: "low", summary: "请保持观察记录连续。", highlights: [], concerns: [], actions: ["核对今日记录"], answer: "请核对记录", keyPoints: [], nextSteps: ["次日复核"], risks: [], nextWeekActions: ["持续观察"], disclaimer: "照护参考" }) } }] }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    const options = { configuredModel: "unused", forceMock: false, forceFallback: false };
+    const results = [
+      await executeSuggestion({ snapshot: buildFollowUpSnapshot() }, options),
+      await executeFollowUp({ snapshot: buildFollowUpSnapshot(), suggestionTitle: "照护观察", question: "下一步做什么？" }, options),
+      await executeWeeklyReport({ role: "teacher", snapshot: buildWeeklySnapshot() }, options),
+    ];
+    for (const result of results) {
+      assert.equal(result.model, "actual-response-model");
+      assert.equal(result.live, true);
+      assert.equal(result.realProvider, true);
+      assert.equal(result.mode, "live");
+      assert.equal(result.fallback, false);
+      assert.equal(result.requestId, "actual-request-id");
+      assert.equal(result.providerTrace?.model, "actual-response-model");
+      assert.equal(result.providerTrace?.requestId, "actual-request-id");
+      assert.equal(result.providerTrace?.mode, "live");
+    }
+    const fallback = await executeSuggestion({ snapshot: buildFollowUpSnapshot() }, { ...options, forceFallback: true });
+    assert.equal(calls, 3);
+    assert.equal(fallback.source, "fallback");
+    assert.notEqual(fallback.live, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const key of keys) { if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key]; }
+  }
+});
+
 test("suggestion execution falls back to Bailian when vivo chat is unavailable", async () => {
   const envKeys = [
     "BAILIAN_MODEL",

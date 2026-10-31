@@ -18,6 +18,7 @@ import {
 } from "@/lib/ai/dashscope";
 import { toFollowUpFeedbackLite } from "@/lib/feedback/normalize";
 import { buildActionizedWeeklyReportResponse, resolveWeeklyReportRole } from "@/lib/ai/weekly-report";
+import { buildAiProviderTrace } from "@/lib/ai/provider-trace";
 import { getVivoProviderStatus, requestVivoChat, VivoProviderError } from "@/lib/providers/vivo";
 import type { VivoProviderStatus } from "@/lib/providers/vivo";
 import { isMaasConfigured, isMaasSelected, requestMaasChat, resolveMaasConfig } from "@/lib/providers/maas/maas-provider";
@@ -258,7 +259,7 @@ async function requestStructuredVivoJson(params: {
       const result = await requestMaasChat({ messages: [{ role: "system", content: "Return strict JSON only with Chinese values. Do not invent facts or provide medical diagnoses." }, { role: "user", content: params.prompt }], json: true, maxTokens: 4000 });
       const parsed = safeJsonParse(result.text);
       if (!parsed) throw new Error("MaaS returned invalid structured content");
-      return { parsed, model: result.model, providerStatus: { ...providerStatus, state: "live" as const, live: true } };
+      return { parsed, model: result.model, requestId: result.requestId, providerStatus: { ...providerStatus, state: "live" as const, live: true } };
     } catch {
       throw new AiProviderUnavailableError("AI 服务暂时无法完成此请求，请稍后重试。", { ...providerStatus, status: "provider-unavailable" });
     }
@@ -297,7 +298,7 @@ async function requestStructuredVivoJson(params: {
         configured: result.status.configured,
       });
     }
-    return { parsed, model: result.model, providerStatus: result.status };
+    return { parsed, model: result.model, requestId: result.requestId ?? null, providerStatus: result.status };
   } catch (error) {
     if (error instanceof AiProviderUnavailableError) throw error;
     if (error instanceof VivoProviderError) {
@@ -318,10 +319,20 @@ async function requestStructuredVivoJson(params: {
   }
 }
 
-function providerMeta(providerStatus: ChatProviderStatus) {
+function providerMeta(providerStatus: ChatProviderStatus, model: string, requestId: string | null) {
+  const provider = providerStatus.providerName === "maas" ? "maas" : "vivo";
+  // 仅已返回并通过结构校验的实际调用可出具 live 证据；配置就绪不能升级为真实成功。
+  const live = providerStatus.live === true && !providerStatus.mock && !providerStatus.fallback;
   return {
-    provider: providerStatus.providerName === "maas" ? "maas" : "vivo",
+    provider,
     providerStatus: { chat: providerStatus },
+    mode: live ? "live" as const : "fallback" as const,
+    live,
+    realProvider: live,
+    fallback: !live,
+    fallbackReason: live ? null : providerStatus.reason ?? "provider-unavailable",
+    requestId,
+    providerTrace: buildAiProviderTrace({ provider, mode: live ? "live" : "fallback", realProvider: live, fallback: !live, capability: "llm", model, requestId }),
   };
 }
 
@@ -464,7 +475,7 @@ export async function executeSuggestion(
   }
 
   try {
-    const { parsed, model, providerStatus } = await requestStructuredVivoJson({
+    const { parsed, model, providerStatus, requestId } = await requestStructuredVivoJson({
       options,
       taskType: "childcare-ai-suggestion",
       prompt: buildStructuredPrompt({
@@ -488,7 +499,7 @@ export async function executeSuggestion(
       ...aiResult,
       source: "ai",
       model,
-      ...providerMeta(providerStatus),
+      ...providerMeta(providerStatus, model, requestId),
     } satisfies AiSuggestionResponse;
   } catch (error) {
     if (!isAiProviderUnavailableError(error) || !isBailianConfigured()) throw error;
@@ -537,7 +548,7 @@ export async function executeFollowUp(
   }
 
   try {
-    const { parsed, model, providerStatus } = await requestStructuredVivoJson({
+    const { parsed, model, providerStatus, requestId } = await requestStructuredVivoJson({
       options,
       taskType: "childcare-ai-follow-up",
       prompt: buildStructuredPrompt({
@@ -561,7 +572,7 @@ export async function executeFollowUp(
       ...aiResult,
       source: "ai",
       model,
-      ...providerMeta(providerStatus),
+      ...providerMeta(providerStatus, model, requestId),
     } satisfies AiFollowUpResponse;
   } catch (error) {
     if (!isAiProviderUnavailableError(error) || !isBailianConfigured()) throw error;
@@ -608,7 +619,7 @@ export async function executeWeeklyReport(
   }
 
   try {
-    const { parsed, model, providerStatus } = await requestStructuredVivoJson({
+    const { parsed, model, providerStatus, requestId } = await requestStructuredVivoJson({
       options,
       taskType: "childcare-ai-weekly-report",
       prompt: buildStructuredPrompt({
@@ -630,7 +641,7 @@ export async function executeWeeklyReport(
       ...aiResult,
       source: "ai",
       model,
-      ...providerMeta(providerStatus),
+      ...providerMeta(providerStatus, model, requestId),
     } satisfies WeeklyReportResponse;
   } catch (error) {
     if (!isAiProviderUnavailableError(error) || !isBailianConfigured()) throw error;

@@ -15,6 +15,7 @@ from app.providers.base import (
 from app.providers.resolver import resolve_text_provider
 from app.providers.maas import MaasTextProvider, maas_selected, maas_configured
 from app.services.age_band_policy import get_age_band_label, resolve_age_band_context
+from app.providers.story_audio_provider import build_story_caption_timing
 
 
 class ParentStoryBookTextProviderError(RuntimeError):
@@ -114,6 +115,7 @@ def _coerce_scene(
     raw_scene: dict[str, Any],
     rule_scene: dict[str, Any],
     index: int,
+    visual_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     scene_title = _normalize_text(
         raw_scene.get("sceneTitle") or raw_scene.get("scene_title")
@@ -132,9 +134,33 @@ def _coerce_scene(
     if not audio_script:
         audio_script = f"{scene_title}。{scene_text}"
 
-    merged_image_prompt = rule_scene["imagePrompt"]
-    if image_prompt:
-        merged_image_prompt = f"{merged_image_prompt}；AI画面补充：{image_prompt}"
+    # 模型已经换了本页剧情，旧场景的字幕、分镜和动作不能继续冒充本页内容。
+    # 仅复用全书稳定的角色/画风约束，当前场景全部来自本次真实文字及其分镜。
+    context = visual_context or {}
+    old_blueprint = rule_scene.get("sceneBlueprint") if isinstance(rule_scene.get("sceneBlueprint"), dict) else {}
+    protagonist = context.get("protagonist") or old_blueprint.get("protagonist") or {}
+    protagonist = protagonist if isinstance(protagonist, dict) else {}
+    recipe = context.get("style_recipe") if isinstance(context.get("style_recipe"), dict) else {}
+    style = _normalize_text(context.get("style_prompt") or recipe.get("prompt"))
+    if not style:
+        old_prompt = _normalize_text(rule_scene.get("imagePrompt"))
+        style = old_prompt.split("；儿童成长绘本场景插画", 1)[0] if "；儿童成长绘本场景插画" in old_prompt else "温暖水彩"
+    character = "、".join(_normalize_text(protagonist.get(key)) for key in ("label", "archetype", "visual_cue") if protagonist.get(key))
+    merged_image_prompt = "；".join(part for part in [
+        f"本页故事：{scene_title}。{scene_text}",
+        f"统一角色设定：{character[:200]}，全书保持同一外观和服饰" if character else "全书保持同一主角外观和服饰",
+        f"统一画风：{style[:220]}",
+        f"AI画面补充：{image_prompt}" if image_prompt else "仅描绘本页文字中的场景、人物和动作",
+        "严格禁止任何文字元素：不要任何中文、英文、数字、水印或标志；image-only composition",
+    ] if part)
+    aligned_blueprint = {
+        **old_blueprint, "sceneTitle": scene_title, "sceneGoal": scene_title,
+        "environment": "本页文字所述场景", "visibleAction": scene_text,
+        "emotion": "依照本页文字中的角色表现", "mustInclude": [image_prompt or scene_text],
+        "narrativeAnchor": scene_text, "visualAnchor": image_prompt or scene_text,
+        "sceneObjectCue": "依照本页文字出现的物件", "supportCharacterCue": "仅呈现本页文字出现的角色",
+        "activityCue": scene_text, "emotionCue": "依照本页文字中的角色表现", "taskCue": scene_text,
+    } if old_blueprint else None
 
     return {
         **rule_scene,
@@ -143,6 +169,8 @@ def _coerce_scene(
         "sceneText": scene_text,
         "imagePrompt": merged_image_prompt,
         "audioScript": audio_script,
+        "captionTiming": build_story_caption_timing(audio_script),
+        **({"sceneBlueprint": aligned_blueprint} if aligned_blueprint else {}),
         "voiceStyle": voice_style or rule_scene["voiceStyle"],
         "highlightSource": highlight_source or rule_scene["highlightSource"],
     }
@@ -153,6 +181,7 @@ def _validate_story_payload(
     *,
     rule_story: dict[str, Any],
     expected_scene_count: int,
+    visual_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if _contains_fixed_demo(parsed):
         raise ValueError("storybook text provider returned fixed demo story")
@@ -171,6 +200,7 @@ def _validate_story_payload(
                 raw_scene=raw_scene,
                 rule_scene=rule_scenes[index],
                 index=index,
+                visual_context=visual_context,
             )
         )
 
@@ -386,6 +416,7 @@ def generate_parent_storybook_text(
             parsed,
             rule_story=rule_story,
             expected_scene_count=expected_scene_count,
+            visual_context=ingredients,
         )
     except Exception as error:
         if not getattr(settings, "enable_mock_provider", True):

@@ -347,26 +347,25 @@ function buildStoryTextPrompt(input: {
   ].join("\n");
 }
 
-function mergeScenesWithRealText(
+/** 仅处理新生成的文字结果；派生字幕与图像提示不继承旧模板剧情。 */
+export function mergeScenesWithRealText(
   originalScenes: ParentStoryBookScene[],
   generatedScenes: StoryTextScene[]
 ): ParentStoryBookScene[] {
   return originalScenes.map((scene, index) => {
     const generated = generatedScenes[index];
+    const sceneText = generated.sceneText || scene.sceneText;
+    const audioScript = generated.audioScript || generated.sceneText || scene.audioScript;
     return {
       ...scene,
       sceneTitle: generated.sceneTitle || scene.sceneTitle,
-      sceneText: generated.sceneText || scene.sceneText,
-      audioScript: generated.audioScript || generated.sceneText || scene.audioScript,
-      imagePrompt: generated.imagePrompt || scene.imagePrompt,
+      sceneText,
+      audioScript,
+      imagePrompt: `本页故事：${sceneText}；${generated.imagePrompt ? `AI画面补充：${generated.imagePrompt}` : "仅描绘本页文字中的人物和动作"}`,
       voiceStyle: generated.voiceStyle || scene.voiceStyle,
       highlightSource: generated.highlightSource || scene.highlightSource,
-      captionTiming: scene.captionTiming
-        ? {
-            ...scene.captionTiming,
-            segmentTexts: [generated.audioScript || generated.sceneText || scene.audioScript],
-          }
-        : scene.captionTiming,
+      captionTiming: { mode: "duration-derived", segmentTexts: [audioScript],
+        segmentDurationsMs: [Math.max(2400, 1700 + audioScript.replace(/\s+/gu, "").length * 95)] },
     };
   });
 }

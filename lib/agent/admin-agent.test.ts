@@ -336,6 +336,29 @@ function buildAllResultsWithMetadata(metadata: AiResultProviderMetadata, source:
   ];
 }
 
+test("healthy institutions retain genuine generated actions without inventing child risk", () => {
+  const context = { ...buildWeeklyContext(), actionItems: [], priorityTopItems: [], riskChildren: [], riskClasses: [], feedbackRiskItems: [], recommendedOwnerMap: [] };
+  const common = { source: "ai" as const, model: "actual-response-model" };
+  const results = [
+    buildAdminDailyPriorityResult({ context, suggestion: { riskLevel: "low", summary: "记录完整，保持复核。", highlights: [], concerns: [], actions: ["核对今日记录", "核对今日记录"], disclaimer: "参考", ...common } }),
+    buildAdminFollowUpResult({ context, question: "机构下一步怎么做？", response: { answer: "保持复核", keyPoints: [], nextSteps: ["核对今日记录"], disclaimer: "参考", ...common } }),
+    buildAdminWeeklyReportResult({ context, report: { ...buildDirtyWeeklyReport(), nextWeekActions: ["核对今日记录"], ...common } }),
+  ];
+  for (const result of results) {
+    assert.equal(result.actionItems.length, 1);
+    const action = result.actionItems[0];
+    assert.equal(action.action, "核对今日记录");
+    assert.equal(action.targetType, "issue");
+    assert.equal(action.ownerRole, "admin");
+    assert.equal(action.dispatchPayload.source.institutionName, context.institutionScope.institutionName);
+    assert.deepEqual(action.dispatchPayload.source.relatedChildIds, []);
+    assert.equal(result.riskChildren.length, 0);
+    assert.equal(result.recommendedOwnerMap[0]?.count, 1);
+  }
+  const empty = buildAdminDailyPriorityResult({ context, suggestion: { riskLevel: "low", summary: "无建议", highlights: [], concerns: [], actions: [], disclaimer: "参考", ...common } });
+  assert.deepEqual(empty.actionItems, []);
+});
+
 test("admin result builders preserve actual MaaS provider metadata through business and weekly sanitizers", () => {
   const metadata: AiResultProviderMetadata = {
     provider: "maas", mode: "live", live: true, realProvider: true, fallback: false, fallbackReason: null,

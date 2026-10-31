@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { SessionUser } from "@/lib/auth/accounts";
 import type { ParentStoryBookRequest } from "@/lib/ai/types";
-import type { AiResultEntry, AiResultStore } from "@/lib/server/ai-result-cache";
+import { buildAiResultKey, type AiResultEntry, type AiResultStore } from "@/lib/server/ai-result-cache";
 import { withParentStoryBookTextResult } from "./parent-storybook-text-result";
 
 function fixture() {
@@ -71,4 +71,21 @@ test("persisted pending owner from a lost worker blocks another submission even 
   const response = await withParentStoryBookTextResult(state.input, async () => { brainCalls++; return Response.json({ source: "ai" }); }, { store: state.persistedStore(), now: state.now });
   assert.equal((await response.json()).code, "generation_result_unknown");
   assert.equal(brainCalls, 1);
+});
+
+test("the aligned scene contract does not reuse v1 template metadata or rewrite historical cached raw", async () => {
+  const state = fixture(); let brainCalls = 0;
+  const oldKey = buildAiResultKey({ session: state.input.session, capability: "parent-storybook", scopeId: state.input.childId,
+    input: { version: 1, payload: state.input.payload, dataVersion: state.input.dataVersion } }, undefined, new Date(state.now()));
+  const old = { state: "completed" as const, owner: "old-worker", expiresAt: state.now() + 86400000,
+    response: { status: 200, body: { source: "ai", storyId: "historical-book", raw: "历史原文与模板字幕保持原样" }, headers: {} } };
+  state.entries.set(oldKey, old);
+  const generate = async () => { brainCalls++; return Response.json({ source: "ai", storyId: "aligned-new-book" }); };
+  const options = { store: state.persistedStore(), now: state.now };
+  const readOnly = await withParentStoryBookTextResult(state.input, generate, { ...options, cacheOnly: true });
+  assert.equal((await readOnly.json()).cacheStatus, "miss"); assert.equal(brainCalls, 0);
+  assert.deepEqual(state.entries.get(oldKey), old);
+  const explicit = await withParentStoryBookTextResult(state.input, generate, options);
+  assert.equal((await explicit.json()).storyId, "aligned-new-book"); assert.equal(brainCalls, 1);
+  assert.equal(state.entries.size, 2); assert.deepEqual(state.entries.get(oldKey), old);
 });
