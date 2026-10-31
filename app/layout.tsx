@@ -6,6 +6,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "sonner";
 import { CHUNK_RECOVERY_BOOTSTRAP } from "@/lib/client/chunk-recovery";
 import { AiServiceNotice } from "@/components/layout/AiServiceNotice";
+import { PerformanceAudit } from "@/components/layout/PerformanceAudit";
 
 const enableVercelAnalytics =
   process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === "1" ||
@@ -33,6 +34,7 @@ export default function RootLayout({
         ) : null}
       </head>
       <body className="antialiased">
+        <PerformanceAudit />
         <AppProvider>
           <AppShell>
             <AiServiceNotice />

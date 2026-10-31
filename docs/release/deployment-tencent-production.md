@@ -17,6 +17,13 @@
 
 在本机 Linux 构建环境，使用同一份源代码快照分别构建根目录 `Dockerfile` 与 `backend/Dockerfile`，将两个带发布标签的镜像导出并传至服务器。Windows 的 `node_modules`、`.next`、本地环境文件不属于发布内容。
 
+两份 Dockerfile 都以项目根目录作为上下文；后端需要同时携带根目录的 `shared` 月龄照护规则：
+
+```sh
+docker build -t smartchildcare-web:RELEASE .
+docker build -f backend/Dockerfile -t smartchildcare-backend:RELEASE .
+```
+
 服务器目录为 `/home/ubuntu/smartchildcare`。先验证配置，再启动数据库、后端和网站；只有内网验收通过后才启动正式域名入口并切换 DNS。
 
 ```sh

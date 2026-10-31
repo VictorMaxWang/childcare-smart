@@ -1,0 +1,14 @@
+{
+  "budgetId": "REPLACE_WITH_REVIEWED_BATCH_ID",
+  "currency": "CNY",
+  "maxTotalCny": 10,
+  "confirmedAt": "REPLACE_WITH_ACTUAL_PRICING_VERIFICATION_ISO_TIMESTAMP",
+  "pricingEvidence": "REPLACE_WITH_VERIFIED_PRICING_SOURCE_OR_LOCAL_AUDIT_ARTIFACT",
+  "requests": {
+    "suggestions-initial": { "reserveCny": 2, "includesAllInternalCalls": true },
+    "suggestions-update": { "reserveCny": 2, "includesAllInternalCalls": true },
+    "teacher-communication": { "reserveCny": 2, "includesAllInternalCalls": true },
+    "weekly-report": { "reserveCny": 2, "includesAllInternalCalls": true },
+    "consultation-sse": { "reserveCny": 2, "includesAllInternalCalls": true }
+  }
+}

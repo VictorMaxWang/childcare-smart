@@ -264,11 +264,20 @@ test("oversized Content-Length is rejected before multipart parsing or authoriza
 
 test("actual multipart file bytes are capped even without a trustworthy Content-Length", async () => {
   const { dependencies, calls } = buildDependencies();
+  // 先完成客户端编码，再模拟到达服务端的字节。Node 内建 FormData 懒编码器在
+  // reader.cancel() 后仍会异步 enqueue，产生与真实 HTTP 入站流无关的未处理拒绝。
+  const encoded = buildUploadRequest(
+    "image/png",
+    new Uint8Array(ATTACHMENT_MAX_UPLOAD_BYTES + 512 * 1024)
+  );
+  const request = new Request(encoded.url, {
+    method: "POST",
+    headers: encoded.headers,
+    body: await encoded.arrayBuffer(),
+  });
+  assert.equal(request.headers.has("content-length"), false);
   const response = await handleAttachmentUploadRequest(
-    buildUploadRequest(
-      "image/png",
-      new Uint8Array(ATTACHMENT_MAX_UPLOAD_BYTES + 512 * 1024)
-    ),
+    request,
     dependencies
   );
 
