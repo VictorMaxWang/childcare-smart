@@ -90,6 +90,8 @@ export type StorybookMediaReceiptClaim = { action: "none" | "wait" } | {
 };
 
 export interface StorybookMediaTaskStore {
+  /** 只读任务状态，不创建提交行、不领取租约，也不增加生成次数。 */
+  inspect?(identity: StorybookMediaTaskIdentity, operation?: StorybookMediaTaskOperation): Promise<StorybookMediaTaskClaim | null>;
   saveProviderReceipt?(
     identity: StorybookMediaTaskIdentity, leaseToken: string, receipt: StorybookMediaProviderReceipt,
     operation?: StorybookMediaTaskOperation
@@ -587,6 +589,12 @@ export class InMemoryStorybookMediaTaskStore
   private readonly tasks = new Map<string, StoredTask>();
   private readonly providerReceipts = new Map<string, StorybookMediaProviderReceipt>();
 
+  async inspect(identity: StorybookMediaTaskIdentity, operation: StorybookMediaTaskOperation = {}) {
+    assertOperationActive(operation);
+    const state = this.tasks.get(taskKey(identity));
+    return state ? claimFromState(identity, state, resolveNow(operation)) : null;
+  }
+
   async saveProviderReceipt(identity: StorybookMediaTaskIdentity, leaseToken: string, rawReceipt: StorybookMediaProviderReceipt, operation: StorybookMediaTaskOperation = {}) {
     assertOperationActive(operation);
     const key = taskKey(identity), state = this.tasks.get(key), receipt = normalizeProviderReceipt(identity, rawReceipt);
@@ -955,6 +963,12 @@ export class DatabaseStorybookMediaTaskStore
   private tableReady?: Promise<void>;
 
   constructor(private readonly pool: Pool = getDatabasePool()) {}
+
+  async inspect(identity: StorybookMediaTaskIdentity, operation: StorybookMediaTaskOperation = {}) {
+    await this.ensureTable(operation);
+    const state = await this.read(normalizeIdentity(identity), operation);
+    return state ? claimFromState(identity, state, resolveNow(operation)) : null;
+  }
 
   async saveProviderReceipt(identity: StorybookMediaTaskIdentity, leaseToken: string, rawReceipt: StorybookMediaProviderReceipt, operation: StorybookMediaTaskOperation = {}) {
     await this.ensureTable(operation);

@@ -37,6 +37,13 @@ test("synchronous MaaS image completion requires its submission lease rather tha
   assert.equal((await store.claim(identity)).action, "ready");
 });
 
+test("read-only inspection distinguishes absent pages and unknown tasks without reserving any generation", async () => {
+  const store = new InMemoryStorybookMediaTaskStore(); assert.equal(await store.inspect(imageIdentity), null);
+  const claim = await store.claim(imageIdentity); assert.equal(claim.attemptCount, 1); assert.ok(claim.leaseToken);
+  await store.markSubmissionFailure(imageIdentity, claim.leaseToken, { retryable: false, nextRetryAtMs: Date.now(), reason: "media-result-unknown" });
+  assert.equal((await store.inspect(imageIdentity))?.action, "blocked"); assert.equal((await store.inspect(imageIdentity))?.attemptCount, 1);
+});
+
 test("private provider receipts have a separate lease and never reopen a receipt-less unknown generation", async () => {
   const store = new InMemoryStorybookMediaTaskStore(), identity: StorybookMediaTaskIdentity = { ...imageIdentity, provider: "maas-z-image", providerModel: "z-image-turbo" }, nowMs = Date.now();
   const receipt = { version: 1 as const, model: "z-image-turbo", requestId: "synthetic-image-1", contentType: "image/png", kind: "url" as const, data: "https://synthetic.oss-cn-beijing.aliyuncs.com/a.png?Signature=private", receivedAtMs: nowMs };

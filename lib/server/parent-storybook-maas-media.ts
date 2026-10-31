@@ -229,7 +229,12 @@ export async function completeMaasStoryMedia(input: {
         } else {
           if (input.reconcileOnly || input.payload.reconcileOnly) {
             submitted[channel] = true;
-            problems[channel] = "未找到可恢复的已生成媒体，未重新调用生成服务。";
+            if (!dependencies.store.inspect) throw new Error("Read-only task inspection unavailable");
+            const previous = await dependencies.store.inspect(identity, operation);
+            // 新页尚无成果不是失败；只有账本证明真实失败/未知才阻断后续生成。
+            // 必须只读检查，不能为了区分状态而claim一个新提交租约。
+            if (previous?.action === "blocked") problems[channel] = "媒体请求结果待确认，已停止自动重复扣费。";
+            else if (previous?.action === "ready") problems[channel] = "已保存媒体暂时无法读取，已停止重复生成。";
             continue;
           }
           let claim = await dependencies.store.claim(identity, operation);

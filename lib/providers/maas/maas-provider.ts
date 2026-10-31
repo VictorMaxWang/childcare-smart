@@ -275,5 +275,17 @@ export function requestMaasChat(input: Parameters<typeof requestMaasChatImpl>[0]
 }
 export function requestMaasEmbeddings(texts: string[], options: MaasRequestOptions = {}) { return observe(["embedding"], resolveMaasConfig().embeddingModel, () => requestMaasEmbeddingsImpl(texts, options)); }
 export function requestMaasImage(input: Parameters<typeof requestMaasImageImpl>[0]) { return observe(["image", "storybook-image"], resolveMaasConfig().imageModel, () => requestMaasImageImpl(input)); }
-export function requestMaasTts(input: Parameters<typeof requestMaasTtsImpl>[0]) { return observe(["tts", "storybook-audio"], resolveMaasConfig().ttsModel, () => requestMaasTtsImpl(input)); }
+export async function requestMaasTts(input: Parameters<typeof requestMaasTtsImpl>[0]) {
+  const model = resolveMaasConfig().ttsModel;
+  if (typeof input.text !== "string" || !input.text.trim()) {
+    throw new MaasProviderError("语音旁白不能为空，未发送语音生成请求。", "provider-response", 400);
+  }
+  // Qwen3-TTS官方单次输入上限为600字符；按Unicode字符而非UTF-16长度计算。
+  // 不静默截断旁白：原文与绘本保持一致，超限在计费请求及live观测之前明确拒绝。
+  // 此协议约束不等于计费单位：计费时汉字按2个字符，其他字符按1个字符。
+  if (model === "qwen3-tts-flash" && Array.from(input.text).length > 600) {
+    throw new MaasProviderError("语音旁白超过600个字符，请缩短后重试；原文未被截断，未发送语音生成请求。", "provider-response", 400);
+  }
+  return observe(["tts", "storybook-audio"], model, () => requestMaasTtsImpl(input));
+}
 export function requestMaasAsr(input: Parameters<typeof requestMaasAsrImpl>[0]) { return observe(["asr"], resolveMaasConfig().asrModel, () => requestMaasAsrImpl(input)); }

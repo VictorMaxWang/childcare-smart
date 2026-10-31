@@ -31,6 +31,12 @@ try {
   await verify("synchronous MaaS image reaches ready in the real SQL store without an asynchronous task id", async () => {
     const { target, claim } = await seed(1); assert.equal(await store.markReady(target, { leaseToken: claim.leaseToken, mediaKey: "b".repeat(40) }), true); assert.equal((await store.claim(target)).action, "ready");
   });
+  await verify("read-only inspection does not create an absent page and still identifies a real unknown", async () => {
+    const target = identity(7); assert.equal(await store.inspect(target), null);
+    const [empty] = await pool.execute("SELECT COUNT(*) AS total FROM storybook_media_tasks WHERE institution_id=? AND scene_index=7", [target.institutionId]); assert.equal(empty[0].total, 0);
+    const { claim } = await seed(7); await block(target, claim.leaseToken);
+    const inspected = await store.inspect(target); assert.equal(inspected.action, "blocked"); assert.equal(inspected.attemptCount, 1);
+  });
   await verify("receipt insertion is tied to the current actor and submission lease", async () => {
     const { target, claim } = await seed(2); saved = { target, claim };
     assert.equal(await store.saveProviderReceipt(target, "wrong-lease", receipt), false);

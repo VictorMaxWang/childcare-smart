@@ -247,7 +247,32 @@ test("free reconciliation never reserves a new generation when no recoverable re
   const result = await completeMaasStoryMedia(fixture.input, fixture.dependencies);
   assert.equal(fixture.calls.image, 0); assert.equal(fixture.calls.audio, 0);
   assert.ok(result.scenes.every(scene => scene.imageStatus !== "ready" && scene.audioStatus !== "ready"));
-  assert.match(result.providerMeta.diagnostics!.image.lastErrorReason!, /未重新调用/u);
+  assert.equal(result.providerMeta.diagnostics!.image.jobStatus, "warming"); assert.equal(result.providerMeta.diagnostics!.image.lastErrorReason, null);
+});
+
+test("one recovered page and three never-submitted pages remain warming and permit explicitly authorized continuation", async () => {
+  const fixture = await harness(4);
+  const first = await completeMaasStoryMedia(fixture.input, fixture.dependencies); assert.equal(first.scenes[0].imageStatus, "ready"); assert.equal(first.scenes[0].audioStatus, "ready");
+  fixture.input.payload.story = first; fixture.input.reconcileOnly = true;
+  const reconciled = await completeMaasStoryMedia(fixture.input, fixture.dependencies);
+  for (const channel of ["image", "audio"] as const) {
+    assert.equal(reconciled.providerMeta.diagnostics![channel].readySceneCount, 1); assert.equal(reconciled.providerMeta.diagnostics![channel].pendingSceneCount, 3);
+    assert.equal(reconciled.providerMeta.diagnostics![channel].jobStatus, "warming"); assert.equal(reconciled.providerMeta.diagnostics![channel].lastErrorReason, null);
+  }
+  assert.equal(fixture.calls.image, 1); assert.equal(fixture.calls.audio, 1);
+  fixture.input.payload.story = reconciled; fixture.input.reconcileOnly = false;
+  const continued = await completeMaasStoryMedia(fixture.input, fixture.dependencies);
+  assert.equal(continued.scenes[1].imageStatus, "ready"); assert.equal(continued.scenes[1].audioStatus, "ready");
+  assert.equal(fixture.calls.image, 2); assert.equal(fixture.calls.audio, 2);
+});
+
+test("reconciliation still reports a genuine receipt-less unknown as error without reissuing it or later pages", async () => {
+  const fixture = await harness(4);
+  fixture.dependencies.image = async () => { fixture.calls.image++; throw new MaasProviderError("synthetic unknown", "request-timeout"); };
+  const failed = await completeMaasStoryMedia(fixture.input, fixture.dependencies); fixture.input.payload.story = failed; fixture.input.reconcileOnly = true;
+  const reconciled = await completeMaasStoryMedia(fixture.input, fixture.dependencies);
+  assert.equal(reconciled.providerMeta.diagnostics!.image.jobStatus, "error"); assert.match(reconciled.providerMeta.diagnostics!.image.lastErrorReason!, /待确认/u);
+  assert.equal(fixture.calls.image, 1); assert.equal(fixture.calls.audio, 1);
 });
 
 test("one media round stops cold lookups after its single image and audio rather than reading every remaining page", async () => {

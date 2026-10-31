@@ -6,9 +6,9 @@ import { resolveOcrProvider } from "@/lib/ai/providers/ocr-provider";
 import { resolveTtsProvider } from "@/lib/ai/providers/tts-provider";
 
 async function configured(run: () => Promise<void>) {
-  const previous = { AI_PROVIDER: process.env.AI_PROVIDER, AI_API_KEY: process.env.AI_API_KEY, AI_BASE_URL: process.env.AI_BASE_URL, AI_USAGE_AUDIT: process.env.AI_USAGE_AUDIT };
+  const previous = { AI_PROVIDER: process.env.AI_PROVIDER, AI_API_KEY: process.env.AI_API_KEY, AI_BASE_URL: process.env.AI_BASE_URL, AI_USAGE_AUDIT: process.env.AI_USAGE_AUDIT, AI_TTS_MODEL: process.env.AI_TTS_MODEL, AI_TTS_PROTOCOL: process.env.AI_TTS_PROTOCOL };
   const fetch = globalThis.fetch;
-  Object.assign(process.env, { AI_PROVIDER: "maas", AI_API_KEY: "test-only-key", AI_BASE_URL: "https://gateway.example/compatible-mode/v1", AI_USAGE_AUDIT: "0" });
+  Object.assign(process.env, { AI_PROVIDER: "maas", AI_API_KEY: "test-only-key", AI_BASE_URL: "https://gateway.example/compatible-mode/v1", AI_USAGE_AUDIT: "0", AI_TTS_MODEL: "qwen3-tts-flash", AI_TTS_PROTOCOL: "native" });
   try { await run(); } finally { globalThis.fetch = fetch; for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } }
 }
 test("MaaS chat uses final content without Qwen thinking-disable fields", async () => configured(async () => {
@@ -175,6 +175,40 @@ test("MaaS media supports native single-image and TTS response contracts", async
   assert.equal(image.imageUrl, "https://media.example/image.png"); assert.equal((body.parameters as Record<string, unknown>).prompt_extend, false);
   globalThis.fetch = (async () => Response.json({ output: { audio: { url: "https://media.example/audio.wav" } } })) as typeof fetch;
   assert.equal((await requestMaasTts({ text: "合成验收文字" })).audioUrl, "https://media.example/audio.wav");
+}));
+
+test("Qwen3 TTS accepts exactly 600 Unicode characters without truncating either native or compatible requests", async () => configured(async () => {
+  const text = "合成🌼".repeat(200); assert.equal(Array.from(text).length, 600); assert.ok(text.length > 600);
+  for (const protocol of ["native", "openai"]) {
+    process.env.AI_TTS_PROTOCOL = protocol; let sent = "", started = 0;
+    globalThis.fetch = (async (_url, init) => { const payload = JSON.parse(String(init?.body)); sent = protocol === "native" ? payload.input.text : payload.input; return Response.json({ output: { audio: { url: "https://media.example/valid.wav" } } }); }) as typeof fetch;
+    const result = await requestMaasTts({ text, onRequestStart: () => { started++; } });
+    assert.equal(sent, text); assert.equal(result.audioUrl, "https://media.example/valid.wav"); assert.equal(started, 1);
+  }
+}));
+
+test("Qwen3 TTS rejects empty and 601-character narration before charging, audit or capability failure, retaining original text", async () => configured(async () => {
+  let fetchCalls = 0, started = 0, auditCalls = 0; const info = console.info;
+  globalThis.fetch = (async () => { fetchCalls++; return Response.json({ output: { audio: { url: "https://media.example/valid.wav" } } }); }) as typeof fetch;
+  await requestMaasTts({ text: "已经真实成功的合成测试旁白" }); const previousStatus = getMaasProviderStatus("tts"); assert.equal(previousStatus.live, true);
+  fetchCalls = 0; process.env.AI_USAGE_AUDIT = "1"; console.info = () => { auditCalls++; };
+  try {
+    for (const text of ["", "  \n\t", "合".repeat(601), "🌼".repeat(601)]) {
+      const original = text;
+      await assert.rejects(requestMaasTts({ text, onRequestStart: () => { started++; } }), (error: unknown) => {
+        assert.ok(error instanceof MaasProviderError); assert.equal(error.httpStatus, 400); assert.equal(error.failureKind, "provider-response");
+        assert.match(error.message, /未发送语音生成请求/u); assert.ok(!error.message.includes("合合")); return true;
+      });
+      assert.equal(text, original);
+    }
+    assert.equal(fetchCalls, 0); assert.equal(started, 0); assert.equal(auditCalls, 0); assert.equal(getMaasProviderStatus("tts").live, true, "本地输入错误不应伪装成供应商故障。");
+  } finally { console.info = info; }
+}));
+
+test("Qwen3-only text length does not silently impose an unverified limit on a different explicitly selected TTS model", async () => configured(async () => {
+  process.env.AI_TTS_MODEL = "synthetic-other-tts-model"; const text = "a".repeat(601); let sent = "";
+  globalThis.fetch = (async (_url, init) => { sent = JSON.parse(String(init?.body)).input.text; return Response.json({ output: { audio: { url: "https://media.example/other.wav" } } }); }) as typeof fetch;
+  assert.equal((await requestMaasTts({ text })).model, "synthetic-other-tts-model"); assert.equal(sent, text);
 }));
 test("MaaS ASR keeps the selected model and never labels supplied text as recognition", async () => configured(async () => {
   let model = "";

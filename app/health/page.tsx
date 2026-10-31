@@ -22,7 +22,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StatusTag } from "@/components/ui/status-tag";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { buildRecentLocalDateRange, getLocalToday, isDateWithinLastDays } from "@/lib/date";
+import { buildRecentLocalDateRange, isDateWithinLastDays, normalizeBusinessDate } from "@/lib/date";
+import { buildHealthDailySummary, filterHealthDailyChildren, type HealthDailyFilter } from "@/lib/health/daily-summary";
 import { createRecord, updateRecord } from "@/lib/api/records";
 import { listAttachments } from "@/lib/api/communication";
 import type { ApiAttachment } from "@/lib/api/types";
@@ -95,7 +96,7 @@ export default function HealthPage() {
   const childFromQuery = searchParams.get("child");
   const parentD01 = useParentD01Data(childFromQuery);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | "abnormal" | "unchecked">("all");
+  const [filterStatus, setFilterStatus] = useState<HealthDailyFilter>("all");
   const isParent = currentUser.role === "家长";
   
   // Dialog State
@@ -151,39 +152,11 @@ export default function HealthPage() {
     };
   }, [isParent, parentD01.selectedChildId]);
 
-  // Computed data — use visibleChildren so admin/teacher can see all children, not just present ones
-  const childData = useMemo(() => {
-    const today = getLocalToday();
-    return visibleChildren.map(child => {
-      const todayRecord = healthCheckRecords.find(r => r.childId === child.id && r.date === today);
-      return { 
-        ...child, 
-        health: todayRecord 
-      };
-    });
-  }, [visibleChildren, healthCheckRecords]);
-
-  const filteredChildren = useMemo(() => {
-    const presentChildIds = new Set(presentChildren.map((child) => child.id));
-    return childData.filter(child => {
-      const matchesSearch = child.name.includes(searchTerm) || (child.nickname && child.nickname.includes(searchTerm));
-      if (!matchesSearch) return false;
-      
-      if (filterStatus === "unchecked") return presentChildIds.has(child.id) && !child.health;
-      if (filterStatus === "abnormal") return child.health?.isAbnormal;
-      
-      return true;
-    });
-  }, [childData, presentChildren, searchTerm, filterStatus]);
-
-  const stats = useMemo(() => {
-    const presentChildIds = new Set(presentChildren.map((child) => child.id));
-    const total = childData.length;
-    const present = presentChildren.length;
-    const checked = childData.filter((child) => presentChildIds.has(child.id) && child.health).length;
-    const abnormal = childData.filter((child) => presentChildIds.has(child.id) && child.health?.isAbnormal).length;
-    return { total, present, checked, abnormal, unchecked: Math.max(present - checked, 0) };
-  }, [childData, presentChildren]);
+  const { children: childData, stats } = useMemo(() =>
+    buildHealthDailySummary(visibleChildren, healthCheckRecords, presentChildren),
+  [visibleChildren, healthCheckRecords, presentChildren]);
+  const filteredChildren = useMemo(() => filterHealthDailyChildren(childData, filterStatus, searchTerm), [childData, filterStatus, searchTerm]);
+  const dailyStatusLabel = stats.abnormal > 0 ? "有异常需处理" : stats.unchecked > 0 ? "晨检尚未完成" : stats.checked > 0 ? "已检记录无异常" : "暂无晨检数据";
 
   const weeklyTemperatureData = useMemo(() => {
     const visibleIds = new Set(visibleChildren.map((child) => child.id));
@@ -328,7 +301,7 @@ export default function HealthPage() {
         const existing = childData.find((child) => child.id === selectedChildId)?.health;
         const payload = {
           childId: selectedChildId,
-          date: getLocalToday(),
+          date: normalizeBusinessDate(new Date().toISOString()),
           temperature: tempNum,
           mood,
           handMouthEye,
@@ -385,7 +358,7 @@ export default function HealthPage() {
     const persistenceNote =
       saveResult.status === "local_only"
         ? "已写入共享演示数据，刷新和切换角色仍可查看。"
-        : "已写入当前数据层，刷新后保留。";
+        : "记录已保存，刷新后可查看。";
     if (isAbnormal) {
       toast.warning("晨检记录已保存", {
         description: `${childName} 已标记为异常状态，请及时复核并通知家长。${persistenceNote}`,
@@ -415,7 +388,7 @@ if (isParent) {
           <EmptyState
             icon={<ShieldAlert className="h-6 w-6" />}
             title="无法查看该孩子的健康管理"
-            description="当前家长账号没有该 childId 的授权，系统不会自动回退到其他孩子。"
+            description="当前账号没有查看该孩子的权限，请选择已关联的孩子。"
           />
         </div>
       );
@@ -427,7 +400,7 @@ if (isParent) {
           <EmptyState
             icon={<HeartPulse className="h-6 w-6" />}
             title="暂无可查看的健康数据"
-            description="当前账号还没有关联孩子，或 D01 store 中没有健康记录。"
+            description="当前账号还没有关联孩子，或尚未收到健康记录。"
           />
         </div>
       );
@@ -485,7 +458,7 @@ if (isParent) {
                 <EmptyState
                   icon={<Thermometer className="h-6 w-6" />}
                   title="暂无晨检记录"
-                  description="当前 childId 在 D01 store 中还没有晨检数据。"
+                  description="该孩子目前还没有晨检记录，教师登记后可在这里查看。"
                 />
               ) : null}
               {parentHealthRecords.map((record) => {
@@ -658,8 +631,8 @@ if (isParent) {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="info" className="rounded-full px-3 py-1">{currentUser.className ?? "当前班级"} · {stats.total}名幼儿</Badge>
-                  <Badge variant={stats.abnormal > 0 ? "warning" : "success"} className="rounded-full px-3 py-1">
-                    {stats.abnormal > 0 ? "有异常需处理" : "今日稳定"}
+                  <Badge variant={stats.abnormal > 0 || stats.unchecked > 0 ? "warning" : stats.checked > 0 ? "success" : "secondary"} className="rounded-full px-3 py-1">
+                    {dailyStatusLabel}
                   </Badge>
                 </div>
                 <h1 className="mt-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
@@ -671,16 +644,16 @@ if (isParent) {
               </div>
             </div>
             <Button type="button" variant="outline" className="min-h-11 rounded-2xl" onClick={() => setFilterStatus("unchecked")}>
-              今日 {new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "long" })}
+              今日 {new Date().toLocaleDateString("zh-CN", { timeZone: "Asia/Taipei", month: "long", day: "numeric", weekday: "long" })}
             </Button>
           </div>
 
           <div className="mt-5 rounded-2xl border border-white/80 bg-white/88 p-4 shadow-sm">
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               {[
-                { label: "应到人数", value: `${stats.total}人`, helper: `在园 ${stats.present}人`, icon: Users, tone: "bg-indigo-50 text-indigo-700" },
-                { label: "已完成", value: `${stats.checked}人`, helper: `${stats.present ? Math.round((stats.checked / stats.present) * 100) : 0}%`, icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-700" },
-                { label: "异常", value: `${stats.abnormal}人`, helper: `${stats.present ? Math.round((stats.abnormal / stats.present) * 100) : 0}%`, icon: AlertTriangle, tone: "bg-rose-50 text-rose-700" },
+                { label: "全部幼儿", value: `${stats.total}人`, helper: `出勤已登记在园 ${stats.present}人`, icon: Users, tone: "bg-indigo-50 text-indigo-700" },
+                { label: "已完成", value: `${stats.checked}人`, helper: `占全部幼儿 ${stats.total ? Math.round((stats.checked / stats.total) * 100) : 0}%`, icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-700" },
+                { label: "异常", value: `${stats.abnormal}人`, helper: `占全部幼儿 ${stats.total ? Math.round((stats.abnormal / stats.total) * 100) : 0}%`, icon: AlertTriangle, tone: "bg-rose-50 text-rose-700" },
                 { label: "未完成", value: `${stats.unchecked}人`, helper: "需补录", icon: Activity, tone: "bg-slate-100 text-slate-600" },
               ].map((item) => {
                 const Icon = item.icon;
@@ -689,7 +662,7 @@ if (isParent) {
                     key={item.label}
                     type="button"
                     className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4 text-left transition hover:border-indigo-200 hover:bg-indigo-50"
-                    onClick={() => setFilterStatus(item.label === "异常" ? "abnormal" : item.label === "未完成" ? "unchecked" : "all")}
+                    onClick={() => setFilterStatus(item.label === "异常" ? "abnormal" : item.label === "未完成" ? "unchecked" : item.label === "已完成" ? "checked" : "all")}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -735,7 +708,8 @@ if (isParent) {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 {[
-                  { value: "all", label: `全部 ${stats.present}` },
+                  { value: "all", label: `全部 ${stats.total}` },
+                  { value: "checked", label: `已完成 ${stats.checked}` },
                   { value: "unchecked", label: `未完成 ${stats.unchecked}` },
                   { value: "abnormal", label: `异常 ${stats.abnormal}` },
                 ].map((item) => (
@@ -787,7 +761,7 @@ if (isParent) {
                         </p>
                       </div>
                       <div className="flex items-center justify-between gap-3 sm:justify-end">
-                        <span className="text-sm text-slate-400">{isChecked ? "08:25" : "未完成"}</span>
+                        <span className="text-sm text-slate-400">{isChecked ? "今日已登记" : "未完成"}</span>
                         <Badge variant={isAbnormal ? "destructive" : isChecked ? "success" : "outline"}>
                           {isChecked ? "已完成" : "去录入"}
                         </Badge>
@@ -824,8 +798,8 @@ if (isParent) {
                   <Badge variant="info" className="rounded-full px-3 py-1">
                     {isTeacher ? currentUser.className ?? "当前班级" : "全园健康"}
                   </Badge>
-                  <Badge variant={stats.abnormal > 0 ? "warning" : "success"} className="rounded-full px-3 py-1">
-                    {stats.abnormal > 0 ? "有异常需处理" : "今日稳定"}
+                  <Badge variant={stats.abnormal > 0 || stats.unchecked > 0 ? "warning" : stats.checked > 0 ? "success" : "secondary"} className="rounded-full px-3 py-1">
+                    {dailyStatusLabel}
                   </Badge>
                 </div>
                 <h1 className="mt-4 flex items-center gap-3 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
@@ -833,7 +807,7 @@ if (isParent) {
                   晨检健康工作台
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  先处理待检与异常，再查看体温趋势和情绪分布，移动端优先呈现儿童状态卡。
+                  先处理待检与异常，再查看体温趋势和情绪分布。
                 </p>
               </div>
               <Button type="button" variant="premium" className="min-h-11 rounded-2xl" onClick={() => setFilterStatus(stats.unchecked > 0 ? "unchecked" : "abnormal")}>
@@ -844,7 +818,7 @@ if (isParent) {
             <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
               {[
                 { label: "可见幼儿", value: `${stats.total}人`, icon: Users, tone: "bg-sky-50 text-sky-700" },
-                { label: "今日出勤", value: `${stats.present}人`, icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-700" },
+                { label: "已登记在园", value: `${stats.present}人`, icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-700" },
                 { label: "已晨检", value: `${stats.checked}人`, icon: Activity, tone: "bg-indigo-50 text-indigo-700" },
                 { label: "异常告警", value: `${stats.abnormal}人`, icon: AlertTriangle, tone: "bg-rose-50 text-rose-700" },
               ].map((item) => {
@@ -894,7 +868,7 @@ if (isParent) {
       )}
 
       <div data-testid="r05-health-chart-suite" className="grid gap-6 xl:grid-cols-2">
-        <ChartCard title="一周体温趋势" description="对比平均体温、异常人数和发热阈值，使用 R03 共享图表组件。" minHeight="20rem">
+        <ChartCard title="一周体温趋势" description="查看近一周平均体温、异常人数和发热阈值。" minHeight="20rem">
           <ReplicaLineChart
             data={weeklyTemperatureChartRows}
             testId="r05-health-temperature-chart"
@@ -952,6 +926,7 @@ if (isParent) {
               <legend className="sr-only">健康晨检筛选条件</legend>
               {[
                 { value: "all", label: "全部" },
+                { value: "checked", label: "已完成" },
                 { value: "unchecked", label: "待晨检" },
                 { value: "abnormal", label: "异常警告" },
               ].map((option) => (
