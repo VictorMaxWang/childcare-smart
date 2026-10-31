@@ -255,7 +255,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  const childId = resolvePrimaryNavChildId(currentUser.childIds, visibleChildren);
+  const childId = resolvePrimaryNavChildId(currentUser.childIds, visibleChildren, searchParams.get("child"));
   const navOptions = { childId };
   const navItems = buildPrimaryNavItems(currentUser.role, navOptions);
   const navGroups = buildPrimaryNavGroups(currentUser.role, navOptions);

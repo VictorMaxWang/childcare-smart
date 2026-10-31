@@ -36,7 +36,8 @@ export interface PrimaryNavOptions {
 
 export function resolvePrimaryNavChildId(
   childIds?: readonly (string | null | undefined)[] | null,
-  visibleChildren?: readonly { id?: string | null }[] | null
+  visibleChildren?: readonly { id?: string | null }[] | null,
+  selectedChildId?: string | null,
 ): string | undefined {
   const sessionChildIds =
     childIds?.filter((childId): childId is string => typeof childId === "string" && childId.length > 0) ?? [];
@@ -48,10 +49,12 @@ export function resolvePrimaryNavChildId(
   // 可见幼儿来自最新服务端状态；会话 childIds 可能在建档或重新绑定后仍是旧快照。
   if (visibleChildIds.length > 0) {
     const visibleChildIdSet = new Set(visibleChildIds);
+    // 页面已切换到另一个授权儿童时，桌面、移动与快捷导航必须继续携带同一个范围。
+    if (selectedChildId && visibleChildIdSet.has(selectedChildId)) return selectedChildId;
     return sessionChildIds.find((childId) => visibleChildIdSet.has(childId)) ?? visibleChildIds[0];
   }
 
-  return sessionChildIds[0];
+  return selectedChildId && sessionChildIds.includes(selectedChildId) ? selectedChildId : sessionChildIds[0];
 }
 
 const OVERVIEW_ITEM: PrimaryNavItem = { href: "/", label: "数据总览", icon: "overview" };
@@ -216,6 +219,7 @@ export function buildPrimaryNavItems(role: AccountRole, options: PrimaryNavOptio
     buildParentHomeItem(options.childId),
     buildParentFeedbackItem(options.childId),
     buildParentGrowthItem(options.childId),
+    { href: parentPath("/parent/courses", options.childId), label: "三元课程", icon: "storybook" },
     buildParentStorybookItem(options.childId),
     buildParentHealthItem(options.childId),
     buildParentDietItem(options.childId),

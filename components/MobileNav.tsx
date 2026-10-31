@@ -79,7 +79,7 @@ export default function MobileNav({
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const wasOpenRef = useRef(false);
   const navGroups = buildPrimaryNavGroups(currentUser.role, {
-    childId: resolvePrimaryNavChildId(currentUser.childIds, visibleChildren),
+    childId: resolvePrimaryNavChildId(currentUser.childIds, visibleChildren, searchParams.get("child")),
   });
 
   const close = () => setOpen(false);

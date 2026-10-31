@@ -6,6 +6,13 @@ import { buildPrimaryNavItems, resolvePrimaryNavChildId } from "./primary-nav.ts
 
 const PARENT_ROLE = "\u5bb6\u957f" as AccountRole;
 
+test("parent navigation preserves the selected authorized child and rejects a forged URL scope", () => {
+  const visible = [{ id: "child-1" }, { id: "child-2" }];
+  assert.equal(resolvePrimaryNavChildId(["child-1", "child-2"], visible, "child-2"), "child-2");
+  assert.equal(resolvePrimaryNavChildId(["child-1", "child-2"], visible, "foreign-child"), "child-1");
+  assert.equal(resolvePrimaryNavChildId(["child-1", "child-2"], [], "child-2"), "child-2");
+});
+
 test("admin nav keeps root overview and institution home as separate entries", () => {
   const navItems = buildPrimaryNavItems(getDemoAccountById("u-admin")!.role);
 
