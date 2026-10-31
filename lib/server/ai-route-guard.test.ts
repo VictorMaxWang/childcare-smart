@@ -33,6 +33,26 @@ const snapshot = normalizeExtendedSnapshot(
 );
 const repository = new MemoryRepository(snapshot);
 
+test("AI maintenance rejects generation after authorization and preserves scoped reads", async () => {
+  const previous = process.env.AI_SERVICE_UNAVAILABLE;
+  process.env.AI_SERVICE_UNAVAILABLE = "1";
+  try {
+    const options = { repository, session: session(demoUser("u-parent")) };
+    const response = await authorizeAiRoute(requestWithJson({ childId: "c-1" }), options);
+    assert.equal(response?.status, 503);
+    assert.equal((await response!.json()).code, "provider_unavailable");
+    const anonymous = await authorizeAiRoute(requestWithJson({}), { session: null });
+    assert.equal(anonymous?.status, 401);
+    const forbidden = await authorizeAiRoute(requestWithJson({ childId: "c-20" }), options);
+    assert.equal(forbidden?.status, 403);
+    const readable = await authorizeAiRoute(new Request("http://localhost/api/ai/media?childId=c-1"), options);
+    assert.equal(readable, null);
+  } finally {
+    if (previous === undefined) delete process.env.AI_SERVICE_UNAVAILABLE;
+    else process.env.AI_SERVICE_UNAVAILABLE = previous;
+  }
+});
+
 function session(user: SessionUser): RequestSession {
   return { user, source: user.accountKind === "demo" ? "demo-header" : "cookie" };
 }

@@ -25,3 +25,5 @@ backend/**/*.pyc
 *.log
 .DS_Store
 .vscode
+.vercel
+deploy/tencent/.env*

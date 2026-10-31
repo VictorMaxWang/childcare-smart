@@ -1,0 +1,15 @@
+www.smartchildcare.cn {
+	reverse_proxy web:3000 {
+		# 会诊和语音流必须及时刷新，不能等响应完成后统一返回。
+		flush_interval -1
+		transport http {
+			response_header_timeout 120s
+			read_timeout 3600s
+			write_timeout 3600s
+		}
+	}
+}
+
+smartchildcare.cn {
+	redir https://www.smartchildcare.cn{uri} permanent
+}

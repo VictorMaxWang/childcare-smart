@@ -5,6 +5,7 @@ import AppShell from "@/components/Navbar";
 import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "sonner";
 import { CHUNK_RECOVERY_BOOTSTRAP } from "@/lib/client/chunk-recovery";
+import { AiServiceNotice } from "@/components/layout/AiServiceNotice";
 
 const enableVercelAnalytics =
   process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === "1" ||
@@ -34,6 +35,7 @@ export default function RootLayout({
       <body className="antialiased">
         <AppProvider>
           <AppShell>
+            <AiServiceNotice />
             {children}
           </AppShell>
           <Toaster

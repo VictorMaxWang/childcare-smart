@@ -327,6 +327,15 @@ export async function authorizeAiRouteSession(
       }
     }
 
+    // 停用生成请求时仍保留原有鉴权和作用域检查，GET 继续允许读取历史媒体及状态。
+    if (process.env.AI_SERVICE_UNAVAILABLE === "1" && !["GET", "HEAD"].includes(request.method)) {
+      return handleApiError(new ApiRouteError(
+        "provider_unavailable",
+        "AI 服务暂不可用，请稍后再试。记录、管理和查看功能可继续使用。",
+        503
+      ));
+    }
+
     return { session };
   } catch (error) {
     if (error instanceof ApiRouteError && error.code === "unauthorized") {

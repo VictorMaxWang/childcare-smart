@@ -8,7 +8,7 @@ function configured(value: string | undefined) {
 }
 
 function currentDeploymentUrl() {
-  const value = process.env.VERCEL_URL?.trim();
+  const value = process.env.DEPLOYMENT_URL?.trim() || process.env.VERCEL_URL?.trim();
   if (!value) return null;
   try {
     return new URL(
@@ -35,9 +35,16 @@ export function GET() {
         process.env.NODE_ENV?.trim() ||
         "unknown",
       deployment: {
-        commitSha: process.env.VERCEL_GIT_COMMIT_SHA?.trim() || null,
-        deploymentId: process.env.VERCEL_DEPLOYMENT_ID?.trim() || null,
+        commitSha:
+          process.env.DEPLOYMENT_COMMIT_SHA?.trim() ||
+          process.env.VERCEL_GIT_COMMIT_SHA?.trim() || null,
+        deploymentId:
+          process.env.DEPLOYMENT_ID?.trim() ||
+          process.env.VERCEL_DEPLOYMENT_ID?.trim() || null,
         deploymentUrl: currentDeploymentUrl(),
+      },
+      serviceStatus: {
+        aiUnavailable: process.env.AI_SERVICE_UNAVAILABLE === "1",
       },
       capabilities: {
         database: configured(process.env.DATABASE_URL),

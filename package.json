@@ -108,7 +108,7 @@
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.577.0",
     "mysql2": "^3.15.3",
-    "next": "16.1.6",
+    "next": "16.4.3",
     "pdfjs-dist": "^5.7.284",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -127,9 +127,10 @@
     "@types/ws": "^8.18.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "eslint-plugin-react-hooks": "7.0.1",
     "pixelmatch": "^7.1.0",
     "pngjs": "^7.0.0",
-    "sharp": "^0.34.5",
+    "sharp": "0.35.5",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

@@ -13,7 +13,13 @@ test("public health endpoint reports deployment readiness without exposing secre
     VERCEL_DEPLOYMENT_ID: process.env.VERCEL_DEPLOYMENT_ID,
     VERCEL_GIT_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA,
     VERCEL_URL: process.env.VERCEL_URL,
+    DEPLOYMENT_COMMIT_SHA: process.env.DEPLOYMENT_COMMIT_SHA,
+    DEPLOYMENT_ID: process.env.DEPLOYMENT_ID,
+    DEPLOYMENT_URL: process.env.DEPLOYMENT_URL,
   };
+  delete process.env.DEPLOYMENT_COMMIT_SHA;
+  delete process.env.DEPLOYMENT_ID;
+  delete process.env.DEPLOYMENT_URL;
   process.env.AUTH_SESSION_SECRET = "health-auth-secret";
   process.env.BLOB_READ_WRITE_TOKEN = "health-blob-secret";
   process.env.DATABASE_URL = "mysql://health-db-secret";
@@ -60,6 +66,33 @@ test("public health endpoint reports deployment readiness without exposing secre
       } else {
         process.env[key] = value;
       }
+    }
+  }
+});
+
+test("self-hosted deployment identity takes precedence and retains secret-free health", async () => {
+  const values = {
+    DEPLOYMENT_COMMIT_SHA: "0123456789abcdef0123456789abcdef01234567",
+    DEPLOYMENT_ID: "tencent-release-test",
+    DEPLOYMENT_URL: "https://www.smartchildcare.cn/path?ignored=true",
+    VERCEL_DEPLOYMENT_ID: "old-vercel-deployment",
+    VERCEL_URL: "old.vercel.app",
+  };
+  const previous = Object.fromEntries(Object.keys(values).map(key => [key, process.env[key]]));
+  Object.assign(process.env, values);
+  try {
+    const body = await GET().json();
+    assert.deepEqual(body.deployment, {
+      commitSha: values.DEPLOYMENT_COMMIT_SHA,
+      deploymentId: values.DEPLOYMENT_ID,
+      deploymentUrl: "https://www.smartchildcare.cn",
+    });
+    process.env.DEPLOYMENT_URL = "https://[invalid";
+    assert.equal((await GET().json()).deployment.deploymentUrl, null);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
     }
   }
 });
