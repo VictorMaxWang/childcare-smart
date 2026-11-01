@@ -1,4 +1,5 @@
 import type { ApiParentChildOnboardingInput } from "@/lib/api/types";
+import { ApiClientError } from "@/lib/api/errors";
 
 export type ChildOnboardingDraft = {
   version: 1;
@@ -6,6 +7,18 @@ export type ChildOnboardingDraft = {
   input: string;
   form: { name: string; nickname: string; birthDate: string; gender: "男" | "女" };
 };
+
+/** POST响应丢失时服务器可能已提交；不能显示“创建失败”或建议换新请求编号。 */
+export function childOnboardingErrorState(error: unknown) {
+  if (error instanceof ApiClientError && error.status >= 400 && error.status < 500 && error.status !== 408) {
+    return { resultUnknown: false, title: "孩子成长档案创建未完成", message: error.message };
+  }
+  return {
+    resultUnknown: true,
+    title: "暂时未能确认创建结果",
+    message: "暂时未能确认创建结果，资料已保留；请使用相同资料重试，系统会读取原档案，避免重复创建。",
+  };
+}
 
 /** 只使用当前标签页的sessionStorage；账号/机构改变后不能恢复另一家庭的表单或请求编号。 */
 export function childOnboardingDraftKey(userId: string, institutionId: string) {

@@ -25,7 +25,7 @@ import {
   type ChildOnboardingConsentState,
 } from "@/lib/parent/child-onboarding";
 import { useApp } from "@/lib/store";
-import { childOnboardingDraftKey, parseChildOnboardingDraft, prepareChildOnboardingDraft, type ChildOnboardingDraft } from "@/lib/parent/child-onboarding-draft";
+import { childOnboardingDraftKey, childOnboardingErrorState, parseChildOnboardingDraft, prepareChildOnboardingDraft, type ChildOnboardingDraft } from "@/lib/parent/child-onboarding-draft";
 
 const CONSENT_LABELS: Array<{ key: ChildOnboardingConsentKey; label: string }> = [
   {
@@ -41,10 +41,6 @@ const CONSENT_LABELS: Array<{ key: ChildOnboardingConsentKey; label: string }> =
     label: "我已阅读并同意《儿童个人信息保护规则》",
   },
 ];
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "孩子成长档案创建失败，请稍后重试。";
-}
 
 export default function ParentChildOnboardingPage() {
   const router = useRouter();
@@ -132,9 +128,10 @@ export default function ParentChildOnboardingPage() {
       } catch { toast.warning("孩子档案已创建，但读取最新数据失败，请在家长首页刷新查看。"); }
       router.replace(`/parent?child=${encodeURIComponent(child.id)}`);
     } catch (requestError) {
-      const message = errorMessage(requestError);
-      setLastError(message);
-      toast.error("孩子成长档案创建失败", { description: message });
+      const result = childOnboardingErrorState(requestError);
+      setLastError(result.message);
+      if (result.resultUnknown) toast.warning(result.title, { description: result.message });
+      else toast.error(result.title, { description: result.message });
     } finally {
       submittingRef.current = false;
       setSubmitting(false);

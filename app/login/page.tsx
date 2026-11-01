@@ -2,8 +2,8 @@
 
 import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
-import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Baby,
   BarChart3,
@@ -24,6 +24,7 @@ import {
 import { type AccountRole } from "@/lib/auth/accounts";
 import { resolveAuthorizedRedirectPath, sanitizeNextPath } from "@/lib/auth/route-access";
 import { useApp } from "@/lib/store";
+import { navigateAfterSessionChange } from "@/lib/auth/session-navigation";
 import { cn } from "@/lib/utils";
 import brandShield from "./assets/brand-shield.png";
 import demoAvatarAdmin from "./assets/demo-avatar-admin.png";
@@ -117,7 +118,6 @@ export default function LoginPage() {
 }
 
 function LoginPageContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { demoAccounts, login, loginWithDemo, isAuthenticated, authLoading, currentUser } = useApp();
 
@@ -130,6 +130,7 @@ function LoginPageContent() {
   const [presentationOpen, setPresentationOpen] = useState(false);
   const [rememberLogin, setRememberLogin] = useState(true);
   const [agreementAccepted, setAgreementAccepted] = useState(true);
+  const navigatingRef = useRef(false);
 
   const showDesktopReplicaImage = useDesktopReplicaImage();
 
@@ -142,11 +143,17 @@ function LoginPageContent() {
     [nextPath]
   );
 
+  const navigateToLanding = useCallback((role: AccountRole) => {
+    if (navigatingRef.current) return;
+    navigatingRef.current = true;
+    navigateAfterSessionChange(role, resolveLandingPath(role));
+  }, [resolveLandingPath]);
+
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      router.replace(resolveLandingPath(currentUser.role));
+      navigateToLanding(currentUser.role);
     }
-  }, [authLoading, currentUser.role, isAuthenticated, router, resolveLandingPath]);
+  }, [authLoading, currentUser.role, isAuthenticated, navigateToLanding]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -161,7 +168,7 @@ function LoginPageContent() {
       return;
     }
 
-    router.replace(resolveLandingPath(result.user.role));
+    navigateToLanding(result.user.role);
   }
 
   async function handleDemoLogin(accountId: string, role: AccountRole) {
@@ -175,7 +182,7 @@ function LoginPageContent() {
       return;
     }
 
-    router.replace(resolveLandingPath(result.user?.role ?? role));
+    navigateToLanding(result.user?.role ?? role);
   }
 
   return (

@@ -6,6 +6,8 @@ build
 coverage
 artifacts
 node_modules
+docs
+.deployment-source-sha
 
 .env
 .env.local

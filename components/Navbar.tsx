@@ -54,6 +54,7 @@ import {
   type PrimaryNavItem,
 } from "@/lib/navigation/primary-nav";
 import { useApp } from "@/lib/store";
+import { navigateAfterSessionChange } from "@/lib/auth/session-navigation";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -268,8 +269,7 @@ function ProtectedAppShell({ children }: { children: ReactNode }) {
 
   async function handleLogout() {
     await logout();
-    router.replace("/login");
-    router.refresh();
+    navigateAfterSessionChange(null);
   }
 
   return (

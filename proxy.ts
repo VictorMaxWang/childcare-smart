@@ -125,6 +125,19 @@ function clearSessionCookie(response: NextResponse) {
   });
 }
 
+function privateAuthResponse(response: NextResponse) {
+  response.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+  const vary = new Set((response.headers.get("Vary") ?? "").split(",").map(value => value.trim()).filter(Boolean));
+  for (const header of ["Cookie", "RSC", "Next-Router-State-Tree", "Next-Router-Prefetch", "Next-Router-Segment-Prefetch", "Next-Url"]) vary.add(header);
+  response.headers.set("Vary", [...vary].join(", "));
+  return response;
+}
+
+function isSpeculativeOrRscRequest(request: NextRequest) {
+  return request.headers.get("RSC") === "1" || request.headers.has("Next-Router-Prefetch")
+    || /prefetch/iu.test(request.headers.get("Purpose") ?? "") || /prefetch/iu.test(request.headers.get("Sec-Purpose") ?? "");
+}
+
 function redirectToLogin(request: NextRequest, nextPath?: string | null) {
   const loginUrl = new URL("/login", request.url);
   const sanitizedNextPath = sanitizeNextPath(nextPath);
@@ -133,8 +146,9 @@ function redirectToLogin(request: NextRequest, nextPath?: string | null) {
   }
 
   const response = NextResponse.redirect(loginUrl);
-  clearSessionCookie(response);
-  return response;
+  // 旧匿名/过期预取可能晚于新登录返回；它仍应拒绝正文，但不能用Set-Cookie删除新的会话。
+  if (!isSpeculativeOrRscRequest(request)) clearSessionCookie(response);
+  return privateAuthResponse(response);
 }
 
 export async function proxy(request: NextRequest) {
@@ -165,10 +179,10 @@ export async function proxy(request: NextRequest) {
 
   if (session.role && !canRoleAccessPath(session.role, pathname)) {
     const redirectUrl = new URL(resolveUnauthorizedRedirectPath(session.role), request.url);
-    return NextResponse.redirect(redirectUrl);
+    return privateAuthResponse(NextResponse.redirect(redirectUrl));
   }
 
-  return NextResponse.next();
+  return privateAuthResponse(NextResponse.next());
 }
 
 export const config = {

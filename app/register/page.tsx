@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { getRoleHomePath, type AccountRole, type RegisterAccountRoleInput } from "@/lib/auth/accounts";
 import { resolveAuthorizedRedirectPath, sanitizeNextPath } from "@/lib/auth/route-access";
 import { useApp } from "@/lib/store";
+import { navigateAfterSessionChange } from "@/lib/auth/session-navigation";
 import { cn } from "@/lib/utils";
 import styles from "./register.module.css";
 
@@ -112,7 +113,6 @@ export default function RegisterPage() {
 }
 
 function RegisterPageContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { register, isAuthenticated, authLoading, currentUser } = useApp();
 
@@ -125,6 +125,7 @@ function RegisterPageContent() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const submittingRef = useRef(false);
+  const navigatingRef = useRef(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -137,11 +138,17 @@ function RegisterPageContent() {
     [nextPath]
   );
 
+  const navigateToRole = useCallback((accountRole: AccountRole, next?: string) => {
+    if (navigatingRef.current) return;
+    navigatingRef.current = true;
+    navigateAfterSessionChange(accountRole, next ?? redirectForRole(accountRole));
+  }, [redirectForRole]);
+
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      router.replace(redirectForRole(currentUser.role));
+      navigateToRole(currentUser.role);
     }
-  }, [authLoading, currentUser.role, isAuthenticated, redirectForRole, router]);
+  }, [authLoading, currentUser.role, isAuthenticated, navigateToRole]);
 
   function validateForm() {
     const nextErrors: FieldErrors = {};
@@ -199,7 +206,7 @@ function RegisterPageContent() {
         setMessage(friendlyServerError(result.error));
         return;
       }
-      router.replace(result.redirectPath || getRoleHomePath(result.user.role) || redirectForRole(selectedRole.accountRole));
+      navigateToRole(result.user.role, result.redirectPath || getRoleHomePath(result.user.role) || redirectForRole(selectedRole.accountRole));
     } catch {
       setMessage("网络异常，请稍后重试；如果账号已创建，请返回登录。");
     } finally {

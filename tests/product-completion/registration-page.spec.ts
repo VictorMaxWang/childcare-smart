@@ -108,12 +108,17 @@ test.describe("phone registration page", () => {
         body: JSON.stringify({ ok: true, user: REGISTER_USER, redirectPath: "/teacher" }),
       });
     });
+    // 这里只验证mock响应的提交与整页导航契约，不用匿名proxy的/login跳转冒充注册成功。
+    // 正式Cookie、真实账号与后续业务由独立普通账号验收覆盖。
+    await page.route("**/teacher", async (route) => {
+      await route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><html><body><h1>注册成功后的教师入口</h1></body></html>" });
+    });
     await page.goto("/register");
     await fillRegistrationForm(page, { role: "教师" });
     await page.getByRole("button", { name: "注册并进入系统" }).click();
 
-    await expect(page).toHaveURL(/\/login\?next=%2Fteacher/);
-    expect(new URL(page.url()).searchParams.get("next")).toBe("/teacher");
+    await expect(page).toHaveURL(/\/teacher$/);
+    await expect(page.getByRole("heading", { name: "注册成功后的教师入口" })).toBeVisible();
     expect(requestBody).toMatchObject({
       phone: "13800000000",
       username: "13800000000",
