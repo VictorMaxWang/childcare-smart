@@ -1328,6 +1328,7 @@ export default function StoryBookViewer({
   refreshMessage,
   cacheState,
   isRefreshing = false,
+  isSavingStorybook = false,
   isStorybookActionPending = false,
   storybookActionStatus,
   selectedChildName,
@@ -1353,6 +1354,7 @@ export default function StoryBookViewer({
   onCustomStyleNegativePromptChange,
   onGenerate,
   onRetry,
+  onRetrySave,
   onRetryMedia,
   onActiveSceneChange,
   onExportStorybook,
@@ -1374,6 +1376,7 @@ export default function StoryBookViewer({
   refreshMessage?: string | null;
   cacheState?: { kind: "none" | "hit" | "saved"; savedAt?: number };
   isRefreshing?: boolean;
+  isSavingStorybook?: boolean;
   isStorybookActionPending?: boolean;
   storybookActionStatus?: string | null;
   selectedChildName?: string;
@@ -1399,6 +1402,7 @@ export default function StoryBookViewer({
   onCustomStyleNegativePromptChange: (value: string) => void;
   onGenerate: () => void;
   onRetry?: () => void;
+  onRetrySave?: () => void;
   onRetryMedia?: () => void;
   onActiveSceneChange?: (index: number) => void;
   onExportStorybook?: (format: StorybookExportFormat) => void;
@@ -2159,6 +2163,12 @@ export default function StoryBookViewer({
               <Button type="button" variant="outline" className={cn("rounded-full", theme.quiet)}
                 disabled={isRefreshing} data-testid="parent-storybook-retry-media" onClick={onRetryMedia}>
                 重试失败媒体
+              </Button>
+            ) : null}
+            {story && onRetrySave ? (
+              <Button type="button" variant="outline" className={cn("rounded-full", theme.quiet)}
+                disabled={isSavingStorybook} loading={isSavingStorybook} data-testid="parent-storybook-retry-save" onClick={onRetrySave}>
+                重试保存
               </Button>
             ) : null}
             {storybookActionStatus ? (

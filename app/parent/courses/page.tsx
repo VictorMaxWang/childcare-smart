@@ -8,25 +8,29 @@ import { RolePageShell } from "@/components/role-shell/RoleScaffold";
 import { Button } from "@/components/ui/button";
 import { COURSE_MODULE_LABELS, type CareCourse, type CourseLearningEvent, type CourseModule, type CourseRecommendationJob } from "@/lib/courses/types";
 import { safeBilibiliUrl } from "@/lib/courses/catalog";
+import { CourseJobReadError, courseJobStorageKey, startCourseJobPolling } from "@/lib/courses/job-polling";
+import { useApp } from "@/lib/store";
 
-type CatalogResponse = { children: { id: string; name: string }[]; selectedChildId: string | null; ageMonths: number | null; courses: CareCourse[]; learning: CourseLearningEvent[]; canSave: boolean };
+type CatalogResponse = { children: { id: string; name: string }[]; selectedChildId: string | null; ageMonths: number | null; courses: CareCourse[]; learning: CourseLearningEvent[]; canSave: boolean; ageWarning?: string | null };
 async function readApi<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, { method: body === undefined ? "GET" : "POST", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal });
   const payload = await response.json();
-  if (!response.ok || !payload.ok) throw new Error(payload.error || "课程请求未完成，请稍后重试。");
+  if (!response.ok || !payload.ok) throw new CourseJobReadError(payload.error || "课程请求未完成，请稍后重试。", response.status);
   return payload.data as T;
 }
 function duration(seconds: number | null) { return seconds === null ? "时长待复核" : `${Math.floor(seconds / 60)}分${seconds % 60}秒`; }
-const storageKey = (childId: string) => `childcare-course-job:${childId}`;
 
 export default function ParentCoursesPage() {
   const params = useSearchParams(), router = useRouter();
+  const { currentUser } = useApp();
   const childFromQuery = params.get("child");
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [module, setModule] = useState<CourseModule | "all">("all");
   const [budget, setBudget] = useState<5 | 10 | 20>(10);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [job, setJob] = useState<CourseRecommendationJob | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [jobError, setJobError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +41,7 @@ export default function ParentCoursesPage() {
   const [practiceNote, setPracticeNote] = useState("");
   const detailRef = useRef<HTMLElement | null>(null);
   const generationController = useRef<AbortController | null>(null);
+  const jobPolling = useRef<ReturnType<typeof startCourseJobPolling> | null>(null);
   const currentChildQuery = useRef(childFromQuery);
 
   const loadCatalog = useCallback(async (signal?: AbortSignal) => {
@@ -50,7 +55,7 @@ export default function ParentCoursesPage() {
     generationController.current?.abort();
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      setLoading(true); setGenerating(false); setCatalog(null); setError(null); setMessage(null); setSelectedId(null); setJob(null);
+      setLoading(true); setGenerating(false); setCatalog(null); setError(null); setMessage(null); setSelectedId(null); setJob(null); setActiveJobId(null); setJobError(null);
       loadCatalog(controller.signal).catch(issue => { if (!controller.signal.aborted) setError(issue instanceof Error ? issue.message : "课程加载失败。"); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 0);
     return () => { window.clearTimeout(timer); controller.abort(); generationController.current?.abort(); };
@@ -58,29 +63,40 @@ export default function ParentCoursesPage() {
   useEffect(() => { if (selectedId) detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [selectedId]);
   useEffect(() => {
     if (!catalog?.selectedChildId) return;
-    let stored: string | null = null;
-    try { stored = localStorage.getItem(storageKey(catalog.selectedChildId)); } catch { return; }
-    if (!stored) return;
-    const controller = new AbortController();
-    readApi<CourseRecommendationJob>(`/api/parent/course-recommendations/${encodeURIComponent(stored)}`, undefined, controller.signal)
-      .then(result => { if (!controller.signal.aborted) setJob(result); })
-      .catch(() => { /* 过期、退出或儿童绑定变化时不恢复其他用户的推荐。 */ });
-    return () => controller.abort();
-  }, [catalog?.selectedChildId]);
-  useEffect(() => {
-    if (!job || !["pending", "running"].includes(job.status)) return;
-    const controller = new AbortController();
-    let timer: number;
-    const poll = async () => {
-      if (document.visibilityState !== "visible") { timer = window.setTimeout(poll, 5000); return; }
+    const childId = catalog.selectedChildId;
+    const timer = window.setTimeout(() => {
       try {
-        const result = await readApi<CourseRecommendationJob>(`/api/parent/course-recommendations/${encodeURIComponent(job.jobId)}`, undefined, controller.signal);
-        if (!controller.signal.aborted) setJob(result);
-      } catch (issue) { if (!controller.signal.aborted) setError(issue instanceof Error ? issue.message : "推荐状态读取失败。"); }
-    };
-    timer = window.setTimeout(poll, 2500);
-    return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [job]);
+        const key = courseJobStorageKey(currentUser.institutionId, currentUser.id, childId);
+        // 旧键只提供待核验的jobId；后续GET必须通过账号/儿童校验，成功后迁移至隔离键。
+        const stored = localStorage.getItem(key) ?? localStorage.getItem(`childcare-course-job:${childId}`);
+        if (stored && stored.length <= 120) setActiveJobId(stored);
+      } catch { /* 浏览器禁止存储时，不自动创建新的收费任务。 */ }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [catalog?.selectedChildId, currentUser.id, currentUser.institutionId]);
+  useEffect(() => {
+    const childId = catalog?.selectedChildId;
+    if (!activeJobId || !childId) return;
+    const poller = startCourseJobPolling({
+      jobId: activeJobId, childId,
+      readJob: (jobId, signal) => readApi<CourseRecommendationJob>(`/api/parent/course-recommendations/${encodeURIComponent(jobId)}`, undefined, signal),
+      onJob: result => {
+        setJob(result);
+        try { localStorage.setItem(courseJobStorageKey(currentUser.institutionId, currentUser.id, childId), result.jobId); } catch { /* 已授权结果仍可在当前页面使用。 */ }
+      },
+      onError: setJobError,
+      runtime: {
+        isOnline: () => navigator.onLine, isVisible: () => document.visibilityState === "visible",
+        setTimer: (callback, delay) => window.setTimeout(callback, delay), clearTimer: timer => window.clearTimeout(timer as number),
+        subscribe(resume) {
+          window.addEventListener("online", resume); document.addEventListener("visibilitychange", resume);
+          return () => { window.removeEventListener("online", resume); document.removeEventListener("visibilitychange", resume); };
+        },
+      },
+    });
+    jobPolling.current = poller;
+    return () => { poller.stop(); if (jobPolling.current === poller) jobPolling.current = null; };
+  }, [activeJobId, catalog?.selectedChildId, currentUser.id, currentUser.institutionId]);
   const visibleCourses = useMemo(() => (catalog?.courses ?? []).filter(course => module === "all" || course.module === module), [catalog?.courses, module]);
   const selected = catalog?.courses.find(course => course.id === selectedId) ?? null;
   const selectedEvents = catalog?.learning.filter(event => event.courseId === selectedId && event.courseVersion === selected?.version) ?? [];
@@ -105,18 +121,19 @@ export default function ParentCoursesPage() {
     finally { setSaving(false); }
   }
   async function generate() {
-    if (!catalog?.selectedChildId) return;
+    if (!catalog?.selectedChildId || generating || generationController.current) return;
     const childId = catalog.selectedChildId;
     const controller = new AbortController();
-    generationController.current?.abort(); generationController.current = controller;
-    setGenerating(true); setError(null);
+    generationController.current = controller;
+    setGenerating(true); setError(null); setJobError(null);
     try {
       const result = await readApi<CourseRecommendationJob>("/api/parent/course-recommendations", { requestId: crypto.randomUUID(), childId, module, budgetMinutes: budget }, controller.signal);
       if (controller.signal.aborted) return;
       setJob(result);
-      try { localStorage.setItem(storageKey(childId), result.jobId); } catch { /* 浏览器禁用存储时，服务端任务仍然有效。 */ }
+      setActiveJobId(result.jobId);
+      try { localStorage.setItem(courseJobStorageKey(currentUser.institutionId, currentUser.id, childId), result.jobId); } catch { /* 浏览器禁用存储时，服务端任务仍然有效。 */ }
     } catch (issue) { if (!controller.signal.aborted) setError(issue instanceof Error ? issue.message : "推荐请求失败。"); }
-    finally { if (!controller.signal.aborted) setGenerating(false); }
+    finally { if (generationController.current === controller) { generationController.current = null; if (!controller.signal.aborted) setGenerating(false); } }
   }
   return <RolePageShell badge="家长端" title="三元课程与智慧推荐" description="从成长档案出发，在营养、心理支持和体育活动中选择可执行的小步学习。" testId="parent-courses-page">
     <div className="space-y-5">
@@ -141,9 +158,16 @@ export default function ParentCoursesPage() {
           <Button disabled={loading || !catalog?.canSave || generating || Boolean(job && ["pending", "running"].includes(job.status))} loading={generating} onClick={generate}><Sparkles className="mr-2 h-4 w-4" />生成智慧推荐</Button>
         </div>
         <p className="mt-3 text-sm text-slate-600">最多推荐3项，视频总时长不超过预算；知识卡、自检和家庭实践另行安排。进入页面不会自动调用模型。</p>
+        {catalog?.ageWarning && <p role="alert" className="mt-3 text-sm text-amber-800">{catalog.ageWarning}</p>}
         {!catalog?.canSave && !loading && <p className="mt-3 text-sm text-amber-800">可先阅读课程；保存进度和个性化推荐需要普通家长账号及儿童档案。<Link href="/parent/onboarding/child" className="ml-2 underline">创建成长档案</Link></p>}
       </section>
       {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{error}<Button variant="link" onClick={() => { setError(null); void loadCatalog().catch(issue => setError(String(issue.message))); }}>重新加载课程</Button></div>}
+      {activeJobId && <div className="rounded-xl border bg-white p-4">
+        {jobError && <p role="alert" className="text-amber-900">{jobError}</p>}
+        {!job && !jobError && <p role="status">正在恢复已创建的推荐任务……</p>}
+        <Button variant="link" onClick={() => jobPolling.current?.refresh()}>刷新推荐状态</Button>
+        <p className="text-xs text-slate-500">仅查询原任务，不重新生成或调用收费模型。</p>
+      </div>}
       {message && <div role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-800">{message}</div>}
       {job && <section className="rounded-2xl border bg-indigo-50 p-5" aria-label="智慧推荐结果">
         <h2 className="text-lg font-bold">智慧推荐</h2>

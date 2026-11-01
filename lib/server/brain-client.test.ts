@@ -404,6 +404,47 @@ test("brain client keeps its timeout active while buffering a response body", as
   }
 });
 
+test("brain stream retains caller cancellation until the response body is consumed", async () => {
+  const originalFetch = globalThis.fetch;
+  const caller = new AbortController();
+  let upstreamSignal: AbortSignal | null = null;
+  let cancelled = false;
+  globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+    upstreamSignal = init?.signal as AbortSignal;
+    return new Response(new ReadableStream<Uint8Array>({ cancel() { cancelled = true; } }), { headers: { "content-type": "text/event-stream" } });
+  }) as typeof fetch;
+  try {
+    await withEnv({ BRAIN_API_BASE_URL: "http://brain.example.com", NODE_ENV: "development" }, async () => {
+      const result = await forwardBrainRequest(buildStorybookRequest(caller.signal), "/api/v1/agents/consultations/high-risk/stream", { timeoutMs: 5_000 });
+      assert.ok(result.response?.body);
+      caller.abort();
+      await Promise.resolve();
+      const aborted = (upstreamSignal as unknown as AbortSignal).aborted;
+      await result.response.body.cancel().catch(() => undefined);
+      assert.equal(aborted, true, "响应头返回后仍须传递调用方取消");
+      assert.equal(cancelled, true);
+    });
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("consumer cancelling a brain response body cancels the upstream connection", async () => {
+  const originalFetch = globalThis.fetch;
+  let upstreamSignal: AbortSignal | null = null;
+  let cancelled = false;
+  globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+    upstreamSignal = init?.signal as AbortSignal;
+    return new Response(new ReadableStream<Uint8Array>({ cancel() { cancelled = true; } }));
+  }) as typeof fetch;
+  try {
+    await withEnv({ BRAIN_API_BASE_URL: "http://brain.example.com", NODE_ENV: "development" }, async () => {
+      const result = await forwardBrainRequest(buildStorybookRequest(), "/api/v1/agents/consultations/high-risk/stream", { timeoutMs: 5_000 });
+      await result.response!.body!.cancel("user cancelled");
+      assert.equal((upstreamSignal as unknown as AbortSignal).aborted, true);
+      assert.equal(cancelled, true);
+    });
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("normal accounts reject explicit remote mock payloads while demo accounts retain mock support", () => {
   const shouldAcceptRemotePayload = (
     brainClientInternals as typeof brainClientInternals & {

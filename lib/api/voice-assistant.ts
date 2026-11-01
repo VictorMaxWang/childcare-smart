@@ -17,6 +17,7 @@ export function planVoiceAssistantCommand(params: {
   currentPath?: string;
   currentQuery?: Record<string, string | undefined>;
   objects?: Record<string, string | undefined>;
+  signal?: AbortSignal;
 }) {
   return apiPost<AssistantPlanResult>("/api/voice-assistant/commands", {
     action: "plan",
@@ -26,7 +27,7 @@ export function planVoiceAssistantCommand(params: {
       currentQuery: params.currentQuery,
       objects: params.objects,
     },
-  });
+  }, { signal: params.signal });
 }
 
 export function executeVoiceAssistantCommand(params: {
@@ -35,6 +36,7 @@ export function executeVoiceAssistantCommand(params: {
   currentPath?: string;
   currentQuery?: Record<string, string | undefined>;
   objects?: Record<string, string | undefined>;
+  signal?: AbortSignal;
 }) {
   return apiPost<AssistantExecuteResult>("/api/voice-assistant/commands", {
     action: "execute",
@@ -45,14 +47,15 @@ export function executeVoiceAssistantCommand(params: {
       currentQuery: params.currentQuery,
       objects: params.objects,
     },
-  });
+  }, { signal: params.signal });
 }
 
-export async function transcribeVoiceAssistantAudio(formData: FormData) {
+export async function transcribeVoiceAssistantAudio(formData: FormData, signal?: AbortSignal) {
   const response = await fetch("/api/ai/voice-asr", {
     method: "POST",
     body: formData,
     cache: "no-store",
+    signal,
   });
   const body = (await response.json().catch(() => null)) as
     | { ok: true; data: VoiceAsrResponse }

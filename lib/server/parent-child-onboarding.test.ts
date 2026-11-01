@@ -145,6 +145,19 @@ function assertApiError(code: string) {
   };
 }
 
+test("missing or invalid gender is rejected before consent storage or any database writes", async () => {
+  for (const gender of [undefined, "", "unspecified", true, []]) {
+    const fixture = createFixture();
+    await assert.rejects(createParentChildWithConsent(parentSession(), { name: "性别校验", ageMonth: 12, gender, consentAccepted: true } as unknown as import("@/lib/api/types").ApiParentChildOnboardingInput, {}, fixture.dependencies), error => {
+      assert.ok(error instanceof ApiRouteError); assert.equal(error.code, "invalid_request"); assert.equal(error.status, 400); return true;
+    });
+    assert.equal(fixture.transactionCount(), 0);
+    assert.equal(fixture.ensureConsentStorageCount(), 0);
+    assert.deepEqual(fixture.state().consents, []);
+    assert.equal((fixture.state().snapshot as ApiExtendedSnapshot).children.length, 0);
+  }
+});
+
 test("parent child onboarding rejects consentAccepted=false before DB writes", async () => {
   const fixture = createFixture();
 
@@ -152,7 +165,7 @@ test("parent child onboarding rejects consentAccepted=false before DB writes", a
     () =>
       createParentChildWithConsent(
         parentSession(),
-        { name: "小雨", birthDate: "2022-05-10", consentAccepted: false },
+        { name: "小雨", birthDate: "2022-05-10", gender: "女" as const, consentAccepted: false },
         {},
         fixture.dependencies
       ),
@@ -168,7 +181,7 @@ test("parent child onboarding rejects consentAccepted=false before DB writes", a
 
 test("retrying an onboarding request returns the existing child and does not duplicate consent", async () => {
   const fixture = createFixture();
-  const input = { name: "重试验收儿童", birthDate: "2023-05-10", consentAccepted: true, requestId: "onboarding-retry-20261031" };
+  const input = { name: "重试验收儿童", birthDate: "2023-05-10", gender: "女" as const, consentAccepted: true, requestId: "onboarding-retry-20261031" };
   const first = await createParentChildWithConsent(parentSession(), input, {}, fixture.dependencies);
   const retry = await createParentChildWithConsent(parentSession(), input, {}, fixture.dependencies);
   assert.equal(first.id, retry.id);
@@ -181,13 +194,13 @@ test("retrying an onboarding request returns the existing child and does not dup
 
 test("onboarding a month-old child at month end clamps the inferred birthday", async () => {
   const fixture = createFixture();
-  const child = await createParentChildWithConsent(parentSession(), { name: "月末验收", ageMonth: 1, consentAccepted: true }, {}, { ...fixture.dependencies, now: () => new Date("2026-03-31T12:00:00Z") });
+  const child = await createParentChildWithConsent(parentSession(), { name: "月末验收", ageMonth: 1, gender: "女" as const, consentAccepted: true }, {}, { ...fixture.dependencies, now: () => new Date("2026-03-31T12:00:00Z") });
   assert.equal(child.birthDate, "2026-02-28");
 });
 
 test("onboarding retry cannot return a child after the current database binding is removed", async () => {
   const fixture = createFixture();
-  const input = { name: "解除绑定验收", ageMonth: 24, consentAccepted: true, requestId: "revoked-retry-20261031" };
+  const input = { name: "解除绑定验收", ageMonth: 24, gender: "女" as const, consentAccepted: true, requestId: "revoked-retry-20261031" };
   await createParentChildWithConsent(parentSession(), input, {}, fixture.dependencies);
   fixture.state().userRow.child_ids = [];
   await assert.rejects(createParentChildWithConsent(parentSession(), input, {}, fixture.dependencies), assertApiError("forbidden_scope"));
@@ -198,7 +211,7 @@ test("age-based onboarding follows the business date and remains idempotent acro
   const fixture = createFixture();
   let now = new Date("2026-10-31T18:00:00Z");
   const dependencies = { ...fixture.dependencies, now: () => now };
-  const input = { name: "跨日验收", ageMonth: 0, consentAccepted: true, requestId: "business-date-request-20261031" };
+  const input = { name: "跨日验收", ageMonth: 0, gender: "女" as const, consentAccepted: true, requestId: "business-date-request-20261031" };
   const first = await createParentChildWithConsent(parentSession(), input, {}, dependencies);
   assert.equal(first.birthDate, "2026-11-01");
   now = new Date("2026-11-02T01:00:00Z");
@@ -259,7 +272,7 @@ test("unbound parent creates a personal child snapshot without institution forei
 
   const child = await createParentChildWithConsent(
     parentSession(),
-    { name: "Snapshot Child", birthDate: "2022-05-10", consentAccepted: true },
+    { name: "Snapshot Child", birthDate: "2022-05-10", gender: "女" as const, consentAccepted: true },
     {},
     fixture.dependencies
   );
@@ -287,7 +300,7 @@ test("parent child onboarding rejects demo, non-parent, and cross-institution at
     () =>
       createParentChildWithConsent(
         parentSession({ accountKind: "demo" }),
-        { name: "小雨", birthDate: "2022-05-10", consentAccepted: true },
+        { name: "小雨", birthDate: "2022-05-10", gender: "女" as const, consentAccepted: true },
         {},
         demoFixture.dependencies
       ),
@@ -297,7 +310,7 @@ test("parent child onboarding rejects demo, non-parent, and cross-institution at
     () =>
       createParentChildWithConsent(
         parentSession({ role: "教师" }),
-        { name: "小雨", birthDate: "2022-05-10", consentAccepted: true },
+        { name: "小雨", birthDate: "2022-05-10", gender: "女" as const, consentAccepted: true },
         {},
         teacherFixture.dependencies
       ),
@@ -307,7 +320,7 @@ test("parent child onboarding rejects demo, non-parent, and cross-institution at
     () =>
       createParentChildWithConsent(
         parentSession(),
-        { name: "小雨", birthDate: "2022-05-10", consentAccepted: true },
+        { name: "小雨", birthDate: "2022-05-10", gender: "女" as const, consentAccepted: true },
         {},
         crossInstitutionFixture.dependencies
       ),
@@ -327,7 +340,7 @@ test("parent child onboarding rolls back child and child_ids when consent insert
     () =>
       createParentChildWithConsent(
         parentSession(),
-        { name: "小雨", birthDate: "2022-05-10", consentAccepted: true },
+        { name: "小雨", birthDate: "2022-05-10", gender: "女" as const, consentAccepted: true },
         {},
         fixture.dependencies
       ),
@@ -344,7 +357,7 @@ test("parent child onboarding converts ageMonth fallback to birthDate", async ()
 
   const child = await createParentChildWithConsent(
     parentSession(),
-    { name: "小雨", ageMonth: 24, consentAccepted: true },
+    { name: "小雨", ageMonth: 24, gender: "女" as const, consentAccepted: true },
     {},
     fixture.dependencies
   );

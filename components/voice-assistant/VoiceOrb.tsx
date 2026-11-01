@@ -183,6 +183,13 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
   const recordingTimeoutRef = useRef<number | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const recordingStartedAtRef = useRef<number>(0);
+  const recordingGenerationRef = useRef(0);
+  const recordingPendingRef = useRef(false);
+  const recordingAbortRef = useRef<AbortController | null>(null);
+  const commandGenerationRef = useRef(0);
+  const commandAbortRef = useRef<AbortController | null>(null);
+  const speechCaptureValidRef = useRef(false);
+  const nativeSpeechPendingRef = useRef(false);
 
   const queryObject = useMemo(() => buildQueryObject(searchParams), [searchParams]);
   const currentPath = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
@@ -208,7 +215,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
       (capability) => !capability.configured || capability.status !== "ready"
     );
     if (unavailable) return providerStatus.fallbackText;
-    return "vivo provider ready";
+    return "语音助手服务已就绪";
   }, [providerStatus]);
 
   const providerCapabilities = providerStatus
@@ -291,12 +298,19 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
     const recognizer = createBrowserSpeechRecognizer({
       lang: "zh-CN",
       interimResults: true,
-      onStatusChange: setSpeechStatus,
+      onStatusChange(status) {
+        nativeSpeechPendingRef.current = status === "requesting" || status === "stopping";
+        if (status === "idle") speechCaptureValidRef.current = false;
+        setSpeechStatus(status);
+      },
       onError(message) {
+        if (!speechCaptureValidRef.current) return;
+        speechCaptureValidRef.current = false;
         setError(message);
         setPhase("error");
       },
       onResult(result) {
+        if (!speechCaptureValidRef.current) return;
         setRecognizedText(result.transcript);
         setText(result.transcript);
         if (result.isFinal) {
@@ -311,27 +325,46 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
     };
   }, [speechSupport?.recognitionSupported]);
 
-  useEffect(
-    () => () => {
+  const cancelRecording = useCallback(() => {
+      // 权限弹窗不能可靠中止，先使代际失效；迟到的stream会被入口立即释放。
+      recordingGenerationRef.current += 1;
+      recordingPendingRef.current = false;
+      commandGenerationRef.current += 1;
+      commandAbortRef.current?.abort();
+      commandAbortRef.current = null;
+      recordingAbortRef.current?.abort();
+      recordingAbortRef.current = null;
+      speechCaptureValidRef.current = false;
+      nativeSpeechPendingRef.current = false;
+      recognizerRef.current?.abort();
       if (recordingTimeoutRef.current !== null) {
         window.clearTimeout(recordingTimeoutRef.current);
+        recordingTimeoutRef.current = null;
       }
       const recorder = recorderRef.current;
       if (recorder && recorder.state !== "inactive") {
         recorder.onstop = null;
-        recorder.stop();
+        recorder.ondataavailable = null;
+        recorder.onerror = null;
+        try { recorder.stop(); } catch { /* 设备可能已经自行停止，仍须释放stream。 */ }
       }
       recordingStreamRef.current
         ?.getTracks()
         .forEach((track) => track.stop());
       recordingStreamRef.current = null;
       recorderRef.current = null;
-    },
-    []
-  );
+      recordedChunksRef.current = [];
+      setSpeechStatus("idle");
+      setPhase("idle");
+    }, []);
+
+  useEffect(() => () => cancelRecording(), [cancelRecording, currentUser.id, activeChildId]);
 
   const executeCommand = useCallback(
-    async (nextCommand: AssistantCommand, confirmed = false) => {
+    async (nextCommand: AssistantCommand, confirmed = false, generation = commandGenerationRef.current) => {
+      if (generation !== commandGenerationRef.current) return;
+      const controller = commandAbortRef.current ?? new AbortController();
+      commandAbortRef.current = controller;
       setPhase("executing");
       setError("");
       setResultActionStatus("");
@@ -342,7 +375,9 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
           currentPath,
           currentQuery: queryObject,
           objects: currentObjects,
+          signal: controller.signal,
         });
+        if (generation !== commandGenerationRef.current || controller.signal.aborted) return;
         setResult(executed);
         setCommand(executed.command);
         if (executed.refs) {
@@ -376,6 +411,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
           router.refresh();
         }
       } catch (err) {
+        if (generation !== commandGenerationRef.current || controller.signal.aborted) return;
         const message = errorMessage(err);
         setError(message);
         setPhase("error");
@@ -397,6 +433,10 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
     async (value: string, inputMode: AssistantUtterance["inputMode"] = "text") => {
       const trimmed = value.trim();
       if (!trimmed) return;
+      const generation = ++commandGenerationRef.current;
+      commandAbortRef.current?.abort();
+      const controller = new AbortController();
+      commandAbortRef.current = controller;
       setExpanded(true);
       setMinimized(false);
       setPhase("planning");
@@ -416,12 +456,14 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
           currentPath,
           currentQuery: queryObject,
           objects: currentObjects,
+          signal: controller.signal,
         });
+        if (generation !== commandGenerationRef.current || controller.signal.aborted) return;
         setProviderStatus(planned.providerStatus ?? providerStatus);
         setCommand(planned.command);
 
         if (planned.command.status === "ready" && !planned.command.requiredConfirmation) {
-          await executeCommand(planned.command, true);
+          await executeCommand(planned.command, true, generation);
           return;
         }
 
@@ -453,6 +495,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
 
         setPhase("idle");
       } catch (err) {
+        if (generation !== commandGenerationRef.current || controller.signal.aborted) return;
         const message = errorMessage(err);
         setError(message);
         setPhase("error");
@@ -470,43 +513,58 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
   }
 
   async function startProviderRecording() {
+    if (recordingPendingRef.current || recorderRef.current || recordingAbortRef.current) return;
     if (!speechSupport?.recordingSupported) {
       setError("当前浏览器无法录音，可输入文字指令。");
       setPhase("error");
       return;
     }
+    const generation = ++recordingGenerationRef.current;
+    const isCurrent = () => generation === recordingGenerationRef.current;
+    recordingPendingRef.current = true;
+    setSpeechStatus("requesting");
+    let stream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!isCurrent()) { stream.getTracks().forEach(track => track.stop()); return; }
+      recordingPendingRef.current = false;
       recordingStreamRef.current = stream;
-      recordedChunksRef.current = [];
+      const chunks: Blob[] = [];
+      recordedChunksRef.current = chunks;
       const recorder = new MediaRecorder(stream);
+      const capturedStream = stream;
       recorderRef.current = recorder;
       recordingStartedAtRef.current = Date.now();
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) recordedChunksRef.current.push(event.data);
+        if (isCurrent() && event.data.size > 0) chunks.push(event.data);
       };
       recorder.onstop = async () => {
+        if (!isCurrent()) { capturedStream.getTracks().forEach(track => track.stop()); return; }
         if (recordingTimeoutRef.current !== null) {
           window.clearTimeout(recordingTimeoutRef.current);
           recordingTimeoutRef.current = null;
         }
-        stream.getTracks().forEach((track) => track.stop());
+        capturedStream.getTracks().forEach((track) => track.stop());
         recordingStreamRef.current = null;
         recorderRef.current = null;
-        const recordedAudio = new Blob(recordedChunksRef.current, {
+        const recordedAudio = new Blob(chunks, {
           type: recorder.mimeType || "audio/webm",
         });
         let audio: Blob;
         try {
           audio = await normalizeRecordedAudioForAsr(recordedAudio);
         } catch (conversionError) {
+          if (!isCurrent()) return;
           setError(errorMessage(conversionError));
           setPhase("error");
+          setSpeechStatus("idle");
           return;
         }
+        if (!isCurrent()) return;
         if (audio.size <= 0 || audio.size > VOICE_AUDIO_MAX_BYTES) {
-          setError("录音超过 4 MB，请缩短后重试。");
+          setError(audio.size <= 0 ? "录音文件为空，请重新录制。" : "录音超过 4 MB，请缩短后重试。");
           setPhase("error");
+          setSpeechStatus("idle");
           return;
         }
         const formData = new FormData();
@@ -531,8 +589,11 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
         if (activeChildId) formData.set("childId", activeChildId);
         setPhase("planning");
         setError("");
+        const controller = new AbortController();
+        recordingAbortRef.current = controller;
         try {
-          const asr = await transcribeVoiceAssistantAudio(formData);
+          const asr = await transcribeVoiceAssistantAudio(formData, controller.signal);
+          if (!isCurrent() || controller.signal.aborted) return;
           const transcript = asr.transcript.trim();
           if (!transcript) {
             setError("ASR provider 没有返回可用转写，请使用文字 fallback。");
@@ -543,9 +604,21 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
           setText(transcript);
           await submitText(transcript, "asr-provider");
         } catch (err) {
+          if (!isCurrent() || controller.signal.aborted) return;
           setError(errorMessage(err));
           setPhase("error");
+        } finally {
+          if (isCurrent()) {
+            recordingAbortRef.current = null;
+            setSpeechStatus("idle");
+          }
         }
+      };
+      recorder.onerror = () => {
+        if (!isCurrent()) return;
+        cancelRecording();
+        setError("录音设备发生错误，请重新录制。");
+        setPhase("error");
       };
       recorder.start();
       recordingTimeoutRef.current = window.setTimeout(() => {
@@ -556,6 +629,9 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
       }, VOICE_AUDIO_MAX_DURATION_MS);
       setSpeechStatus("listening");
     } catch (err) {
+      if (!isCurrent()) { stream?.getTracks().forEach(track => track.stop()); return; }
+      if (recordingStreamRef.current !== stream) stream?.getTracks().forEach(track => track.stop());
+      cancelRecording();
       setError(errorMessage(err));
       setPhase("error");
     }
@@ -566,7 +642,9 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
       window.clearTimeout(recordingTimeoutRef.current);
       recordingTimeoutRef.current = null;
     }
-    recorderRef.current?.stop();
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+    recorder.stop();
     setSpeechStatus("stopping");
   }
 
@@ -574,12 +652,25 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
     setExpanded(true);
     setMinimized(false);
     if (speechSupport?.recognitionSupported && recognizerRef.current?.supported) {
-      if (speechStatus === "listening") {
-        recognizerRef.current.stop();
-      } else {
-        setRecognizedText("");
-        setError("");
-        recognizerRef.current.start();
+      if (nativeSpeechPendingRef.current) return;
+      nativeSpeechPendingRef.current = true;
+      try {
+        if (speechStatus === "listening") {
+          setSpeechStatus("stopping");
+          recognizerRef.current.stop();
+        } else {
+          speechCaptureValidRef.current = true;
+          setRecognizedText("");
+          setError("");
+          setSpeechStatus("requesting");
+          recognizerRef.current.start();
+        }
+      } catch (error) {
+        nativeSpeechPendingRef.current = false;
+        speechCaptureValidRef.current = false;
+        setSpeechStatus("idle");
+        setError(errorMessage(error));
+        setPhase("error");
       }
       return;
     }
@@ -619,6 +710,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
   }
 
   function cancelCommand() {
+    cancelRecording();
     if (command) {
       persistHistory({
         id: command.id,
@@ -677,6 +769,8 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
                 type="button"
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                 onClick={() => {
+                  cancelRecording();
+                  setPhase("idle");
                   setExpanded(false);
                   setMinimized(false);
                 }}
@@ -728,6 +822,7 @@ export function VoiceOrb({ hideFloatingButton = false }: VoiceOrbProps) {
                   size="icon"
                   variant={isListening ? "danger" : "outline"}
                   onClick={handleVoiceButton}
+                  disabled={isBusy || speechStatus === "requesting" || speechStatus === "stopping"}
                   aria-label={isListening ? "停止语音输入" : "开始语音输入"}
                   title={isListening ? "停止语音输入" : "开始语音输入"}
                 >

@@ -131,11 +131,12 @@ function resolveBirthDate(
 
 function createMinimalParentChild(params: {
   childId: string;
-  input: ApiParentChildOnboardingInput & { consentAccepted: true };
+  input: ApiParentChildOnboardingInput & { consentAccepted: true; gender: ApiChildInput["gender"] };
   session: SessionUser;
   nowIso: string;
 }): ApiChild {
-  const gender: ApiChildInput["gender"] = params.input.gender ?? "女";
+  // 创建前已严格校验必填性别，不能把“未选择”记录为真实的女性儿童。
+  const gender = params.input.gender;
 
   return {
     id: params.childId,
@@ -404,7 +405,7 @@ export async function createParentChildWithConsent(
         if (existingChild.parentUserId !== session.id || existingChild.name !== validated.payload.name ||
             existingChild.birthDate !== resolveBirthDate(validated.payload, identityDate) ||
             (existingChild.nickname ?? "") !== (validated.payload.nickname ?? "") ||
-            existingChild.gender !== (validated.payload.gender ?? "女")) {
+            existingChild.gender !== validated.payload.gender) {
           throw new ApiRouteError("conflict", "该创建请求已用于其他档案内容，请重新提交。", 409);
         }
         return existingChild;

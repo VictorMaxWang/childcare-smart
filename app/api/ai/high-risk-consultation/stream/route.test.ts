@@ -304,6 +304,40 @@ test("high-risk consultation stream appends local fallback done when brain SSE n
   }
 });
 
+test("cancelling the consultation response cancels the remote body without a replacement result", async () => {
+  const originalFetch = globalThis.fetch;
+  let remoteCancelled = false;
+  let remoteSignal: AbortSignal | null = null;
+  globalThis.fetch = (async (_input: unknown, options?: RequestInit) => {
+    remoteSignal = options?.signal as AbortSignal;
+    return new Response(new ReadableStream<Uint8Array>({ cancel() { remoteCancelled = true; } }), { headers: { "content-type": "text/event-stream" } });
+  }) as typeof fetch;
+  try {
+    await withEnv({ BRAIN_API_BASE_URL: "http://brain.example.com", HIGH_RISK_CONSULTATION_STREAM_DONE_TIMEOUT_MS: "1000" }, async () => {
+      const response = await POST(buildStreamRequest());
+      await response.body!.cancel("page unmounted");
+      assert.equal(remoteCancelled, true);
+      assert.equal((remoteSignal as unknown as AbortSignal).aborted, true);
+    });
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("caller abort remains linked through the normalized consultation request after headers", async () => {
+  const originalFetch = globalThis.fetch;
+  const caller = new AbortController();
+  let remoteCancelled = false;
+  globalThis.fetch = (async () => new Response(new ReadableStream<Uint8Array>({ cancel() { remoteCancelled = true; } }), { headers: { "content-type": "text/event-stream" } })) as typeof fetch;
+  try {
+    await withEnv({ BRAIN_API_BASE_URL: "http://brain.example.com", HIGH_RISK_CONSULTATION_STREAM_DONE_TIMEOUT_MS: "1000" }, async () => {
+      const response = await POST(new Request(buildStreamRequest(), { signal: caller.signal }));
+      const reading = response.text();
+      caller.abort();
+      await assert.rejects(reading, error => error instanceof DOMException && error.name === "AbortError");
+      assert.equal(remoteCancelled, true);
+    });
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("high-risk consultation stream returns local fallback when brain fetch times out", async () => {
   const originalFetch = globalThis.fetch;
 

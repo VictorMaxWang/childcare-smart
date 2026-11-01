@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Baby, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ import {
   type ChildOnboardingConsentState,
 } from "@/lib/parent/child-onboarding";
 import { useApp } from "@/lib/store";
+import { childOnboardingDraftKey, parseChildOnboardingDraft, prepareChildOnboardingDraft, type ChildOnboardingDraft } from "@/lib/parent/child-onboarding-draft";
 
 const CONSENT_LABELS: Array<{ key: ChildOnboardingConsentKey; label: string }> = [
   {
@@ -47,7 +48,7 @@ function errorMessage(error: unknown) {
 
 export default function ParentChildOnboardingPage() {
   const router = useRouter();
-  const { reloadAppSnapshotFromApi } = useApp();
+  const { currentUser, reloadAppSnapshotFromApi } = useApp();
   const [name, setName] = useState("");
   const [nickname, setNickname] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -56,7 +57,25 @@ export default function ParentChildOnboardingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const submittingRef = useRef(false);
-  const lastRequestRef = useRef<{ input: string; id: string } | null>(null);
+  const lastRequestRef = useRef<ChildOnboardingDraft | null>(null);
+  const draftKey = currentUser.accountKind === "normal" && currentUser.institutionId ? childOnboardingDraftKey(currentUser.id, currentUser.institutionId) : null;
+  const [draftMessage, setDraftMessage] = useState<string | null>(null);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      lastRequestRef.current = null;
+      setName(""); setNickname(""); setBirthDate(""); setGender("");
+      setConsents(createEmptyChildOnboardingConsents()); setDraftMessage(null);
+      if (!draftKey) return;
+      try {
+        const restored = parseChildOnboardingDraft(sessionStorage.getItem(draftKey));
+        if (!restored) return;
+        lastRequestRef.current = restored;
+        setName(restored.form.name); setNickname(restored.form.nickname); setBirthDate(restored.form.birthDate); setGender(restored.form.gender);
+        setDraftMessage("已恢复上次提交的资料。请重新确认三项同意；相同资料重试会读取原档案，避免重复创建。");
+      } catch { /* 存储被禁用时仍支持本页重试，不声称刷新后能恢复。 */ }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [draftKey]);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const validation = useMemo(
     () =>
@@ -97,17 +116,20 @@ export default function ParentChildOnboardingPage() {
     setSubmitting(true);
     setLastError(null);
     try {
-      const serialized = JSON.stringify(result.payload);
-      if (lastRequestRef.current?.input !== serialized) {
-        lastRequestRef.current = { input: serialized, id: crypto.randomUUID() };
+      const draft = prepareChildOnboardingDraft(result.payload, lastRequestRef.current, () => crypto.randomUUID());
+      lastRequestRef.current = draft;
+      if (draftKey) {
+        try { sessionStorage.setItem(draftKey, JSON.stringify(draft)); }
+        catch { setDraftMessage("浏览器未允许保存恢复信息。如本次结果未知，请先检查家长首页已有档案，再刷新重填。"); }
       }
-      const child = await createParentChildWithConsent({ ...result.payload, requestId: lastRequestRef.current.id });
-      const reloadResult = await reloadAppSnapshotFromApi();
-      if (reloadResult.status === "failed") {
-        toast.warning("孩子档案已创建，但本地快照刷新失败，请手动刷新页面。");
-      } else {
-        toast.success("孩子成长档案已创建");
-      }
+      const child = await createParentChildWithConsent({ ...result.payload, requestId: draft.requestId });
+      if (draftKey) { try { sessionStorage.removeItem(draftKey); } catch { /* 已确认创建成功，不重发请求。 */ } }
+      // 服务端已确认创建成功后，刷新失败只能提示同步问题，不能再声称建档失败引导重复提交。
+      try {
+        const reloadResult = await reloadAppSnapshotFromApi();
+        if (reloadResult.status === "failed") toast.warning("孩子档案已创建，但本地快照刷新失败，请手动刷新页面。");
+        else toast.success("孩子成长档案已创建");
+      } catch { toast.warning("孩子档案已创建，但读取最新数据失败，请在家长首页刷新查看。"); }
       router.replace(`/parent?child=${encodeURIComponent(child.id)}`);
     } catch (requestError) {
       const message = errorMessage(requestError);
@@ -177,19 +199,20 @@ export default function ParentChildOnboardingPage() {
                 onChange={(event) => setBirthDate(event.target.value)}
               />
             </FormField>
-            <FormField label="性别" htmlFor="child-gender">
-              <Select disabled={submitting} value={gender || "unspecified"} onValueChange={(value) => setGender(value === "unspecified" ? "" : (value as ApiChildInput["gender"]))}>
+            <FormField label="性别" htmlFor="child-gender" required>
+              <Select disabled={submitting} value={gender} onValueChange={(value) => setGender(value as ApiChildInput["gender"])}>
                 <SelectTrigger id="child-gender">
-                  <SelectValue placeholder="可选" />
+                  <SelectValue placeholder="请选择孩子性别" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="unspecified">暂不填写</SelectItem>
                   <SelectItem value="女">女</SelectItem>
                   <SelectItem value="男">男</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
           </div>
+
+          {draftMessage && <p className="rounded-xl bg-indigo-50 p-3 text-sm text-indigo-800" role="status">{draftMessage}</p>}
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">

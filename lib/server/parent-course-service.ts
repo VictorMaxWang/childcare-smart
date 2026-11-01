@@ -24,9 +24,14 @@ const token = (value: unknown, label: string, max = 120) => {
   return value.trim();
 };
 export function courseAgeMonths(birthDate: string, now = new Date()) {
-  const birth = new Date(birthDate);
-  if (!Number.isFinite(birth.getTime())) return null;
-  return Math.max(0, (now.getUTCFullYear() - birth.getUTCFullYear()) * 12 + now.getUTCMonth() - birth.getUTCMonth() - (now.getUTCDate() < birth.getUTCDate() ? 1 : 0));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate) || !Number.isFinite(now.getTime())) return null;
+  const birth = new Date(`${birthDate}T00:00:00.000Z`);
+  if (!Number.isFinite(birth.getTime()) || birth.toISOString().slice(0, 10) !== birthDate) return null;
+  // 出生日期是业务日而非UTC时刻；台北午夜即进入新月龄，未来/溢出日期不能归零冒充新生儿。
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  if (birthDate > today) return null;
+  const [year, month, day] = today.split("-").map(Number);
+  return (year - birth.getUTCFullYear()) * 12 + month - 1 - birth.getUTCMonth() - (day < birth.getUTCDate() ? 1 : 0);
 }
 export function videoMetadataIsFresh(course: CareCourse, now = Date.now()) {
   const verified = course.video.verifiedAt ? Date.parse(course.video.verifiedAt) : NaN;
@@ -80,18 +85,20 @@ export async function getParentCourses(scope: SessionScope, requestedChild?: str
     catalogVersion: COURSE_CATALOG_VERSION,
     children: scope.visibleChildren.map(item => ({ id: item.id, name: item.name })),
     selectedChildId: childId, ageMonths: months,
-    courses: courses.filter(course => months === null || (months >= course.minAgeMonths && months <= course.maxAgeMonths)),
+    courses: courses.filter(course => child ? months !== null && months >= course.minAgeMonths && months <= course.maxAgeMonths : true),
     learning: childId ? await listCourseLearning(scope, childId) : [],
-    canSave: scope.user.accountKind === "normal" && Boolean(childId),
+    canSave: scope.user.accountKind === "normal" && Boolean(childId) && months !== null,
+    ageWarning: child && months === null ? "儿童出生日期无效或晚于今天，请先修正档案后查看适龄课程。" : null,
   };
 }
 export async function saveCourseLearning(scope: SessionScope, courseId: string, input: Record<string, unknown>) {
   requireNormal(scope);
   const childId = token(input.childId, "儿童编号", 100), child = childFor(scope, childId);
+  const ageMonths = courseAgeMonths(child.birthDate);
+  if (ageMonths === null) throw new ApiRouteError("invalid_request", "儿童出生日期无效，请先修正档案。");
   const course = (await loadCourseCatalog()).find(item => item.id === courseId);
   if (!course) throw new ApiRouteError("not_found", "课程不存在。");
-  const ageMonths = courseAgeMonths(child.birthDate);
-  if (ageMonths !== null && (ageMonths < course.minAgeMonths || ageMonths > course.maxAgeMonths)) throw new ApiRouteError("forbidden_scope", "该课程不适合当前儿童月龄。");
+  if (ageMonths < course.minAgeMonths || ageMonths > course.maxAgeMonths) throw new ApiRouteError("forbidden_scope", "该课程不适合当前儿童月龄。");
   const requestId = token(input.requestId, "请求编号");
   const type = input.type;
   if (!["opened", "answer", "practice", "feedback"].includes(String(type))) throw new ApiRouteError("invalid_request", "学习事件无效。");
@@ -137,8 +144,10 @@ export async function getCourseRecommendationJob(scope: SessionScope, jobId: str
 interface RecommendationInput { childId: string; module: CourseModule | "all"; budgetMinutes: 5 | 10 | 20; dataVersion: string; facts: Record<string, unknown>; feedback: CourseLearningEvent[] }
 export async function createCourseRecommendationJob(scope: SessionScope, input: Record<string, unknown>) {
   requireNormal(scope);
-  if (process.env.AI_SERVICE_UNAVAILABLE === "1" || !isMaasConfigured()) throw new ApiRouteError("provider_unavailable", "智慧推荐服务暂不可用，课程阅读和已保存进度不受影响。");
   const childId = token(input.childId, "儿童编号", 100), child = childFor(scope, childId);
+  const ageMonths = courseAgeMonths(child.birthDate);
+  if (ageMonths === null) throw new ApiRouteError("invalid_request", "儿童出生日期无效，请先修正档案。");
+  if (process.env.AI_SERVICE_UNAVAILABLE === "1" || !isMaasConfigured()) throw new ApiRouteError("provider_unavailable", "智慧推荐服务暂不可用，课程阅读和已保存进度不受影响。");
   const requestId = token(input.requestId, "请求编号");
   if (![5, 10, 20].includes(Number(input.budgetMinutes))) throw new ApiRouteError("invalid_request", "视频预算只能选择5、10或20分钟。");
   const selectedModule = input.module ?? "all";
@@ -146,7 +155,7 @@ export async function createCourseRecommendationJob(scope: SessionScope, input: 
   const feedback = (await listCourseLearning(scope, childId)).filter(event => event.type === "feedback");
   const snapshot = scope.scopedSnapshot;
   const facts = {
-    ageMonths: courseAgeMonths(child.birthDate),
+    ageMonths,
     health: snapshot.health.filter(record => record.childId === childId).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7).map(record => ({ date: record.date, mood: record.mood, abnormal: record.isAbnormal })),
     meals: snapshot.meals.filter(record => record.childId === childId).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7).map(record => ({ date: record.date, intake: record.intakeLevel })),
     growth: snapshot.growth.filter(record => record.childId === childId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 7).map(record => ({ date: record.createdAt, category: record.category, needsAttention: record.needsAttention })),

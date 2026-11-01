@@ -6,7 +6,7 @@ import { loginAs } from "../feature-completion/helpers";
 
 const ARTIFACT_DIR = path.join(process.cwd(), "artifacts", "product-completion", "E09");
 const CHILD_ID = "c-1";
-const LIVE_OR_FALLBACK_PROVIDER_STATUS = /vivo provider ready|fallback|missing-env/i;
+const LIVE_OR_FALLBACK_PROVIDER_STATUS = /语音助手服务已就绪|fallback|missing-env/i;
 
 async function captureE09(page: Page, fileName: string) {
   await fs.mkdir(ARTIFACT_DIR, { recursive: true });

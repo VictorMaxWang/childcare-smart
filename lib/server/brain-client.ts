@@ -401,6 +401,11 @@ export async function forwardBrainRequest(
   }
   const startedAt = Date.now();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let responseOwnsCancellation = false;
+  const cleanupCancellation = () => {
+    clearTimeout(timeout);
+    request.signal.removeEventListener("abort", abortFromCaller);
+  };
   const method = request.method.toUpperCase();
   const retryStrategy: BrainRetryStrategy = baseUrlDetails.hadApiV1Suffix
     ? "normalized-base-retry"
@@ -447,6 +452,7 @@ export async function forwardBrainRequest(
         });
 
         if (shouldFallback(proxiedResponse)) {
+          await proxiedResponse.body?.cancel().catch(() => undefined);
           lastStatusCode = proxiedResponse.status;
           lastFallbackReason = `brain-status-${proxiedResponse.status}`;
           const canRetryWithNormalizedBase =
@@ -500,9 +506,54 @@ export async function forwardBrainRequest(
           };
         }
 
-        const responseBody = options?.bufferResponseBody
+        let responseBody: BodyInit | null = options?.bufferResponseBody
           ? await proxiedResponse.arrayBuffer()
           : proxiedResponse.body;
+        if (!options?.bufferResponseBody && proxiedResponse.body) {
+          // 连接预算只约束取得响应头；流正文由业务watchdog约束，但调用方取消必须存活到正文结束。
+          clearTimeout(timeout);
+          const reader = proxiedResponse.body.getReader();
+          let settled = false;
+          let bodyController: ReadableStreamDefaultController<Uint8Array>;
+          const finish = () => {
+            if (settled) return false;
+            settled = true;
+            controller.signal.removeEventListener("abort", abortBody);
+            cleanupCancellation();
+            return true;
+          };
+          const abortBody = () => {
+            if (!finish()) return;
+            const reason = controller.signal.reason ?? new DOMException("Aborted", "AbortError");
+            bodyController.error(reason);
+            void reader.cancel(reason).catch(() => undefined);
+          };
+          responseOwnsCancellation = true;
+          responseBody = new ReadableStream<Uint8Array>({
+            start(nextController) {
+              bodyController = nextController;
+              controller.signal.addEventListener("abort", abortBody, { once: true });
+              if (controller.signal.aborted) abortBody();
+            },
+            async pull(nextController) {
+              if (settled) return;
+              try {
+                const chunk = await reader.read();
+                if (settled) return;
+                if (chunk.done) { if (finish()) nextController.close(); }
+                else nextController.enqueue(chunk.value);
+              } catch (error) {
+                if (finish()) nextController.error(error);
+              }
+            },
+            async cancel(reason) {
+              if (!finish()) return;
+              // 主动取消正文也应关闭上游连接；不能由此推断供应商退费或撤销已提交推理。
+              controller.abort(reason);
+              await reader.cancel(reason).catch(() => undefined);
+            },
+          });
+        }
         const responseHeaders = new Headers();
         const contentType = proxiedResponse.headers.get("content-type");
         if (contentType) responseHeaders.set("content-type", contentType);
@@ -595,8 +646,7 @@ export async function forwardBrainRequest(
       timeoutMs,
     };
   } finally {
-    clearTimeout(timeout);
-    request.signal.removeEventListener("abort", abortFromCaller);
+    if (!responseOwnsCancellation) cleanupCancellation();
   }
 }
 

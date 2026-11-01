@@ -478,7 +478,10 @@ export default function TeacherHighRiskConsultationPage() {
     markMobileDraftSyncStatus,
     reloadAppSnapshotFromApi,
   } = useApp();
-  const { start, isStreaming, stop } = useAgentStream();
+  const { start, isStreaming: isStreamOpen, stop } = useAgentStream();
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [consultationCancelled, setConsultationCancelled] = useState(false);
+  const isStreaming = isPreparing || isStreamOpen;
   const searchParams = useSearchParams();
   const traceMode: ConsultationTraceMode = searchParams.get("trace") === "debug" ? "debug" : "demo";
   const traceCaseParam = searchParams.get("traceCase");
@@ -523,6 +526,8 @@ export default function TeacherHighRiskConsultationPage() {
   const streamErroredRef = useRef(false);
   const resultMountedRef = useRef(false);
   const consultationStartGuardRef = useRef(false);
+  const consultationGenerationRef = useRef(0);
+  const consultationAbortRef = useRef<AbortController | null>(null);
   const consultationSetupRef = useRef<HTMLDivElement | null>(null);
   const consultationStartButtonRef = useRef<HTMLButtonElement | null>(null);
   const mergedGuardianFeedbacks = useMemo(
@@ -600,7 +605,7 @@ export default function TeacherHighRiskConsultationPage() {
     );
   }, [autoContext, currentUser.accountKind, existingDraftPayload, selectedChild]);
   useEffect(() => {
-    if (isStreaming) return;
+    if (isStreaming || consultationCancelled) return;
     const preferredStored = queryConsultationId
       ? storedConsultationsForChild.find((item) => item.consultationId === queryConsultationId)
       : undefined;
@@ -620,6 +625,7 @@ export default function TeacherHighRiskConsultationPage() {
     );
   }, [
     currentUser.accountKind,
+    consultationCancelled,
     isStreaming,
     queryConsultationId,
     result?.consultationId,
@@ -684,7 +690,32 @@ export default function TeacherHighRiskConsultationPage() {
     traceMode,
   ]);
 
-  useEffect(() => () => stop(), [stop]);
+  useEffect(() => {
+    setResult(null);
+    setConsultationCancelled(false);
+    setProviderTrace(null);
+    setMemoryMeta(null);
+    setTraceId(null);
+    setActiveStage(null);
+    setStreamError(null);
+    setStreamEndedUnexpectedly(false);
+    setInvalidResultReason(null);
+    setStreamMessage("请补充当前儿童的信息后开始会诊。");
+    setStageStatuses({});
+    setStageUi({});
+    setStageNotes([]);
+    setReceivedAnyEvent(false);
+    setReceivedDone(false);
+    return () => {
+      // 切换儿童/账号或退出页面只取消当前意图，不能被网络异常分支改写成新会诊。
+      consultationGenerationRef.current += 1;
+      consultationAbortRef.current?.abort();
+      consultationAbortRef.current = null;
+      consultationStartGuardRef.current = false;
+      setIsPreparing(false);
+      stop();
+    };
+  }, [activeChildId, currentUser.id, stop]);
 
   useEffect(() => {
     let cancelled = false;
@@ -712,11 +743,28 @@ export default function TeacherHighRiskConsultationPage() {
     });
   }
 
+  function cancelConsultation() {
+    // 手动取消与切换scope使用同一失效边界；即使reader正常结束也不能进入fallback分支。
+    consultationGenerationRef.current += 1;
+    consultationAbortRef.current?.abort();
+    consultationAbortRef.current = null;
+    consultationStartGuardRef.current = false;
+    setIsPreparing(false);
+    setConsultationCancelled(true);
+    stop();
+    setStreamError(null);
+    setStreamEndedUnexpectedly(false);
+    setReceivedDone(false);
+    setStreamMessage("已取消本次会诊；不会继续提交后续结果。");
+  }
+
   async function applyConsultationResult(
     rawResult: unknown,
-    successMessagePrefix = "证据链生成完成"
+    successMessagePrefix = "证据链生成完成",
+    run: { generation: number; controller: AbortController; childId: string }
   ) {
-    if (!selectedChild) return false;
+    const isCurrent = () => consultationGenerationRef.current === run.generation && !run.controller.signal.aborted;
+    if (!selectedChild || !isCurrent()) return false;
 
     if (!isRenderableConsultationApiResult(rawResult)) {
       const reason = describeConsultationResultIssues(rawResult);
@@ -728,10 +776,12 @@ export default function TeacherHighRiskConsultationPage() {
     try {
       const completedResult = await apiPost<ConsultationApiResult>("/api/consultations", {
         ...rawResult,
-        childId: selectedChild.id,
+        childId: run.childId,
         workflowStatus: "pending",
-      });
+      }, { signal: run.controller.signal });
+      if (!isCurrent()) return false;
       const reloadResult = await reloadAppSnapshotFromApi();
+      if (!isCurrent()) return false;
       if (reloadResult.status === "failed") {
         throw new Error(reloadResult.error ?? reloadResult.message);
       }
@@ -746,6 +796,7 @@ export default function TeacherHighRiskConsultationPage() {
       );
       return true;
     } catch (error) {
+      if (!isCurrent()) return false;
       const message =
         error instanceof Error ? error.message : "会诊结果未能写入当前机构数据。";
       setStreamError(message);
@@ -756,8 +807,11 @@ export default function TeacherHighRiskConsultationPage() {
 
   async function runForcedLocalFallback(
     payload: HighRiskConsultationRequestPayload,
-    fallbackReason: string
+    fallbackReason: string,
+    run: { generation: number; controller: AbortController; childId: string }
   ) {
+    const isCurrent = () => consultationGenerationRef.current === run.generation && !run.controller.signal.aborted;
+    if (!isCurrent()) return;
     setStreamMessage("已切换本地会诊兜底：远端 AI 会诊暂不可用，正在生成可解释结果。");
     const response = await fetch("/api/ai/high-risk-consultation", {
       method: "POST",
@@ -766,6 +820,7 @@ export default function TeacherHighRiskConsultationPage() {
         "x-ai-force-fallback": "1",
       },
       body: JSON.stringify(payload),
+      signal: run.controller.signal,
     });
 
     if (!response.ok) {
@@ -773,6 +828,7 @@ export default function TeacherHighRiskConsultationPage() {
     }
 
     const rawResult = await response.json();
+    if (!isCurrent()) return;
     const resultObject = rawResult && typeof rawResult === "object" ? (rawResult as Record<string, unknown>) : null;
     const nextProviderTrace =
       resultObject?.providerTrace && typeof resultObject.providerTrace === "object"
@@ -791,7 +847,7 @@ export default function TeacherHighRiskConsultationPage() {
     setProviderTrace(nextProviderTrace);
     setMemoryMeta(nextMemoryMeta);
     setStreamError(null);
-    await applyConsultationResult(rawResult, "证据链生成完成");
+    await applyConsultationResult(rawResult, "证据链生成完成", run);
   }
 
   async function runConsultation(form: {
@@ -800,7 +856,12 @@ export default function TeacherHighRiskConsultationPage() {
     voiceInput?: { attachmentName?: string; content?: string };
   }) {
     if (!selectedChild || isStreaming || consultationStartGuardRef.current) return;
+    const run = { generation: ++consultationGenerationRef.current, controller: new AbortController(), childId: selectedChild.id };
+    consultationAbortRef.current = run.controller;
+    const isCurrent = () => consultationGenerationRef.current === run.generation && !run.controller.signal.aborted;
     consultationStartGuardRef.current = true;
+    setIsPreparing(true);
+    setConsultationCancelled(false);
     setSetupFocusMessage(null);
     setStreamError(null);
     setStreamMessage("AI 辅助会诊进行中：正在连接会诊流。");
@@ -824,11 +885,13 @@ export default function TeacherHighRiskConsultationPage() {
     let workflowFeedbacks = mergedGuardianFeedbacks;
     try {
       const latestApiFeedbacks = await listApiFeedback();
+      if (!isCurrent()) return;
       setApiFeedbacks(latestApiFeedbacks);
       workflowFeedbacks = normalizeGuardianFeedbackCollection([...guardianFeedbacks, ...latestApiFeedbacks]) ?? workflowFeedbacks;
     } catch {
       // Keep local feedback available if the communication API is unavailable.
     }
+    if (!isCurrent()) return;
 
     const payload: HighRiskConsultationRequestPayload = {
       currentUser,
@@ -849,7 +912,7 @@ export default function TeacherHighRiskConsultationPage() {
 
     try {
       streamFallbackTimer = setTimeout(() => {
-        if (resultMountedRef.current || receivedDoneRef.current) return;
+        if (!isCurrent() || resultMountedRef.current || receivedDoneRef.current) return;
         streamTimedOut = true;
         setStreamEndedUnexpectedly(true);
         setStreamMessage("已切换本地会诊兜底：远端 AI 会诊超过 28 秒仍未返回完整结果。");
@@ -857,6 +920,7 @@ export default function TeacherHighRiskConsultationPage() {
       }, CONSULTATION_CLIENT_FALLBACK_TIMEOUT_MS);
 
       await start({ url: "/api/ai/high-risk-consultation/stream", body: payload }, (event: AgentStreamEvent) => {
+        if (!isCurrent()) return;
         if (!receivedAnyEventRef.current) {
           receivedAnyEventRef.current = true;
           setReceivedAnyEvent(true);
@@ -951,10 +1015,12 @@ export default function TeacherHighRiskConsultationPage() {
           setTraceId(data.traceId);
           setProviderTrace(nextProviderTrace);
           setMemoryMeta(nextMemoryMeta);
-          resultPersistencePromise = applyConsultationResult(rawResult);
+          resultPersistencePromise = applyConsultationResult(rawResult, "证据链生成完成", run);
           return;
         }
       });
+
+      if (!isCurrent()) return;
 
       if (resultPersistencePromise) {
         await resultPersistencePromise;
@@ -963,7 +1029,8 @@ export default function TeacherHighRiskConsultationPage() {
         setStreamEndedUnexpectedly(true);
         await runForcedLocalFallback(
           payload,
-          receivedDoneRef.current ? "client-stream-invalid-result" : "client-stream-ended-without-result"
+          receivedDoneRef.current ? "client-stream-invalid-result" : "client-stream-ended-without-result",
+          run
         );
         return;
       }
@@ -977,14 +1044,18 @@ export default function TeacherHighRiskConsultationPage() {
         );
       }
     } catch (error) {
+      // AbortError必须先判定；用户中止不触发备用生成，更不能在离开页面后继续写会诊记录。
+      if (!isCurrent() || (!streamTimedOut && error instanceof DOMException && error.name === "AbortError")) return;
       if (!resultMountedRef.current) {
         try {
           await runForcedLocalFallback(
             payload,
-            streamTimedOut ? "client-stream-timeout" : "client-stream-error"
+            streamTimedOut ? "client-stream-timeout" : "client-stream-error",
+            run
           );
           return;
         } catch (fallbackError) {
+          if (!isCurrent()) return;
           const fallbackMessage =
             fallbackError instanceof Error ? fallbackError.message : "本地会诊兜底请求失败";
           setStreamError(fallbackMessage);
@@ -1006,7 +1077,11 @@ export default function TeacherHighRiskConsultationPage() {
       setStreamMessage(message);
     } finally {
       if (streamFallbackTimer) clearTimeout(streamFallbackTimer);
-      consultationStartGuardRef.current = false;
+      if (consultationGenerationRef.current === run.generation) {
+        consultationStartGuardRef.current = false;
+        setIsPreparing(false);
+        consultationAbortRef.current = null;
+      }
     }
   }
 
@@ -1229,7 +1304,7 @@ export default function TeacherHighRiskConsultationPage() {
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-slate-950">会诊流程</p>
                       <Badge variant={isStreaming ? "info" : result ? "success" : "outline"}>
-                        {isStreaming ? "进行中" : result ? "已完成" : "待启动"}
+                        {isStreaming ? "进行中" : consultationCancelled ? "已取消" : result ? "已完成" : "待启动"}
                       </Badge>
                     </div>
                     <div className="mt-4 grid gap-3 sm:grid-cols-4">
@@ -1648,6 +1723,13 @@ export default function TeacherHighRiskConsultationPage() {
                     isLinXiaoyuCase(selectedChild, currentUser.accountKind)
                   }
                 />
+                {isStreaming ? (
+                  <div className="flex justify-end">
+                    <Button type="button" variant="outline" onClick={cancelConsultation} data-testid="consultation-cancel" aria-label="取消本次会诊">
+                      取消会诊
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

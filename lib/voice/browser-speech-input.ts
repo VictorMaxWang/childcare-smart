@@ -2,6 +2,7 @@
 
 export type BrowserSpeechRecognizerStatus =
   | "idle"
+  | "requesting"
   | "listening"
   | "stopping"
   | "success"
@@ -179,48 +180,89 @@ export function createBrowserSpeechRecognizer(
     };
   }
 
-  const recognition = new recognitionApi.constructor();
+  let recognition: BrowserSpeechRecognition | null = null;
+  let phase: "idle" | "requesting" | "listening" | "stopping" = "idle";
+  let generation = 0;
+  let destroyed = false;
 
-  recognition.lang = options.lang ?? "zh-CN";
-  recognition.continuous = options.continuous ?? false;
-  recognition.interimResults = options.interimResults ?? false;
-  recognition.maxAlternatives = options.maxAlternatives ?? 1;
-
-  recognition.onstart = () => {
-    options.onStatusChange?.("listening");
+  const retire = (abort: boolean) => {
+    const previous = recognition;
+    recognition = null;
+    phase = "idle";
+    generation += 1;
+    if (!previous) return;
+    previous.onstart = previous.onend = previous.onresult = previous.onerror = null;
+    if (abort) { try { previous.abort(); } catch { /* 已结束的原生会话不影响清理。 */ } }
   };
-  recognition.onend = () => {
-    options.onStatusChange?.("idle");
-  };
-  recognition.onresult = (event) => {
-    const nextResult = readSpeechRecognitionTranscript(event);
-    if (!nextResult.transcript) return;
-    options.onResult?.(nextResult);
-    options.onStatusChange?.(nextResult.isFinal ? "success" : "listening");
-  };
-  recognition.onerror = (event) => {
+  const fail = (message: string) => {
+    retire(true);
     options.onStatusChange?.("error");
-    options.onError?.(normalizeSpeechRecognitionError(event.error));
+    options.onError?.(message);
+  };
+  const startupError = (error: unknown) => {
+    const name = error && typeof error === "object" && "name" in error ? String(error.name) : "";
+    return name === "NotAllowedError"
+      ? normalizeSpeechRecognitionError("not-allowed")
+      : "这次没能开始语音输入，请检查麦克风权限后重试。";
   };
 
   return {
     supported: true,
     start() {
-      recognition.start();
+      if (destroyed || phase !== "idle") return;
+      // 原生onstart可能在权限弹窗关闭后才触发；同步锁住请求，不能等React重渲染防重。
+      phase = "requesting";
+      const currentGeneration = ++generation;
+      options.onStatusChange?.("requesting");
+      if (destroyed || currentGeneration !== generation) return;
+      try {
+        const next = new recognitionApi.constructor();
+        recognition = next;
+        next.lang = options.lang ?? "zh-CN";
+        next.continuous = options.continuous ?? false;
+        next.interimResults = options.interimResults ?? false;
+        next.maxAlternatives = options.maxAlternatives ?? 1;
+        const isCurrent = () => !destroyed && currentGeneration === generation && recognition === next;
+        next.onstart = () => {
+          if (!isCurrent()) return;
+          phase = "listening";
+          options.onStatusChange?.("listening");
+        };
+        next.onend = () => {
+          if (!isCurrent()) return;
+          retire(false);
+          options.onStatusChange?.("idle");
+        };
+        next.onresult = (event) => {
+          if (!isCurrent()) return;
+          const result = readSpeechRecognitionTranscript(event);
+          if (!result.transcript) return;
+          options.onStatusChange?.(result.isFinal ? "success" : "listening");
+          options.onResult?.(result);
+        };
+        next.onerror = (event) => {
+          if (isCurrent()) fail(normalizeSpeechRecognitionError(event.error));
+        };
+        next.start();
+      } catch (error) {
+        if (!destroyed && currentGeneration === generation) fail(startupError(error));
+      }
     },
     stop() {
+      if (destroyed || phase === "idle" || phase === "stopping") return;
+      phase = "stopping";
       options.onStatusChange?.("stopping");
-      recognition.stop();
+      try { recognition?.stop(); } catch (error) { fail(startupError(error)); }
     },
     abort() {
-      recognition.abort();
+      if (destroyed) return;
+      retire(true);
+      options.onStatusChange?.("idle");
     },
     destroy() {
-      recognition.onstart = null;
-      recognition.onend = null;
-      recognition.onresult = null;
-      recognition.onerror = null;
-      recognition.abort();
+      if (destroyed) return;
+      destroyed = true;
+      retire(true);
     },
   };
 }

@@ -65,23 +65,41 @@ function sseHeaders(extraHeaders?: HeadersInit) {
   );
 }
 
-function streamResponse(events: StreamEvent[], status = 200, extraHeaders?: HeadersInit) {
+function streamResponse(events: StreamEvent[], status = 200, extraHeaders?: HeadersInit, signal?: AbortSignal) {
   const encoder = new TextEncoder();
+  let cancelled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let abortStream = () => {};
+  const cleanup = () => {
+    cancelled = true;
+    if (timer) clearTimeout(timer);
+    signal?.removeEventListener("abort", abortStream);
+  };
   return new Response(
     new ReadableStream<Uint8Array>({
       start(controller) {
+        abortStream = () => {
+          if (cancelled) return;
+          cleanup();
+          controller.error(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+        };
+        signal?.addEventListener("abort", abortStream, { once: true });
+        if (signal?.aborted) { abortStream(); return; }
         let index = 0;
         const push = () => {
+          if (cancelled) return;
           if (index >= events.length) {
+            cleanup();
             controller.close();
             return;
           }
           controller.enqueue(encoder.encode(encodeEvent(events[index])));
           index += 1;
-          setTimeout(push, 80);
+          timer = setTimeout(push, 80);
         };
         push();
       },
+      cancel() { cleanup(); },
     }),
     {
       status,
@@ -506,6 +524,7 @@ function createRemoteStreamWithDoneFallback(params: {
   brainForward: BrainForwardResult;
   accountKind: "demo" | "normal";
   provenanceContext: AiProvenanceContext;
+  signal: AbortSignal;
 }) {
   const {
     response,
@@ -514,6 +533,7 @@ function createRemoteStreamWithDoneFallback(params: {
     brainForward,
     accountKind,
     provenanceContext,
+    signal,
   } = params;
   const remoteBody = response.body;
   const watchdogMs = getHighRiskConsultationStreamDoneTimeoutMs(brainForward);
@@ -530,10 +550,12 @@ function createRemoteStreamWithDoneFallback(params: {
         provenanceContext
       ),
       200,
-      buildLocalStreamHeaders(brainForward, "brain-stream-empty-body")
+      buildLocalStreamHeaders(brainForward, "brain-stream-empty-body"),
+      signal
     );
   }
 
+  let cancelRemote: (reason?: unknown) => Promise<void> = async () => {};
   return new Response(
     new ReadableStream<Uint8Array>({
       async start(controller) {
@@ -546,9 +568,25 @@ function createRemoteStreamWithDoneFallback(params: {
         let bufferedBytes = 0;
         const validatedBlocks: string[] = [];
 
+        const removeListener = () => signal.removeEventListener("abort", abortRemote);
+        cancelRemote = async (reason) => {
+          if (closed) return;
+          closed = true;
+          clearTimeout(watchdog);
+          removeListener();
+          await reader.cancel(reason).catch(() => undefined);
+        };
+        const abortRemote = () => {
+          if (closed) return;
+          controller.error(signal.reason ?? new DOMException("Aborted", "AbortError"));
+          void cancelRemote(signal.reason);
+        };
+
         const close = () => {
           if (closed) return;
           closed = true;
+          clearTimeout(watchdog);
+          removeListener();
           controller.close();
         };
 
@@ -556,6 +594,7 @@ function createRemoteStreamWithDoneFallback(params: {
           if (closed || doneSeen || fallbackStarted) return;
           fallbackStarted = true;
           await reader.cancel().catch(() => undefined);
+          if (closed || signal.aborted) return;
           buffer = "";
           for (const event of buildFallbackStreamEvents(
             payload,
@@ -575,6 +614,8 @@ function createRemoteStreamWithDoneFallback(params: {
             "已切换本地会诊兜底：远端 AI 会诊流超过时限仍未返回完成事件。"
           );
         }, watchdogMs);
+        signal.addEventListener("abort", abortRemote, { once: true });
+        if (signal.aborted) { abortRemote(); return; }
 
         try {
           while (!closed) {
@@ -661,8 +702,10 @@ function createRemoteStreamWithDoneFallback(params: {
           );
         } finally {
           clearTimeout(watchdog);
+          removeListener();
         }
       },
+      cancel(reason) { return cancelRemote(reason); },
     }),
     {
       status: 200,
@@ -672,6 +715,7 @@ function createRemoteStreamWithDoneFallback(params: {
 }
 
 export async function POST(request: Request) {
+  if (request.signal.aborted) return new Response(null, { status: 499 });
   const authResult = await authorizeAiRouteSession(request, { requiredRole: "staff" });
   if (authResult instanceof Response) return authResult;
 
@@ -731,7 +775,8 @@ export async function POST(request: Request) {
         provenanceContext
       ),
       200,
-      buildForcedStreamHeaders(fallbackReason)
+      buildForcedStreamHeaders(fallbackReason),
+      request.signal
     );
   }
 
@@ -739,11 +784,16 @@ export async function POST(request: Request) {
     method: "POST",
     headers: request.headers,
     body: JSON.stringify(payload),
+    signal: request.signal,
   });
   const brainForward = await forwardBrainRequest(brainRequest, HIGH_RISK_CONSULTATION_STREAM_TARGET_PATH, {
     timeoutMs: getHighRiskConsultationBrainTimeoutMs(),
     serviceScope,
   });
+  if (request.signal.aborted) {
+    await brainForward.response?.body?.cancel(request.signal.reason).catch(() => undefined);
+    return new Response(null, { status: 499 });
+  }
 
   if (brainForward.response && isSseResponse(brainForward.response)) {
     return createRemoteStreamWithDoneFallback({
@@ -753,6 +803,7 @@ export async function POST(request: Request) {
       brainForward,
       accountKind: authResult.session.user.accountKind,
       provenanceContext,
+      signal: request.signal,
     });
   }
 
@@ -767,7 +818,8 @@ export async function POST(request: Request) {
       provenanceContext
     ),
     200,
-    buildLocalStreamHeaders(brainForward, fallbackReason)
+    buildLocalStreamHeaders(brainForward, fallbackReason),
+    request.signal
   );
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import StoryBookViewer from "@/components/parent/StoryBookViewer";
 import { restoreParentStorybookResponse, useParentD01Data } from "@/components/parent/useParentD01Data";
@@ -55,6 +55,16 @@ import {
   resolveLinXiaoyuChildId,
 } from "@/lib/storybooks/lin-xiaoyu-bravery";
 import { compareStorybooksByLatestSave } from "@/lib/storybooks/storybook-order";
+import {
+  clearPendingStorybookSave,
+  createPendingStorybookSave,
+  loadPendingStorybookSave,
+  savePendingStorybook,
+  storePendingStorybookSave,
+  storybookSaveScopeKey,
+  type PendingStorybookSave,
+  type StorybookSaveOutcome,
+} from "@/lib/parent/storybook-save-recovery";
 
 type StoryBookPageStatus = "loading" | "storybook" | "card" | "empty" | "error";
 
@@ -182,6 +192,8 @@ export default function StoryBookWorkspace({
   const [hasManualStorybookOverride, setHasManualStorybookOverride] = useState(false);
   const [isPageVisible, setIsPageVisible] = useState(true);
   const [mediaPollStopped, setMediaPollStopped] = useState(false);
+  const [pendingSave, setPendingSave] = useState<PendingStorybookSave | null>(null);
+  const [isSavingStorybook, setIsSavingStorybook] = useState(false);
   const hasManualStorybookOverrideRef = useRef(false);
   const networkOnlyRef = useRef(false);
   const refreshCurrentOnlyRef = useRef(false);
@@ -197,6 +209,9 @@ export default function StoryBookWorkspace({
   const previousSelectedChildIdRef = useRef<string | undefined>(undefined);
   const manualStorybookGenerationInFlightRef = useRef(false);
   const activeStoryRequestControllerRef = useRef<AbortController | null>(null);
+  const pendingSaveRef = useRef<PendingStorybookSave | null>(null);
+  const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const saveInFlightRef = useRef<Promise<StorybookSaveOutcome> | null>(null);
 
   const feeds = useMemo(() => getParentFeed(), [getParentFeed]);
   const selectedFeed = useMemo(() => {
@@ -212,6 +227,48 @@ export default function StoryBookWorkspace({
     return feeds[0];
   }, [childFromQuery, feeds, parentD01.invalidChildId, parentD01.selectedChildId]);
   const hasChildContext = Boolean(selectedFeed);
+  const saveScope = useMemo(() => ({ userId: parentD01.currentUser.id, institutionId: parentD01.currentUser.institutionId, childId: selectedFeed?.child.id ?? "" }), [parentD01.currentUser.id, parentD01.currentUser.institutionId, selectedFeed?.child.id]);
+  const saveScopeKey = storybookSaveScopeKey(saveScope);
+  const saveScopeKeyRef = useRef(saveScopeKey);
+  const visiblePendingSave = pendingSave && storybookSaveScopeKey(pendingSave.scope) === saveScopeKey ? pendingSave : null;
+  useEffect(() => {
+    saveScopeKeyRef.current = saveScopeKey;
+    const pending = parentD01.currentUser.accountKind === "normal" && saveScope.childId ? loadPendingStorybookSave(saveScope) : null;
+    pendingSaveRef.current = pending;
+    setPendingSave(pending);
+    setIsSavingStorybook(false);
+    // 只恢复原账号自己的待保存正文；读取历史/跨角色绘本仍不能触发自动 POST。
+  }, [parentD01.currentUser.accountKind, saveScope, saveScopeKey]);
+  const persistGeneratedStorybook = useCallback(async (pending: PendingStorybookSave, reconcileFirst = false) => {
+    const scopeKey = storybookSaveScopeKey(pending.scope);
+    const isCurrent = () => saveScopeKeyRef.current === scopeKey;
+    if (!isCurrent()) return { status: "superseded", message: "账号或儿童已切换。" } as StorybookSaveOutcome;
+    pendingSaveRef.current = pending;
+    const retainedForRefresh = storePendingStorybookSave(pending);
+    setPendingSave(pending);
+    setIsSavingStorybook(true);
+    // 正文与随后到达的媒体按保存顺序提交，较早响应不能覆盖较新的待保存正文。
+    const task = saveQueueRef.current.catch(() => {}).then(() => {
+      if (!isCurrent() || pendingSaveRef.current !== pending) return { status: "superseded", message: "已保留较新的绘本版本。" } as StorybookSaveOutcome;
+      return savePendingStorybook(pending, { reconcileFirst, isCurrent });
+    });
+    saveQueueRef.current = task;
+    saveInFlightRef.current = task;
+    const result = await task;
+    const outcome = !retainedForRefresh && result.status !== "saved" && result.status !== "superseded"
+      ? { ...result, message: `${result.message} 浏览器无法暂存，关闭或刷新页面将丢失本次未保存结果，请保留当前页面并重试保存。` }
+      : result;
+    if (saveInFlightRef.current === task) saveInFlightRef.current = null;
+    if (isCurrent() && pendingSaveRef.current === pending) {
+      setIsSavingStorybook(false);
+      if (outcome.status === "saved") {
+        clearPendingStorybookSave(pending);
+        pendingSaveRef.current = null;
+        setPendingSave(null);
+      }
+    }
+    return outcome;
+  }, []);
   const isDemoStorybookAccount =
     workspaceRole === "parent" &&
     parentD01.currentUser.accountKind === "demo";
@@ -483,6 +540,7 @@ export default function StoryBookWorkspace({
           ? "请输入主题，或先点一个快捷主题。"
           : null;
   const canGenerate =
+    !visiblePendingSave &&
     !parentD01.invalidChildId &&
     (workspaceRole !== "teacher" || hasChildContext) &&
     ((draftControls.generationMode === "child-personalized" && hasChildContext) ||
@@ -628,6 +686,20 @@ export default function StoryBookWorkspace({
           cancelled = true;
           controller.abort();
         };
+      }
+
+      const pending = pendingSaveRef.current;
+      if (pending && storybookSaveScopeKey(pending.scope) === saveScopeKey && pending.input.childId === activeRequestChildId) {
+        // 刷新后显示此前已经生成的完整结果；用户明确点“重试保存”才核实并持久化。
+        startTransition(() => {
+          const preserved = pending.input.response as unknown as ParentStoryBookResponse;
+          setStory(preserved);
+          setStatus(preserved.mode);
+          setErrorMessage(null);
+          setRefreshMessage("已恢复当前账号尚待确认保存的绘本。请点击“重试保存”，不会重新生成。");
+          setIsRefreshing(false);
+        });
+        return () => { cancelled = true; controller.abort(); };
       }
 
       if (!hasManualStorybookOverrideActive && latestSavedStorybook && selectedFeed) {
@@ -814,7 +886,7 @@ export default function StoryBookWorkspace({
         }
 
         const data = (await response.json()) as ParentStoryBookResponse;
-        if (cancelled) return;
+        if (cancelled || saveScopeKeyRef.current !== saveScopeKey) return;
         const previousMediaStateKey = buildStorybookMediaStateKey(storyRef.current);
         if (backgroundMediaPoll) {
           const currentStory = storyRef.current;
@@ -879,26 +951,30 @@ export default function StoryBookWorkspace({
             generatedAt: data.generatedAt,
           };
           try {
-            await withClientTimeout(
-              upsertApiStorybook(apiStorybookInput),
-              STORYBOOK_API_SAVE_TIMEOUT_MS,
-              "E01 storybook save timed out"
-            );
-            apiStorybookSaved = true;
+            if (parentD01.currentUser.accountKind === "normal") {
+              const pending = createPendingStorybookSave(saveScope, data, sourceRecordIds);
+              const outcome = await persistGeneratedStorybook(pending);
+              apiStorybookSaved = outcome.status === "saved";
+              apiStorybookSaveError = apiStorybookSaved || outcome.status === "superseded" ? "" : outcome.message;
+            } else {
+              await withClientTimeout(upsertApiStorybook(apiStorybookInput), STORYBOOK_API_SAVE_TIMEOUT_MS, "E01 storybook save timed out");
+              apiStorybookSaved = true;
+            }
           } catch (saveError) {
             apiStorybookSaveError = saveError instanceof Error ? saveError.message : "E01 绘本服务保存失败。";
           }
         }
+        if (saveScopeKeyRef.current !== saveScopeKey) return;
         startTransition(() => {
           setStory(data);
           setStatus(data.mode);
-          if (!backgroundMediaPoll) {
+          if (!backgroundMediaPoll || apiStorybookSaveError) {
             setErrorMessage(null);
             setRefreshMessage(
               storybookSaveResult?.status === "failed"
                 ? `生成完成，但保存到 D01 失败：${storybookSaveResult.error ?? storybookSaveResult.message}`
                 : apiStorybookSaveError
-                  ? `绘本已生成，但服务端保存失败：${apiStorybookSaveError}。请勿重新生成，可保留页面后重试保存。`
+                  ? apiStorybookSaveError
                   : apiStorybookSaved
                     ? "绘本已保存，刷新后仍可继续阅读；图片和音频的完成状态以各页标识为准。"
                     : storybookSaveResult?.status === "local_only"
@@ -921,7 +997,7 @@ export default function StoryBookWorkspace({
           }
         });
       } catch (error) {
-        if (cancelled) return;
+        if (cancelled || saveScopeKeyRef.current !== saveScopeKey) return;
 
         if (backgroundMediaPoll && storyRef.current) {
           startTransition(() => {
@@ -955,7 +1031,7 @@ export default function StoryBookWorkspace({
         if (activeStoryRequestControllerRef.current === controller) {
           activeStoryRequestControllerRef.current = null;
         }
-        if (shouldTrackManualGeneration) {
+        if (shouldTrackManualGeneration && saveScopeKeyRef.current === saveScopeKey) {
           manualStorybookGenerationInFlightRef.current = false;
         }
       }
@@ -980,6 +1056,9 @@ export default function StoryBookWorkspace({
     latestSavedStorybook,
     parentD01.invalidChildId,
     parentD01.currentUser.accountKind,
+    persistGeneratedStorybook,
+    saveScope,
+    saveScopeKey,
     reloadToken,
     saveParentStorybook,
     selectedFeed,
@@ -1079,6 +1158,15 @@ export default function StoryBookWorkspace({
     });
   }
 
+  async function handleRetrySave() {
+    const pending = pendingSaveRef.current;
+    if (!pending || saveInFlightRef.current || storybookSaveScopeKey(pending.scope) !== saveScopeKey) return;
+    const outcome = await persistGeneratedStorybook(pending, true);
+    if (saveScopeKeyRef.current !== saveScopeKey) return;
+    setRefreshMessage(outcome.message);
+    if (outcome.status === "saved") setCacheState({ kind: "saved", savedAt: Date.now() });
+  }
+
   return (
     <StoryBookViewer
       status={status}
@@ -1086,6 +1174,8 @@ export default function StoryBookWorkspace({
       errorMessage={errorMessage}
       refreshMessage={refreshMessage}
       isRefreshing={isRefreshing}
+      isSavingStorybook={isSavingStorybook}
+      onRetrySave={visiblePendingSave ? handleRetrySave : undefined}
       isStorybookActionPending={isStorybookActionPending}
       storybookActionStatus={storybookActionStatus}
       cacheState={cacheState}

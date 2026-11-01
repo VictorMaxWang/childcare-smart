@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -124,6 +124,7 @@ function RegisterPageContent() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -174,6 +175,8 @@ function RegisterPageContent() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // 状态渲染前的连续Enter/点击也只能发起一次注册。
+    if (submittingRef.current) return;
     setMessage("");
 
     if (!validateForm() || !selectedRole) {
@@ -181,23 +184,28 @@ function RegisterPageContent() {
     }
 
     const phoneValue = phone.trim();
+    submittingRef.current = true;
     setLoading(true);
-    const result = await register({
-      phone: phoneValue,
-      username: phoneValue,
-      password,
-      confirmPassword,
-      role: selectedRole.value,
-      displayName: displayName.trim() || undefined,
-    });
-    setLoading(false);
-
-    if (!result.ok || !result.user) {
-      setMessage(friendlyServerError(result.error));
-      return;
+    try {
+      const result = await register({
+        phone: phoneValue,
+        username: phoneValue,
+        password,
+        confirmPassword,
+        role: selectedRole.value,
+        displayName: displayName.trim() || undefined,
+      });
+      if (!result.ok || !result.user) {
+        setMessage(friendlyServerError(result.error));
+        return;
+      }
+      router.replace(result.redirectPath || getRoleHomePath(result.user.role) || redirectForRole(selectedRole.accountRole));
+    } catch {
+      setMessage("网络异常，请稍后重试；如果账号已创建，请返回登录。");
+    } finally {
+      submittingRef.current = false;
+      setLoading(false);
     }
-
-    router.replace(result.redirectPath || getRoleHomePath(result.user.role) || redirectForRole(selectedRole.accountRole));
   }
 
   return (

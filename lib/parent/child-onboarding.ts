@@ -19,7 +19,7 @@ export interface ChildOnboardingFormValues {
 }
 
 export type ChildOnboardingValidationResult =
-  | { ok: true; payload: ApiParentChildOnboardingInput & { consentAccepted: true } }
+  | { ok: true; payload: ApiParentChildOnboardingInput & { consentAccepted: true; gender: ApiChildInput["gender"] } }
   | { ok: false; error: string; field?: string };
 
 const MAX_CHILD_AGE_MONTH = 216;
@@ -38,10 +38,14 @@ function isValidDateKey(value: string) {
 }
 
 function normalizeAgeMonth(value: unknown) {
-  if (value === undefined || value === null || value === "") {
+  if (value === undefined) {
     return { ok: true as const, value: undefined };
   }
 
+  // JSON中的布尔值、数组和空白不能借Number()转换成真实儿童月龄。
+  if (typeof value !== "number" && (typeof value !== "string" || !/^\d+$/.test(value))) {
+    return { ok: false as const, error: "儿童月龄需为 0 到 216 之间的整数。", field: "ageMonth" };
+  }
   const ageMonth = typeof value === "number" ? value : Number(value);
   if (!Number.isInteger(ageMonth) || ageMonth < 0 || ageMonth > MAX_CHILD_AGE_MONTH) {
     return { ok: false as const, error: "儿童月龄需为 0 到 216 之间的整数。", field: "ageMonth" };
@@ -111,14 +115,17 @@ export function validateChildOnboardingInput(input: ApiParentChildOnboardingInpu
     }
   }
 
-  const gender = input.gender === "男" || input.gender === "女" ? input.gender : undefined;
+  if (input.gender !== "男" && input.gender !== "女") {
+    return { ok: false, error: "请选择孩子性别。", field: "gender" };
+  }
+  const gender = input.gender;
   return {
     ok: true,
     payload: {
       name,
       ...(nickname ? { nickname } : {}),
       ...(birthDate ? { birthDate } : { ageMonth: ageMonthResult.value }),
-      ...(gender ? { gender } : {}),
+      gender,
       consentAccepted: true,
       ...(input.requestId ? { requestId: input.requestId } : {}),
     },
