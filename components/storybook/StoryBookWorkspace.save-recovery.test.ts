@@ -25,6 +25,8 @@ async function workspaceHarness(options: { saved?: boolean; failFirstSave?: bool
   if (options.saved && options.pendingMediaInitial) Object.assign(savedResponse, { providerMeta: { ...savedResponse.providerMeta, imageDelivery: "mixed", audioDelivery: "mixed" }, scenes: savedResponse.scenes.map(scene => ({ ...scene, imageStatus: "empty", audioStatus: "empty", imageUrl: null, assetRef: null, audioUrl: null, audioRef: null })) });
   let saved = options.saved ? { storybookId: response.storyId, childId: response.childId, generatedAt: response.generatedAt, pages: [{ response: savedResponse }] } : null;
   let finishFirstAbort = () => {};
+  let finishFirstMedia = () => {};
+  let failFirstMedia = () => {};
   const feed = { child: { id: response.childId, name: "合成儿童" } };
   const owner = { id: options.scope ?? "synthetic-owner", institutionId: "synthetic-institution", accountKind: "normal", authzVersion: 1 };
   const data = {
@@ -85,11 +87,15 @@ async function workspaceHarness(options: { saved?: boolean; failFirstSave?: bool
       assert.ok(["/api/ai/parent-storybook", "/api/ai/parent-storybook/media-status"].includes(url));
       if (url.endsWith("/media-status")) {
         calls.media++;
-        if (options.suspendFirstMedia && calls.media === 1) return new Promise((_, reject) => request.signal.addEventListener("abort", () => {
+        if (options.suspendFirstMedia && calls.media === 1) return new Promise((resolve, reject) => {
+          finishFirstMedia = () => resolve({ ok: true, json: async () => structuredClone(response) });
+          failFirstMedia = () => reject(new TypeError("synthetic unknown media response"));
+          request.signal.addEventListener("abort", () => {
           calls.abortedMedia++;
           const finish = () => reject(new Error("synthetic media request aborted"));
           if (options.deferFirstMediaAbort) finishFirstAbort = finish; else finish();
-        }, { once: true }));
+          }, { once: true });
+        });
         if (options.suspendSecondMedia && calls.media === 2) return new Promise((_, reject) => request.signal.addEventListener("abort", () => reject(new Error("synthetic second media aborted")), { once: true }));
       }
       const result = structuredClone(response);
@@ -112,8 +118,28 @@ async function workspaceHarness(options: { saved?: boolean; failFirstSave?: bool
   function render() { dirty = false; cursor = 0; props = Component({ workspaceRole: "parent" }).props; while (effects.length) effects.shift()!(); }
   async function settle() { for (let turn = 0; turn < 35; turn++) { if (dirty) render(); await new Promise(resolve => setImmediate(resolve)); if (!dirty && !effects.length && turn > 3) break; } return props!; }
   await settle();
-  return { calls, storage, get props() { return props!; }, settle, async generate() { props!.onGenerate(); return settle(); }, changeOwner(id: string) { owner.id = id; dirty = true; }, publishSavedContext() { data.parentHomeData = { storybooks: saved ? [saved] : [] }; dirty = true; }, finishFirstAbort: () => finishFirstAbort(), dispose() { for (const slot of slots) slot.cleanup?.(); } };
+  return { calls, storage, get props() { return props!; }, settle, async generate() { props!.onGenerate(); return settle(); }, changeOwner(id: string) { owner.id = id; dirty = true; }, publishSavedContext() { data.parentHomeData = { storybooks: saved ? [saved] : [] }; dirty = true; }, publishEquivalentSnapshot() {
+    // /api/state 每次解码都会重建记录和 feed 引用；内容相同也会使真实 Workspace 的主 effect 重新执行。
+    data.growthRecords = [...data.growthRecords]; data.healthCheckRecords = [...data.healthCheckRecords];
+    data.mealRecords = [...data.mealRecords]; data.getParentFeed = () => [structuredClone(feed)];
+    data.parentHomeData = { storybooks: saved ? [structuredClone(saved)] : [] }; dirty = true;
+  }, finishFirstMedia: () => finishFirstMedia(), failFirstMedia: () => failFirstMedia(), finishFirstAbort: () => finishFirstAbort(), dispose() { for (const slot of slots) slot.cleanup?.(); } };
 }
+
+test("confirmed media continuation survives equivalent state snapshots without aborting or redispatching", async () => {
+  const app = await workspaceHarness({ saved: true, pendingMediaInitial: true, failFirstSave: false, suspendFirstMedia: true });
+  try {
+    (app.props.onRetryMedia as () => void)(); await app.settle();
+    assert.equal(app.calls.media, 1);
+    for (let update = 0; update < 3; update++) { app.publishEquivalentSnapshot(); await app.settle(); }
+    assert.equal(app.calls.abortedMedia, 0, "ordinary state snapshots cannot cancel the original paid media request");
+    assert.equal(app.calls.media, 1, "equivalent context updates cannot submit a second media request");
+    app.finishFirstMedia(); await app.settle();
+    assert.equal(app.props.story?.storyId, response.storyId);
+    assert.deepEqual(app.props.story?.scenes, response.scenes);
+    assert.equal(app.calls.saves.length, 1); assert.equal(app.calls.generation, 0);
+  } finally { app.dispose(); }
+});
 
 test("generated book exposes a separate save retry and preserves exact signed payload without regenerating", async () => {
   const app = await workspaceHarness();
@@ -224,16 +250,18 @@ test("session storage quota failures keep a retry and warn against closing the p
   finally { app.dispose(); }
 });
 
-test("save-context refresh aborting pending media exposes explicit recovery instead of silently stranding the book", async () => {
+test("an explicitly interrupted media response pauses until confirmed recovery without automatic replay", async () => {
   const app = await workspaceHarness({ pendingMediaInitial: true, suspendFirstMedia: true });
   try {
     await app.generate(); await new Promise(resolve => setTimeout(resolve, 10)); await app.settle();
     assert.equal(app.calls.media, 1);
     await app.props.onRetrySave!(); await app.settle();
     app.publishSavedContext(); await app.settle();
-    assert.equal(app.calls.abortedMedia, 1, "the saved-context effect really interrupted the pending media request");
+    assert.equal(app.calls.abortedMedia, 0, "saving the current book must not interrupt the pending media request");
+    app.failFirstMedia(); await app.settle();
     assert.equal(typeof app.props.onRetryMedia, "function", "interrupted pending media must expose explicit safe recovery");
     assert.match(String(app.props.refreshMessage), /媒体.*中断|媒体.*暂停/u);
+    app.publishEquivalentSnapshot(); await app.settle();
     await new Promise(resolve => setTimeout(resolve, 20)); await app.settle();
     assert.equal(app.calls.media, 1, "an unknown dispatch cannot be automatically replayed by adding a render tick");
     assert.equal(app.calls.generation, 1);
@@ -256,14 +284,16 @@ test("a late aborted media finally cannot release the newer request's in-flight 
   const app = await workspaceHarness({ pendingMediaInitial: true, suspendFirstMedia: true, deferFirstMediaAbort: true, suspendSecondMedia: true });
   try {
     await app.generate(); await new Promise(resolve => setTimeout(resolve, 10)); await app.settle();
-    await app.props.onRetrySave!(); await app.settle(); app.publishSavedContext(); await app.settle();
-    assert.equal(app.calls.media, 1); assert.equal(app.calls.abortedMedia, 1);
-    (app.props.onRetryMedia as () => void)(); await app.settle();
+    await app.props.onRetrySave!(); await app.settle(); app.publishEquivalentSnapshot(); await app.settle();
+    assert.equal(app.calls.media, 1); assert.equal(app.calls.abortedMedia, 0);
+    // 用户明确生成另一版才取消旧请求；旧 fetch 的 reject/finally 故意迟到。
+    await app.generate(); await new Promise(resolve => setTimeout(resolve, 10)); await app.settle();
+    assert.equal(app.calls.abortedMedia, 1);
     assert.equal(app.calls.media, 2);
     app.finishFirstAbort(); await app.settle();
     (app.props.onActiveSceneChange as (index: number) => void)(1); await app.settle();
     assert.equal(app.calls.media, 2, "old finally must not permit a third media dispatch while request two is pending");
-    assert.equal(app.calls.generation, 1);
+    assert.equal(app.calls.generation, 2);
   } finally { app.finishFirstAbort(); app.dispose(); }
 });
 
@@ -281,6 +311,21 @@ test("unmount aborts the owned pending media request without scheduling another 
   const app = await workspaceHarness({ saved: true, pendingMediaInitial: true, suspendFirstMedia: true });
   (app.props.onRetryMedia as () => void)(); await app.settle();
   assert.equal(app.calls.media, 1);
+  app.publishEquivalentSnapshot(); await app.settle();
+  assert.equal(app.calls.abortedMedia, 0, "state refresh cannot replace the actual request controller with a read-only one");
   app.dispose(); await new Promise(resolve => setTimeout(resolve, 20));
   assert.equal(app.calls.abortedMedia, 1); assert.equal(app.calls.media, 1); assert.equal(app.calls.generation, 0);
+});
+
+test("changing the account aborts the original media after context refresh and ignores its late response", async () => {
+  const app = await workspaceHarness({ saved: true, pendingMediaInitial: true, suspendFirstMedia: true, deferFirstMediaAbort: true });
+  try {
+    (app.props.onRetryMedia as () => void)(); await app.settle();
+    app.publishEquivalentSnapshot(); await app.settle();
+    app.changeOwner("synthetic-next-owner"); await app.settle();
+    assert.equal(app.calls.abortedMedia, 1);
+    app.finishFirstMedia(); await app.settle();
+    assert.equal(app.calls.saves.length, 0, "late media must not persist under the next account");
+    assert.equal(app.calls.media, 1); assert.equal(app.calls.generation, 0);
+  } finally { app.finishFirstAbort(); app.dispose(); }
 });

@@ -210,6 +210,7 @@ export default function StoryBookWorkspace({
   const previousSelectedChildIdRef = useRef<string | undefined>(undefined);
   const manualStorybookGenerationInFlightRef = useRef(false);
   const activeStoryRequestControllerRef = useRef<AbortController | null>(null);
+  const storyNetworkControllersRef = useRef(new Set<AbortController>());
   const pendingSaveRef = useRef<PendingStorybookSave | null>(null);
   const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const saveInFlightRef = useRef<Promise<StorybookSaveOutcome> | null>(null);
@@ -240,6 +241,21 @@ export default function StoryBookWorkspace({
     setIsSavingStorybook(false);
     // 只恢复原账号自己的待保存正文；读取历史/跨角色绘本仍不能触发自动 POST。
   }, [parentD01.currentUser.accountKind, saveScope, saveScopeKey]);
+  useEffect(() => {
+    const controllers = storyNetworkControllersRef.current;
+    return () => {
+      // 请求归属于账号／机构／儿童及当前挂载。普通机构快照刷新不能取消已提交的收费请求；
+      // 真正离开作用域仍需取消，并使迟到响应失效，不能把 unknown 自动重发成新任务。
+      for (const controller of controllers) controller.abort();
+      controllers.clear();
+      activeStoryRequestControllerRef.current = null;
+      mediaRequestControllerRef.current = null;
+      mediaRequestInFlightRef.current = false;
+      manualStorybookGenerationInFlightRef.current = false;
+      backgroundMediaPollRef.current = false;
+      retryFailedMediaRef.current = false;
+    };
+  }, [saveScopeKey]);
   const persistGeneratedStorybook = useCallback(async (pending: PendingStorybookSave, reconcileFirst = false) => {
     const scopeKey = storybookSaveScopeKey(pending.scope);
     const isCurrent = () => saveScopeKeyRef.current === scopeKey;
@@ -640,17 +656,30 @@ export default function StoryBookWorkspace({
       return;
     }
 
-    let cancelled = false;
-    let mediaResponseReceived = false;
-    const controller = new AbortController();
-    activeStoryRequestControllerRef.current = controller;
     const bypassCache = networkOnlyRef.current;
     const refreshCurrentOnly = refreshCurrentOnlyRef.current;
     const backgroundMediaPoll = backgroundMediaPollRef.current;
     const forceNetworkForManualOverride =
       isLockedLinXiaoyuStorybook && hasManualStorybookOverrideActive && !refreshCurrentOnly;
-    const keepUserGenerationRequestAlive =
-      !backgroundMediaPoll && (bypassCache || forceNetworkForManualOverride);
+    const previousRequestController = activeStoryRequestControllerRef.current;
+    if (previousRequestController && !previousRequestController.signal.aborted) {
+      if (!bypassCache) {
+        // /api/state 重建 feed、records 和 saved book 引用时，继续等待同一请求，不能恢复旧版或再发一次。
+        backgroundMediaPollRef.current = false;
+        retryFailedMediaRef.current = false;
+        refreshCurrentOnlyRef.current = false;
+        return;
+      }
+      // 只有明确生成新正文的意图能取代同作用域的旧请求。
+      previousRequestController.abort();
+      if (mediaRequestControllerRef.current === previousRequestController) {
+        mediaRequestControllerRef.current = null;
+        mediaRequestInFlightRef.current = false;
+      }
+    }
+    let cancelled = false;
+    let networkRequestStarted = false;
+    const controller = new AbortController();
     const shouldTrackManualGeneration = !backgroundMediaPoll && (bypassCache || forceNetworkForManualOverride);
     const retryFailedMedia = backgroundMediaPoll && retryFailedMediaRef.current;
     retryFailedMediaRef.current = false;
@@ -824,6 +853,9 @@ export default function StoryBookWorkspace({
 
     async function loadStory() {
       let timedOut = false;
+      networkRequestStarted = true;
+      storyNetworkControllersRef.current.add(controller);
+      activeStoryRequestControllerRef.current = controller;
       const requestTimeout = window.setTimeout(() => {
         timedOut = true;
         controller.abort();
@@ -900,8 +932,7 @@ export default function StoryBookWorkspace({
         }
 
         const data = (await response.json()) as ParentStoryBookResponse;
-        if (backgroundMediaPoll) mediaResponseReceived = true;
-        if (cancelled || saveScopeKeyRef.current !== saveScopeKey) return;
+        if (cancelled || controller.signal.aborted || saveScopeKeyRef.current !== saveScopeKey) return;
         const previousMediaStateKey = buildStorybookMediaStateKey(storyRef.current);
         if (backgroundMediaPoll) {
           const currentStory = storyRef.current;
@@ -979,7 +1010,7 @@ export default function StoryBookWorkspace({
             apiStorybookSaveError = saveError instanceof Error ? saveError.message : "E01 绘本服务保存失败。";
           }
         }
-        if (saveScopeKeyRef.current !== saveScopeKey) return;
+        if (controller.signal.aborted || saveScopeKeyRef.current !== saveScopeKey) return;
         startTransition(() => {
           setStory(data);
           setStatus(data.mode);
@@ -1012,7 +1043,7 @@ export default function StoryBookWorkspace({
           }
         });
       } catch (error) {
-        if (cancelled || saveScopeKeyRef.current !== saveScopeKey) return;
+        if (cancelled || saveScopeKeyRef.current !== saveScopeKey || (controller.signal.aborted && !timedOut)) return;
 
         if (backgroundMediaPoll && storyRef.current) {
           startTransition(() => {
@@ -1047,11 +1078,12 @@ export default function StoryBookWorkspace({
           mediaRequestControllerRef.current = null;
         }
         window.clearTimeout(requestTimeout);
+        storyNetworkControllersRef.current.delete(controller);
         if (activeStoryRequestControllerRef.current === controller) {
           activeStoryRequestControllerRef.current = null;
-        }
-        if (shouldTrackManualGeneration && saveScopeKeyRef.current === saveScopeKey) {
-          manualStorybookGenerationInFlightRef.current = false;
+          if (shouldTrackManualGeneration && saveScopeKeyRef.current === saveScopeKey) {
+            manualStorybookGenerationInFlightRef.current = false;
+          }
         }
       }
     }
@@ -1059,25 +1091,11 @@ export default function StoryBookWorkspace({
     void loadStory();
 
     return () => {
-      if (!keepUserGenerationRequestAlive) {
+      if (!networkRequestStarted) {
         cancelled = true;
-        const ownsMediaRequest = backgroundMediaPoll && mediaRequestControllerRef.current === controller;
-        if (ownsMediaRequest) {
-          mediaRequestInFlightRef.current = false;
-          mediaRequestControllerRef.current = null;
-          if (!mediaResponseReceived && saveScopeKeyRef.current === saveScopeKey &&
-              storyRef.current?.childId === activeRequestChildId && !networkOnlyRef.current) {
-            // 保存后的Context同步也会清理此effect。取消不代表上游未计费，
-            // 显式暂停并提供原书恢复入口，不能靠补一次render tick自动重发。
-            setMediaPollStopped(true);
-            setRefreshMessage("媒体请求已中断，已保留原绘本并暂停自动请求。可点击“重试失败媒体”确认后检查并继续；结果未知的任务不会重新提交。");
-          }
-        }
         controller.abort();
       }
-      if (activeStoryRequestControllerRef.current === controller && !keepUserGenerationRequestAlive) {
-        activeStoryRequestControllerRef.current = null;
-      }
+      // 已发出的网络任务由 scope/unmount 生命周期持有，不能被响应式数据 effect 的 cleanup 误取消。
     };
   }, [
     appliedControls.preset,
