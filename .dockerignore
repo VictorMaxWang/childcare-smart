@@ -6,7 +6,11 @@ build
 coverage
 artifacts
 node_modules
-docs
+# 知识库JSON在docs/knowledge中被业务代码直接导入，只排除发布与状态说明。
+docs/release
+docs/current-status-ledger.md
+docs/task-registry.md
+docs/competition-architecture.md
 .deployment-source-sha
 
 .env
