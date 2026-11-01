@@ -199,6 +199,7 @@ export default function StoryBookWorkspace({
   const refreshCurrentOnlyRef = useRef(false);
   const backgroundMediaPollRef = useRef(false);
   const mediaRequestInFlightRef = useRef(false);
+  const mediaRequestControllerRef = useRef<AbortController | null>(null);
   const retryFailedMediaRef = useRef(false);
   const activeSceneIndexRef = useRef(0);
   const storyRef = useRef<ParentStoryBookResponse | null>(null);
@@ -358,6 +359,8 @@ export default function StoryBookWorkspace({
       pollingStoryIdRef.current = null;
       pollAttemptRef.current = 0;
       mediaRequestInFlightRef.current = false;
+      mediaRequestControllerRef.current?.abort();
+      mediaRequestControllerRef.current = null;
       retryFailedMediaRef.current = false;
       manualStorybookGenerationInFlightRef.current = false;
       setMediaPollStopped(false);
@@ -638,6 +641,7 @@ export default function StoryBookWorkspace({
     }
 
     let cancelled = false;
+    let mediaResponseReceived = false;
     const controller = new AbortController();
     activeStoryRequestControllerRef.current = controller;
     const bypassCache = networkOnlyRef.current;
@@ -697,6 +701,7 @@ export default function StoryBookWorkspace({
           setStatus(preserved.mode);
           setErrorMessage(null);
           setRefreshMessage("已恢复当前账号尚待确认保存的绘本。请点击“重试保存”，不会重新生成。");
+          setMediaPollStopped(shouldPollParentStoryBookMedia(preserved));
           setIsRefreshing(false);
         });
         return () => { cancelled = true; controller.abort(); };
@@ -720,10 +725,13 @@ export default function StoryBookWorkspace({
           setStatus(restoredStory.mode);
           setErrorMessage(null);
           setRefreshMessage(
-            parentD01.currentUser.accountKind === "normal"
+            shouldPollParentStoryBookMedia(restoredStory)
+              ? "已读取保存的原绘本，媒体尚未齐全。请点击“重试失败媒体”确认后继续补齐；打开页面不会自动重新生成。"
+              : parentD01.currentUser.accountKind === "normal"
               ? "已从绘本服务恢复，刷新后仍会保留。"
               : "已从 D01 本地演示持久化恢复，刷新后仍会保留。"
           );
+          setMediaPollStopped(shouldPollParentStoryBookMedia(restoredStory));
           setIsRefreshing(false);
           setCacheState({
             kind: "saved",
@@ -757,7 +765,10 @@ export default function StoryBookWorkspace({
           setStory(cached.story);
           setStatus(cached.story.mode);
           setErrorMessage(null);
-          setRefreshMessage(null);
+          setRefreshMessage(shouldPollParentStoryBookMedia(cached.story)
+            ? "已读取缓存中的原绘本，媒体尚未齐全。请点击“重试失败媒体”确认后继续补齐。"
+            : null);
+          setMediaPollStopped(shouldPollParentStoryBookMedia(cached.story));
           setIsRefreshing(false);
           setCacheState({
             kind: "hit",
@@ -818,7 +829,10 @@ export default function StoryBookWorkspace({
         controller.abort();
       }, backgroundMediaPoll ? STORYBOOK_MEDIA_POLL_TIMEOUT_MS : STORYBOOK_USER_REQUEST_TIMEOUT_MS);
       try {
-        if (backgroundMediaPoll) mediaRequestInFlightRef.current = true;
+        if (backgroundMediaPoll) {
+          mediaRequestInFlightRef.current = true;
+          mediaRequestControllerRef.current = controller;
+        }
         const requestHeaders = new Headers({
           "Content-Type": "application/json",
         });
@@ -886,6 +900,7 @@ export default function StoryBookWorkspace({
         }
 
         const data = (await response.json()) as ParentStoryBookResponse;
+        if (backgroundMediaPoll) mediaResponseReceived = true;
         if (cancelled || saveScopeKeyRef.current !== saveScopeKey) return;
         const previousMediaStateKey = buildStorybookMediaStateKey(storyRef.current);
         if (backgroundMediaPoll) {
@@ -1026,7 +1041,11 @@ export default function StoryBookWorkspace({
           setCacheState({ kind: "none" });
         });
       } finally {
-        if (backgroundMediaPoll) mediaRequestInFlightRef.current = false;
+        // 旧请求的finally可能晚于新请求开始；只有持有当前媒体句柄的请求能释放它。
+        if (backgroundMediaPoll && mediaRequestControllerRef.current === controller) {
+          mediaRequestInFlightRef.current = false;
+          mediaRequestControllerRef.current = null;
+        }
         window.clearTimeout(requestTimeout);
         if (activeStoryRequestControllerRef.current === controller) {
           activeStoryRequestControllerRef.current = null;
@@ -1042,6 +1061,18 @@ export default function StoryBookWorkspace({
     return () => {
       if (!keepUserGenerationRequestAlive) {
         cancelled = true;
+        const ownsMediaRequest = backgroundMediaPoll && mediaRequestControllerRef.current === controller;
+        if (ownsMediaRequest) {
+          mediaRequestInFlightRef.current = false;
+          mediaRequestControllerRef.current = null;
+          if (!mediaResponseReceived && saveScopeKeyRef.current === saveScopeKey &&
+              storyRef.current?.childId === activeRequestChildId && !networkOnlyRef.current) {
+            // 保存后的Context同步也会清理此effect。取消不代表上游未计费，
+            // 显式暂停并提供原书恢复入口，不能靠补一次render tick自动重发。
+            setMediaPollStopped(true);
+            setRefreshMessage("媒体请求已中断，已保留原绘本并暂停自动请求。可点击“重试失败媒体”确认后检查并继续；结果未知的任务不会重新提交。");
+          }
+        }
         controller.abort();
       }
       if (activeStoryRequestControllerRef.current === controller && !keepUserGenerationRequestAlive) {
@@ -1284,6 +1315,7 @@ export default function StoryBookWorkspace({
         setReloadToken((previousToken) => previousToken + 1);
       }}
       onRetryMedia={story && (mediaPollStopped || hasParentStoryBookMediaFailure(story)) ? () => {
+        if (saveScopeKeyRef.current !== saveScopeKey) return;
         if (mediaRequestInFlightRef.current || !window.confirm("仅重试失败媒体，可能产生新的 API 费用；结果未知的请求不会自动重发。确认继续吗？")) return;
         setMediaPollStopped(false);
         pollAttemptRef.current = 0;

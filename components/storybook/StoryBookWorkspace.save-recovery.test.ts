@@ -15,13 +15,16 @@ const response = {
 };
 
 /** 执行完整 Workspace 的 hooks、生成响应与保存事件；仅替换浏览器/网络边界，不抽取待测分支。 */
-async function workspaceHarness(options: { saved?: boolean; failFirstSave?: boolean; firstRead?: "missing" | "saved" | "offline"; scope?: string; storage?: Map<string, string>; timeoutFirstSave?: boolean; failSaveNumber?: number; pendingMediaInitial?: boolean; rejectStorage?: boolean } = {}) {
+async function workspaceHarness(options: { saved?: boolean; failFirstSave?: boolean; firstRead?: "missing" | "saved" | "offline"; scope?: string; storage?: Map<string, string>; timeoutFirstSave?: boolean; failSaveNumber?: number; pendingMediaInitial?: boolean; rejectStorage?: boolean; suspendFirstMedia?: boolean; deferFirstMediaAbort?: boolean; suspendSecondMedia?: boolean } = {}) {
   const slots: Array<{ value?: unknown; deps?: unknown[]; cleanup?: () => void }> = [];
   let cursor = 0, dirty = true, props: Props;
   const effects: Array<() => void> = [];
   const storage = options.storage ?? new Map<string, string>();
-  const calls: { generation: number; reads: number; saves: Array<Record<string, unknown>> } = { generation: 0, reads: 0, saves: [] };
-  let saved = options.saved ? { storybookId: response.storyId, childId: response.childId, generatedAt: response.generatedAt, pages: [{ response: structuredClone(response) }] } : null;
+  const calls: { generation: number; reads: number; media: number; abortedMedia: number; saves: Array<Record<string, unknown>> } = { generation: 0, reads: 0, media: 0, abortedMedia: 0, saves: [] };
+  const savedResponse = structuredClone(response);
+  if (options.saved && options.pendingMediaInitial) Object.assign(savedResponse, { providerMeta: { ...savedResponse.providerMeta, imageDelivery: "mixed", audioDelivery: "mixed" }, scenes: savedResponse.scenes.map(scene => ({ ...scene, imageStatus: "empty", audioStatus: "empty", imageUrl: null, assetRef: null, audioUrl: null, audioRef: null })) });
+  let saved = options.saved ? { storybookId: response.storyId, childId: response.childId, generatedAt: response.generatedAt, pages: [{ response: savedResponse }] } : null;
+  let finishFirstAbort = () => {};
   const feed = { child: { id: response.childId, name: "合成儿童" } };
   const owner = { id: options.scope ?? "synthetic-owner", institutionId: "synthetic-institution", accountKind: "normal", authzVersion: 1 };
   const data = {
@@ -78,8 +81,17 @@ async function workspaceHarness(options: { saved?: boolean; failFirstSave?: bool
   const load = (filename: string): Record<string, unknown> => {
     const loaded = { exports: {} };
     const compiled = ts.transpileModule(readFileSync(filename, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-    vm.runInNewContext(compiled, { module: loaded, exports: loaded.exports, require: (name: string) => { if (!(name in modules)) throw new Error(`unexpected test dependency: ${name}`); return modules[name]; }, window: browserWindow, document: browserDocument, fetch: async (url: string) => {
+    vm.runInNewContext(compiled, { module: loaded, exports: loaded.exports, require: (name: string) => { if (!(name in modules)) throw new Error(`unexpected test dependency: ${name}`); return modules[name]; }, window: browserWindow, document: browserDocument, fetch: async (url: string, request: { signal: AbortSignal }) => {
       assert.ok(["/api/ai/parent-storybook", "/api/ai/parent-storybook/media-status"].includes(url));
+      if (url.endsWith("/media-status")) {
+        calls.media++;
+        if (options.suspendFirstMedia && calls.media === 1) return new Promise((_, reject) => request.signal.addEventListener("abort", () => {
+          calls.abortedMedia++;
+          const finish = () => reject(new Error("synthetic media request aborted"));
+          if (options.deferFirstMediaAbort) finishFirstAbort = finish; else finish();
+        }, { once: true }));
+        if (options.suspendSecondMedia && calls.media === 2) return new Promise((_, reject) => request.signal.addEventListener("abort", () => reject(new Error("synthetic second media aborted")), { once: true }));
+      }
       const result = structuredClone(response);
       if (url === "/api/ai/parent-storybook") {
         calls.generation++;
@@ -91,7 +103,7 @@ async function workspaceHarness(options: { saved?: boolean; failFirstSave?: bool
   };
   const params = new URLSearchParams(`child=${response.childId}`);
   const browserWindow = { location: { href: `https://example.invalid/parent/storybook?child=${response.childId}` }, history: { replaceState: () => {} }, setTimeout, clearTimeout,
-    sessionStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => { if (options.rejectStorage) throw new Error("synthetic quota exceeded"); storage.set(key, value); }, removeItem: (key: string) => storage.delete(key) }, addEventListener: () => {}, removeEventListener: () => {} };
+    sessionStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => { if (options.rejectStorage) throw new Error("synthetic quota exceeded"); storage.set(key, value); }, removeItem: (key: string) => storage.delete(key) }, confirm: () => true, addEventListener: () => {}, removeEventListener: () => {} };
   const browserDocument = { visibilityState: "visible", addEventListener: () => {}, removeEventListener: () => {} };
   modules["@/lib/api/errors"] = { ApiClientError };
   const recoveryFile = path.resolve("lib/parent/storybook-save-recovery.ts");
@@ -100,7 +112,7 @@ async function workspaceHarness(options: { saved?: boolean; failFirstSave?: bool
   function render() { dirty = false; cursor = 0; props = Component({ workspaceRole: "parent" }).props; while (effects.length) effects.shift()!(); }
   async function settle() { for (let turn = 0; turn < 35; turn++) { if (dirty) render(); await new Promise(resolve => setImmediate(resolve)); if (!dirty && !effects.length && turn > 3) break; } return props!; }
   await settle();
-  return { calls, storage, get props() { return props!; }, settle, async generate() { props!.onGenerate(); return settle(); }, changeOwner(id: string) { owner.id = id; dirty = true; }, dispose() { for (const slot of slots) slot.cleanup?.(); } };
+  return { calls, storage, get props() { return props!; }, settle, async generate() { props!.onGenerate(); return settle(); }, changeOwner(id: string) { owner.id = id; dirty = true; }, publishSavedContext() { data.parentHomeData = { storybooks: saved ? [saved] : [] }; dirty = true; }, finishFirstAbort: () => finishFirstAbort(), dispose() { for (const slot of slots) slot.cleanup?.(); } };
 }
 
 test("generated book exposes a separate save retry and preserves exact signed payload without regenerating", async () => {
@@ -210,4 +222,65 @@ test("session storage quota failures keep a retry and warn against closing the p
   const app = await workspaceHarness({ rejectStorage: true });
   try { await app.generate(); assert.equal(typeof app.props.onRetrySave, "function"); assert.match(String(app.props.refreshMessage), /浏览器无法暂存.*关闭或刷新页面.*请保留当前页面/u); }
   finally { app.dispose(); }
+});
+
+test("save-context refresh aborting pending media exposes explicit recovery instead of silently stranding the book", async () => {
+  const app = await workspaceHarness({ pendingMediaInitial: true, suspendFirstMedia: true });
+  try {
+    await app.generate(); await new Promise(resolve => setTimeout(resolve, 10)); await app.settle();
+    assert.equal(app.calls.media, 1);
+    await app.props.onRetrySave!(); await app.settle();
+    app.publishSavedContext(); await app.settle();
+    assert.equal(app.calls.abortedMedia, 1, "the saved-context effect really interrupted the pending media request");
+    assert.equal(typeof app.props.onRetryMedia, "function", "interrupted pending media must expose explicit safe recovery");
+    assert.match(String(app.props.refreshMessage), /媒体.*中断|媒体.*暂停/u);
+    await new Promise(resolve => setTimeout(resolve, 20)); await app.settle();
+    assert.equal(app.calls.media, 1, "an unknown dispatch cannot be automatically replayed by adding a render tick");
+    assert.equal(app.calls.generation, 1);
+  } finally { app.dispose(); }
+});
+
+test("opening an incomplete saved book is read-only until explicit confirmed media recovery", async () => {
+  const app = await workspaceHarness({ saved: true, pendingMediaInitial: true, failFirstSave: false });
+  try {
+    await new Promise(resolve => setTimeout(resolve, 15)); await app.settle();
+    assert.equal(app.calls.generation, 0); assert.equal(app.calls.media, 0); assert.equal(app.calls.saves.length, 0);
+    assert.equal(typeof app.props.onRetryMedia, "function");
+    (app.props.onRetryMedia as () => void)(); await app.settle();
+    assert.equal(app.calls.generation, 0); assert.equal(app.calls.media, 1);
+    assert.equal(app.props.story?.storyId, response.storyId);
+  } finally { app.dispose(); }
+});
+
+test("a late aborted media finally cannot release the newer request's in-flight guard", async () => {
+  const app = await workspaceHarness({ pendingMediaInitial: true, suspendFirstMedia: true, deferFirstMediaAbort: true, suspendSecondMedia: true });
+  try {
+    await app.generate(); await new Promise(resolve => setTimeout(resolve, 10)); await app.settle();
+    await app.props.onRetrySave!(); await app.settle(); app.publishSavedContext(); await app.settle();
+    assert.equal(app.calls.media, 1); assert.equal(app.calls.abortedMedia, 1);
+    (app.props.onRetryMedia as () => void)(); await app.settle();
+    assert.equal(app.calls.media, 2);
+    app.finishFirstAbort(); await app.settle();
+    (app.props.onActiveSceneChange as (index: number) => void)(1); await app.settle();
+    assert.equal(app.calls.media, 2, "old finally must not permit a third media dispatch while request two is pending");
+    assert.equal(app.calls.generation, 1);
+  } finally { app.finishFirstAbort(); app.dispose(); }
+});
+
+test("a captured media recovery action cannot start work after the account scope changes", async () => {
+  const app = await workspaceHarness({ saved: true, pendingMediaInitial: true });
+  try {
+    const retry = app.props.onRetryMedia as () => void;
+    assert.equal(typeof retry, "function");
+    app.changeOwner("synthetic-other-owner"); await app.settle(); retry(); await app.settle();
+    assert.equal(app.calls.media, 0); assert.equal(app.calls.generation, 0);
+  } finally { app.dispose(); }
+});
+
+test("unmount aborts the owned pending media request without scheduling another dispatch", async () => {
+  const app = await workspaceHarness({ saved: true, pendingMediaInitial: true, suspendFirstMedia: true });
+  (app.props.onRetryMedia as () => void)(); await app.settle();
+  assert.equal(app.calls.media, 1);
+  app.dispose(); await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(app.calls.abortedMedia, 1); assert.equal(app.calls.media, 1); assert.equal(app.calls.generation, 0);
 });
